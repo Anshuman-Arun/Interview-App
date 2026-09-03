@@ -2,17 +2,23 @@ import { randomBytes } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import process from "node:process";
 import { createAndStartServer } from "../../server/src/server.js";
+import { newSessionId } from "../../../packages/domain/src/index.js";
+import { TurnCoordinator } from "../../../packages/interview-engine/src/index.js";
+import { sixPeopleProblem } from "../../../packages/problems/src/index.js";
 import {
   app,
   BrowserWindow,
   dialog,
   ipcMain,
-  type IpcMainEvent
+  type IpcMainEvent,
+  type IpcMainInvokeEvent
 } from "electron";
 import { DesktopBackendController } from "./backend-controller.js";
 import { DesktopLocalRuntimeComposition } from "./runtime/index.js";
 import {
   DESKTOP_BOOTSTRAP_CHANNEL,
+  DESKTOP_INSTALL_LOCAL_MODELS_CHANNEL,
+  DESKTOP_LOCAL_RUNTIME_STATUS_CHANNEL,
   DESKTOP_ZOOM_CHANGED_CHANNEL,
   DESKTOP_ZOOM_CHANNEL,
   DESKTOP_MAX_ZOOM_FACTOR,
@@ -22,6 +28,9 @@ import {
   isDesktopZoomFactor,
   isTrustedDesktopNavigation,
   type DesktopRendererBootstrap,
+  type DesktopRendererLocalRuntimeStatus,
+  type DesktopRendererModelSetupState,
+  type DesktopRendererRuntimeCapabilityStatus,
   type DesktopZoomFactor
 } from "./bootstrap.js";
 import {
@@ -62,6 +71,12 @@ let removePermissionCapability: (() => void) | undefined;
 let shuttingDown = false;
 let shutdownComplete = false;
 let shutdownPromise: Promise<void> | undefined;
+let modelSetupState: DesktopRendererModelSetupState = "IDLE";
+let modelSetupRestartRequired = false;
+let modelInstallPromise: Promise<DesktopRendererLocalRuntimeStatus> | undefined;
+const packagedSingleInstanceSmokeHost = process.argv.includes(
+  "--packaged-single-instance-smoke-host"
+);
 
 if (!app.requestSingleInstanceLock()) {
   if (process.argv.includes("--install-local-models")) {
@@ -73,10 +88,21 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on("second-instance", () => {
-    if (mainWindow === undefined) return;
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.show();
-    mainWindow.focus();
+    if (mainWindow !== undefined) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+    if (packagedSingleInstanceSmokeHost && app.isPackaged) {
+      void shutdownDesktop()
+        .catch(() => {
+          process.exitCode = 1;
+        })
+        .finally(() => {
+          shutdownComplete = true;
+          app.quit();
+        });
+    }
   });
 
   app.on("before-quit", (event) => {
@@ -158,7 +184,7 @@ async function startDesktop(): Promise<void> {
   }
 
   clientToken = randomBytes(32).toString("hex");
-  const server = await backend.start({
+  const backendConfig = {
     host: "127.0.0.1",
     commandPort: 0,
     rendererStreamPort: 0,
@@ -166,7 +192,8 @@ async function startDesktop(): Promise<void> {
     clientToken,
     allowedOrigins: [new URL(frontendUrl).origin],
     databasePath: paths.databasePath
-  });
+  } as const;
+  const server = await backend.start(backendConfig);
 
   if (frontendServer !== undefined) {
     frontendServer.configureBackendOrigins(
@@ -186,7 +213,157 @@ async function startDesktop(): Promise<void> {
 
   installBootstrapHandler();
   installZoomHandler();
+  installLocalRuntimeHandlers();
   await createMainWindow(paths.preloadPath);
+
+  if (process.argv.includes("--packaged-smoke-test")) {
+    if (!app.isPackaged) throw new Error("Packaged smoke mode requires a packaged executable");
+    await runPackagedSmoke(server, backendConfig);
+    await shutdownDesktop();
+    shutdownComplete = true;
+    app.quit();
+  }
+}
+
+function installLocalRuntimeHandlers(): void {
+  ipcMain.removeHandler(DESKTOP_LOCAL_RUNTIME_STATUS_CHANNEL);
+  ipcMain.removeHandler(DESKTOP_INSTALL_LOCAL_MODELS_CHANNEL);
+
+  ipcMain.handle(
+    DESKTOP_LOCAL_RUNTIME_STATUS_CHANNEL,
+    (event: IpcMainInvokeEvent): DesktopRendererLocalRuntimeStatus => {
+      if (!isAuthorizedDesktopInvoke(event)) {
+        throw new Error("Desktop local runtime request was rejected");
+      }
+      return localRuntimeStatusForRenderer();
+    }
+  );
+
+  ipcMain.handle(
+    DESKTOP_INSTALL_LOCAL_MODELS_CHANNEL,
+    async (event: IpcMainInvokeEvent): Promise<DesktopRendererLocalRuntimeStatus> => {
+      if (!isAuthorizedDesktopInvoke(event)) {
+        throw new Error("Desktop local model setup request was rejected");
+      }
+      if (modelInstallPromise !== undefined) return modelInstallPromise;
+      const runtime = localRuntime;
+      if (runtime === undefined || shuttingDown) {
+        throw new Error("Desktop local runtime is unavailable");
+      }
+      modelSetupState = "INSTALLING";
+      modelSetupRestartRequired = false;
+      const operation = installLocalModels(runtime);
+      modelInstallPromise = operation;
+      void operation.finally(() => {
+        if (modelInstallPromise === operation) modelInstallPromise = undefined;
+      }).catch(() => undefined);
+      return operation;
+    }
+  );
+}
+
+function isAuthorizedDesktopInvoke(event: IpcMainInvokeEvent): boolean {
+  const currentWindow = mainWindow;
+  const currentFrontendUrl = frontendUrl;
+  return currentWindow !== undefined
+    && currentFrontendUrl !== undefined
+    && isAuthorizedDesktopBootstrapRequest({
+      shuttingDown,
+      senderWebContentsId: event.sender.id,
+      trustedWebContentsId: currentWindow.webContents.id,
+      senderFrame: event.senderFrame,
+      trustedMainFrame: currentWindow.webContents.mainFrame,
+      senderFrameUrl: event.senderFrame?.url,
+      trustedFrontendUrl: currentFrontendUrl
+    });
+}
+
+async function installLocalModels(
+  runtime: DesktopLocalRuntimeComposition
+): Promise<DesktopRendererLocalRuntimeStatus> {
+  try {
+    await runtime.installVoiceAssets(startupAbort.signal);
+    modelSetupState = "INSTALLED";
+    modelSetupRestartRequired = true;
+    return localRuntimeStatusForRenderer();
+  } catch {
+    if (startupAbort.signal.aborted) {
+      modelSetupState = "IDLE";
+      modelSetupRestartRequired = false;
+      throw new Error("Local model setup was cancelled");
+    }
+    modelSetupState = "FAILED";
+    modelSetupRestartRequired = false;
+    throw new Error(
+      "Local model setup failed. Check network access, available disk space, and retry."
+    );
+  }
+}
+
+function localRuntimeStatusForRenderer(): DesktopRendererLocalRuntimeStatus {
+  const snapshot = localRuntime?.getCapabilityStatus();
+  return Object.freeze({
+    protocolVersion: 1,
+    speech: rendererCapability(snapshot?.speech),
+    tts: rendererCapability(snapshot?.tts),
+    python: Object.freeze({
+      strategy: "SYSTEM_CPYTHON",
+      supportedVersions: Object.freeze(["3.12", "3.13"] as const)
+    }),
+    modelSetup: Object.freeze({
+      state: modelSetupState,
+      restartRequired: modelSetupRestartRequired
+    })
+  });
+}
+
+function rendererCapability(
+  status: {
+    readonly state: DesktopRendererRuntimeCapabilityStatus["state"];
+    readonly reasonCode?: string;
+  } | undefined
+): DesktopRendererRuntimeCapabilityStatus {
+  if (status === undefined) {
+    return Object.freeze({ state: "UNAVAILABLE", reasonCode: "NOT_STARTED" });
+  }
+  return Object.freeze({
+    state: status.state,
+    ...(status.reasonCode === undefined ? {} : { reasonCode: status.reasonCode })
+  });
+}
+
+async function runPackagedSmoke(
+  server: Awaited<ReturnType<DesktopBackendController["start"]>>,
+  backendConfig: Parameters<DesktopBackendController["start"]>[0]
+): Promise<void> {
+  const window = mainWindow;
+  if (window === undefined || window.isDestroyed()) {
+    throw new Error("Packaged smoke did not create a desktop window");
+  }
+  const rendererReady = await window.webContents.executeJavaScript(
+    `Boolean(document.body)
+      && document.readyState !== "loading"
+      && typeof globalThis.interviewDesktop?.getBootstrap === "function"
+      && typeof globalThis.interviewDesktop?.getLocalRuntimeStatus === "function"
+      && typeof globalThis.interviewDesktop?.installLocalModels === "function"`
+  );
+  if (rendererReady !== true) {
+    throw new Error("Packaged renderer/preload smoke validation failed");
+  }
+
+  const sessionId = newSessionId();
+  const writer = server.registry.get(sessionId);
+  const turns = new TurnCoordinator(writer);
+  await turns.startSession(sixPeopleProblem);
+  await turns.commitInput("Packaged Windows desktop smoke input.");
+  const beforeRestart = JSON.stringify(writer.getState());
+
+  await backend.stop();
+  const restarted = await backend.start(backendConfig);
+  const afterRestart = JSON.stringify(restarted.registry.get(sessionId).getState());
+  if (afterRestart !== beforeRestart) {
+    throw new Error("Packaged SQLite persistence smoke validation failed");
+  }
 }
 
 function installBootstrapHandler(): void {
@@ -396,6 +573,11 @@ async function failStartup(message: string): Promise<void> {
     app.quit();
     return;
   }
+  if (process.argv.includes("--packaged-smoke-test")) {
+    console.error(message);
+    app.quit();
+    return;
+  }
   try {
     await dialog.showMessageBox({
       type: "error",
@@ -416,6 +598,8 @@ function shutdownDesktop(): Promise<void> {
   bootstrap = undefined;
   ipcMain.removeAllListeners(DESKTOP_BOOTSTRAP_CHANNEL);
   ipcMain.removeAllListeners(DESKTOP_ZOOM_CHANNEL);
+  ipcMain.removeHandler(DESKTOP_LOCAL_RUNTIME_STATUS_CHANNEL);
+  ipcMain.removeHandler(DESKTOP_INSTALL_LOCAL_MODELS_CHANNEL);
 
   const failures: unknown[] = [];
 
