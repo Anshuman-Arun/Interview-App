@@ -97,6 +97,12 @@ export const ListInterviewCatalogCommandSchema = z.object({
   type: z.literal("LIST_INTERVIEW_CATALOG")
 }).strict();
 
+export const ListProviderOptionsCommandSchema = z.object({
+  protocolVersion: ProtocolVersionSchema,
+  requestId: RequestIdSchema,
+  type: z.literal("LIST_PROVIDER_OPTIONS")
+}).strict();
+
 export const ListSessionsCommandSchema = z.object({
   protocolVersion: ProtocolVersionSchema,
   requestId: RequestIdSchema,
@@ -174,6 +180,7 @@ export const ClientCommandSchema = z.discriminatedUnion("type", [
   StartSessionCommandSchema,
   StartConfiguredSessionCommandSchema,
   ListInterviewCatalogCommandSchema,
+  ListProviderOptionsCommandSchema,
   ListSessionsCommandSchema,
   ResumeSessionCommandSchema,
   CompleteSessionCommandSchema,
