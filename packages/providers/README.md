@@ -69,7 +69,10 @@ choose an executable path or arbitrary process environment.
 
 Antigravity authentication is deliberately outside provider/session state. The trusted runtime
 relies only on the CLI's documented OS-native keyring sign-in and does not inspect, copy, persist,
-or return those credentials. Each supervised turn receives a fresh temporary CLI profile rather
+or return those credentials.
+Before using this provider, run `agy` interactively once outside Interview App and complete
+sign-in. A supervised/headless interview does not perform onboarding; if cached authentication is
+unavailable, the CLI exits and the turn fails closed. Each supervised turn receives a fresh temporary CLI profile rather
 than the user's normal `~/.gemini` profile. That profile pins strict tool review,
 non-workspace access off, AI-credit fallback off, telemetry off, an empty custom-agent tool list,
 and deny-all fine-grained permission rules. The concrete Windows path does not depend on
@@ -84,7 +87,7 @@ capabilities therefore declare both local process execution and remote execution
 remote data use, and unknown metered-execution status. The standalone adapter remains fail-closed
 under no-metered policy unless a trusted runtime supplies current billing evidence.
 
-The concrete Windows application runtime requires the audited `agy 1.1.15-1.1.16` stream-json
+The concrete Windows application runtime requires the audited `agy 1.1.16` stream-json
 contract, forces AI-credit fallback off, leaves `modelProvider` absent, and does not inherit
 API-key/custom-endpoint environment variables. The CLI still authenticates through its OS-native
 account keyring, which can represent subscription, enterprise, or Google Cloud project modes.

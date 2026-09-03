@@ -13,9 +13,7 @@ import {
 } from "../../../packages/providers/src/index.js";
 
 const ANTIGRAVITY_EXECUTABLE_ID = "antigravity-cli";
-const ANTIGRAVITY_SAFE_CLI_LINE = Object.freeze([1, 1] as const);
-const ANTIGRAVITY_MINIMUM_SAFE_CLI_PATCH = 15;
-const ANTIGRAVITY_MAXIMUM_SAFE_CLI_PATCH = 16;
+const ANTIGRAVITY_SAFE_CLI_VERSION = Object.freeze([1, 1, 16] as const);
 // First use also pays cold executable hashing and trusted Windows supervisor
 // compilation. Those stages are each independently bounded at 30s, so this
 // one-time local preflight must leave room for both plus `agy --version`.
@@ -109,6 +107,9 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
   const ensureSupportedVersion = async (
     signal: AbortSignal | undefined
   ): Promise<void> => {
+    if (signal?.aborted === true) {
+      throw new Error("Antigravity version wait cancelled");
+    }
     let check = versionVerification;
     if (check === undefined) {
       check = (async () => {
@@ -252,13 +253,11 @@ export function isSupportedAntigravityCliVersionOutput(
     return false;
   }
 
-  const [safeMajor, safeMinor] = ANTIGRAVITY_SAFE_CLI_LINE;
-  // Headless, profile, auth, and protocol behavior can change even in a patch
-  // release. Admit only the exact upstream release window reviewed for this
-  // adapter instead of silently trusting future 1.1.x builds.
-  if (major !== safeMajor || minor !== safeMinor) return false;
-  return patch >= ANTIGRAVITY_MINIMUM_SAFE_CLI_PATCH
-    && patch <= ANTIGRAVITY_MAXIMUM_SAFE_CLI_PATCH;
+  const [safeMajor, safeMinor, safePatch] = ANTIGRAVITY_SAFE_CLI_VERSION;
+  // Headless, keyring restoration, profile, auth, and protocol behavior can
+  // change even in a patch release. This runtime depends on the 1.1.16 fixes
+  // for restored system-keyring account state, so admit exactly that build.
+  return major === safeMajor && minor === safeMinor && patch === safePatch;
 }
 
 function assertRestrictedAntigravityProfile(environment: {
