@@ -237,9 +237,10 @@ function createApplicationProviderRuntimePolicySource(): ProviderRuntimePolicySo
     process.env["INTERVIEW_ALLOW_METERED_REMOTE_REASONING"] === "1";
   const antigravityPolicy: ProviderPolicy = Object.freeze({
     allowMeteredUsage: allowMeteredRemoteReasoning,
-    maximumDataUse: allowMeteredRemoteReasoning
-      ? "REMOTE_MAY_BE_USED_FOR_IMPROVEMENT"
-      : "LOCAL_ONLY",
+    // Selecting the Antigravity provider explicitly authorizes its declared
+    // remote data-use class. Metered spend remains a separate gate and is
+    // denied by default unless the trusted runtime supplies current proof.
+    maximumDataUse: "REMOTE_MAY_BE_USED_FOR_IMPROVEMENT",
     billingVerificationMaxAgeMs: 60_000
   });
 
