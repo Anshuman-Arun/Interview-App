@@ -71,7 +71,9 @@ Antigravity authentication is deliberately outside provider/session state. The t
 relies only on the CLI's documented OS-native keyring sign-in and does not inspect, copy, persist,
 or return those credentials. Each supervised turn receives a fresh temporary CLI profile rather
 than the user's normal `~/.gemini` profile. That profile pins strict tool review,
-non-workspace access off, terminal sandboxing on, AI-credit fallback off, and telemetry off.
+non-workspace access off, AI-credit fallback off, telemetry off, an empty custom-agent tool list,
+and deny-all fine-grained permission rules. The concrete Windows path does not depend on
+Antigravity terminal sandbox mode because that CLI feature is not currently supported on Windows.
 The isolated profile does not inherit the user's normal CLI customizations; instead it contains
 one application-owned documented custom agent with an empty tool list and subagent invocation
 disabled. Runtime admission additionally requires the CLI's `init.tools` list to be empty.
