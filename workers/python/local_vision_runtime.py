@@ -115,6 +115,11 @@ class VisionRuntime:
         )
         self._tokens = _load_tokenizer(root / "tokenizer.json")
 
+    def close(self) -> None:
+        # Process teardown owns ONNX session release; expose the common managed
+        # worker lifecycle hook without pretending batch inference is interruptible.
+        return
+
     def analyze(
         self,
         png_bytes: bytes,
