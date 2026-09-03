@@ -115,7 +115,7 @@ export const QuantTradingWorkspace: React.FC<QuantTradingWorkspaceProps> = ({
   const quoteRequest = state.quoteRequest;
   const controlsDisabled = disabled || actionPending || terminal || quoteRequest === undefined;
 
-  const submitQuote = async (event: React.FormEvent): Promise<void> => {
+  const submitQuote = async (event: React.SyntheticEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     if (controlsDisabled) return;
     setLocalError(null);
