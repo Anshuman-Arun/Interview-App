@@ -139,7 +139,7 @@ export class StudentReasoningAnalysisCoordinator {
     let timeout: ReturnType<typeof setTimeout> | undefined;
     const timeLimit = new Promise<StudentReasoningAnalysisOutcome>((resolve) => {
       timeout = setTimeout(() => {
-        context.coordinator.abandon(request.requestId);
+        this.abandon(context, request.requestId);
         resolve({ status: "SKIPPED", reason: "TIME_LIMIT" });
       }, this.timeoutMs);
     });
@@ -176,7 +176,7 @@ export class StudentReasoningAnalysisCoordinator {
         || latest === undefined
         || turn.committedSequence !== latest
       ) {
-        context.coordinator.abandon(requestId);
+        this.abandon(context, requestId);
       }
     }
   }
@@ -185,13 +185,27 @@ export class StudentReasoningAnalysisCoordinator {
     this.shuttingDown = true;
     for (const context of this.contexts.values()) {
       for (const requestId of context.active.keys()) {
-        context.coordinator.abandon(requestId);
+        this.abandon(context, requestId);
       }
     }
   }
 
   public resume(): void {
     this.shuttingDown = false;
+  }
+
+  private abandon(context: SessionAnalysisContext, requestId: RequestId): void {
+    context.coordinator.abandon(requestId);
+    try {
+      const cancel: unknown = Reflect.get(this.provider, "cancel");
+      if (typeof cancel !== "function") return;
+      const result: unknown = Reflect.apply(cancel, this.provider, [requestId]);
+      void Promise.resolve(result).catch(() => undefined);
+    } catch {
+      // Physical provider cancellation is best-effort only. A malformed or
+      // failing optional cancellation hook must never escape timeout,
+      // supersession, or shutdown and cannot change authoritative admission.
+    }
   }
 
   private contextFor(

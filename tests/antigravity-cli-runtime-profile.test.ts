@@ -1,6 +1,7 @@
 import process from "node:process";
 import { describe, expect, it } from "vitest";
 import {
+  ANTIGRAVITY_FORMAL_INTERPRETER_AGENT_MARKDOWN,
   ANTIGRAVITY_REALIZER_AGENT_MARKDOWN,
   ANTIGRAVITY_SUPERVISED_SETTINGS_JSON,
   createApplicationProviderAdapterRuntimeSource,
@@ -84,6 +85,25 @@ describe("supervised Antigravity runtime profile", () => {
   );
 
   it.runIf(process.platform === "win32")(
+    "returns one stable frozen runtime object for repeated selected-provider resolution",
+    async () => {
+      const source = createApplicationProviderAdapterRuntimeSource();
+      const selection = {
+        providerId: ANTIGRAVITY_CLI_PROVIDER_ID,
+        modelId: ANTIGRAVITY_CLI_MODEL_ID
+      } as const;
+
+      const first = source.resolveRuntime(selection);
+      const second = source.resolveRuntime(selection);
+
+      expect(first).toBe(second);
+      expect(Object.isFrozen(first)).toBe(true);
+      expect(hasRuntimeExecutor(first)).toBe(true);
+      await expect(source.drain()).resolves.toBeUndefined();
+    }
+  );
+
+  it.runIf(process.platform === "win32")(
     "does not claim spend-impossible billing proof from profile isolation alone",
     async () => {
       const source = createApplicationProviderAdapterRuntimeSource();
@@ -112,24 +132,31 @@ describe("supervised Antigravity runtime profile", () => {
     expect(isSupportedAntigravityCliVersionOutput("not-a-version")).toBe(false);
   });
 
-  it("pins a primary-only custom agent using only documented capability fields", () => {
+  it("pins primary-only no-tools custom agents for realization and formal interpretation", () => {
+    for (const agent of [
+      ANTIGRAVITY_REALIZER_AGENT_MARKDOWN,
+      ANTIGRAVITY_FORMAL_INTERPRETER_AGENT_MARKDOWN
+    ]) {
+      expect(agent).toContain("tools: []");
+      expect(agent).toContain("inheritCustomizations: false");
+      expect(agent).toContain("mainAgent: true");
+      expect(agent).toContain("subagent: false");
+      expect(agent).not.toContain("run_command");
+      expect(agent).not.toContain("invoke_subagent");
+      expect(agent).not.toContain("commandExecutionPolicy:");
+      expect(agent).not.toContain("mcpServers:");
+      expect(agent).not.toContain("skills:");
+      expect(agent).not.toContain("plugins:");
+    }
     expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain(
       "name: interview-realizer"
     );
-    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain("tools: []");
-    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain(
-      "inheritCustomizations: false"
+    expect(ANTIGRAVITY_FORMAL_INTERPRETER_AGENT_MARKDOWN).toContain(
+      "name: formal-interpreter"
     );
-    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain("mainAgent: true");
-    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain("subagent: false");
-    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).not.toContain("run_command");
-    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).not.toContain("invoke_subagent");
-    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).not.toContain(
-      "commandExecutionPolicy:"
+    expect(ANTIGRAVITY_FORMAL_INTERPRETER_AGENT_MARKDOWN).toContain(
+      "never decide mathematical correctness"
     );
-    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).not.toContain("mcpServers:");
-    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).not.toContain("skills:");
-    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).not.toContain("plugins:");
   });
 
   it("fails closed for the concrete Antigravity runtime outside Windows", async () => {
