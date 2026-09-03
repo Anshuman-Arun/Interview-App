@@ -631,7 +631,7 @@ describe("Quant Research client admission boundaries", () => {
     document.body.append(container);
     const root = createRoot(container);
 
-    const allocationSubmit = vi.fn(async (_action: unknown) => allocationState);
+    const allocationSubmissions: QuantResearchCandidateAction[] = [];
     await act(async () => {
       root.render(
         <QuantResearchWorkspace
@@ -667,7 +667,7 @@ describe("Quant Research client admission boundaries", () => {
     expect(allocationSubmissions).toHaveLength(0);
     expect(container.textContent).toContain("public budget of 10");
 
-    const optimizationSubmit = vi.fn(async (_action: unknown) => optimizationState);
+    const optimizationSubmissions: QuantResearchCandidateAction[] = [];
     await act(async () => {
       root.render(
         <QuantResearchWorkspace
