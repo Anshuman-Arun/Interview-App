@@ -340,6 +340,7 @@ export class LocalInterviewTransportRuntime {
   private handleSessionTerminal(
     sessionId: Parameters<VoiceSynthesisCoordinator["cancelSession"]>[0]
   ): void {
+    this.orchestrator.requestCancellationForSupersededWork(sessionId);
     const writer = this.sessions.getWriter(sessionId);
     this.rendererStreamServer.closeSession(sessionId);
     this.audioAssets.pruneUnauthorizedSessionAssets(sessionId, writer.getState());
