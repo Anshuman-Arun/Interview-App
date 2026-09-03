@@ -150,7 +150,8 @@ function executorReturning(
   request: FormalInterpretationRequest,
   outputFactory: () => unknown,
   inspect?: (input: SupervisedCliExecutionRequest) => void,
-  responseSuffix = ""
+  responseSuffix = "",
+  responseTransform?: (serialized: string) => string
 ): SupervisedCliExecutor {
   void request;
   return Object.freeze({
@@ -166,6 +167,10 @@ function executorReturning(
       if (schemaArgument === undefined) throw new Error("Missing formal schema");
       const schema = JSON.parse(schemaArgument) as unknown;
       const output = outputFactory();
+      const serializedResponse = JSON.stringify(output) + responseSuffix;
+      const response = responseTransform === undefined
+        ? serializedResponse
+        : responseTransform(serializedResponse);
       const stdout = [
         JSON.stringify({
           event: "init",
@@ -183,7 +188,7 @@ function executorReturning(
           result: {
             conversation_id: "formal-test-conversation",
             status: "SUCCESS",
-            response: JSON.stringify(output) + responseSuffix,
+            response,
             num_turns: 1,
             structured_output: output,
             json_schema: schema
@@ -412,6 +417,40 @@ describe("provider-backed Oxford formal interpretation", () => {
           () => resultFor(test.request, "2"),
           undefined,
           "\nVERIFIED"
+        )
+      );
+      const coordinator = new InterpretationCoordinator(
+        test.writer,
+        provider,
+        test.profile.scopes
+      );
+
+      const outcome = await coordinator.interpretAndVerify(test.request);
+
+      expect(outcome).toMatchObject({
+        status: "NO_SUPPORTED_INTERPRETATION",
+        reason: "NO_INTERPRETATION"
+      });
+      expect(Object.keys(test.writer.getState().studentEvidence)).toHaveLength(0);
+    } finally {
+      test.store.close();
+    }
+  });
+
+  it("rejects duplicate JSON object keys instead of accepting JSON.parse last-key semantics", async () => {
+    const test = await fixture("2 divides 4.");
+    try {
+      const provider = providerFor(
+        test.sessions,
+        executorReturning(
+          test.request,
+          () => resultFor(test.request, "2"),
+          undefined,
+          "",
+          (serialized) => serialized.replace(
+            '{"protocolVersion":1,',
+            '{"protocolVersion":1,"protocolVersion":1,'
+          )
         )
       );
       const coordinator = new InterpretationCoordinator(
