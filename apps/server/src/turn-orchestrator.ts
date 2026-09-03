@@ -309,7 +309,13 @@ export class ServerTurnOrchestrator {
       turnId: input.turnId,
       inputEpisodeId: input.inputEpisodeId
     });
-    if (cancellationRequested() || !this.isTurnStillLatest(input)) {
+    const postAnalysisState = writer.getState();
+    if (
+      cancellationRequested()
+      || postAnalysisState.status !== "ACTIVE"
+      || postAnalysisState.contextEpoch !== currentState.contextEpoch
+      || !this.isTurnStillLatest(input)
+    ) {
       return "COMPLETE";
     }
 
