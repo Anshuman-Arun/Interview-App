@@ -488,10 +488,7 @@ function parseAntigravityStream(
         || init.data.init.agent !== expectedAgentId
         || init.data.init.tools.length !== 0
         || !schemaMatches
-        || (
-          init.data.init.permission_mode !== "strict"
-          && init.data.init.permission_mode !== "request-review"
-        )
+        || init.data.init.permission_mode !== "strict"
       ) {
         throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
       }
