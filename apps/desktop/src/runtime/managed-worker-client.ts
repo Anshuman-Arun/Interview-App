@@ -8,7 +8,7 @@ const MAX_JSON_RESPONSE_BYTES = 16 * 1024 * 1024;
 const MAX_JSON_RESPONSE_CHUNKS = 1_024;
 const MAX_CONSECUTIVE_UNCERTAIN_RECYCLES = 2;
 
-export type ManagedWorkerRecoveryScope = "vad" | "stt" | "tts" | "tts-cancel";
+export type ManagedWorkerRecoveryScope = "vad" | "stt" | "tts" | "tts-cancel" | "vision";
 
 export class ManagedWorkerTransportError extends Error {
   public constructor(cause: unknown) {
@@ -50,7 +50,7 @@ export class ManagedModelWorkerClient {
   public constructor(
     private readonly manager: LocalRuntimeManager,
     private readonly componentId: string,
-    private readonly workerType: "speech" | "tts",
+    private readonly workerType: "speech" | "tts" | "vision",
     private readonly token: string,
     private readonly lifecycleSignal?: AbortSignal
   ) {
@@ -88,7 +88,7 @@ export class ManagedModelWorkerClient {
   }
 
   public async postJson(
-    pathname: "/v1/vad" | "/v1/stt" | "/v1/tts" | "/v1/tts/cancel",
+    pathname: "/v1/vad" | "/v1/stt" | "/v1/tts" | "/v1/tts/cancel" | "/v1/vision",
     body: unknown,
     options: {
       readonly signal?: AbortSignal;
@@ -264,7 +264,7 @@ function readWorkerErrorCode(value: unknown): string | undefined {
 }
 
 function handshakeMetadata(status: LocalComponentStatus): {
-  readonly workerType: "speech" | "tts";
+  readonly workerType: "speech" | "tts" | "vision";
   readonly runtimeVersion: string;
   readonly port: number;
 } {
@@ -275,7 +275,7 @@ function handshakeMetadata(status: LocalComponentStatus): {
   const workerType = status.handshake?.workerType;
   const runtimeVersion = status.handshake?.runtimeVersion;
   const port = metadata["port"];
-  if ((workerType !== "speech" && workerType !== "tts")
+  if ((workerType !== "speech" && workerType !== "tts" && workerType !== "vision")
       || typeof runtimeVersion !== "string"
       || runtimeVersion.length === 0
       || runtimeVersion.length > 256

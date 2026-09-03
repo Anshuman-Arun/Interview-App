@@ -3,7 +3,11 @@
     "target": "ES2023",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2023",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "jsx": "react-jsx",
     "strict": true,
     "skipLibCheck": true,
@@ -12,13 +16,17 @@
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
     "noEmit": true,
-    "types": ["node", "vitest/globals"]
+    "types": [
+      "node",
+      "vitest/globals"
+    ]
   },
   "include": [
     "apps/**/*.ts",
     "apps/**/*.tsx",
     "packages/**/*.ts",
     "packages/**/*.tsx",
+    "scripts/**/*.ts",
     "tests/**/*.ts",
     "tests/**/*.tsx",
     "vitest.config.ts",

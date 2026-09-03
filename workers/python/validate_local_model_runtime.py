@@ -10,6 +10,8 @@ from importlib.metadata import version
 
 import moonshine_voice
 import onnxruntime as ort
+from PIL import Image
+from tokenizers import Tokenizer
 from moonshine_voice.moonshine_api import ModelArch
 from moonshine_voice.transcriber import Transcriber
 from moonshine_voice.tts import TextToSpeech
@@ -19,6 +21,18 @@ MAX_PYTHON_EXCLUSIVE = (3, 14)
 EXPECTED_DISTRIBUTIONS = {
     "moonshine-voice": "0.1.5",
     "onnxruntime": "1.29.0",
+    "Pillow": "12.3.0",
+    "tokenizers": "0.23.1",
+    "huggingface-hub": "1.30.0",
+    "click": "8.5.0",
+    "fsspec": "2026.7.0",
+    "hf-xet": "1.6.0",
+    "httpx": "0.28.1",
+    "PyYAML": "6.0.3",
+    "typing-extensions": "4.16.0",
+    "anyio": "4.15.0",
+    "httpcore": "1.0.9",
+    "h11": "0.16.0",
     "numpy": "2.5.2",
     "sounddevice": "0.5.6",
     "requests": "2.34.2",
@@ -74,6 +88,8 @@ def main() -> int:
         "CPUExecutionProvider" in ort.get_available_providers(),
         "onnxruntime CPUExecutionProvider is unavailable",
     )
+    require(hasattr(Image, "Resampling"), "Pillow resampling API is unavailable")
+    require(callable(getattr(Tokenizer, "from_file", None)), "tokenizers file loader API is unavailable")
     require(hasattr(ModelArch, "TINY"), "Moonshine ModelArch.TINY is unavailable")
 
     transcriber_parameters = inspect.signature(Transcriber).parameters

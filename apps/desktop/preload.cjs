@@ -128,7 +128,7 @@ function validateLocalRuntimeStatus(value) {
   if (
     typeof value !== "object"
     || value === null
-    || !hasExactKeys(value, ["protocolVersion", "speech", "tts", "python", "modelSetup"])
+    || !hasExactKeys(value, ["protocolVersion", "speech", "tts", "vision", "python", "modelSetup"])
     || value.protocolVersion !== 1
     || typeof value.python !== "object"
     || value.python === null
@@ -150,6 +150,7 @@ function validateLocalRuntimeStatus(value) {
     protocolVersion: 1,
     speech: validateCapabilityStatus(value.speech),
     tts: validateCapabilityStatus(value.tts),
+    vision: validateCapabilityStatus(value.vision),
     python: Object.freeze({
       strategy: "SYSTEM_CPYTHON",
       supportedVersions: Object.freeze(["3.12", "3.13"])
