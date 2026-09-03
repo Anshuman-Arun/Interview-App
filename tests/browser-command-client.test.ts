@@ -579,7 +579,7 @@ describe("browser command client", () => {
     expect(String(caught)).not.toContain("server message");
   });
 
-  it("surfaces only bounded whitelisted provider launch conflicts", async () => {
+  it("surfaces only bounded structured provider launch conflicts", async () => {
     const requestId = RequestIdSchema.parse("request_provider_conflict");
     const client = createClient({
       requestIdFactory: () => requestId,
@@ -588,7 +588,8 @@ describe("browser command client", () => {
         ok: false,
         error: {
           code: "CONFLICT",
-          message: "Selected provider requires configured authentication"
+          message: `untrusted server prose containing ${CLIENT_TOKEN}`,
+          providerLaunchReason: "CREDENTIALS_REQUIRED"
         }
       }, 409)
     });
@@ -597,6 +598,7 @@ describe("browser command client", () => {
       name: "BrowserCommandProtocolError",
       code: "CONFLICT",
       requestId,
+      providerLaunchReason: "CREDENTIALS_REQUIRED",
       publicMessage: "Selected provider requires configured authentication",
       message: "Selected provider requires configured authentication"
     });
