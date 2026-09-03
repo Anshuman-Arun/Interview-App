@@ -876,4 +876,61 @@ describe("live Oxford formal reasoning analysis", () => {
     }
   });
 
+
+  it("atomically discards pending formal verification when the session completes", async () => {
+    const store = new SqliteEventStore(":memory:");
+    try {
+      const registry = new SessionRuntimeRegistry(store);
+      const sessionId = newSessionId();
+      const writer = registry.get(sessionId);
+      const turns = new TurnCoordinator(writer);
+      const selectedProblem = problem("oxford-euclid-primes");
+      await turns.startSession(selectedProblem);
+      const committed = await turns.commitInput("The modular subclaim is exact.");
+
+      const profile = resolveOxfordFormalAnalysisProfile(selectedProblem);
+      if (profile === undefined) throw new Error("Missing Oxford formal profile");
+      const request = createCommittedTurnFormalInterpretationRequest(writer, {
+        inputEpisodeId: committed.inputEpisodeId,
+        turnId: committed.turnId,
+        target: profile.target,
+        allowedProtocols: profile.allowedProtocols
+      });
+      const verifier = profile.scopes[0]?.verifier;
+      if (verifier === undefined) throw new Error("Missing verifier scope");
+
+      await new VerificationCoordinator(writer, profile.scopes).requestVerification({
+        inputEpisodeId: committed.inputEpisodeId,
+        turnId: committed.turnId,
+        verifier,
+        candidateFormalInterpretation: statementFor(request, "CORRECT"),
+        interpretationConfidence: 1,
+        evidenceKey: profile.target,
+        expectedProblemVersion: selectedProblem.version,
+        envelope: createCommandEnvelope({
+          sessionId,
+          producer: "interpretation-coordinator",
+          requestId: request.requestId,
+          correlationId: request.requestId,
+          inputEpisodeId: committed.inputEpisodeId,
+          turnId: committed.turnId,
+          contextEpoch: request.basis.contextEpoch,
+          sourceRevision: request.source.sourceRevision
+        })
+      });
+      expect(writer.getState().verificationRequests[request.requestId]?.status).toBe("PENDING");
+
+      await turns.completeSession();
+
+      expect(writer.getState().status).toBe("COMPLETED");
+      expect(writer.getState().verificationRequests[request.requestId]).toMatchObject({
+        status: "DISCARDED",
+        discardReason: "Session completed"
+      });
+      expect(Object.values(writer.getState().studentEvidence)).toHaveLength(0);
+    } finally {
+      store.close();
+    }
+  });
+
 });
