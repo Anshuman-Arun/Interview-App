@@ -46,6 +46,9 @@ export function parseProductRoute(hash: string): ProductRoute {
   const parts = normalized.split("/");
   const head = parts[0];
 
+  if (head === "new" && parts.length === 1) {
+    return { page: "new" };
+  }
   if (head === "interview" && parts.length === 1) {
     return { page: "interview" };
   }
@@ -108,6 +111,8 @@ export function productRouteTitle(route: ProductRoute): string {
     case "home":
     case "interview":
       return "Interview";
+    case "new":
+      return "New interview · Interview";
     case "sessions":
       return "Sessions · Interview";
     case "settings":
