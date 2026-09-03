@@ -1041,7 +1041,6 @@ async function verifyWindowsSupervisorAssembly(
     if (
       !info.isFile()
       || info.isSymbolicLink()
-      || info.nlink !== 1n
       || info.size <= 0n
       || info.size > BigInt(MAX_WINDOWS_SUPERVISOR_ASSEMBLY_BYTES)
       || normalizeWindowsIdentityPath(assembly.path)
@@ -1191,7 +1190,6 @@ async function compileWindowsSupervisorAssembly(
     if (
       !info.isFile()
       || info.isSymbolicLink()
-      || info.nlink !== 1n
       || info.size <= 0n
       || info.size > BigInt(MAX_WINDOWS_SUPERVISOR_ASSEMBLY_BYTES)
       || normalizeWindowsIdentityPath(output)
