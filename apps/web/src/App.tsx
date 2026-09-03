@@ -540,6 +540,7 @@ export const App: React.FC = () => {
         <button
           type="button"
           role="tab"
+          data-testid="tab-whiteboard"
           aria-selected={compactPane === "whiteboard"}
           onClick={() => {
             setCompactPane("whiteboard");
