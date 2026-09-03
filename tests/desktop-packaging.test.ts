@@ -66,15 +66,20 @@ describe("Windows desktop packaging contract", () => {
   it("pins packaged Python resource hashes to the reviewed source bytes", async () => {
     const integrity = await source("apps/desktop/src/runtime/packaged-resource-integrity.ts");
     const worker = await readFile(path.join(root, "workers/python/local_model_worker.py"));
+    const preload = await readFile(path.join(root, "apps/desktop/preload.cjs"));
     const requirements = await readFile(
       path.join(root, "workers/python/requirements-local-model-runtime.txt")
     );
     const workerHash = createHash("sha256").update(worker).digest("hex");
+    const preloadHash = createHash("sha256").update(preload).digest("hex");
     const requirementsHash = createHash("sha256").update(requirements).digest("hex");
 
     expect(integrity).toContain(workerHash);
+    expect(integrity).toContain(preloadHash);
     expect(integrity).toContain(requirementsHash);
-    expect(await source(".gitattributes")).toContain("workers/python/*.py text eol=lf");
+    const attributes = await source(".gitattributes");
+    expect(attributes).toContain("workers/python/*.py text eol=lf");
+    expect(attributes).toContain("apps/desktop/preload.cjs text eol=lf");
   });
 
   it("keeps model setup behind narrow authenticated preload IPC", async () => {
