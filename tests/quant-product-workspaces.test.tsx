@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import fs from "node:fs";
+import path from "node:path";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -504,6 +506,21 @@ describe("Quant product hook authority", () => {
 
     await act(async () => rendered.root.unmount());
     rendered.container.remove();
+  });
+});
+
+describe("Quant workspace lifecycle source invariants", () => {
+  it("defers a skipped authoritative refresh until an in-flight action settles", () => {
+    const source = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/quant/QuantSessionWorkspace.tsx"),
+      "utf8"
+    );
+
+    expect(source).toContain("const deferredRefreshRef = useRef(false)");
+    expect(source).toContain("deferredRefreshRef.current = true");
+    expect(source).toContain("!deferredRefreshRef.current");
+    expect(source).toContain("quantActionPending");
+    expect(source).toContain("void onRefresh().catch(() => undefined)");
   });
 });
 
