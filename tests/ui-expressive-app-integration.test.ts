@@ -102,6 +102,9 @@ describe("expressive product integration invariants", () => {
 
     expect(app).toContain("session.pauseSession()");
     expect(app).toContain('navigateProductPage("home")');
+    expect(app).toContain('route.page === "home"');
+    expect(app).not.toContain('if (hasActiveInterview) session.pauseSession();');
+    expect(app).not.toContain('onClick={() => {\n                  session.pauseSession();');
     expect(app).toContain("session.resumePausedSession()");
     expect(app).not.toContain("Stored Interview Sessions");
     expect(app).not.toContain("<SessionReviewModal");
