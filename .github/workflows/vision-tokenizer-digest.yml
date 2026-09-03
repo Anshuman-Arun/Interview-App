@@ -5,15 +5,18 @@ on:
     branches: [main]
 
 jobs:
-  tokenizer-digest:
+  digest:
     if: github.head_ref == 'feat/production-local-whiteboard-vision'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Fetch pinned tokenizer and report identity
+      - uses: actions/checkout@v4
+      - name: Report pinned identities
         shell: bash
         run: |
           set -euo pipefail
+          printf 'LOCAL_MODEL_WORKER_SHA256='
+          sha256sum workers/python/local_model_worker.py | awk '{print $1}'
           url='https://github.com/RapidAI/RapidLaTeXOCR/releases/download/v0.0.0/tokenizer.json'
           curl --fail --location --proto '=https' --tlsv1.2 --max-time 120 "$url" --output tokenizer.json
           test "$(wc -c < tokenizer.json)" -eq 24174
