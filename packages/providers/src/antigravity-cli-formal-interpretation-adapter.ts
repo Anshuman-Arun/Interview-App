@@ -307,8 +307,7 @@ function createFormalInterpretationInput(
     },
     requestIdentity: {
       protocolVersion: request.protocolVersion,
-      requestId: request.requestId,
-      sessionId: request.sessionId
+      requestId: request.requestId
     },
     publicProblem: {
       id: publicProblem.id,
