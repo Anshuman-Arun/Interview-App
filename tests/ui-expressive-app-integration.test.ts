@@ -151,7 +151,15 @@ describe("expressive product integration invariants", () => {
     expect(adapter).toContain("detachedEditorState");
     expect(adapter).toContain('kind: "SNAPSHOT"');
     expect(adapter).toContain("captureEditorSnapshot");
+    const bridge = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/whiteboard/real-tldraw-editor.ts"),
+      "utf8"
+    );
+
     expect(adapter).toContain("restoreEditorSnapshot");
+    expect(bridge).toContain("getSnapshot(this.nativeEditor.store)");
+    expect(bridge).toContain("loadSnapshot(");
+    expect(bridge).toContain("this.nativeEditor.clearHistory()");
   });
 
   it("drops a prior canvas before attaching a different recovered ACTIVE session", () => {
