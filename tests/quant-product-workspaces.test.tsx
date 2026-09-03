@@ -647,8 +647,8 @@ describe("Quant Research client admission boundaries", () => {
     let inputs = [...container.querySelectorAll("input")];
     if (inputs.length !== 2) throw new Error("Expected paired allocation inputs");
     await act(async () => {
-      setInputValue(inputs[0] as HTMLInputElement, "1");
-      setInputValue(inputs[1] as HTMLInputElement, "1");
+      setInputValue(inputs[0], "1");
+      setInputValue(inputs[1], "1");
     });
     const allocationForm = container.querySelector("form");
     if (allocationForm === null) throw new Error("Expected allocation form");
@@ -675,8 +675,8 @@ describe("Quant Research client admission boundaries", () => {
     inputs = [...container.querySelectorAll("input")];
     if (inputs.length !== 2) throw new Error("Expected paired optimization inputs");
     await act(async () => {
-      setInputValue(inputs[0] as HTMLInputElement, "10");
-      setInputValue(inputs[1] as HTMLInputElement, "10");
+      setInputValue(inputs[0], "10");
+      setInputValue(inputs[1], "10");
     });
     const optimizationForm = container.querySelector("form");
     if (optimizationForm === null) throw new Error("Expected optimization form");
