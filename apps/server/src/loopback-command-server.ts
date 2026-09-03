@@ -11,6 +11,7 @@ import {
   SessionIdSchema,
   type ClientCommand,
   type LocalTransportSecurity,
+  type ProviderLaunchAvailabilityReason,
   type SessionId,
   type ProtocolErrorResponse,
   type ProtocolSuccessResponse
