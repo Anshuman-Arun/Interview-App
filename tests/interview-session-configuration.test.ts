@@ -6,6 +6,7 @@ import {
   InterviewSessionContextResponseSchema,
   OxfordInterviewSessionConfigurationSchema,
   ProtocolErrorResponseSchema,
+  ProviderOptionsResponseSchema,
   SessionStartedResponseSchema,
   newRequestId,
   newSessionId,
@@ -285,6 +286,7 @@ describe("generic interview session configuration", () => {
     expect(contextResponse.status).toBe(200);
     const context = InterviewSessionContextResponseSchema.parse(await json(contextResponse));
     expect(context.configuration.mode).toBe("OXFORD_MATHEMATICS");
+    expect(context.configurationSource).toBe("LEGACY_COMPATIBILITY");
     expect(context.problem?.id).toBe(sixPeopleProblem.id);
     expect(store.eventCount(sessionId)).toBe(eventCount);
   });
@@ -344,22 +346,12 @@ describe("generic interview session configuration", () => {
       }
     });
 
-    expect((await postStart(sessionId, configuration)).status).toBe(200);
-    const writer = registry.get(sessionId);
-    const committed = await new TurnCoordinator(writer).commitInput(
-      "Choose one person and consider the five relationships from them."
-    );
-    const orchestrator = new ServerTurnOrchestrator(sessions, () => undefined);
-    await orchestrator.orchestrateTurn({
-      sessionId,
-      turnId: committed.turnId,
-      inputEpisodeId: committed.inputEpisodeId,
-      studentText: "Choose one person and consider the five relationships from them."
-    });
-
-    expect(Object.keys(writer.getState().generations)).toHaveLength(0);
-    expect(Object.keys(writer.getState().deliveries)).toHaveLength(0);
-    expect(writer.getState().configuration).toEqual(configuration);
+    const response = await postStart(sessionId, configuration);
+    expect(response.status).toBe(409);
+    const failure = ProtocolErrorResponseSchema.parse(await json(response));
+    expect(failure.error.code).toBe("CONFLICT");
+    expect(failure.error.message).toMatch(/provider|authentication|policy/i);
+    expect(registry.hasSession(sessionId)).toBe(false);
   });
 
   it("rejects any later attempt to mutate a started session configuration", async () => {
@@ -528,6 +520,24 @@ describe("generic interview session configuration", () => {
     expect(serialized).not.toContain(sixPeopleProblem.private.verificationNotes);
     expect(serialized).not.toContain("generatedParameters");
     expect(serialized).not.toContain("gradingData");
+
+    const providersResponse = await post({
+      protocolVersion: 1,
+      type: "LIST_PROVIDER_OPTIONS",
+      requestId: newRequestId()
+    });
+    expect(providersResponse.status).toBe(200);
+    const providers = ProviderOptionsResponseSchema.parse(await json(providersResponse));
+    const mock = providers.options.find(
+      (option) => option.providerId === "mock-model" && option.modelId === "mock-default"
+    );
+    const gemini = providers.options.find(
+      (option) => option.providerId === "gemini-api" && option.modelId === "gemini-2.5-flash"
+    );
+    expect(mock).toMatchObject({ availability: "AVAILABLE" });
+    expect(gemini).toMatchObject({ availability: "UNAVAILABLE" });
+    const providerSerialized = JSON.stringify(providers);
+    expect(providerSerialized).not.toMatch(/api[_-]?key|credentialRef|token|executable|path/i);
   });
 
   function postStart(
