@@ -1,6 +1,24 @@
 name: Build Windows installer
 
 on:
+  pull_request:
+    paths:
+      - ".gitattributes"
+      - ".github/workflows/windows-installer.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "electron-builder.yml"
+      - "tsconfig.json"
+      - "apps/desktop/**"
+      - "apps/web/**"
+      - "apps/server/**"
+      - "packages/**"
+      - "workers/python/local_model_worker.py"
+      - "workers/python/requirements-local-model-runtime.txt"
+      - "scripts/check-packaged-desktop.mjs"
+      - "scripts/check-public-release.mjs"
+      - "scripts/run-packaged-desktop-smoke.ps1"
+      - "scripts/test-windows-installer.ps1"
   workflow_dispatch:
 
 permissions:
@@ -37,6 +55,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Validate packaging contract
+        run: pnpm test:package:win
 
       - name: Build unsigned NSIS installer
         run: pnpm dist:win
