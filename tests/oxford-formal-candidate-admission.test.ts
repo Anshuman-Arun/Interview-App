@@ -95,12 +95,6 @@ function admitted(problemId: string, sourceText: string, formalStatement: string
   return isOxfordFormalCandidateTargetAdmissible({
     profile,
     request,
-    publicProblem: {
-      id: request.problem.id,
-      version: request.problem.version,
-      prompt: "Public prompt only",
-      givenInformation: []
-    },
     candidate
   });
 }
