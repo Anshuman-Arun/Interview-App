@@ -48,9 +48,32 @@ export const QuantSessionWorkspace: React.FC<QuantSessionWorkspaceProps> = ({
   onSubmitResearch
 }) => {
   useEffect(() => {
-    if (productHidden || paused || sessionStatus !== "ACTIVE") return;
-    void onRefresh().catch(() => undefined);
-  }, [onRefresh, paused, productHidden, sessionStatus]);
+    if (
+      productHidden
+      || paused
+      || quantActionPending
+      || sessionStatus !== "ACTIVE"
+    ) return;
+
+    const refresh = (): void => {
+      void onRefresh().catch(() => undefined);
+    };
+    refresh();
+
+    const handleVisibilityChange = (): void => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [
+    onRefresh,
+    paused,
+    productHidden,
+    quantActionPending,
+    sessionStatus
+  ]);
 
   const modeLabel = configuration.mode === "QUANT_TRADING" ? "Quant Trading" : "Quant Research";
   const disabled = paused || sessionStatus !== "ACTIVE";
@@ -67,6 +90,7 @@ export const QuantSessionWorkspace: React.FC<QuantSessionWorkspaceProps> = ({
           type="button"
           className="app-header__identity"
           onClick={onHome}
+          disabled={quantActionPending}
           aria-label="Pause interview and open Home"
         >
           <BrandMark size={28} title="Interview" />
@@ -80,7 +104,14 @@ export const QuantSessionWorkspace: React.FC<QuantSessionWorkspaceProps> = ({
             <span aria-hidden="true" />
             Deterministic state
           </span>
-          <button type="button" onClick={onHome} className="app-header__quiet">Home</button>
+          <button
+            type="button"
+            onClick={onHome}
+            disabled={quantActionPending}
+            className="app-header__quiet"
+          >
+            Home
+          </button>
           <AppearanceDock compact />
         </div>
       </header>
