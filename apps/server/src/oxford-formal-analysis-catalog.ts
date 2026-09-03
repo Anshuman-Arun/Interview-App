@@ -1,5 +1,5 @@
 import type {
-  EvidenceKey,
+  FormalInterpretationTarget,
   FormalProtocolRef
 } from "../../../packages/domain/src/index.js";
 import {
@@ -10,7 +10,7 @@ import {
 export interface OxfordFormalAnalysisProfile {
   readonly problemId: string;
   readonly problemVersion: string;
-  readonly target: EvidenceKey;
+  readonly target: FormalInterpretationTarget;
   readonly allowedProtocols: readonly FormalProtocolRef[];
   readonly scopes: readonly FormalProtocolRoutingScope[];
 }
@@ -57,7 +57,7 @@ const PROFILE_SPECS: readonly ProfileSpec[] = Object.freeze([
 
 const PROFILES = new Map<string, OxfordFormalAnalysisProfile>(
   PROFILE_SPECS.map((spec) => {
-    const target: EvidenceKey = {
+    const target: FormalInterpretationTarget = {
       problemId: spec.problemId,
       subject: { kind: "CLAIM", claimId: spec.claimId },
       dimension: "CORRECTNESS"
