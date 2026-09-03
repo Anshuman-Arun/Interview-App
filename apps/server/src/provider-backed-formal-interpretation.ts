@@ -323,13 +323,14 @@ function formalInterpretationJsonSchema(
 ): Readonly<Record<string, unknown>> {
   const candidateSource = {
     requestId: request.requestId,
+    ...(request.generationId === undefined ? {} : { generationId: request.generationId }),
     basis: request.basis,
     sourceRevision: request.source.sourceRevision,
     inputEpisodeId: request.source.inputEpisodeId,
     turnId: request.source.turnId,
     eventIds: request.source.eventIds,
     span: request.source.span,
-    problem: request.source.problem
+    problem: request.problem
   };
   const protocolAlternatives = request.allowedProtocols.map((protocol) =>
     exactJsonObjectSchema(protocol)
