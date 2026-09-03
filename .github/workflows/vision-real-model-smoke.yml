@@ -93,13 +93,43 @@ jobs:
           pnpm exec tsx scripts/prepare-local-vision-smoke.ts $cacheRoot $modelRoot
           "INTERVIEW_VISION_SMOKE_MODEL_ROOT=$modelRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
+      - name: Download and verify pinned upstream regression fixtures
+        if: github.event_name != 'pull_request' || steps.current_head.outputs.current == 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $revision = "68680550355330b4ac68acdb947e776bc11f46d7"
+          $fixtureRoot = Join-Path $env:RUNNER_TEMP "rapid-latex-ocr-fixtures"
+          New-Item -ItemType Directory -Force $fixtureRoot | Out-Null
+          $fixtures = @(
+            @{ Name = "1.png"; Bytes = 93704; Blob = "73e1e0cc9b7567717fba60d6af603ab54a0ed18a" },
+            @{ Name = "2.png"; Bytes = 4601; Blob = "8812b1ceefa24a9658ab2d15a34aa9ea227602c1" },
+            @{ Name = "5.png"; Bytes = 171763; Blob = "bdf4ad6a6fe5d75188ef8075c7fe5b5c53dc9e5e" },
+            @{ Name = "6.png"; Bytes = 91882; Blob = "961d2a545f3e95b9d654cfbfe79fa62af2e5e437" }
+          )
+          foreach ($fixture in $fixtures) {
+            $target = Join-Path $fixtureRoot $fixture.Name
+            $url = "https://raw.githubusercontent.com/RapidAI/RapidLaTeXOCR/$revision/tests/test_files/$($fixture.Name)"
+            & curl.exe -L --fail --silent --show-error --retry 3 --output $target $url
+            if ($LASTEXITCODE -ne 0) { throw "fixture download failed: $($fixture.Name)" }
+            $file = Get-Item $target
+            if ($file.Length -ne $fixture.Bytes) {
+              throw "fixture size mismatch for $($fixture.Name): $($file.Length)"
+            }
+            $blob = (& git hash-object $target).Trim()
+            if ($blob -ne $fixture.Blob) {
+              throw "fixture Git blob identity mismatch for $($fixture.Name): $blob"
+            }
+          }
+          "INTERVIEW_VISION_SMOKE_FIXTURES=$fixtureRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: Run exact real-model regression and whiteboard smoke
         id: smoke
         if: github.event_name != 'pull_request' || steps.current_head.outputs.current == 'true'
         shell: pwsh
         run: |
           $report = Join-Path $env:RUNNER_TEMP "vision-smoke-report.json"
-          python -I workers/python/run_local_vision_smoke.py --model-root "$env:INTERVIEW_VISION_SMOKE_MODEL_ROOT" --fixtures "tests/fixtures/rapid-latex-ocr" --report "$report"
+          python -I workers/python/run_local_vision_smoke.py --model-root "$env:INTERVIEW_VISION_SMOKE_MODEL_ROOT" --fixtures "$env:INTERVIEW_VISION_SMOKE_FIXTURES" --report "$report"
           if (-not (Test-Path $report)) {
             throw "Real vision smoke did not produce its report"
           }
