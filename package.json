@@ -30,8 +30,8 @@
     "test:e2e:voice": "vitest run tests/e2e-voice-interview.test.ts",
     "test:package:win": "vitest run tests/desktop-packaging.test.ts",
     "verify:package:win": "node scripts/check-packaged-desktop.mjs",
-    "package:win": "pnpm build:web && pnpm build:desktop && pnpm security:public && npx --yes electron-builder@26.15.3 --win --x64 --dir && pnpm verify:package:win",
-    "dist:win": "pnpm build:web && pnpm build:desktop && pnpm security:public && npx --yes electron-builder@26.15.3 --win nsis --x64 && pnpm verify:package:win"
+    "package:win": "node scripts/clean-windows-package.mjs && pnpm build:web && pnpm build:desktop && pnpm security:public && npx --yes electron-builder@26.15.3 --win --x64 --dir && pnpm verify:package:win",
+    "dist:win": "node scripts/clean-windows-package.mjs && pnpm build:web && pnpm build:desktop && pnpm security:public && npx --yes electron-builder@26.15.3 --win nsis --x64 && pnpm verify:package:win"
   },
   "dependencies": {
     "katex": "^0.18.4",
