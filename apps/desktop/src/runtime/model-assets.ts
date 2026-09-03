@@ -109,7 +109,10 @@ const SILERO_VAD: DesktopRuntimeAsset = Object.freeze({
 
 
 const RAPID_LATEX_OCR_LICENSE = Object.freeze({
-  name: "MIT",
+  // Upstream is internally inconsistent: the repository LICENSE is MIT while
+  // setup.py declares Apache-2.0. Record both declarations instead of silently
+  // choosing one. The installer does not redistribute these weights.
+  name: "MIT repository LICENSE; setup.py declares Apache-2.0",
   url: "https://github.com/RapidAI/RapidLaTeXOCR/blob/68680550355330b4ac68acdb947e776bc11f46d7/LICENSE"
 });
 const RAPID_LATEX_OCR_RELEASE_URL =
@@ -258,60 +261,3 @@ export const DESKTOP_LOCAL_MODEL_ASSETS: readonly DesktopRuntimeAsset[] = Object
     type: "CONFIG",
     sourcePath: "tts/en_us/oov/onnx-config.json",
     filename: "onnx-config.json",
-    sizeBytes: 4_641,
-    sha256: "60a7cf2592ae66702f56e4368a8614e72235eef89205de96f4cf6bace96c5692",
-    runtimeRelativePath: "tts/en_us/oov/onnx-config.json",
-    modelVersion: "moonshine-en-us-g2p"
-  }),
-  moonshineAsset({
-    group: "tts",
-    familyId: "kokoro-en",
-    artifactId: "kokoro-en-config",
-    type: "CONFIG",
-    sourcePath: "tts/kokoro/config.json",
-    filename: "config.json",
-    sizeBytes: 2_351,
-    sha256: "5abb01e2403b072bf03d04fde160443e209d7a0dad49a423be15196b9b43c17f",
-    runtimeRelativePath: "tts/kokoro/config.json",
-    modelVersion: "kokoro"
-  }),
-  moonshineAsset({
-    group: "tts",
-    familyId: "kokoro-en",
-    artifactId: "kokoro-en-model",
-    type: "MODEL",
-    sourcePath: "tts/kokoro/model.ort",
-    filename: "model.ort",
-    sizeBytes: 92_586_320,
-    sha256: "ffe5ac61b1035e787d37451457d52052ce34ef4fe9e014ceed1aad55a6d915da",
-    runtimeRelativePath: "tts/kokoro/model.ort",
-    modelVersion: "kokoro"
-  }),
-  moonshineAsset({
-    group: "tts",
-    familyId: "kokoro-en",
-    artifactId: "kokoro-af-heart-voice",
-    type: "DATA",
-    sourcePath: "tts/kokoro/voices/af_heart.kokorovoice",
-    filename: "af_heart.kokorovoice",
-    sizeBytes: 522_252,
-    sha256: "908e14de5b4709da55562129164e618f5d135fcc34dac419e0c3de5189b72d2c",
-    runtimeRelativePath: "tts/kokoro/voices/af_heart.kokorovoice",
-    modelVersion: "kokoro-af-heart"
-  }),
-  ...VISION_MODEL_ASSETS
-]);
-
-export const SPEECH_ASSETS = Object.freeze(
-  DESKTOP_LOCAL_MODEL_ASSETS.filter((asset) => asset.group === "speech")
-);
-export const TTS_ASSETS = Object.freeze(
-  DESKTOP_LOCAL_MODEL_ASSETS.filter((asset) => asset.group === "tts")
-);
-export const VISION_ASSETS = Object.freeze(
-  DESKTOP_LOCAL_MODEL_ASSETS.filter((asset) => asset.group === "vision")
-);
-export const VOICE_ASSETS = Object.freeze([
-  ...SPEECH_ASSETS,
-  ...TTS_ASSETS
-]);
