@@ -8,7 +8,7 @@ const MAX_JSON_RESPONSE_BYTES = 16 * 1024 * 1024;
 const MAX_JSON_RESPONSE_CHUNKS = 1_024;
 const MAX_CONSECUTIVE_UNCERTAIN_RECYCLES = 2;
 
-export type ManagedWorkerRecoveryScope = "vad" | "stt" | "tts";
+export type ManagedWorkerRecoveryScope = "vad" | "stt" | "tts" | "tts-cancel";
 
 export class ManagedWorkerTransportError extends Error {
   public constructor(cause: unknown) {
@@ -229,7 +229,8 @@ function recoveryScopeForPath(
 ): ManagedWorkerRecoveryScope {
   if (pathname === "/v1/vad") return "vad";
   if (pathname === "/v1/stt") return "stt";
-  return "tts";
+  if (pathname === "/v1/tts") return "tts";
+  return "tts-cancel";
 }
 
 function readWorkerErrorCode(value: unknown): string | undefined {
