@@ -1,6 +1,8 @@
 export * from "./types.js";
 export {
   copyLocalArtifactBounded,
+  createStableStagingFile,
+  ensureSafeDirectory,
   verifyArtifactFile
 } from "./filesystem.js";
 export type {
