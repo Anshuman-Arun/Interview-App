@@ -697,6 +697,23 @@ describe("generic interview session configuration", () => {
     });
   });
 
+  it("reports disabled provider runtime state as disabled instead of a capability failure", async () => {
+    const resolver = new ProviderRuntimeResolver({
+      configurationSource: {
+        resolveConfiguration: () => ({ enabled: false })
+      }
+    });
+
+    const option = await resolver.evaluateLaunchOption({
+      providerId: "mock-model",
+      modelId: "mock-default"
+    });
+    expect(option).toMatchObject({
+      availability: "UNAVAILABLE",
+      reason: "DISABLED"
+    });
+  });
+
   it("enumerates only bounded public launch metadata", async () => {
     const response = await post({
       protocolVersion: 1,
