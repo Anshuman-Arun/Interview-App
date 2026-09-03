@@ -1080,6 +1080,20 @@ export function useInterviewSession(
     sessionTransitionEpochRef.current = transitionEpoch;
     setError(null);
     try {
+      // A pointer-up mutation may still be awaiting its command acknowledgement
+      // when the user immediately leaves for Home. Do not issue a competing
+      // board-state read on resume until that already-admitted mutation has
+      // settled; doing so can compare the new local stroke against an older
+      // server snapshot and incorrectly fail the canvas closed.
+      const pendingCoordinator =
+        boardSyncSessionRef.current === targetSessionId
+          ? boardSyncRef.current
+          : null;
+      if (pendingCoordinator !== null) {
+        await pendingCoordinator.awaitQuiescence();
+      }
+      if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+
       await synchronizeWhiteboardFor(targetSessionId);
       if (sessionTransitionEpochRef.current !== transitionEpoch) return;
       const coordinator = boardSyncRef.current;
@@ -1101,7 +1115,16 @@ export function useInterviewSession(
       sessionMutationAdmissionRef.current = false;
       setIsPaused(true);
       const message = err instanceof Error ? err.message : "Failed to resume interview";
-      setError(message);
+      setWhiteboardSync((current) =>
+        current.status === "UNSYNCHRONIZED"
+          ? current
+          : {
+              status: "UNSYNCHRONIZED",
+              pendingMutationCount: 0,
+              reason: message
+            }
+      );
+      setError("Whiteboard is reconnecting. Try Resume again in a moment.");
       throw err;
     }
   }, [
