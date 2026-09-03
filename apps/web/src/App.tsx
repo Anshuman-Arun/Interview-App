@@ -444,7 +444,7 @@ export const App: React.FC = () => {
     return productPage;
   }
 
-  if (!isOxfordWorkspace && session.configuration !== null) {
+  if (!isOxfordWorkspace) {
     const target = session.configuration.scenario;
     const provider = session.configuration.providerSelection;
     return (
