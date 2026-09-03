@@ -1,5 +1,6 @@
 import {
   SessionHistoryEntrySchema,
+  StoredSessionSummarySchema,
   type DeliveryId,
   type SessionHistoryEntry,
   type SessionId,
@@ -10,7 +11,10 @@ import {
   replaySession,
   type SessionEvent
 } from "../../../packages/events/src/index.js";
-import type { SqliteEventStore } from "../../../packages/persistence/src/index.js";
+import {
+  CorruptEventStreamError,
+  type SqliteEventStore
+} from "../../../packages/persistence/src/index.js";
 import { assertReplayPrefixValidForRecovery } from "../../../packages/replay/src/index.js";
 import { resolveSessionStateComposition } from "./interview-session-composition.js";
 import {
@@ -57,7 +61,9 @@ export class SessionRecoveryCoordinator {
   ) {}
 
   public listSessions(): readonly StoredSessionSummary[] {
-    const summaries = this.store?.listSessions() ?? this.registry.listSessions();
+    const summaries = this.store === undefined
+      ? this.registry.listSessions()
+      : listStoreSessionsBestEffort(this.store);
     const trusted: StoredSessionSummary[] = [];
     for (const summary of summaries) {
       const events = this.store?.load(summary.sessionId) ?? this.registry.loadEvents(summary.sessionId);
@@ -278,6 +284,63 @@ export class SessionRecoveryCoordinator {
     });
     return recovery;
   }
+}
+
+function listStoreSessionsBestEffort(
+  store: SqliteEventStore
+): readonly StoredSessionSummary[] {
+  try {
+    return store.listSessions();
+  } catch (error) {
+    if (!(error instanceof CorruptEventStreamError)) throw error;
+  }
+
+  const summaries: StoredSessionSummary[] = [];
+  for (const sessionId of store.listSessionIds()) {
+    let events: readonly SessionEvent[];
+    try {
+      events = store.load(sessionId);
+    } catch (error) {
+      if (error instanceof CorruptEventStreamError) continue;
+      throw error;
+    }
+    if (events.length === 0) continue;
+
+    let problemId: string | undefined;
+    let problemVersion: string | undefined;
+    let status: StoredSessionSummary["status"] = "CREATED";
+    for (const event of events) {
+      if (event.type === "PROBLEM_PRESENTED") {
+        problemId = event.payload.problemId;
+        problemVersion = event.payload.problemVersion;
+      } else if (event.type === "SESSION_STARTED") {
+        status = "ACTIVE";
+      } else if (event.type === "SESSION_COMPLETED") {
+        status = "COMPLETED";
+      } else if (event.type === "SESSION_ARCHIVED") {
+        status = "ARCHIVED";
+      }
+    }
+
+    const first = events[0];
+    const last = events.at(-1);
+    if (first === undefined || last === undefined) continue;
+    summaries.push(StoredSessionSummarySchema.parse({
+      sessionId,
+      ...(problemId === undefined ? {} : { problemId }),
+      ...(problemVersion === undefined ? {} : { problemVersion }),
+      status,
+      sequence: last.sequence,
+      createdAt: first.wallTime,
+      updatedAt: last.wallTime,
+      eventCount: events.length
+    }));
+  }
+
+  return summaries.sort((left, right) =>
+    right.updatedAt.localeCompare(left.updatedAt)
+    || left.sessionId.localeCompare(right.sessionId)
+  );
 }
 
 function eventsAreLegacyUninitializedQuantSession(
