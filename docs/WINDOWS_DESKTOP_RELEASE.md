@@ -165,7 +165,13 @@ clean Windows x64 machine:
   focused and no second backend/database writer appears.
 - Make the install directory read-only and confirm mutable state still goes to
   per-user app data.
+- Make the per-user app-data directory unwritable and confirm startup fails
+  clearly without falling back to the install directory or creating a second
+  database elsewhere.
 - Upgrade over a prior installer and verify interview history/model cache.
+- Exercise an older verified model cache and a stale or corrupt cached model;
+  confirm compatible verified assets remain usable while malformed bytes are
+  rejected/reinstalled rather than admitted.
 - Uninstall and verify binaries are removed while app data remains.
 - Reinstall and verify preserved history/model cache are still usable.
 - Inspect SmartScreen/Defender behavior for the unsigned build; do not bypass
