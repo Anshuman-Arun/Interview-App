@@ -742,4 +742,64 @@ describe("live Oxford formal reasoning analysis", () => {
     }
   });
 
+
+  it("does not select pedagogy from a turn whose text context changes during live analysis", async () => {
+    const store = new SqliteEventStore(":memory:");
+    try {
+      const registry = new SessionRuntimeRegistry(store);
+      const sessionId = newSessionId();
+      const writer = registry.get(sessionId);
+      const turns = new TurnCoordinator(writer);
+      const selectedProblem = problem("oxford-euclid-primes");
+      await turns.startSession(selectedProblem);
+      const committed = await turns.commitInput("For every listed prime the Euclid number leaves remainder one.");
+
+      let capturedRequest: FormalInterpretationRequest | undefined;
+      let releaseProvider: ((value: unknown) => void) | undefined;
+      let signalProviderStarted: (() => void) | undefined;
+      const providerStarted = new Promise<void>((resolve) => {
+        signalProviderStarted = resolve;
+      });
+      const provider: FormalInterpretationProvider = {
+        interpret(request) {
+          capturedRequest = request;
+          signalProviderStarted?.();
+          return new Promise((resolve) => {
+            releaseProvider = resolve;
+          });
+        }
+      };
+      const orchestrator = new ServerTurnOrchestrator(
+        new SessionRecoveryCoordinator(registry, store),
+        () => undefined,
+        undefined,
+        undefined,
+        provider
+      );
+      const orchestration = orchestrator.orchestrateTurn({
+        sessionId,
+        turnId: committed.turnId,
+        inputEpisodeId: committed.inputEpisodeId,
+        studentText: writer.getState().turns[committed.turnId]?.studentText ?? ""
+      });
+
+      await providerStarted;
+      await turns.correctTranscript("The corrected transcript invalidates the earlier interpretation.");
+      if (capturedRequest === undefined || releaseProvider === undefined) {
+        throw new Error("Provider did not receive the formal request");
+      }
+      releaseProvider(interpretationResult(capturedRequest, "CORRECT"));
+      await orchestration;
+
+      const state = writer.getState();
+      expect(state.pedagogicalActions[committed.turnId]).toBeUndefined();
+      expect(Object.values(state.verificationRequests)).toHaveLength(0);
+      expect(Object.values(state.studentEvidence)).toHaveLength(0);
+      expect(Object.values(state.generations)).toHaveLength(0);
+      expect(Object.values(state.deliveries)).toHaveLength(0);
+    } finally {
+      store.close();
+    }
+  });
+
 });
