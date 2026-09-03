@@ -1,5 +1,7 @@
 import {
   MAX_SPEECH_CONCURRENT_STREAMS,
+  MAX_SPEECH_TRANSCRIPT_CHARS,
+  MAX_SPEECH_WORD_TIMINGS,
   SPEECH_RECOGNIZER_TIMEOUT_ABORT_REASON,
   SPEECH_VAD_TIMEOUT_ABORT_REASON,
   TTS_LIMITS,
@@ -13,7 +15,8 @@ import {
   ManagedWorkerRequestTimeoutError,
   ManagedWorkerResponseError,
   ManagedWorkerTransportError,
-  type ManagedModelWorkerClient
+  type ManagedModelWorkerClient,
+  type ManagedWorkerRecoveryScope
 } from "./managed-worker-client.js";
 
 const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u;
@@ -78,10 +81,28 @@ export class ManagedSileroVadRuntime implements SileroVadRuntime {
       }
       throw error;
     }
-    if (!isRecord(result) || Object.keys(result).length !== 1) {
-      throw new Error("Silero worker returned invalid output");
+    const probability = isRecord(result)
+      && Object.keys(result).length === 1
+      ? result["speechProbability"]
+      : undefined;
+    if (
+      typeof probability !== "number"
+      || !Number.isFinite(probability)
+      || probability < 0
+      || probability > 1
+    ) {
+      const protocolError = new Error("Silero worker returned invalid bounded output");
+      await recycleAfterProtocolFailure(
+        this.client,
+        "vad",
+        workerInstance,
+        protocolError,
+        "Silero VAD protocol output was invalid"
+      );
+      throw protocolError;
     }
-    return result["speechProbability"];
+    this.client.markHealthy("vad");
+    return probability;
   }
 }
 
