@@ -52,8 +52,10 @@ prerequisite. A missing interpreter is reported as unavailable rather than
 falling back to a fixture worker.
 
 For voice on a clean machine, install CPython 3.12 or 3.13 and install the
-pinned requirements with that interpreter. A custom interpreter may be selected
-with `INTERVIEW_LOCAL_PYTHON`; the runtime canonicalizes and validates it
+pinned requirements with that interpreter. On Windows the desktop checks the
+standard per-user/system Python 3.13 and 3.12 locations before falling back to
+`PATH`, and ignores the Microsoft Store execution alias. A custom interpreter
+may be selected with `INTERVIEW_LOCAL_PYTHON`; the runtime canonicalizes it
 before worker registration.
 
 ## Model setup
