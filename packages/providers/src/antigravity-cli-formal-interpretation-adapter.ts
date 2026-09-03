@@ -3,7 +3,6 @@ import { z } from "zod";
 import {
   FormalInterpretationRequestSchema,
   InterpretationProviderResultSchema,
-  MAX_FORMAL_INTERPRETATION_CANDIDATES,
   MAX_FORMAL_INTERPRETATION_STATEMENT_CHARACTERS,
   type FormalInterpretationRequest,
   type InterpretationProviderResult
