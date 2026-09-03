@@ -508,15 +508,15 @@ if (
   exit 191
 }
 Write-InterviewSupervisorStage "PS_REQUIRED_OK"
-Remove-Item Env:INTERVIEW_SUPERVISED_CONFIG_JSON -ErrorAction SilentlyContinue
+[Environment]::SetEnvironmentVariable("INTERVIEW_SUPERVISED_CONFIG_JSON", $null, "Process")
 Write-InterviewSupervisorStage "PS_REMOVE_CONFIG"
-Remove-Item Env:INTERVIEW_SUPERVISED_ASSEMBLY_PATH -ErrorAction SilentlyContinue
+[Environment]::SetEnvironmentVariable("INTERVIEW_SUPERVISED_ASSEMBLY_PATH", $null, "Process")
 Write-InterviewSupervisorStage "PS_REMOVE_PATH"
-Remove-Item Env:INTERVIEW_SUPERVISED_ASSEMBLY_SHA256 -ErrorAction SilentlyContinue
+[Environment]::SetEnvironmentVariable("INTERVIEW_SUPERVISED_ASSEMBLY_SHA256", $null, "Process")
 Write-InterviewSupervisorStage "PS_REMOVE_SHA"
-Remove-Item Env:INTERVIEW_SUPERVISED_BOOTSTRAP -ErrorAction SilentlyContinue
+[Environment]::SetEnvironmentVariable("INTERVIEW_SUPERVISED_BOOTSTRAP", $null, "Process")
 Write-InterviewSupervisorStage "PS_REMOVE_BOOTSTRAP"
-Remove-Item Env:INTERVIEW_SUPERVISOR_STAGE_DEBUG_FILE -ErrorAction SilentlyContinue
+[Environment]::SetEnvironmentVariable("INTERVIEW_SUPERVISOR_STAGE_DEBUG_FILE", $null, "Process")
 Write-InterviewSupervisorStage "PS_CONFIG_OK"
 
 $config = $configJson | ConvertFrom-Json
