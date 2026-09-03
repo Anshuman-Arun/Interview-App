@@ -111,6 +111,26 @@ describe("expressive product integration invariants", () => {
     expect(hook).toContain("stopRendererTransport()");
   });
 
+  it("requires mounted whiteboard authority before Start or Recover can attach renderer delivery", () => {
+    const hook = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/hooks/useInterviewSession.ts"),
+      "utf8"
+    );
+    const app = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+
+    expect(hook).toContain("): Promise<boolean> =>");
+    expect(hook).toContain("if (adapter.getEditor() === null) return false");
+    expect(hook).toContain("sessionMutationAdmissionRef.current = whiteboardBound");
+    expect(hook).toContain('if (response.status === "ACTIVE" && whiteboardBound)');
+    expect(hook).toContain("if (!wasAdmitted)");
+    expect(hook).toContain("launchRendererStream(targetSessionId)");
+    expect(hook).toContain('whiteboardSync.status === "SYNCED"');
+    expect(app).toContain('session.whiteboardSync.status !== "SYNCED"');
+  });
+
   it("mounts the paused canvas read-only before restoring renderer and input authority", () => {
     const app = fs.readFileSync(
       path.resolve(process.cwd(), "apps/web/src/App.tsx"),
