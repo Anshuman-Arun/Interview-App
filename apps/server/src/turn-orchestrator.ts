@@ -8,7 +8,8 @@ import {
   ClosedWorldDisclosureAnalyzer,
   DisclosureValidator,
   ProviderCoordinator,
-  TurnCoordinator
+  TurnCoordinator,
+  type FormalInterpretationProvider
 } from "../../../packages/interview-engine/src/index.js";
 import type {
   SessionRecoveryCoordinator,
@@ -17,6 +18,7 @@ import type {
 import type { RendererStreamServer } from "./renderer-stream-server.js";
 import { resolveSessionStateComposition } from "./interview-session-composition.js";
 import { ProviderRuntimeResolver } from "./provider-runtime.js";
+import { StudentReasoningAnalysisCoordinator } from "./student-reasoning-analysis-coordinator.js";
 import {
   getReviewedProblemRealizationTexts,
   realizeProblemInterviewerProposal
@@ -62,16 +64,22 @@ export class ServerTurnOrchestrator {
   private readonly validator: DisclosureValidator;
   private readonly inFlight = new Map<string, InFlightOrchestration>();
   private readonly activeProviderExecutions = new Map<GenerationId, ActiveProviderExecution>();
+  private readonly reasoningAnalysis: StudentReasoningAnalysisCoordinator;
   private acceptingWork = true;
 
   public constructor(
     private readonly sessions: SessionRecoveryCoordinator,
     private readonly getRendererStreamServer: () => RendererStreamServer | undefined,
     validator?: DisclosureValidator,
-    private readonly providerRuntime: ProviderRuntimeResolver = new ProviderRuntimeResolver()
+    private readonly providerRuntime: ProviderRuntimeResolver = new ProviderRuntimeResolver(),
+    formalInterpretationProvider?: FormalInterpretationProvider
   ) {
     this.validator = validator ?? new DisclosureValidator(
       new ClosedWorldDisclosureAnalyzer(getReviewedProblemRealizationTexts())
+    );
+    this.reasoningAnalysis = new StudentReasoningAnalysisCoordinator(
+      sessions,
+      formalInterpretationProvider
     );
   }
 
@@ -87,6 +95,7 @@ export class ServerTurnOrchestrator {
   public requestCancellationForSupersededWork(
     sessionId: SessionId
   ): void {
+    this.reasoningAnalysis.supersedeStaleRequests(sessionId);
     for (const orchestration of this.inFlight.values()) {
       if (orchestration.input.sessionId === sessionId) {
         orchestration.signalCancellation();
@@ -121,6 +130,7 @@ export class ServerTurnOrchestrator {
    */
   public requestCancellationForShutdown(): void {
     this.acceptingWork = false;
+    this.reasoningAnalysis.shutdown();
     for (const orchestration of this.inFlight.values()) {
       orchestration.signalCancellation();
     }
@@ -137,6 +147,7 @@ export class ServerTurnOrchestrator {
     if (this.inFlight.size !== 0 || this.activeProviderExecutions.size !== 0) {
       throw new Error("Cannot resume provider orchestration while prior work is still active");
     }
+    this.reasoningAnalysis.resume();
     this.acceptingWork = true;
   }
 
@@ -290,13 +301,25 @@ export class ServerTurnOrchestrator {
     const problem = composition.problem;
     const turns = new TurnCoordinator(writer);
 
-    // 1. Pedagogical policy selects (or refreshes) the required action
+    // 1. Analyze the exact committed student turn. Interpretation remains
+    // fallible; only application-routed deterministic verification can change
+    // authoritative evidence. Any abstention/unavailability is non-blocking.
+    await this.reasoningAnalysis.analyze({
+      sessionId: input.sessionId,
+      turnId: input.turnId,
+      inputEpisodeId: input.inputEpisodeId
+    });
+    if (cancellationRequested() || !this.isTurnStillLatest(input)) {
+      return "COMPLETE";
+    }
+
+    // 2. Pedagogical policy reads the post-verification authoritative state.
     const realizationRequest = await turns.selectAction(input.turnId, problem);
     if (realizationRequest.requiredAction === "WAIT") {
       return "COMPLETE";
     }
 
-    // 2. Keep deterministic problem-specific realization only for the mock provider.
+    // 3. Keep deterministic problem-specific realization only for the mock provider.
     // Real providers receive the application-selected action through compiled context
     // and remain fallible realization engines.
     const mockProposal = usesDeterministicMockRealization(composition.configuration)
@@ -307,7 +330,7 @@ export class ServerTurnOrchestrator {
         )
       : undefined;
 
-    // 3. Resolve the authoritative provider/model through the application-owned
+    // 4. Resolve the authoritative provider/model through the application-owned
     // runtime boundary and the existing provider control plane. Raw runtime
     // errors never escape; recovery receives only a stable retry disposition.
     const runtimeOpening = this.providerRuntime.resolve({
@@ -333,7 +356,7 @@ export class ServerTurnOrchestrator {
     }
     const runtimeResolution = runtimeResult.resolution;
 
-    // 4. ProviderCoordinator owns policy/billing admission, context compilation,
+    // 5. ProviderCoordinator owns policy/billing admission, context compilation,
     // provider execution, proposal admission, and delivery validation.
     const coordinator = new ProviderCoordinator(writer);
     let execution: Awaited<ReturnType<ProviderCoordinator["start"]>>;
@@ -388,7 +411,7 @@ export class ServerTurnOrchestrator {
         return "COMPLETE";
       }
 
-      // 5. Publish delivery atoms to active renderer stream (SSE)
+      // 6. Publish delivery atoms to active renderer stream (SSE)
       const streamServer = this.getRendererStreamServer();
       if (streamServer !== undefined) {
         for (const atom of outcome.deliveryAtoms) {

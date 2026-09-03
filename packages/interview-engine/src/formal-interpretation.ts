@@ -12,7 +12,9 @@ import {
   type FormalInterpretationRequest,
   type FormalProtocolRef,
   type GenerationId,
-  type RequestId
+  type InputEpisodeId,
+  type RequestId,
+  type TurnId
 } from "../../domain/src/index.js";
 import { isGenerationBasisStillCompatible } from "./compatibility.js";
 import type { SessionWriter } from "./session-writer.js";
@@ -114,6 +116,106 @@ export function createFormalInterpretationRequest(
       inputEpisodeId: generation.basis.inputEpisodeId,
       turnId: generation.basis.turnId,
       sourceRevision: generation.basis.committedInputSequence,
+      eventIds: [sourceEventId],
+      span: {
+        start,
+        end,
+        text: turn.studentText.slice(start, end)
+      }
+    },
+    problem: {
+      id: state.problem.id,
+      version: state.problem.version
+    },
+    target,
+    allowedProtocols
+  });
+}
+
+
+export function createCommittedTurnFormalInterpretationRequest(
+  writer: SessionWriter,
+  input: {
+    readonly inputEpisodeId: InputEpisodeId;
+    readonly turnId: TurnId;
+    readonly target: EvidenceKey;
+    readonly allowedProtocols: readonly FormalProtocolRef[];
+    readonly requestId?: RequestId;
+    readonly sourceSpan?: {
+      readonly start: number;
+      readonly end: number;
+    };
+  }
+): FormalInterpretationRequest {
+  if (writer.isClosed()) throw new Error("Cannot create a formal interpretation request from a closed session writer");
+  const state = writer.getState();
+  if (!state.started || state.status !== "ACTIVE") {
+    throw new Error("Formal interpretation requires an active session");
+  }
+  if (state.problem === undefined) throw new Error("Formal interpretation requires an active problem");
+
+  const episode = state.inputEpisodes[input.inputEpisodeId];
+  const turn = state.turns[input.turnId];
+  if (
+    episode === undefined
+    || episode.status !== "COMMITTED"
+    || turn === undefined
+    || turn.inputEpisodeId !== input.inputEpisodeId
+  ) {
+    throw new Error("Formal interpretation requires an exact committed InputEpisode/Turn source");
+  }
+  if (
+    state.lastCommittedInputSequence === undefined
+    || turn.committedSequence !== state.lastCommittedInputSequence
+  ) {
+    throw new Error("Formal interpretation requires the latest committed Turn");
+  }
+  const sourceEventId = state.eventIds[turn.committedSequence - 1];
+  if (sourceEventId === undefined) {
+    throw new Error("Formal interpretation source event provenance is unavailable");
+  }
+
+  const target = FormalInterpretationTargetSchema.parse(input.target);
+  if (
+    input.allowedProtocols.length < 1
+    || input.allowedProtocols.length > MAX_FORMAL_INTERPRETATION_PROTOCOLS
+  ) {
+    throw new Error("Formal interpretation protocol list exceeds the bounded size");
+  }
+  const allowedProtocols = input.allowedProtocols.map((protocol) => FormalProtocolRefSchema.parse(protocol));
+  const start = input.sourceSpan?.start ?? 0;
+  const defaultEnd = Math.min(turn.studentText.length, MAX_FORMAL_INTERPRETATION_SOURCE_CHARACTERS);
+  const end = input.sourceSpan?.end ?? defaultEnd;
+  if (
+    !Number.isSafeInteger(start)
+    || !Number.isSafeInteger(end)
+    || start < 0
+    || end > turn.studentText.length
+    || end <= start
+    || end - start > MAX_FORMAL_INTERPRETATION_SOURCE_CHARACTERS
+  ) {
+    throw new Error("Formal interpretation source span is invalid or exceeds the bounded size");
+  }
+
+  return FormalInterpretationRequestSchema.parse({
+    protocolVersion: 1,
+    requestId: input.requestId ?? newRequestId(),
+    sessionId: state.sessionId,
+    basis: {
+      contextEpoch: state.contextEpoch,
+      committedInputSequence: state.lastCommittedInputSequence,
+      transcriptRevision: state.transcriptRevision,
+      boardRevision: state.boardRevision,
+      problemStateRevision: state.problemStateRevision,
+      policyRevision: state.policyRevision,
+      inputEpisodeId: input.inputEpisodeId,
+      turnId: input.turnId
+    },
+    source: {
+      kind: "TURN_TEXT",
+      inputEpisodeId: input.inputEpisodeId,
+      turnId: input.turnId,
+      sourceRevision: turn.committedSequence,
       eventIds: [sourceEventId],
       span: {
         start,

@@ -2,6 +2,7 @@ import type { LocalTransportSecurity } from "../../../packages/domain/src/index.
 import type {
   SessionRuntimeRegistry,
   VisionEvidenceInterpreter,
+  FormalInterpretationProvider,
   VisionInferenceBackend
 } from "../../../packages/interview-engine/src/index.js";
 import type { SqliteEventStore } from "../../../packages/persistence/src/index.js";
@@ -42,6 +43,7 @@ export interface LocalInterviewTransportRuntimeOptions {
   readonly maxRendererMessageBytes?: number;
   readonly orchestrator?: ServerTurnOrchestrator;
   readonly providerRuntimeResolver?: ProviderRuntimeResolver;
+  readonly formalInterpretationProvider?: FormalInterpretationProvider;
   readonly readService?: SessionReadService;
   readonly visionBackend?: VisionInferenceBackend;
   readonly visionEvidenceInterpreter?: VisionEvidenceInterpreter;
@@ -77,10 +79,13 @@ export class LocalInterviewTransportRuntime {
   public constructor(options: LocalInterviewTransportRuntimeOptions) {
     if (
       options.orchestrator !== undefined
-      && options.providerRuntimeResolver !== undefined
+      && (
+        options.providerRuntimeResolver !== undefined
+        || options.formalInterpretationProvider !== undefined
+      )
     ) {
       throw new Error(
-        "Local interview transport cannot accept both an orchestrator and a provider runtime resolver"
+        "Local interview transport cannot accept both an orchestrator and provider runtime dependencies"
       );
     }
     const voiceRuntime = options.voiceRuntime;
@@ -103,7 +108,8 @@ export class LocalInterviewTransportRuntime {
         this.sessions,
         () => this.rendererStreamServer,
         undefined,
-        options.providerRuntimeResolver
+        options.providerRuntimeResolver,
+        options.formalInterpretationProvider
       );
     this.sessions.setTurnRecoveryDelegate(this.orchestrator);
     this.readService = options.readService ?? new SessionReadService({

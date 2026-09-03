@@ -24,6 +24,7 @@ import {
 import type { EventDraft } from "../../events/src/index.js";
 import { createCommandEnvelope } from "./envelopes.js";
 import { isGenerationBasisStillCompatible } from "./compatibility.js";
+import { isVerificationBasisStillCompatible } from "./verification-compatibility.js";
 import { invalidateUndeliveredPolicyOutput } from "./policy-output-invalidation.js";
 import type { SessionWriter } from "./session-writer.js";
 
@@ -419,7 +420,7 @@ export class VerificationCoordinator {
         || envelope.sourceRevision !== request.basis.committedInputSequence
       ) return discard("CALLBACK_BASIS_MISMATCH");
 
-      const compatibility = isGenerationBasisStillCompatible(request.basis, state);
+      const compatibility = isVerificationBasisStillCompatible(request.basis, state, request.sourceGenerationId);
       if (compatibility === "INCOMPATIBLE") return discard("COMPATIBILITY_INCOMPATIBLE");
       if (compatibility === "UNKNOWN") return discard("COMPATIBILITY_UNKNOWN");
       if (!this.isScopeAuthorized(request.verifier, request.evidenceKey)) {

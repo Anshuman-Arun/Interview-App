@@ -32,6 +32,7 @@ import {
   canonicalJson,
   createProviderContextSpecFingerprintSync
 } from "./context-compiler.js";
+import { isVerificationBasisStillCompatible } from "./verification-compatibility.js";
 
 const MAX_APPROACHES = 256;
 const MAX_MILESTONES = 2_048;
@@ -221,6 +222,7 @@ interface VerificationSignal {
 interface VerificationEvidenceLink {
   readonly key: EvidenceKey;
   readonly basis: GenerationBasis;
+  readonly sourceGenerationId?: string;
   readonly result: VerificationResult;
   readonly resultSequence: number;
 }
@@ -826,7 +828,11 @@ function collectActiveEvidence(
       ) {
         return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
       }
-      if (isGenerationBasisStillCompatible(verificationLink.basis, state) !== "COMPATIBLE") {
+      if (isVerificationBasisStillCompatible(
+        verificationLink.basis,
+        state,
+        verificationLink.sourceGenerationId
+      ) !== "COMPATIBLE") {
         staleVerificationDerivedEvidence = true;
       }
     }
@@ -925,6 +931,7 @@ function collectVerificationSignals(
     const verificationRequestId = rawRequest["verificationRequestId"];
     const verifier = rawRequest["verifier"];
     const interpretationConfidence = rawRequest["interpretationConfidence"];
+    const sourceGenerationId = rawRequest["sourceGenerationId"];
     const evidenceEventIds = rawRequest["evidenceEventIds"];
     if (
       !result.success
@@ -939,6 +946,10 @@ function collectVerificationSignals(
       || verifier.length === 0
       || verifier.length > 128
       || typeof interpretationConfidence !== "number"
+      || (
+        sourceGenerationId !== undefined
+        && (!boundedString(sourceGenerationId, MAX_POLICY_ID_CHARACTERS))
+      )
       || interpretationConfidence !== result.data.interpretationConfidence
       || verifier !== result.data.verifier
       || !Array.isArray(evidenceEventIds)
@@ -978,13 +989,18 @@ function collectVerificationSignals(
       evidenceLinks.set(requestedEventId, {
         key: key.data,
         basis: basis.data,
+        ...(sourceGenerationId === undefined ? {} : { sourceGenerationId }),
         result: result.data,
         resultSequence
       });
     }
 
     if (key.data.problemId !== graph.problem.id) continue;
-    if (isGenerationBasisStillCompatible(basis.data, state) !== "COMPATIBLE") {
+    if (isVerificationBasisStillCompatible(
+      basis.data,
+      state,
+      sourceGenerationId as string | undefined
+    ) !== "COMPATIBLE") {
       continue;
     }
 

@@ -20,7 +20,7 @@ import {
   type VerificationStatus
 } from "../../domain/src/index.js";
 import { RequestIdConflictError } from "../../persistence/src/index.js";
-import { isGenerationBasisStillCompatible } from "./compatibility.js";
+import { isVerificationBasisStillCompatible } from "./verification-compatibility.js";
 import { createCommandEnvelope } from "./envelopes.js";
 import { fingerprintFormalInterpretationRequest } from "./formal-interpretation.js";
 import {
@@ -39,6 +39,7 @@ export const DEFAULT_MAX_IN_FLIGHT_INTERPRETATION_REQUESTS = 16 as const;
 export const DEFAULT_MAX_CACHED_INTERPRETATION_REQUESTS = 256 as const;
 export const MAX_INTERPRETATION_DIAGNOSTICS = 256 as const;
 export const MINIMUM_DETERMINISTIC_INTERPRETATION_CONFIDENCE = 1 as const;
+export const MAX_FORMAL_INTERPRETATION_PROVIDER_STATEMENT_CHARACTERS = 200_000 as const;
 
 const InterpretationCoordinatorOptionsSchema = z.object({
   maxInFlight: z.number().int().min(1).max(64).default(DEFAULT_MAX_IN_FLIGHT_INTERPRETATION_REQUESTS),
@@ -262,8 +263,15 @@ function providerResultExceedsStructuralBounds(input: unknown): boolean {
   const result = objectRecord(input);
   if (result === undefined || !Array.isArray(result.candidates)) return false;
   if (result.candidates.length > MAX_FORMAL_INTERPRETATION_CANDIDATES) return true;
+  let totalStatementCharacters = 0;
   return result.candidates.some((candidate) => {
     const candidateRecord = objectRecord(candidate);
+    if (candidateRecord !== undefined && typeof candidateRecord.formalStatement === "string") {
+      totalStatementCharacters += candidateRecord.formalStatement.length;
+      if (totalStatementCharacters > MAX_FORMAL_INTERPRETATION_PROVIDER_STATEMENT_CHARACTERS) {
+        return true;
+      }
+    }
     const source = candidateRecord === undefined ? undefined : objectRecord(candidateRecord.source);
     return source !== undefined
       && exceedsArrayBound(source.eventIds, MAX_FORMAL_INTERPRETATION_SOURCE_EVENTS);
@@ -352,6 +360,20 @@ export class InterpretationCoordinator {
     return true;
   }
 
+  /**
+   * Supersede analysis even after deterministic dispatch has started. The
+   * verifier may finish locally, but its result will not be admitted.
+   */
+  public abandon(requestIdInput: unknown): boolean {
+    const parsed = RequestIdSchema.safeParse(requestIdInput);
+    if (!parsed.success) return false;
+    const record = this.records.get(parsed.data);
+    if (record === undefined || record.settled) return false;
+    record.cancelled = true;
+    record.resolveCancel();
+    return true;
+  }
+
   public interpretAndVerify(input: unknown): Promise<InterpretationExecutionOutcome> {
     let requestExceedsBounds: boolean;
     try {
@@ -421,7 +443,7 @@ export class InterpretationCoordinator {
     request: FormalInterpretationRequest,
     record: RequestRecord
   ): Promise<InterpretationExecutionOutcome> {
-    const currentFailure = this.checkCurrentRequest(request);
+    const currentFailure = this.checkCurrentRequest(request, 0, true);
     if (currentFailure !== undefined) return this.finishFailure(currentFailure);
 
     for (const protocol of request.allowedProtocols) {
@@ -637,29 +659,62 @@ export class InterpretationCoordinator {
       verifier: candidate.route.definition.verifier
     });
 
-    let admittedVerification;
+    let workItem: VerificationWorkItem;
+    let duplicateVerificationRequest = false;
     try {
-      admittedVerification = await this.verification.requestVerificationFromProposal({
-        envelope: createCommandEnvelope({
-          sessionId: request.sessionId,
-          producer: "interpretation-coordinator",
-          requestId: request.requestId,
-          correlationId: request.requestId,
-          generationId: request.generationId,
+      if (request.generationId === undefined) {
+        const admitted = await this.verification.requestVerification({
           inputEpisodeId: request.source.inputEpisodeId,
           turnId: request.source.turnId,
-          contextEpoch: request.basis.contextEpoch,
-          sourceRevision: request.source.sourceRevision
-        }),
-        proposal: {
+          verifier: candidate.route.definition.verifier,
           candidateFormalInterpretation: candidate.canonicalStatement,
-          interpretationConfidence: candidate.confidence
-        },
-        verifier: candidate.route.definition.verifier,
-        evidenceKey: request.target,
-        expectedProblemVersion: request.problem.version,
-        sourceRequestFingerprint: record.fingerprint
-      });
+          interpretationConfidence: candidate.confidence,
+          evidenceKey: request.target,
+          envelope: createCommandEnvelope({
+            sessionId: request.sessionId,
+            producer: "interpretation-coordinator",
+            requestId: request.requestId,
+            correlationId: request.requestId,
+            inputEpisodeId: request.source.inputEpisodeId,
+            turnId: request.source.turnId,
+            contextEpoch: request.basis.contextEpoch,
+            sourceRevision: request.source.sourceRevision
+          })
+        });
+        workItem = admitted.value;
+        duplicateVerificationRequest = admitted.duplicate;
+      } else {
+        const admitted = await this.verification.requestVerificationFromProposal({
+          envelope: createCommandEnvelope({
+            sessionId: request.sessionId,
+            producer: "interpretation-coordinator",
+            requestId: request.requestId,
+            correlationId: request.requestId,
+            generationId: request.generationId,
+            inputEpisodeId: request.source.inputEpisodeId,
+            turnId: request.source.turnId,
+            contextEpoch: request.basis.contextEpoch,
+            sourceRevision: request.source.sourceRevision
+          }),
+          proposal: {
+            candidateFormalInterpretation: candidate.canonicalStatement,
+            interpretationConfidence: candidate.confidence
+          },
+          verifier: candidate.route.definition.verifier,
+          evidenceKey: request.target,
+          expectedProblemVersion: request.problem.version,
+          sourceRequestFingerprint: record.fingerprint
+        });
+        if (!admitted.value.accepted) {
+          return this.finishFailure(this.mapVerificationAdmissionFailure(
+            admitted.value.reason,
+            request.requestId,
+            candidateCount
+          ));
+        }
+        workItem = admitted.value.workItem;
+        duplicateVerificationRequest = admitted.duplicate;
+      }
     } catch (error) {
       if (error instanceof RequestIdConflictError) {
         return this.finishFailure(failed(
@@ -680,17 +735,8 @@ export class InterpretationCoordinator {
       ));
     }
 
-    if (!admittedVerification.value.accepted) {
-      return this.finishFailure(this.mapVerificationAdmissionFailure(
-        admittedVerification.value.reason,
-        request.requestId,
-        candidateCount
-      ));
-    }
-
-    const workItem = admittedVerification.value.workItem;
     const persisted = this.writer.getState().verificationRequests[workItem.verificationRequestId];
-    if (admittedVerification.duplicate && persisted?.status === "ACCEPTED" && persisted.result !== undefined) {
+    if (duplicateVerificationRequest && persisted?.status === "ACCEPTED" && persisted.result !== undefined) {
       const outcome: AcceptedInterpretationOutcome = {
         status: "ACCEPTED",
         requestId: request.requestId,
@@ -705,7 +751,7 @@ export class InterpretationCoordinator {
       this.finishAccepted(outcome, candidateCount);
       return outcome;
     }
-    if (admittedVerification.duplicate && persisted?.status === "DISCARDED") {
+    if (duplicateVerificationRequest && persisted?.status === "DISCARDED") {
       return this.finishFailure(failed(
         "VERIFICATION_REJECTED",
         "VERIFICATION_ALREADY_DISCARDED",
@@ -715,6 +761,11 @@ export class InterpretationCoordinator {
     }
 
     const supplied = await this.executeVerifier(verifier, workItem);
+    if (this.isCancelled(record)) {
+      return this.finishFailure(failed("STALE", "CANCELLED", candidateCount, request.requestId));
+    }
+    const afterVerifierFailure = this.checkCurrentRequest(request, candidateCount);
+    if (afterVerifierFailure !== undefined) return this.finishFailure(afterVerifierFailure);
     let verificationResult;
     try {
       verificationResult = await this.verification.processResult({
@@ -757,7 +808,7 @@ export class InterpretationCoordinator {
       verificationRequestId: workItem.verificationRequestId,
       verificationStatus: verificationResult.value.status,
       evidenceCommitted: verificationResult.value.evidenceCommitted,
-      duplicateVerificationRequest: admittedVerification.duplicate
+      duplicateVerificationRequest
     };
     this.finishAccepted(outcome, candidateCount);
     return outcome;
@@ -788,7 +839,8 @@ export class InterpretationCoordinator {
 
   private checkCurrentRequest(
     request: FormalInterpretationRequest,
-    candidateCount = 0
+    candidateCount = 0,
+    requireExactInitialBasis = false
   ): RejectedInterpretationOutcome | undefined {
     if (this.writer.isClosed()) {
       return failed("STALE", "WRITER_CLOSED", candidateCount, request.requestId);
@@ -810,30 +862,48 @@ export class InterpretationCoordinator {
       return failed("SOURCE_MISMATCH", "PROBLEM_CHANGED", candidateCount, request.requestId);
     }
 
-    const generation = state.generations[request.generationId];
-    if (generation === undefined) {
-      return failed("STALE", "UNKNOWN_GENERATION", candidateCount, request.requestId);
-    }
-    if (!generationBasesEqual(generation.basis, request.basis)) {
-      return failed("SOURCE_MISMATCH", "BASIS_MISMATCH", candidateCount, request.requestId);
+    if (request.generationId === undefined && requireExactInitialBasis) {
+      if (
+        request.basis.contextEpoch !== state.contextEpoch
+        || request.basis.committedInputSequence !== state.lastCommittedInputSequence
+        || request.basis.transcriptRevision !== state.transcriptRevision
+        || request.basis.boardRevision !== state.boardRevision
+        || request.basis.problemStateRevision !== state.problemStateRevision
+        || request.basis.policyRevision !== state.policyRevision
+      ) {
+        return failed("SOURCE_MISMATCH", "BASIS_MISMATCH", candidateCount, request.requestId);
+      }
     }
 
-    const compatibility = isGenerationBasisStillCompatible(request.basis, state);
+    if (request.generationId !== undefined) {
+      const generation = state.generations[request.generationId];
+      if (generation === undefined) {
+        return failed("STALE", "UNKNOWN_GENERATION", candidateCount, request.requestId);
+      }
+      if (!generationBasesEqual(generation.basis, request.basis)) {
+        return failed("SOURCE_MISMATCH", "BASIS_MISMATCH", candidateCount, request.requestId);
+      }
+      if (generation.status !== "ACTIVE") {
+        const sameRequestAlreadyOpened = Object.values(state.verificationRequests).some((verificationRequest) =>
+          verificationRequest.sourceGenerationId === request.generationId
+          && verificationRequest.sourceProposalRequestId === request.requestId
+        );
+        if (!sameRequestAlreadyOpened) {
+          return failed("STALE", "GENERATION_NOT_ACTIVE", candidateCount, request.requestId);
+        }
+      }
+    }
+
+    const compatibility = isVerificationBasisStillCompatible(
+      request.basis,
+      state,
+      request.generationId
+    );
     if (compatibility === "INCOMPATIBLE") {
       return failed("STALE", "BASIS_INCOMPATIBLE", candidateCount, request.requestId);
     }
     if (compatibility === "UNKNOWN") {
       return failed("STALE", "BASIS_UNKNOWN", candidateCount, request.requestId);
-    }
-
-    if (generation.status !== "ACTIVE") {
-      const sameRequestAlreadyOpened = Object.values(state.verificationRequests).some((verificationRequest) =>
-        verificationRequest.sourceGenerationId === request.generationId
-        && verificationRequest.sourceProposalRequestId === request.requestId
-      );
-      if (!sameRequestAlreadyOpened) {
-        return failed("STALE", "GENERATION_NOT_ACTIVE", candidateCount, request.requestId);
-      }
     }
 
     const turn = state.turns[request.source.turnId];
@@ -936,7 +1006,7 @@ export function echoInterpretationCandidateSource(
 ): InterpretationProviderResult["candidates"][number]["source"] {
   return {
     requestId: request.requestId,
-    generationId: request.generationId,
+    ...(request.generationId === undefined ? {} : { generationId: request.generationId }),
     basis: request.basis,
     sourceRevision: request.source.sourceRevision,
     inputEpisodeId: request.source.inputEpisodeId,

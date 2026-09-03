@@ -117,7 +117,7 @@ export const FormalInterpretationRequestSchema = z.object({
   protocolVersion: z.literal(FORMAL_INTERPRETATION_SCHEMA_VERSION),
   requestId: BoundedRequestIdSchema,
   sessionId: BoundedSessionIdSchema,
-  generationId: BoundedGenerationIdSchema,
+  generationId: BoundedGenerationIdSchema.optional(),
   basis: FormalInterpretationGenerationBasisSchema,
   source: FormalInterpretationSourceRefSchema,
   problem: FormalInterpretationProblemRefSchema,
@@ -163,7 +163,7 @@ export type FormalInterpretationRequest = z.infer<typeof FormalInterpretationReq
 
 export const FormalInterpretationCandidateSourceSchema = z.object({
   requestId: BoundedRequestIdSchema,
-  generationId: BoundedGenerationIdSchema,
+  generationId: BoundedGenerationIdSchema.optional(),
   basis: FormalInterpretationGenerationBasisSchema,
   sourceRevision: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   inputEpisodeId: BoundedInputEpisodeIdSchema,
