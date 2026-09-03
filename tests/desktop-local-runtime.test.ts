@@ -681,7 +681,7 @@ describe("desktop local model runtime", () => {
     expect(runtime.getStatus("speech-recycle-budget").state).toBe("STOPPED");
   }, 20_000);
 
-  it("resets uncertain worker recycle budget after a healthy response", async () => {
+  it("resets uncertain worker recycle budget only after typed health admission", async () => {
     const token = "2".repeat(64);
     const runtime = fixtureManager(
       "speech-recycle-reset",
@@ -703,6 +703,7 @@ describe("desktop local model runtime", () => {
       sampleRate: 16_000,
       streamId: "recycle-reset-health"
     })).resolves.toEqual({ speechProbability: 0.875 });
+    client.markHealthy("vad");
 
     await client.recycleAfterUncertainRequest(client.workerInstanceIdentity(), "vad");
     await client.recycleAfterUncertainRequest(client.workerInstanceIdentity(), "vad");
@@ -734,6 +735,7 @@ describe("desktop local model runtime", () => {
       sampleRate: 16_000,
       streamId: "stt-budget-vad-health-1"
     })).resolves.toEqual({ speechProbability: 0.875 });
+    client.markHealthy("vad");
 
     await client.recycleAfterUncertainRequest(
       client.workerInstanceIdentity(),
@@ -744,6 +746,7 @@ describe("desktop local model runtime", () => {
       sampleRate: 16_000,
       streamId: "stt-budget-vad-health-2"
     })).resolves.toEqual({ speechProbability: 0.875 });
+    client.markHealthy("vad");
 
     await expect(client.recycleAfterUncertainRequest(
       client.workerInstanceIdentity(),
@@ -775,6 +778,7 @@ describe("desktop local model runtime", () => {
     await expect(client.postJson("/v1/tts/cancel", {
       requestId: "health-cancel-1"
     })).resolves.toEqual({ accepted: false });
+    client.markHealthy("tts-cancel");
 
     await client.recycleAfterUncertainRequest(
       client.workerInstanceIdentity(),
@@ -783,6 +787,7 @@ describe("desktop local model runtime", () => {
     await expect(client.postJson("/v1/tts/cancel", {
       requestId: "health-cancel-2"
     })).resolves.toEqual({ accepted: false });
+    client.markHealthy("tts-cancel");
 
     await expect(client.recycleAfterUncertainRequest(
       client.workerInstanceIdentity(),
