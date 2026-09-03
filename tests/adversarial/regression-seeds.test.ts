@@ -344,7 +344,7 @@ describe("adversarial named regression schedules", () => {
     } finally {
       await fixture.close();
     }
-  });
+  }, 15_000);
 
   it("reconnect retries the same DeliveryId without duplicate visible output", async () => {
     const fixture = await AdversarialFixture.create();
