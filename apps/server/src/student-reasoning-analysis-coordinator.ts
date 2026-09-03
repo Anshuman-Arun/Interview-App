@@ -21,6 +21,7 @@ import {
 
 export const DEFAULT_STUDENT_REASONING_ANALYSIS_TIMEOUT_MS = 1_500 as const;
 export const MAX_STUDENT_REASONING_ANALYSIS_IN_FLIGHT = 2 as const;
+export const MAX_STUDENT_REASONING_ANALYSIS_SESSION_CONTEXTS = 128 as const;
 
 export type StudentReasoningAnalysisOutcome =
   | {
@@ -105,8 +106,13 @@ export class StudentReasoningAnalysisCoordinator {
     });
     if (profile === undefined) return { status: "SKIPPED", reason: "UNSUPPORTED_PROBLEM" };
 
-    const context = this.contextFor(input.sessionId, profile);
-    if (context.active.size >= MAX_STUDENT_REASONING_ANALYSIS_IN_FLIGHT) {
+    let context: SessionAnalysisContext | undefined;
+    try {
+      context = this.contextFor(input.sessionId, profile);
+    } catch {
+      return { status: "SKIPPED", reason: "ANALYSIS_FAILURE" };
+    }
+    if (context === undefined || context.active.size >= MAX_STUDENT_REASONING_ANALYSIS_IN_FLIGHT) {
       return { status: "SKIPPED", reason: "RESOURCE_LIMIT" };
     }
 
@@ -130,6 +136,9 @@ export class StudentReasoningAnalysisCoordinator {
     });
 
     const execution = context.coordinator.interpretAndVerify(request);
+    const trackedExecution = execution.finally(() => {
+      context.active.delete(request.requestId);
+    });
     let timeout: ReturnType<typeof setTimeout> | undefined;
     const timeLimit = new Promise<StudentReasoningAnalysisOutcome>((resolve) => {
       timeout = setTimeout(() => {
@@ -140,7 +149,7 @@ export class StudentReasoningAnalysisCoordinator {
 
     try {
       return await Promise.race([
-        execution.then((interpretation) => ({
+        trackedExecution.then((interpretation) => ({
           status: "ANALYZED" as const,
           interpretation
         })).catch(() => ({
@@ -151,8 +160,7 @@ export class StudentReasoningAnalysisCoordinator {
       ]);
     } finally {
       if (timeout !== undefined) clearTimeout(timeout);
-      context.active.delete(request.requestId);
-      void execution.catch(() => undefined);
+      void trackedExecution.catch(() => undefined);
     }
   }
 
@@ -192,14 +200,24 @@ export class StudentReasoningAnalysisCoordinator {
   private contextFor(
     sessionId: SessionId,
     profile: OxfordFormalAnalysisProfile
-  ): SessionAnalysisContext {
+  ): SessionAnalysisContext | undefined {
     const profileKey = profile.problemId + "\u0000" + profile.problemVersion;
     const existing = this.contexts.get(sessionId);
     if (existing !== undefined) {
       if (existing.profileKey !== profileKey) {
         throw new Error("Session formal-analysis profile changed unexpectedly");
       }
+      // Refresh insertion order so bounded eviction behaves as an LRU over
+      // idle per-session analysis contexts.
+      this.contexts.delete(sessionId);
+      this.contexts.set(sessionId, existing);
       return existing;
+    }
+
+    while (this.contexts.size >= MAX_STUDENT_REASONING_ANALYSIS_SESSION_CONTEXTS) {
+      const evictable = [...this.contexts.entries()].find(([, context]) => context.active.size === 0);
+      if (evictable === undefined) return undefined;
+      this.contexts.delete(evictable[0]);
     }
 
     const created: SessionAnalysisContext = {
@@ -231,7 +249,6 @@ function analysisRequestId(
     state.contextEpoch,
     state.lastCommittedInputSequence,
     state.transcriptRevision,
-    state.boardRevision,
     state.problemStateRevision,
     state.policyRevision,
     profile.problemId,
