@@ -19,7 +19,7 @@ export interface OxfordFormalAnalysisProfile {
 interface ProfileSpec {
   readonly problemId: string;
   readonly problemVersion: string;
-  readonly claimId: string;
+  readonly milestoneId: string;
   readonly allowedProtocols: readonly FormalProtocolRef[];
 }
 
@@ -27,31 +27,31 @@ const PROFILE_SPECS: readonly ProfileSpec[] = Object.freeze([
   {
     problemId: "oxford-domino-chessboard",
     problemVersion: "1.0.0",
-    claimId: "color-count-arithmetic",
+    milestoneId: "compare-color-counts",
     allowedProtocols: [{ protocol: "RATIONAL_ARITHMETIC", version: 1 }]
   },
   {
     problemId: "oxford-euclid-primes",
     problemVersion: "1.0.0",
-    claimId: "listed-prime-remainder",
+    milestoneId: "mod-listed-primes",
     allowedProtocols: [{ protocol: "MODULAR_ARITHMETIC", version: 1 }]
   },
   {
     problemId: "oxford-prefix-sums-mod-n",
     problemVersion: "1.0.0",
-    claimId: "prefix-residue-arithmetic",
+    milestoneId: "subtract-equal",
     allowedProtocols: [{ protocol: "MODULAR_ARITHMETIC", version: 1 }]
   },
   {
     problemId: "oxford-triangle-medians",
     problemVersion: "1.0.0",
-    claimId: "median-ratio-arithmetic",
+    milestoneId: "place-on-median",
     allowedProtocols: [{ protocol: "RATIONAL_ARITHMETIC", version: 1 }]
   },
   {
     problemId: "oxford-divisibility-chain",
     problemVersion: "1.0.0",
-    claimId: "divisibility-step",
+    milestoneId: "divisibility-finish",
     allowedProtocols: [{ protocol: "MODULAR_ARITHMETIC", version: 1 }]
   }
 ]);
@@ -60,7 +60,7 @@ const PROFILES = new Map<string, OxfordFormalAnalysisProfile>(
   PROFILE_SPECS.map((spec) => {
     const target: EvidenceKey = {
       problemId: spec.problemId,
-      subject: { kind: "CLAIM", claimId: spec.claimId },
+      subject: { kind: "MILESTONE", milestoneId: spec.milestoneId },
       dimension: "CORRECTNESS"
     };
     const scopes = spec.allowedProtocols.map((protocol) => {
