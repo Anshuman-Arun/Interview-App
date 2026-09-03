@@ -21,6 +21,7 @@ EXPECTED_DISTRIBUTIONS = {
     "onnxruntime": "1.29.0",
     "numpy": "2.5.2",
     "Pillow": "12.3.0",
+    "tokenizers": "0.23.2",
     "sounddevice": "0.5.6",
     "requests": "2.34.2",
     "tqdm": "4.70.0",
