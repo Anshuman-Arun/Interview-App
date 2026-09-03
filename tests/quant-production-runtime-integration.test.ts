@@ -258,13 +258,7 @@ describe("production quant runtime integration", () => {
       { sessionId: activeTrading, configuration: tradingConfiguration() },
       { sessionId: activeResearch, configuration: researchConfiguration() }
     ] as const) {
-      await new TurnCoordinator(registry.get(legacy.sessionId)).startConfiguredSession(
-        { configuration: legacy.configuration },
-        createCommandEnvelope({
-          sessionId: legacy.sessionId,
-          producer: "legacy-quant-fixture"
-        })
-      );
+      injectLegacyUninitializedQuant(store, legacy.sessionId, legacy.configuration);
       const writer = registry.get(legacy.sessionId);
       const state = writer.getState();
       expect(state.status).toBe("ACTIVE");
@@ -1758,17 +1752,26 @@ describe("adversarial quant lifecycle invariants", () => {
     }
   });
 
-  it("fails recovery and complete replay for configured quant streams missing deterministic initialization", async () => {
+  it("prevents new seedless quant starts while still failing legacy missing-initialization replay closed", async () => {
     const store = new SqliteEventStore(":memory:");
     try {
       for (const configuration of [tradingConfiguration(), researchConfiguration()]) {
+        const rejectedSessionId = newSessionId();
+        const rejectedWriter = SessionWriter.open(store, rejectedSessionId);
+        try {
+          await expect(new TurnCoordinator(rejectedWriter).startConfiguredSession(
+            { configuration },
+            createCommandEnvelope({ sessionId: rejectedSessionId, producer: "quant-adversarial-test" })
+          )).rejects.toThrow(/ProductionSessionRuntime/u);
+          expect(store.eventCount(rejectedSessionId)).toBe(0);
+        } finally {
+          await rejectedWriter.close();
+        }
+
         const sessionId = newSessionId();
+        injectLegacyUninitializedQuant(store, sessionId, configuration);
         const writer = SessionWriter.open(store, sessionId);
         try {
-          await new TurnCoordinator(writer).startConfiguredSession(
-            { configuration },
-            createCommandEnvelope({ sessionId, producer: "quant-adversarial-test" })
-          );
           expect(() => resolveSessionStateComposition(writer.getState()))
             .toThrow(/lacks authoritative scenario state/u);
           expect(() => projectSessionHistory(store.load(sessionId))).toThrow();
@@ -2699,6 +2702,32 @@ function overwriteProcessedResult(
   database.prepare(
     "UPDATE processed_requests SET result_json = ? WHERE session_id = ? AND request_id = ?"
   ).run(JSON.stringify(result), sessionId, requestId);
+}
+
+function injectLegacyUninitializedQuant(
+  store: SqliteEventStore,
+  sessionId: SessionId,
+  configuration: InterviewSessionConfiguration
+): void {
+  const requestId = newRequestId();
+  store.appendIdempotent({
+    sessionId,
+    requestId,
+    causationId: requestId,
+    correlationId: requestId,
+    elapsedMs: 0,
+    expectedPriorSequence: 0,
+    commandFingerprint: "a".repeat(64),
+    drafts: [{
+      source: "APPLICATION",
+      type: "SESSION_STARTED",
+      payload: {
+        startedAt: new Date().toISOString(),
+        configuration
+      }
+    }],
+    result: { injected: true }
+  });
 }
 
 function recoveryCoordinator(registry: SessionRuntimeRegistry): SessionRecoveryCoordinator {
