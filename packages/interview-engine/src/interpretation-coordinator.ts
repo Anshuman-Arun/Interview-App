@@ -228,6 +228,9 @@ function sameCandidateSource(candidate: FormalInterpretationCandidate, request: 
     && candidate.source.inputEpisodeId === request.source.inputEpisodeId
     && candidate.source.turnId === request.source.turnId
     && sameStringArray(candidate.source.eventIds, request.source.eventIds)
+    && candidate.source.span.start === request.source.span.start
+    && candidate.source.span.end === request.source.span.end
+    && candidate.source.span.text === request.source.span.text
     && candidate.source.problem.id === request.problem.id
     && candidate.source.problem.version === request.problem.version;
 }
@@ -1012,6 +1015,7 @@ export function echoInterpretationCandidateSource(
     inputEpisodeId: request.source.inputEpisodeId,
     turnId: request.source.turnId,
     eventIds: request.source.eventIds,
+    span: request.source.span,
     problem: request.problem
   };
 }
