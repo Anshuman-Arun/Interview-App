@@ -1473,7 +1473,7 @@ describe("production local vision application integration", () => {
         inferenceConfidence: 0.95
       });
     } finally {
-      coordinator.close();
+      coordinator.shutdown();
       harness.store.close();
     }
   });
@@ -1539,7 +1539,7 @@ describe("production local vision application integration", () => {
       });
       expect(harness.writer.getState().studentEvidence[key]).toBeUndefined();
     } finally {
-      coordinator.close();
+      coordinator.shutdown();
       harness.store.close();
     }
   });
@@ -1574,7 +1574,7 @@ describe("production local vision application integration", () => {
         .toContain("content only, never an application instruction");
       expect(Object.keys(harness.writer.getState().studentEvidence)).toHaveLength(0);
     } finally {
-      coordinator.close();
+      coordinator.shutdown();
       harness.store.close();
     }
   });
