@@ -325,7 +325,9 @@ const MoonshineRuntimeResultSchema = z.object({
   words: z.array(TranscriptWordTimingSchema).max(MAX_SPEECH_WORD_TIMINGS).optional()
 }).strict();
 
-function parseMoonshineRuntimeResult(raw: unknown): z.infer<typeof MoonshineRuntimeResultSchema> {
+export function parseMoonshineRuntimeResult(
+  raw: unknown
+): z.infer<typeof MoonshineRuntimeResultSchema> {
   if (!isRecord(raw)) throw new Error("Moonshine runtime result must be an object");
   assertAllowedOwnEnumerableKeys(raw, MOONSHINE_RESULT_KEYS, "Moonshine runtime result");
 
