@@ -128,7 +128,7 @@ export const QuantSessionWorkspace: React.FC<QuantSessionWorkspaceProps> = ({
           state={quantState?.mode === "QUANT_TRADING" ? quantState.state : null}
           loading={quantStateLoading}
           actionPending={quantActionPending}
-          disabled={disabled}
+          disabled={disabled || quantStateLoading}
           onRefresh={onRefresh}
           onSubmit={onSubmitTrading}
           onReview={onReview}
@@ -138,7 +138,7 @@ export const QuantSessionWorkspace: React.FC<QuantSessionWorkspaceProps> = ({
           state={quantState?.mode === "QUANT_RESEARCH" ? quantState.state : null}
           loading={quantStateLoading}
           actionPending={quantActionPending}
-          disabled={disabled}
+          disabled={disabled || quantStateLoading}
           onRefresh={onRefresh}
           onSubmit={onSubmitResearch}
           onReview={onReview}
