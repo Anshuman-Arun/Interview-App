@@ -350,7 +350,7 @@ export function NewInterviewPage({
                   step={1}
                   value={durationText}
                   onChange={(event) => setDurationText(event.target.value)}
-                  placeholder="Server default"
+                  placeholder="Leave unset"
                   data-testid="duration-input"
                 />
                 <span>min</span>
