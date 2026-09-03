@@ -77,15 +77,14 @@ export class LocalInterviewTransportRuntime {
   private voiceWorkersTerminated = false;
 
   public constructor(options: LocalInterviewTransportRuntimeOptions) {
-    if (
-      options.orchestrator !== undefined
-      && (
-        options.providerRuntimeResolver !== undefined
-        || options.formalInterpretationProvider !== undefined
-      )
-    ) {
+    if (options.orchestrator !== undefined && options.providerRuntimeResolver !== undefined) {
       throw new Error(
-        "Local interview transport cannot accept both an orchestrator and provider runtime dependencies"
+        "Local interview transport cannot accept both an orchestrator and a provider runtime resolver"
+      );
+    }
+    if (options.orchestrator !== undefined && options.formalInterpretationProvider !== undefined) {
+      throw new Error(
+        "Local interview transport cannot accept both an orchestrator and a formal interpretation provider"
       );
     }
     const voiceRuntime = options.voiceRuntime;
