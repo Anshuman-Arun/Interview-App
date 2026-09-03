@@ -233,6 +233,8 @@ describe("Quant product hook authority", () => {
     const rendered = renderHook(fetchImpl);
     await act(async () => {
       await rendered.current().startConfiguredSession(configuration, sessionId);
+    });
+    await act(async () => {
       await rendered.current().refreshQuantState();
     });
 
@@ -326,6 +328,8 @@ describe("Quant product hook authority", () => {
     const rendered = renderHook(fetchImpl);
     await act(async () => {
       await rendered.current().startConfiguredSession(configuration, sessionId);
+    });
+    await act(async () => {
       await rendered.current().refreshQuantState();
     });
     await act(async () => {
@@ -335,7 +339,7 @@ describe("Quant product hook authority", () => {
     expect(submits).toBe(1);
     expect(reads).toBe(2);
     expect(rendered.current().quantState).toEqual({ mode: "QUANT_TRADING", state: round2 });
-    expect(rendered.current().error).toContain("changed before this action was admitted");
+    expect(rendered.current().error).toContain("conflicts with the current scenario state");
 
     await act(async () => rendered.root.unmount());
     rendered.container.remove();
@@ -394,7 +398,11 @@ describe("Quant product hook authority", () => {
     const rendered = renderHook(fetchImpl);
     await act(async () => {
       await rendered.current().startConfiguredSession(configuration, sessionId);
+    });
+    await act(async () => {
       await rendered.current().refreshQuantState();
+    });
+    await act(async () => {
       await rendered.current().submitQuantResearchAction({
         actionId: "model_choice_1",
         kind: "CHOOSE_OPTION",
