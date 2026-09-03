@@ -18,6 +18,7 @@ import {
 } from "../../../packages/persistence/src/index.js";
 import { assertReplayPrefixValidForRecovery } from "../../../packages/replay/src/index.js";
 import { resolveSessionStateComposition } from "./interview-session-composition.js";
+import { createLegacyDefaultSessionConfiguration } from "./legacy-session-compatibility.js";
 import {
   type SessionRuntimeRegistry,
   type SessionWriter
@@ -126,10 +127,10 @@ export class SessionRecoveryCoordinator {
     const events = this.store?.load(sessionId) ?? this.registry.loadEvents(sessionId);
     for (const event of events) {
       if (event.type === "SESSION_STARTED") {
-        // Unmarked histories predate explicit launch provenance. Classify them
-        // conservatively as legacy rather than silently reinterpreting them as
-        // newly configured sessions.
-        return event.payload.configurationSource ?? "LEGACY_COMPATIBILITY";
+        if (event.payload.configurationSource !== undefined) {
+          return event.payload.configurationSource;
+        }
+        return inferUnmarkedConfigurationSource(event.payload.configuration);
       }
     }
     throw new Error("Authoritative session history has no SESSION_STARTED event");
@@ -433,6 +434,47 @@ function isQuantSessionState(state: Readonly<ReturnType<SessionWriter["getState"
     || state.configuration?.mode === "QUANT_RESEARCH"
     || state.quantTrading !== undefined
     || state.quantResearch !== undefined;
+}
+
+
+function inferUnmarkedConfigurationSource(
+  configuration: SessionEvent["payload"] extends never ? never : unknown
+): SessionConfigurationSource {
+  if (configuration === undefined || configuration === null || typeof configuration !== "object") {
+    return "LEGACY_COMPATIBILITY";
+  }
+
+  const candidate = configuration as {
+    readonly mode?: string;
+    readonly problem?: { readonly id?: string; readonly version?: string };
+    readonly difficulty?: string;
+    readonly interventionPolicy?: string;
+    readonly durationMinutes?: number;
+    readonly providerSelection?: unknown;
+  };
+
+  if (candidate.mode !== "OXFORD_MATHEMATICS") {
+    return "CONFIGURED";
+  }
+
+  const legacy = createLegacyDefaultSessionConfiguration();
+  if (legacy.mode !== "OXFORD_MATHEMATICS") {
+    throw new Error("Legacy compatibility configuration must remain Oxford Mathematics");
+  }
+
+  const exactLegacyShape =
+    candidate.problem?.id === legacy.problem.id
+    && candidate.problem?.version === legacy.problem.version
+    && candidate.difficulty === legacy.difficulty
+    && candidate.interventionPolicy === legacy.interventionPolicy
+    && candidate.durationMinutes === undefined
+    && candidate.providerSelection === undefined;
+
+  // Before provenance was persisted, configured sessions already stored their
+  // exact configuration. Any shape that could not have been emitted by legacy
+  // START_SESSION is therefore known to be configured. The one historically
+  // ambiguous Ramsey/default shape remains conservatively legacy.
+  return exactLegacyShape ? "LEGACY_COMPATIBILITY" : "CONFIGURED";
 }
 
 function semanticDeliveryKey(generationId: string, text: string): string {
