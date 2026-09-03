@@ -582,13 +582,19 @@ function antigravityProposalWithinBounds(
 ): boolean {
   if (
     proposal.speechText !== undefined
-    && proposal.speechText.length > MAX_SPEECH_CHARACTERS
+    && !stringWithinCodePointLimit(
+      proposal.speechText,
+      MAX_SPEECH_CHARACTERS
+    )
   ) {
     return false;
   }
   if (proposal.claimedDisclosureIds.length > MAX_DISCLOSURE_IDS) return false;
   for (const disclosureId of proposal.claimedDisclosureIds) {
-    if (disclosureId.length > MAX_DISCLOSURE_ID_CHARACTERS) return false;
+    if (!stringWithinCodePointLimit(
+      disclosureId,
+      MAX_DISCLOSURE_ID_CHARACTERS
+    )) return false;
   }
 
   const boardActions = proposal.boardActions ?? [];
@@ -596,19 +602,40 @@ function antigravityProposalWithinBounds(
   for (const action of boardActions) {
     if (
       action.content !== undefined
-      && action.content.length > MAX_BOARD_CONTENT_CHARACTERS
+      && !stringWithinCodePointLimit(
+        action.content,
+        MAX_BOARD_CONTENT_CHARACTERS
+      )
     ) {
       return false;
     }
     if (
       action.targetShapeId !== undefined
-      && action.targetShapeId.length > MAX_BOARD_TARGET_ID_CHARACTERS
+      && !stringWithinCodePointLimit(
+        action.targetShapeId,
+        MAX_BOARD_TARGET_ID_CHARACTERS
+      )
     ) {
       return false;
     }
-    if (action.annotationPurpose.length > MAX_ANNOTATION_PURPOSE_CHARACTERS) {
+    if (!stringWithinCodePointLimit(
+      action.annotationPurpose,
+      MAX_ANNOTATION_PURPOSE_CHARACTERS
+    )) {
       return false;
     }
+  }
+  return true;
+}
+
+function stringWithinCodePointLimit(
+  value: string,
+  maximum: number
+): boolean {
+  let count = 0;
+  for (const _character of value) {
+    count += 1;
+    if (count > maximum) return false;
   }
   return true;
 }
