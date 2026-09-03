@@ -13,6 +13,7 @@ import {
   ANTIGRAVITY_CLI_PROVIDER_DEFINITION,
   ANTIGRAVITY_CLI_PROVIDER_ID,
   AntigravityCliAdapterError,
+  SupervisedCliReasoningProvider,
   assertProviderPermitted,
   createAntigravityCliReasoningProvider,
   registerBuiltInProviders,
@@ -227,6 +228,75 @@ describe("Antigravity CLI provider registration and policy truthfulness", () => 
       runtime: hostileProxy
     })).rejects.toMatchObject({ code: "INVALID_FACTORY_INPUT" });
     expect(proxyTrapCalls).toBe(0);
+  });
+});
+
+describe("supervised CLI provider definition boundary", () => {
+  it("rejects nested accessor and Proxy capabilities without invoking user code", () => {
+    let getterCalls = 0;
+    const accessorCapabilities = Object.defineProperty({
+      ...ANTIGRAVITY_CLI_PROVIDER_DEFINITION.capabilities
+    }, "textStreaming", {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return false;
+      }
+    });
+
+    expect(() => new SupervisedCliReasoningProvider({
+      ...ANTIGRAVITY_CLI_PROVIDER_DEFINITION,
+      capabilities: accessorCapabilities as typeof ANTIGRAVITY_CLI_PROVIDER_DEFINITION.capabilities
+    })).toThrow("Supervised CLI provider definition is invalid");
+    expect(getterCalls).toBe(0);
+
+    let proxyTrapCalls = 0;
+    const proxyCapabilities = new Proxy(
+      ANTIGRAVITY_CLI_PROVIDER_DEFINITION.capabilities,
+      {
+        getOwnPropertyDescriptor() {
+          proxyTrapCalls += 1;
+          throw new Error("must-not-run");
+        }
+      }
+    );
+    expect(() => new SupervisedCliReasoningProvider({
+      ...ANTIGRAVITY_CLI_PROVIDER_DEFINITION,
+      capabilities: proxyCapabilities
+    })).toThrow("Supervised CLI provider definition is invalid");
+    expect(proxyTrapCalls).toBe(0);
+  });
+
+  it("captures definition callbacks so later mutation cannot change execution", async () => {
+    let originalBillingCalls = 0;
+    const mutableDefinition = {
+      ...ANTIGRAVITY_CLI_PROVIDER_DEFINITION,
+      verifyBillingSafety: async (input: { readonly now: Date }) => {
+        originalBillingCalls += 1;
+        return {
+          providerId: ANTIGRAVITY_CLI_PROVIDER_ID,
+          adapterVersion: ANTIGRAVITY_CLI_ADAPTER_VERSION,
+          billingClass: "UNKNOWN",
+          spendImpossible: false,
+          checkedAt: input.now.toISOString(),
+          accountFingerprint: "mutation-test",
+          verificationSource: "PROVIDER_ADAPTER",
+          dataUse: "REMOTE_MAY_BE_USED_FOR_IMPROVEMENT",
+          enforcementMechanism: "test"
+        };
+      }
+    };
+    const provider = new SupervisedCliReasoningProvider(mutableDefinition);
+    Reflect.set(mutableDefinition, "verifyBillingSafety", async () => {
+      throw new Error("mutated callback must not run");
+    });
+
+    await expect(provider.verifyBillingSafety({
+      now: new Date("2026-09-02T00:00:00.000Z")
+    })).resolves.toMatchObject({
+      accountFingerprint: "mutation-test"
+    });
+    expect(originalBillingCalls).toBe(1);
   });
 });
 
