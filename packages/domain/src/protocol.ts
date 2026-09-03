@@ -223,6 +223,7 @@ export const InterviewSessionContextResponseSchema = ResponseBaseSchema.extend({
   type: z.literal("INTERVIEW_SESSION_CONTEXT"),
   sessionId: SessionIdSchema,
   configuration: InterviewSessionConfigurationSchema,
+  configurationSource: SessionConfigurationSourceSchema,
   problem: InterviewProblemPublicViewSchema.optional()
 }).strict();
 
@@ -230,6 +231,12 @@ export const InterviewCatalogResponseSchema = ResponseBaseSchema.extend({
   ok: z.literal(true),
   type: z.literal("INTERVIEW_CATALOG"),
   entries: z.array(InterviewCatalogEntrySchema).max(256)
+}).strict();
+
+export const ProviderOptionsResponseSchema = ResponseBaseSchema.extend({
+  ok: z.literal(true),
+  type: z.literal("PROVIDER_OPTIONS"),
+  options: z.array(ProviderLaunchOptionSchema).max(256)
 }).strict();
 
 export const QuantTradingStateResponseSchema = ResponseBaseSchema.extend({
@@ -360,6 +367,7 @@ export const ProtocolSuccessResponseSchema = z.discriminatedUnion("type", [
   ConfiguredSessionStartedResponseSchema,
   InterviewSessionContextResponseSchema,
   InterviewCatalogResponseSchema,
+  ProviderOptionsResponseSchema,
   QuantTradingStateResponseSchema,
   QuantResearchStateResponseSchema,
   SessionsListResponseSchema,
