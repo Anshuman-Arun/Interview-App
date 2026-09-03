@@ -3,6 +3,7 @@ import process from "node:process";
 import { SqliteEventStore } from "../../../packages/persistence/src/index.js";
 import {
   SessionRuntimeRegistry,
+  type FormalInterpretationProvider,
   type VisionInferenceBackend
 } from "../../../packages/interview-engine/src/index.js";
 import type { LocalTransportSecurity } from "../../../packages/domain/src/index.js";
@@ -29,6 +30,7 @@ export interface ServerConfig {
   readonly allowedOrigins?: readonly string[];
   readonly databasePath?: string;
   readonly providerRuntimeResolver?: ProviderRuntimeResolver;
+  readonly formalInterpretationProvider?: FormalInterpretationProvider;
   readonly visionBackend?: VisionInferenceBackend;
 }
 
@@ -70,6 +72,9 @@ export async function createAndStartServer(config: ServerConfig = {}) {
       ...(config.providerRuntimeResolver === undefined
         ? {}
         : { providerRuntimeResolver: config.providerRuntimeResolver }),
+      ...(config.formalInterpretationProvider === undefined
+        ? {}
+        : { formalInterpretationProvider: config.formalInterpretationProvider }),
       ...(config.visionBackend === undefined ? {} : { visionBackend: config.visionBackend })
     });
     bound = await runtime.start();

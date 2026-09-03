@@ -137,6 +137,7 @@ export interface VerificationRequestState {
   readonly interpretationConfidence: number;
   readonly evidenceKey: EvidenceKey;
   readonly evidenceEventIds: readonly EventId[];
+  readonly boardRevisionIndependent?: true | undefined;
   readonly sourceGenerationId?: GenerationId | undefined;
   readonly sourceProposalRequestId?: RequestId | undefined;
   readonly requestedEventId: EventId;
