@@ -252,7 +252,8 @@ describe("expressive product integration invariants", () => {
       "utf8"
     );
 
-    expect(app).toContain('if (displayRoute.page !== "interview")');
+    expect(app).toContain('const productRoute = displayRoute.page === "interview" ? null : displayRoute');
+    expect(app).toContain("if (productRoute !== null && !showingPausedHome)");
     expect(app).toContain("<ProductPageRouter");
     expect(app).not.toContain("Stored Interview Sessions");
     expect(app).not.toContain("Grounded history");
