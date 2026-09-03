@@ -36,11 +36,11 @@ export const LOCAL_VISION_MODEL_IDENTITY = VISION_WORKER_MODEL_IDENTITY;
 const LOCAL_VISION_PROVENANCE: VisionBackendProvenance =
   VisionBackendProvenanceSchema.parse({
     backendId: "desktop-local-whiteboard-vision",
-    backendVersion: "1.0.0",
+    backendVersion: "1.1.0",
     providerId: "local-offline",
     modelId: "rapid-latex-ocr",
     modelVersion: `v0.0.0+${RAPID_LATEX_OCR_MODEL_SET_SHA256}`,
-    visionCapabilityVersion: "1"
+    visionCapabilityVersion: "2"
   });
 
 interface ParsedWorkerObservation {
