@@ -6,7 +6,6 @@ import {
   defaultAntigravityCliExecutablePath
 } from "../../../packages/local-runtime/src/index.js";
 import {
-  ANTIGRAVITY_CLI_ADAPTER_VERSION,
   ANTIGRAVITY_CLI_MODEL_ID,
   ANTIGRAVITY_CLI_PROVIDER_ID,
   type SupervisedCliExecutionRequest,
@@ -14,7 +13,7 @@ import {
 } from "../../../packages/providers/src/index.js";
 
 const ANTIGRAVITY_EXECUTABLE_ID = "antigravity-cli";
-const ANTIGRAVITY_MINIMUM_SAFE_CLI_VERSION = Object.freeze([1, 1, 4] as const);
+const ANTIGRAVITY_MINIMUM_SAFE_CLI_VERSION = Object.freeze([1, 1, 9] as const);
 const ANTIGRAVITY_VERSION_CHECK_TIMEOUT_MS = 10_000;
 const ANTIGRAVITY_VERSION_STDOUT_BYTES = 256;
 const ANTIGRAVITY_VERSION_STDERR_BYTES = 4 * 1024;
@@ -84,7 +83,7 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
   const getRunner = (): SupervisedProcessRunner => {
     if (runner !== undefined) return runner;
     const environment = antigravityEnvironment();
-    assertNoMeteredAntigravityProfile(environment);
+    assertRestrictedAntigravityProfile(environment);
     const created = new SupervisedProcessRunner([{
       id: ANTIGRAVITY_EXECUTABLE_ID,
       executable: defaultAntigravityCliExecutablePath("win32"),
@@ -148,22 +147,7 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
       });
     }
   });
-  const billingVerificationFactory = async (now: Date): Promise<unknown> => {
-    // The billing proof depends on current headless policy enforcement. Verify
-    // the installed CLI before admitting a turn, then re-use that proof only
-    // while the runner's pinned executable identity remains unchanged.
-    await ensureSupportedVersion();
-    return Object.freeze({
-      billingClass: "ACCOUNT_QUOTA" as const,
-      enforcementMechanism:
-        "Antigravity CLI >=1.1.4 with isolated useG1Credits=false account profile and no API-key/custom-endpoint child environment",
-      verifiedAt: now.toISOString(),
-      adapterVersion: ANTIGRAVITY_CLI_ADAPTER_VERSION,
-      spendImpossible: true
-    });
-  };
-  const runtime = Object.freeze({ executor, billingVerificationFactory });
-
+  // Profile isolation disables AI-credit fallback and inherited API-key/custom-endpoint\n  // configuration, but cached authentication can still select a subscription, enterprise,\n  // or Google Cloud project billing mode. Do not fabricate spend-impossible evidence.\n  // The default no-metered policy therefore rejects before remote inference; explicit\n  // trusted-host opt-in is required for this provider.\n  const runtime = Object.freeze({ executor });\n
   return Object.freeze({
     resolveRuntime(selection: ProviderSelectionReference): unknown {
       if (
@@ -246,7 +230,7 @@ export function isSupportedAntigravityCliVersionOutput(
   return patch >= minimumPatch;
 }
 
-function assertNoMeteredAntigravityProfile(environment: {
+function assertRestrictedAntigravityProfile(environment: {
   readonly inherit: readonly string[];
   readonly values: Readonly<Record<string, string>>;
 }): void {
@@ -255,7 +239,7 @@ function assertNoMeteredAntigravityProfile(environment: {
     settings["useG1Credits"] !== false
     || Object.prototype.hasOwnProperty.call(settings, "modelProvider")
   ) {
-    throw new Error("Antigravity no-metered profile is not pinned");
+    throw new Error("Antigravity restricted profile is not pinned");
   }
 
   const forbiddenEnvironmentKeys = new Set([
@@ -265,12 +249,12 @@ function assertNoMeteredAntigravityProfile(environment: {
   ]);
   for (const key of environment.inherit) {
     if (forbiddenEnvironmentKeys.has(key.toUpperCase())) {
-      throw new Error("Antigravity no-metered environment is not isolated");
+      throw new Error("Antigravity restricted environment is not isolated");
     }
   }
   for (const key of Object.keys(environment.values)) {
     if (forbiddenEnvironmentKeys.has(key.toUpperCase())) {
-      throw new Error("Antigravity no-metered environment is not isolated");
+      throw new Error("Antigravity restricted environment is not isolated");
     }
   }
 }

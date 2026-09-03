@@ -103,7 +103,7 @@ This policy module:
 - does not infer that a provider is safe merely because it is free-labeled;
 - does not weaken data-use policy when metered use is enabled.
 
-Real provider adapters must separately demonstrate the provider-specific enforcement mechanism described by the architecture freeze. The standalone Antigravity adapter intentionally remains unable to prove spend safety by itself. The concrete supervised Windows runtime may supply `ACCOUNT_QUOTA` evidence only after validating the application-owned no-overage profile and environment used for that execution. This generic gate validates evidence; it does not manufacture that evidence.
+Real provider adapters must separately demonstrate the provider-specific enforcement mechanism described by the architecture freeze. The Antigravity adapter intentionally remains unable to prove spend safety by itself, and the current supervised Windows runtime does not upgrade restricted profile shape into `ACCOUNT_QUOTA` evidence because cached authentication may still select a billable account/project mode. A future runtime may supply proof only if it can technically establish `spendImpossible=true`. This generic gate validates evidence; it does not manufacture that evidence.
 
 ## Execution ordering
 

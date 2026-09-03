@@ -84,15 +84,15 @@ capabilities therefore declare both local process execution and remote execution
 remote data use, and unknown metered-execution status. The standalone adapter remains fail-closed
 under no-metered policy unless a trusted runtime supplies current billing evidence.
 
-The concrete Windows application runtime supplies `ACCOUNT_QUOTA` evidence only after validating
-the exact supervised profile used for execution and verifying `agy >= 1.1.4`, the first release
-that enforces persisted `settings.json` policies in headless mode. AI-credit overage fallback is
-forced off, `modelProvider` is absent, and API-key/custom-endpoint environment variables are not inherited.
-The CLI then authenticates through its OS-native account keyring. The default Antigravity policy
-allows the provider's declared remote data-use class while continuing to deny metered spend, so
-normal subscription/baseline-quota use needs no API key and no metered-usage opt-in.
-`INTERVIEW_ALLOW_METERED_REMOTE_REASONING=1` remains an explicit host override for metered
-policy admission; it is not required for the supervised account-quota path.
+The concrete Windows application runtime requires the audited `agy 1.1.x >= 1.1.9` stream-json
+contract, forces AI-credit fallback off, leaves `modelProvider` absent, and does not inherit
+API-key/custom-endpoint environment variables. The CLI still authenticates through its OS-native
+account keyring, which can represent subscription, enterprise, or Google Cloud project modes.
+Those local profile restrictions therefore do not prove that incremental spend is technically
+impossible. The production runtime does not fabricate `ACCOUNT_QUOTA` evidence; default
+no-metered policy fails closed before remote inference. Personal use requires the trusted-host
+opt-in `INTERVIEW_ALLOW_METERED_REMOTE_REASONING=1`, which permits metered-unknown execution
+without weakening the separately enforced remote data-use boundary.
 
 No automatic routing, fallback, escalation, provider settings UI, or secret-bearing session
 configuration is implemented here.
