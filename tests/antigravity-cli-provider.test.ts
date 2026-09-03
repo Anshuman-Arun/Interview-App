@@ -274,7 +274,7 @@ describe("supervised CLI provider definition boundary", () => {
 
     expect(() => new SupervisedCliReasoningProvider({
       ...accessorDefinition,
-      capabilities: accessorCapabilities as typeof accessorDefinition.capabilities
+      capabilities: accessorCapabilities
     })).toThrow("Supervised CLI provider definition is invalid");
     expect(getterCalls).toBe(0);
 
