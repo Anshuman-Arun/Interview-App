@@ -191,19 +191,21 @@ function assertZeroTurnUsageEnvelope(value: unknown): void {
     throw new Error("Antigravity usage probe returned an invalid envelope");
   }
   const record = value as Record<string, unknown>;
-  if (record.status !== "SUCCESS" || record.num_turns !== 0) {
+  if (
+    record.status !== "SUCCESS"
+    || record.num_turns !== 0
+    || typeof record.response !== "string"
+    || record.response.trim().length === 0
+  ) {
     throw new Error("Antigravity usage probe did not complete as a zero-turn command");
   }
   const usage = record.usage;
-  if (
-    typeof usage === "object"
-    && usage !== null
-    && !Array.isArray(usage)
-  ) {
-    const totalTokens = (usage as Record<string, unknown>).total_tokens;
-    if (typeof totalTokens === "number" && totalTokens !== 0) {
-      throw new Error("Antigravity readiness probe unexpectedly consumed model tokens");
-    }
+  if (typeof usage !== "object" || usage === null || Array.isArray(usage)) {
+    throw new Error("Antigravity usage probe returned invalid token accounting");
+  }
+  const totalTokens = (usage as Record<string, unknown>).total_tokens;
+  if (totalTokens !== 0) {
+    throw new Error("Antigravity readiness probe unexpectedly consumed model tokens");
   }
 }
 
