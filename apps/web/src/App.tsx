@@ -325,9 +325,6 @@ export const App: React.FC = () => {
     hasActiveInterview,
     session.isPaused
   );
-  const isOxfordWorkspace =
-    session.configuration === null
-    || session.configuration.mode === "OXFORD_MATHEMATICS";
   const activeModeLabel =
     session.configuration?.mode === "QUANT_TRADING"
       ? "Quant Trading"
