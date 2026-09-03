@@ -732,6 +732,40 @@ describe("generic interview session configuration", () => {
     });
   });
 
+  it("classifies failed credential resolution as credentials-required launch state", async () => {
+    const resolver = new ProviderRuntimeResolver({
+      configurationSource: {
+        resolveConfiguration: () => ({
+          enabled: true,
+          credentialRef: {
+            id: "gemini-test-key",
+            purpose: "API_KEY"
+          }
+        })
+      },
+      policySource: {
+        resolvePolicy: () => ({
+          allowMeteredUsage: true,
+          maximumDataUse: "REMOTE_MAY_BE_USED_FOR_IMPROVEMENT",
+          billingVerificationMaxAgeMs: 60_000
+        })
+      },
+      secretResolver: {
+        hasSecret: async () => true,
+        resolveSecret: async () => undefined
+      }
+    });
+
+    const option = await resolver.evaluateLaunchOption({
+      providerId: "gemini-api",
+      modelId: "gemini-2.5-flash"
+    });
+    expect(option).toMatchObject({
+      availability: "UNAVAILABLE",
+      reason: "CREDENTIALS_REQUIRED"
+    });
+  });
+
   it("reports disabled provider runtime state as disabled instead of a capability failure", async () => {
     const resolver = new ProviderRuntimeResolver({
       configurationSource: {
