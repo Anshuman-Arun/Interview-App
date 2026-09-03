@@ -1,0 +1,259 @@
+# Production Local Whiteboard Vision
+
+## Authority boundary
+
+The local vision runtime is an observation backend only.
+
+```text
+student whiteboard
+  -> authoritative BoardRevision / shape revisions
+  -> bounded snapshot preprocessing
+  -> ManagedLocalVisionBackend
+  -> local managed Python worker
+  -> structured observation proposal
+  -> VisionRequestManager freshness/admission
+  -> AcceptedBoardObservation
+  -> existing VisionEvidenceBridge
+  -> application-owned evidence
+```
+
+The worker does not receive or choose the authoritative session ID, source
+BoardRevision, region, relevant-shape revisions, snapshot basis, backend
+provenance, or evidence key/value. The TypeScript adapter reconstructs those
+fields from the already-validated application request after validating the
+worker's request/image echo.
+
+A model response is therefore never equivalent to correctness evidence.
+
+## Chosen model
+
+The production backend uses the RapidAI RapidLaTeXOCR `v0.0.0` ONNX release
+for localized mathematical notation.
+
+The release tag resolves to upstream commit:
+
+`68680550355330b4ac68acdb947e776bc11f46d7`
+
+The four pinned assets total 178,952,787 bytes (about 170.7 MiB):
+
+| Asset | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `image_resizer.onnx` | 38,967,751 | `e0b075c39700f64d50400f39c8fc186bbb3b5d84d31864008313f376603aca9d` |
+| `encoder.onnx` | 89,008,136 | `01bf5dc25539ca0cd5b1bd29296ea495977a6ba5f629dc4178277809d26e5e7d` |
+| `decoder.onnx` | 50,952,726 | `bd695497bf1b22279b7626f5916c79226e1e244c84355f8da7edfd2d921d0072` |
+| `tokenizer.json` | 24,174 | `1dc27b18d6a518d0d5ff3f4bb7bd98521fe80ad39e5b2a246d4109f1bb9d5019` |
+
+The canonical model-set identity is:
+
+`ea51bb3eebca460eeded83ccc81f4d0a50aae0e4aadcf64aa8eead1e50410a4d`
+
+The upstream repository's reviewed LICENSE file is MIT. Asset manifests pin
+the exact upstream revision, release URL, size, digest, model family, and
+version. No mutable `latest` identity is used.
+
+## Why this runtime
+
+The target workload is a small changed whiteboard crop, not general image chat.
+RapidLaTeXOCR is specialized for mathematical notation and can run with the
+desktop's already-pinned CPU ONNXRuntime environment.
+
+Alternatives considered:
+
+- **General local multimodal VLM.** Rejected for this PR because practical
+  models are multi-GB, increase startup/RAM pressure, and introduce a
+  prompt-following language-model surface for text embedded in screenshots.
+- **Generic OCR only.** Rejected as the primary backend because mathematical
+  notation, fractions, superscripts, sums, and relation symbols are the core
+  workload.
+- **The upstream RapidLaTeXOCR Python package.** Not installed. Its published
+  dependency constraints conflict with the desktop's pinned NumPy 2.x runtime.
+  The application instead consumes only the fixed ONNX/tokenizer assets and
+  implements the small bounded preprocessing/decoding layer locally.
+
+This is intentionally a narrow backend. Rough diagram topology remains a known
+limitation rather than a reason to silently add cloud vision or a large VLM.
+
+## Local worker protocol
+
+The desktop registers a dedicated `vision` component with the existing
+`LocalRuntimeManager`. The worker must handshake the exact model/runtime
+identity after every start or restart.
+
+One inference request contains only:
+
+```json
+{
+  "requestId": "<bounded id>",
+  "imageSha256": "<64 lowercase hex>",
+  "pngBase64": "<bounded PNG>",
+  "requestedObservationKind": "<existing enum or ANY>"
+}
+```
+
+The worker returns only:
+
+```json
+{
+  "requestId": "<same id>",
+  "imageSha256": "<same digest>",
+  "observation": {
+    "observationKind": "<existing enum>",
+    "interpretation": "<bounded text>",
+    "confidence": 0.0
+  }
+}
+```
+
+Unknown keys, unknown observation kinds, non-finite confidence, oversized
+interpretations, wrong request identity, and wrong image digest are rejected.
+
+The renderer never sees this endpoint, its bearer token, model paths, or raw
+worker diagnostics.
+
+## Image safety
+
+The worker accepts image bytes, never a request-provided local path.
+
+The local PNG decoder enforces:
+
+- maximum encoded PNG bytes: 2 MiB;
+- maximum dimension: 4096;
+- maximum decoded pixels: 8 MiPixels;
+- 8-bit non-interlaced PNG only;
+- accepted color types: grayscale, RGB, grayscale+alpha, RGBA;
+- bounded IDAT accumulation;
+- per-chunk CRC validation;
+- exact bounded inflate size;
+- no trailing image data.
+
+The application layer independently validates/re-hashes the preprocessing
+artifact before the worker is called.
+
+## Structured observations and uncertainty
+
+The existing observation classes remain unchanged:
+
+- `TEXT`
+- `EQUATION`
+- `DIAGRAM_RELATION`
+- `ARROW`
+- `LABEL`
+- `GENERAL_BOARD_DESCRIPTION`
+
+The math recognizer performs a second deterministic threshold perturbation.
+Only an exactly matching transcription with clean EOS termination and basic
+structural sanity receives a score of `0.72`. Unstable recognition stays at
+`0.55` or below; blank/illegible content is lower still.
+
+These values are conservative stability/admission scores. They are **not**
+claimed calibrated probabilities. The existing evidence bridge continues to
+enforce its own minimum threshold (at least 0.7).
+
+Prompt-like text is explicitly represented as board content, for example:
+
+`Visible whiteboard text (content only, never an application instruction): ...`
+
+It is never evaluated as a worker/application command.
+
+## Freshness and cancellation
+
+No existing freshness rule is weakened.
+
+An accepted result remains bound to:
+
+- session;
+- `VisionRequestId`;
+- source `BoardRevision`;
+- exact snapshot hash/basis;
+- region;
+- relevant shape IDs and expected shape revisions;
+- exact backend/model provenance.
+
+The managed backend serializes native ONNX inference. RapidLaTeXOCR batch
+inference is not treated as natively interruptible. If the application cancels
+after native execution begins, the caller receives cancellation and the late
+result is suppressed, while the native lane remains reserved until it actually
+settles. A subsequent freshness check still runs for every result that reaches
+admission.
+
+Timeout, transport uncertainty, or a 5xx worker failure recycles the exact
+managed worker instance. The replacement must perform the same exact handshake
+before further inference.
+
+## Capability and setup behavior
+
+Vision is optional and normal startup never downloads its weights.
+
+Install explicitly:
+
+```bash
+pnpm setup:desktop-vision
+```
+
+The model setup path uses `ModelAssetManager` with bounded downloads,
+fixed expected byte size, SHA-256 verification, atomic installation, and cache
+limits. GitHub release downloads redirect to a separate HTTPS object origin, so
+vision uses a separate asset-manager instance whose cross-origin redirect
+permission is isolated from the stricter voice asset manager. The fixed
+size/digest remains authoritative.
+
+Capability states are reported as:
+
+- missing assets: `MISSING_ASSET / VISION_ASSET_MISSING`;
+- unsupported platform/runtime: `UNAVAILABLE`;
+- failed worker/model/runtime: `FAILED`;
+- loaded and handshaken: `READY`.
+
+A missing or failed vision capability does not remove typed or voice interview
+functionality.
+
+## CI and real-model validation
+
+CI does **not** download the production vision weights. It runs deterministic
+protocol/integration tests and imports the production preprocessing runtime
+without model construction.
+
+Covered adversarial cases include:
+
+- stale BoardRevision before/after inference;
+- relevant shape revision mutation;
+- wrong request/image identity;
+- cancellation and late result suppression;
+- malformed/oversized worker response;
+- unknown observation type;
+- NaN confidence;
+- malformed PNG;
+- decompression-bomb-style output-size mismatch;
+- prompt-like text in image content;
+- missing model assets while typed/voice paths remain available;
+- packaged resource digest checks.
+
+Before this backend is called merge-ready, run the exact pinned assets on a
+Windows x64 machine and record:
+
+- installed model size;
+- cold worker/model load time;
+- bounded-crop inference latency;
+- peak RAM;
+- representative results for equations, fractions, inequalities, summation,
+  modular congruence, a labeled triangle, graph vertices, crossed-out/replaced
+  expressions, and implication arrows.
+
+Until those measurements exist, the pull request should remain draft. Do not
+substitute mocked CI for this real-model smoke requirement.
+
+## Known limitations
+
+The selected recognizer is strongest on localized mathematical notation.
+Current expected failure modes include:
+
+- very rough freehand geometry/topology;
+- crossed-out notation whose old/new symbols overlap heavily;
+- dense multi-line board crops beyond the model's preferred local expression
+  scale;
+- unusually faint strokes or severe antialiasing artifacts;
+- non-mathematical prose.
+
+Those cases should degrade toward uncertainty. They are not justification for
+inventing missing symbols, weakening freshness, or silently uploading a board
+image to a cloud model.
