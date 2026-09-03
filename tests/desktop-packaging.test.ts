@@ -129,6 +129,11 @@ describe("Windows desktop packaging contract", () => {
     expect(smoke).toContain("--packaged-smoke-test");
     expect(smoke).toContain("--packaged-single-instance-smoke-host");
     expect(installer).toContain("preserve-across-upgrade-and-uninstall");
+    expect(installer).toContain("PriorInstaller");
+    expect(installer).toContain("Versioned upgrade did not replace");
     expect(installer).toContain("Uninstall*.exe");
+    const workflow = await source(".github/workflows/windows-installer.yml");
+    expect(workflow).toContain("Build synthetic prior-version installer");
+    expect(workflow).toContain("InterviewApp-Prior.exe");
   });
 });
