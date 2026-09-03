@@ -64,6 +64,7 @@ describe("Windows desktop packaging contract", () => {
 
     expect(main).toContain("isAuthorizedDesktopInvoke(event)");
     expect(main).toContain("runtime.installVoiceAssets(startupAbort.signal)");
+    expect(main).toContain("await activeModelInstall.catch(() => undefined)");
     expect(preload).toContain("getLocalRuntimeStatus");
     expect(preload).toContain("installLocalModels");
     expect(preload).not.toMatch(/require\(["'](?:node:)?(?:fs|child_process)["']\)/u);
