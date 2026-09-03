@@ -206,9 +206,12 @@ export class AntigravityCliAdapterError extends Error {
   }
 }
 
+export type AntigravityBillingVerificationFactory = (now: Date) => unknown;
+
 export function createAntigravityCliReasoningProvider(
   executor: SupervisedCliExecutor,
-  modelId: string = ANTIGRAVITY_CLI_MODEL_ID
+  modelId: string = ANTIGRAVITY_CLI_MODEL_ID,
+  billingVerificationFactory?: AntigravityBillingVerificationFactory
 ): SupervisedCliReasoningProvider {
   const execute = captureExecutor(executor);
   if (modelId !== ANTIGRAVITY_CLI_MODEL_ID) {
@@ -234,10 +237,17 @@ export function createAntigravityCliReasoningProvider(
       return snapshotAntigravityTurnInput(input);
     },
     async verifyBillingSafety({ now }) {
+      if (billingVerificationFactory !== undefined) {
+        return REFLECT_APPLY_INTRINSIC(
+          billingVerificationFactory,
+          undefined,
+          [new Date(now.getTime())]
+        );
+      }
       return {
         billingClass: "UNKNOWN",
         enforcementMechanism:
-          "Isolated CLI settings disable AI-credit fallback, but account-side incremental billing is not independently verified",
+          "No trusted runtime billing enforcement proof was supplied",
         verifiedAt: now.toISOString(),
         adapterVersion: ANTIGRAVITY_CLI_ADAPTER_VERSION,
         spendImpossible: false
