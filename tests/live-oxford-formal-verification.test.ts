@@ -567,4 +567,120 @@ describe("live Oxford formal reasoning analysis", () => {
     }
   });
 
+
+  it("rejects direct verification admission when transcript authority changes after interpretation", async () => {
+    const store = new SqliteEventStore(":memory:");
+    try {
+      const registry = new SessionRuntimeRegistry(store);
+      const sessionId = newSessionId();
+      const writer = registry.get(sessionId);
+      const turns = new TurnCoordinator(writer);
+      const selectedProblem = problem("oxford-euclid-primes");
+      await turns.startSession(selectedProblem);
+      const committed = await turns.commitInput("31 is congruent to 1 modulo 5.");
+
+      const profile = resolveOxfordFormalAnalysisProfile(selectedProblem);
+      if (profile === undefined) throw new Error("Missing Oxford formal profile");
+      const request = createCommittedTurnFormalInterpretationRequest(writer, {
+        inputEpisodeId: committed.inputEpisodeId,
+        turnId: committed.turnId,
+        target: profile.target,
+        allowedProtocols: profile.allowedProtocols
+      });
+      const verifier = profile.scopes[0]?.verifier;
+      if (verifier === undefined) throw new Error("Missing verifier scope");
+      const staleEnvelope = createCommandEnvelope({
+        sessionId,
+        producer: "interpretation-coordinator",
+        inputEpisodeId: committed.inputEpisodeId,
+        turnId: committed.turnId,
+        contextEpoch: request.basis.contextEpoch,
+        sourceRevision: request.source.sourceRevision
+      });
+
+      await turns.correctTranscript("The corrected transcript supersedes the interpreted wording.");
+
+      await expect(new VerificationCoordinator(writer, profile.scopes).requestVerification({
+        inputEpisodeId: committed.inputEpisodeId,
+        turnId: committed.turnId,
+        verifier,
+        candidateFormalInterpretation: statementFor(request, "CORRECT"),
+        interpretationConfidence: 1,
+        evidenceKey: profile.target,
+        expectedProblemVersion: selectedProblem.version,
+        envelope: staleEnvelope
+      })).rejects.toThrow("Verification source basis changed before durable admission");
+      expect(Object.values(writer.getState().verificationRequests)).toHaveLength(0);
+      expect(Object.values(writer.getState().studentEvidence)).toHaveLength(0);
+    } finally {
+      store.close();
+    }
+  });
+
+  it("keeps direct text analysis idempotent across board-only changes and process-local coordinator restart", async () => {
+    const store = new SqliteEventStore(":memory:");
+    try {
+      const registry = new SessionRuntimeRegistry(store);
+      const sessionId = newSessionId();
+      const writer = registry.get(sessionId);
+      const turns = new TurnCoordinator(writer);
+      const selectedProblem = problem("oxford-triangle-medians");
+      await turns.startSession(selectedProblem);
+      const committed = await turns.commitInput("The exact ratio arithmetic is 1/2 = 2/4.");
+      const sessions = new SessionRecoveryCoordinator(registry, store);
+      const provider = deterministicProvider("CORRECT");
+
+      const first = await new StudentReasoningAnalysisCoordinator(
+        sessions,
+        provider
+      ).analyze({
+        sessionId,
+        turnId: committed.turnId,
+        inputEpisodeId: committed.inputEpisodeId
+      });
+      expect(first.status).toBe("ANALYZED");
+
+      const boardCommit = await turns.commitBoardMutation({
+        baseBoardRevision: writer.getState().boardRevision,
+        added: [{
+          id: "board-only-idempotency-shape",
+          type: "text",
+          bounds: { x: 10, y: 10, width: 100, height: 24 },
+          text: "board note",
+          revision: 1,
+          createdAt: 1,
+          lastModifiedAt: 1
+        }],
+        updated: [],
+        deleted: []
+      });
+      expect(boardCommit.committed).toBe(true);
+
+      const second = await new StudentReasoningAnalysisCoordinator(
+        sessions,
+        provider
+      ).analyze({
+        sessionId,
+        turnId: committed.turnId,
+        inputEpisodeId: committed.inputEpisodeId
+      });
+      expect(second.status).toBe("ANALYZED");
+      if (second.status !== "ANALYZED") throw new Error("Expected duplicate analysis");
+      expect(second.interpretation).toMatchObject({
+        status: "ACCEPTED",
+        verificationStatus: "VERIFIED",
+        duplicateVerificationRequest: true
+      });
+      expect(provider.callCount).toBe(2);
+
+      const profile = resolveOxfordFormalAnalysisProfile(selectedProblem);
+      if (profile === undefined) throw new Error("Missing Oxford formal profile");
+      const state = writer.getState();
+      expect(Object.values(state.verificationRequests)).toHaveLength(1);
+      expect(state.evidenceHistory[evidenceKeyToString(profile.target)]).toHaveLength(1);
+    } finally {
+      store.close();
+    }
+  });
+
 });
