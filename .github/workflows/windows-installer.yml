@@ -63,6 +63,16 @@ jobs:
       - name: Build unsigned NSIS installer
         run: pnpm dist:win
 
+      - name: Assert development installer is unsigned
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem "dist/windows/InterviewApp-Setup-*.exe" | Select-Object -First 1
+          if ($null -eq $installer) { throw "Installer artifact is missing" }
+          $signature = Get-AuthenticodeSignature $installer.FullName
+          if ($signature.Status -ne "NotSigned") {
+            throw "Expected unsigned development installer, got Authenticode status $($signature.Status)"
+          }
+
       - name: Run packaged executable smoke
         shell: pwsh
         run: ./scripts/run-packaged-desktop-smoke.ps1
