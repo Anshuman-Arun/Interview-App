@@ -290,6 +290,7 @@ export class ManagedKokoroRuntime implements KokoroRuntime {
         // observes started=true must use the worker's request tombstone/native
         // cancellation path; one that observes false never reaches the worker.
         state.started = true;
+        const workerInstance = this.client.workerInstanceIdentity();
         const result = await runWithWorkerRecycleOnTimeout(this.client, "tts", () =>
           this.client.postJson("/v1/tts", {
             requestId: input.requestId,
@@ -306,7 +307,21 @@ export class ManagedKokoroRuntime implements KokoroRuntime {
             )
           })
         );
-        return parseTtsResult(result);
+        let parsed: KokoroRuntimeSynthesisResult;
+        try {
+          parsed = parseTtsResult(result);
+        } catch (protocolError) {
+          await recycleAfterProtocolFailure(
+            this.client,
+            "tts",
+            workerInstance,
+            protocolError,
+            "Kokoro synthesis protocol output was invalid"
+          );
+          throw protocolError;
+        }
+        this.client.markHealthy("tts");
+        return parsed;
       });
       synthesisTail = operation.then(
         () => undefined,
@@ -334,6 +349,7 @@ export class ManagedKokoroRuntime implements KokoroRuntime {
           state.cancelled = true;
           return;
         }
+        const workerInstance = this.client.workerInstanceIdentity();
         const result = await runWithWorkerRecycleOnTimeout(this.client, "tts-cancel", () =>
           this.client.postJson("/v1/tts/cancel", {
             requestId
@@ -345,8 +361,17 @@ export class ManagedKokoroRuntime implements KokoroRuntime {
         if (!isRecord(result)
             || Object.keys(result).length !== 1
             || result["accepted"] !== true) {
-          throw new Error("Kokoro worker did not accept runtime cancellation");
+          const protocolError = new Error("Kokoro worker did not accept runtime cancellation");
+          await recycleAfterProtocolFailure(
+            this.client,
+            "tts-cancel",
+            workerInstance,
+            protocolError,
+            "Kokoro cancellation protocol output was invalid"
+          );
+          throw protocolError;
         }
+        this.client.markHealthy("tts-cancel");
       }
     });
   }
