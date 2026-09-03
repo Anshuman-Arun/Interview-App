@@ -1320,7 +1320,6 @@ export function useInterviewSession(
         sessionId === null
         || sessionStatus !== "ACTIVE"
         || !isSessionStarted
-        || !sessionMutationAdmissionRef.current
         || terminalTransitionInFlightRef.current
       ) return;
       const transitionEpoch = sessionTransitionEpochRef.current + 1;
@@ -1361,7 +1360,6 @@ export function useInterviewSession(
         sessionId === null
         || sessionStatus !== "ACTIVE"
         || !isSessionStarted
-        || !sessionMutationAdmissionRef.current
         || terminalTransitionInFlightRef.current
       ) return;
       const transitionEpoch = sessionTransitionEpochRef.current + 1;
