@@ -62,10 +62,6 @@ describe("desktop production vision asset identity", () => {
   it("keeps voice setup groups disjoint from optional vision weights", () => {
     expect(SPEECH_ASSETS.every((asset) => asset.group === "speech")).toBe(true);
     expect(TTS_ASSETS.every((asset) => asset.group === "tts")).toBe(true);
-    expect(new Set([
-      ...SPEECH_ASSETS.map((asset) => asset.manifest.artifactId),
-      ...TTS_ASSETS.map((asset) => asset.manifest.artifactId)
-    ]).intersection?.(new Set())).toBeUndefined();
     const voiceIds = new Set([
       ...SPEECH_ASSETS.map((asset) => asset.manifest.artifactId),
       ...TTS_ASSETS.map((asset) => asset.manifest.artifactId)
