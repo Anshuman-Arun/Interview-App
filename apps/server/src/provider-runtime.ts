@@ -172,20 +172,6 @@ export class ProviderRuntimeResolver {
     }
 
     const configuration = composeProviderConfiguration(selection, runtimeConfiguration);
-    let resolved: ReturnType<typeof resolveProviderConfiguration>;
-    try {
-      resolved = resolveProviderConfiguration({
-        registry: this.registry,
-        configuration,
-        requirements: ["TEXT_GENERATION"]
-      });
-    } catch {
-      return ProviderLaunchOptionSchema.parse({
-        ...base,
-        availability: "UNAVAILABLE",
-        reason: "CAPABILITY_UNAVAILABLE"
-      });
-    }
     const readiness = await evaluateProviderReadiness({
       registry: this.registry,
       configuration,
@@ -197,6 +183,24 @@ export class ProviderRuntimeResolver {
         ...base,
         availability: "UNAVAILABLE",
         reason: mapReadinessReason(readiness.state)
+      });
+    }
+
+    let resolved: ReturnType<typeof resolveProviderConfiguration>;
+    try {
+      resolved = resolveProviderConfiguration({
+        registry: this.registry,
+        configuration,
+        requirements: ["TEXT_GENERATION"]
+      });
+    } catch {
+      // Readiness and resolution share the same immutable registry/configuration
+      // snapshot. If the second validation nevertheless fails, fail closed as a
+      // runtime configuration problem rather than inventing availability.
+      return ProviderLaunchOptionSchema.parse({
+        ...base,
+        availability: "UNAVAILABLE",
+        reason: "RUNTIME_CONFIGURATION_UNAVAILABLE"
       });
     }
 
