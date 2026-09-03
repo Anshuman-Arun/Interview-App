@@ -169,6 +169,7 @@ export const FormalInterpretationCandidateSourceSchema = z.object({
   inputEpisodeId: BoundedInputEpisodeIdSchema,
   turnId: BoundedTurnIdSchema,
   eventIds: z.array(BoundedEventIdSchema).min(1).max(MAX_FORMAL_INTERPRETATION_SOURCE_EVENTS),
+  span: FormalInterpretationSourceSpanSchema,
   problem: FormalInterpretationProblemRefSchema
 }).strict();
 export type FormalInterpretationCandidateSource = z.infer<typeof FormalInterpretationCandidateSourceSchema>;
