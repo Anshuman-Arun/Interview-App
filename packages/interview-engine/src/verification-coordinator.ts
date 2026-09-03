@@ -350,6 +350,11 @@ export class VerificationCoordinator {
         || envelope.turnId !== input.turnId
         || envelope.contextEpoch !== state.contextEpoch
         || envelope.sourceRevision !== state.lastCommittedInputSequence
+        || snapshot.contextEpoch !== state.contextEpoch
+        || snapshot.lastCommittedInputSequence !== state.lastCommittedInputSequence
+        || snapshot.transcriptRevision !== state.transcriptRevision
+        || snapshot.problemStateRevision !== state.problemStateRevision
+        || snapshot.policyRevision !== state.policyRevision
       ) {
         throw new Error("Verification source basis changed before durable admission");
       }
