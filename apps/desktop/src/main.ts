@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
+import path from "node:path";
 import process from "node:process";
 import { createAndStartServer } from "../../server/src/server.js";
 import { newSessionId } from "../../../packages/domain/src/index.js";
