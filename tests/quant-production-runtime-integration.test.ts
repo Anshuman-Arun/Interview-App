@@ -443,6 +443,81 @@ describe("production quant runtime integration", () => {
     ).state).toEqual(beforeOverflow);
   });
 
+  it("rejects a quote before RNG can overflow cumulative portfolio accounting", async () => {
+    const hugeQuote = {
+      type: "QUOTE" as const,
+      quote: {
+        bidPrice: 7e307,
+        bidSize: 1,
+        askPrice: 8e307,
+        askSize: 1
+      }
+    };
+
+    let seed: number | undefined;
+    for (let candidate = 0; candidate < 1_000 && seed === undefined; candidate += 1) {
+      const engine = createQuantTraderScenario({
+        family: "BASIC_MARKET_MAKING",
+        seed: candidate
+      });
+      let filledBidTwice = true;
+      for (let round = 0; round < 2; round += 1) {
+        engine.submitAction(hugeQuote);
+        const evidence = engine.advance();
+        if (!evidence.studentFills.some((fill) => fill.side === "BUY")) {
+          filledBidTwice = false;
+          break;
+        }
+      }
+      if (filledBidTwice) seed = candidate;
+    }
+    if (seed === undefined) throw new Error("Expected a bounded seed with two consecutive bid fills");
+
+    await server.stop();
+    await registry.closeAll();
+    registry = new SessionRuntimeRegistry(store);
+    sessions = recoveryCoordinator(registry);
+    server = commandServer(
+      sessions,
+      new ProductionSessionRuntime({ seedSource: () => seed })
+    );
+    address = await server.start();
+
+    const sessionId = newSessionId();
+    await expectStatus(postStart(sessionId, tradingConfiguration()), 200);
+
+    let state = QuantTradingStateResponseSchema.parse(
+      await responseJson(await getQuantState(sessionId))
+    ).state;
+    for (let round = 0; round < 2; round += 1) {
+      state = QuantTradingStateResponseSchema.parse(
+        await responseJson(await post({
+          protocolVersion: 1,
+          type: "SUBMIT_QUANT_TRADING_ACTION",
+          requestId: newRequestId(),
+          sessionId,
+          expectedRound: state.currentRound,
+          action: hugeQuote
+        }))
+      ).state;
+      expect(state.lastRound?.fills.some((fill) => fill.side === "BUY")).toBe(true);
+    }
+
+    const countBeforeRejectedQuote = store.eventCount(sessionId);
+    await expectProtocolError(post({
+      protocolVersion: 1,
+      type: "SUBMIT_QUANT_TRADING_ACTION",
+      requestId: newRequestId(),
+      sessionId,
+      expectedRound: state.currentRound,
+      action: hugeQuote
+    }), 400, "INVALID_COMMAND");
+    expect(store.eventCount(sessionId)).toBe(countBeforeRejectedQuote);
+    expect(QuantTradingStateResponseSchema.parse(
+      await responseJson(await getQuantState(sessionId))
+    ).state).toEqual(state);
+  });
+
   it("reports a reachable production risk stop with its bounded public reason", async () => {
     await server.stop();
     await registry.closeAll();
