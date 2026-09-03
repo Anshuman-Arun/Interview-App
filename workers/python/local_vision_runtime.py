@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 import re
 import struct
+import time
 import zlib
 from pathlib import Path
 from typing import Any
@@ -36,6 +37,9 @@ BOS_TOKEN = 1
 EOS_TOKEN = 2
 FIRST_CONTENT_TOKEN = 4
 REPETITION_CUTOFF = 8
+MAX_REPEATED_CYCLE_PERIOD = 16
+MIN_REPEATED_CYCLE_COUNT = 4
+MAX_DECODE_SECONDS = 5.0
 MAX_HEURISTIC_CONFIDENCE = 0.69
 UNSTABLE_HEURISTIC_CONFIDENCE = 0.55
 MODEL_SPECS: dict[str, tuple[int, str]] = {
@@ -135,17 +139,17 @@ class VisionRuntime:
                 "No stable mathematical ink was visible in the bounded board crop."
             )
 
-        primary = self._recognize(rgb)
-        # A deterministic binarization perturbation is only a repeatability
-        # gate. It is deliberately not presented as a calibrated probability.
-        secondary = self._recognize(_stability_perturbation(rgb))
-
-        primary_text, primary_ended_cleanly = primary
-        secondary_text, secondary_ended_cleanly = secondary
+        primary_text, primary_ended_cleanly = self._recognize(rgb)
         if not primary_text:
             return _uncertain_observation(
                 "Mathematical marks were visible, but the local recognizer could not produce a stable transcription."
             )
+
+        # A deterministic binarization perturbation is only a repeatability
+        # gate. It is deliberately not presented as a calibrated probability.
+        secondary_text, secondary_ended_cleanly = self._recognize(
+            _stability_perturbation(rgb)
+        )
 
         stable = (
             primary_ended_cleanly
@@ -201,7 +205,10 @@ class VisionRuntime:
         # stochasticity from a fallible observation backend. Canonical upstream
         # fixtures below are the regression guard for this deterministic
         # divergence; do not describe it as byte-equivalent upstream sampling.
+        decode_deadline = time.monotonic() + MAX_DECODE_SECONDS
         for _ in range(MAX_TOKEN_COUNT):
+            if time.monotonic() >= decode_deadline:
+                return "", False
             window = token_ids[-MAX_TOKEN_COUNT:]
             x = np.asarray(window, dtype=np.int64)[None, :]
             mask = np.ones_like(x, dtype=np.bool_)
@@ -226,9 +233,12 @@ class VisionRuntime:
             repeated = repeated + 1 if next_token == token_ids[-1] else 1
             token_ids.append(next_token)
             if repeated >= REPETITION_CUTOFF:
-                del token_ids[-repeated:]
-                break
+                return "", False
+            if _has_repeated_token_cycle(token_ids[1:]):
+                return "", False
 
+        if not ended_cleanly:
+            return "", False
         content_ids = [value for value in token_ids[1:] if value >= FIRST_CONTENT_TOKEN]
         raw = _decode_tokens(content_ids, self._tokenizer)
         return _post_process(raw), ended_cleanly
@@ -364,6 +374,24 @@ def _post_process(value: str) -> str:
     if any(ord(char) < 0x20 and char not in "\t" for char in value):
         return ""
     return value[:MAX_INTERPRETATION_CHARS]
+
+
+def _has_repeated_token_cycle(token_ids: list[int]) -> bool:
+    """Detect short repeating suffix cycles before autoregressive degeneration grows."""
+    length = len(token_ids)
+    for period in range(
+        1,
+        min(MAX_REPEATED_CYCLE_PERIOD, length // MIN_REPEATED_CYCLE_COUNT) + 1,
+    ):
+        span = period * MIN_REPEATED_CYCLE_COUNT
+        suffix = token_ids[-span:]
+        pattern = suffix[-period:]
+        if all(
+            suffix[index : index + period] == pattern
+            for index in range(0, span, period)
+        ):
+            return True
+    return False
 
 
 def _structurally_plausible(value: str) -> bool:
