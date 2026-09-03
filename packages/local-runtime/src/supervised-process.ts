@@ -1187,13 +1187,17 @@ async function compileWindowsSupervisorAssembly(
 
     const info = await lstat(output, { bigint: true });
     const canonical = await realpath(output);
+    const canonicalInfo = await lstat(canonical, { bigint: true });
     if (
       !info.isFile()
       || info.isSymbolicLink()
       || info.size <= 0n
       || info.size > BigInt(MAX_WINDOWS_SUPERVISOR_ASSEMBLY_BYTES)
-      || normalizeWindowsIdentityPath(output)
-        !== normalizeWindowsIdentityPath(canonical)
+      || !canonicalInfo.isFile()
+      || canonicalInfo.isSymbolicLink()
+      || canonicalInfo.dev !== info.dev
+      || canonicalInfo.ino !== info.ino
+      || canonicalInfo.size !== info.size
     ) {
       throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
     }
