@@ -251,6 +251,10 @@ describe("generic interview session configuration", () => {
       title: "A Divisibility Pair in {1,...,2n}",
       prompt: problem.public.prompt
     });
+    const context = await client.getInterviewSessionContext(sessionId);
+    expect(context.configuration).toEqual(configuration);
+    expect(context.configurationSource).toBe("CONFIGURED");
+    expect(context.problem?.id).toBe(problem.id);
     expect(registry.get(sessionId).getState().configuration).toEqual(configuration);
   });
 
