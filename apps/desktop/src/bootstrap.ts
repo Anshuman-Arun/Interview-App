@@ -30,6 +30,7 @@ export interface DesktopRendererLocalRuntimeStatus {
   readonly protocolVersion: 1;
   readonly speech: DesktopRendererRuntimeCapabilityStatus;
   readonly tts: DesktopRendererRuntimeCapabilityStatus;
+  readonly vision: DesktopRendererRuntimeCapabilityStatus;
   readonly python: {
     readonly strategy: "SYSTEM_CPYTHON";
     readonly supportedVersions: readonly ["3.12", "3.13"];

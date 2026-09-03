@@ -60,7 +60,10 @@ const backend = new DesktopBackendController(async (config) =>
     ...config,
     ...(localRuntime?.voiceRuntime === undefined
       ? {}
-      : { voiceRuntime: localRuntime.voiceRuntime })
+      : { voiceRuntime: localRuntime.voiceRuntime }),
+    ...(localRuntime?.visionBackend === undefined
+      ? {}
+      : { visionBackend: localRuntime.visionBackend })
   })
 );
 let frontendServer: DesktopFrontendServer | undefined;
@@ -81,7 +84,10 @@ const packagedSingleInstanceSmokeHost = process.argv.includes(
 );
 
 if (!app.requestSingleInstanceLock()) {
-  if (process.argv.includes("--install-local-models")) {
+  if (
+    process.argv.includes("--install-local-models")
+    || process.argv.includes("--install-local-vision-models")
+  ) {
     console.error(
       "Local model setup requires the running Interview App instance to be closed."
     );
@@ -167,6 +173,18 @@ async function startDesktop(): Promise<void> {
   if (process.argv.includes("--install-local-models")) {
     try {
       await runtime.installVoiceAssets(startupAbort.signal);
+    } catch (error) {
+      if (startupAbort.signal.aborted) return;
+      throw error;
+    }
+    await runtime.stopWorkers();
+    shutdownComplete = true;
+    app.quit();
+    return;
+  }
+  if (process.argv.includes("--install-local-vision-models")) {
+    try {
+      await runtime.installVisionAssets(startupAbort.signal);
     } catch (error) {
       if (startupAbort.signal.aborted) return;
       throw error;
@@ -316,6 +334,7 @@ function localRuntimeStatusForRenderer(): DesktopRendererLocalRuntimeStatus {
     protocolVersion: 1,
     speech: rendererCapability(snapshot?.speech),
     tts: rendererCapability(snapshot?.tts),
+    vision: rendererCapability(snapshot?.vision),
     python: Object.freeze({
       strategy: "SYSTEM_CPYTHON",
       supportedVersions: Object.freeze(["3.12", "3.13"] as const)

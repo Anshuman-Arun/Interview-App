@@ -21,6 +21,8 @@ extraResources:
     to: preload.cjs
   - from: workers/python/local_model_worker.py
     to: workers/python/local_model_worker.py
+  - from: workers/python/local_vision_runtime.py
+    to: workers/python/local_vision_runtime.py
   - from: workers/python/requirements-local-model-runtime.txt
     to: workers/python/requirements-local-model-runtime.txt
 

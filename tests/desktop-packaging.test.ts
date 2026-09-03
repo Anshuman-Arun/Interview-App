@@ -55,6 +55,7 @@ describe("Windows desktop packaging contract", () => {
   it("copies only reviewed production worker resources to the exact packaged worker boundary", async () => {
     const config = await source("electron-builder.yml");
     expect(config).toContain("to: workers/python/local_model_worker.py");
+    expect(config).toContain("to: workers/python/local_vision_runtime.py");
     expect(config).toContain("to: workers/python/requirements-local-model-runtime.txt");
     expect(config).not.toContain("test_fixture_worker.py");
     expect(config).not.toContain("tests/fixtures");
@@ -84,15 +85,18 @@ describe("Windows desktop packaging contract", () => {
   it("pins packaged Python resource hashes to the reviewed source bytes", async () => {
     const integrity = await source("apps/desktop/src/runtime/packaged-resource-integrity.ts");
     const worker = await readFile(path.join(root, "workers/python/local_model_worker.py"));
+    const visionWorker = await readFile(path.join(root, "workers/python/local_vision_runtime.py"));
     const preload = await readFile(path.join(root, "apps/desktop/preload.cjs"));
     const requirements = await readFile(
       path.join(root, "workers/python/requirements-local-model-runtime.txt")
     );
     const workerHash = createHash("sha256").update(worker).digest("hex");
+    const visionWorkerHash = createHash("sha256").update(visionWorker).digest("hex");
     const preloadHash = createHash("sha256").update(preload).digest("hex");
     const requirementsHash = createHash("sha256").update(requirements).digest("hex");
 
     expect(integrity).toContain(workerHash);
+    expect(integrity).toContain(visionWorkerHash);
     expect(integrity).toContain(preloadHash);
     expect(integrity).toContain(requirementsHash);
     const attributes = await source(".gitattributes");
@@ -106,6 +110,8 @@ describe("Windows desktop packaging contract", () => {
 
     expect(main).toContain("isAuthorizedDesktopInvoke(event)");
     expect(main).toContain("runtime.installVoiceAssets(startupAbort.signal)");
+    expect(main).toContain("runtime.installVisionAssets(startupAbort.signal)");
+    expect(main).toContain("--install-local-vision-models");
     expect(main).toContain("await activeModelInstall.catch(() => undefined)");
     expect(preload).toContain("getLocalRuntimeStatus");
     expect(preload).toContain("installLocalModels");
@@ -146,6 +152,7 @@ describe("Windows desktop packaging contract", () => {
     const installer = await source("scripts/test-windows-installer.ps1");
 
     expect(checker).toContain("local_model_worker.py");
+    expect(checker).toContain("local_vision_runtime.py");
     expect(checker).toContain("@electron/asar@4.3.0");
     expect(checker).toContain('shell: process.platform === "win32"');
     expect(checker).toContain("prohibited app.asar entries");
