@@ -3,17 +3,17 @@ import type { SessionState } from "../../events/src/index.js";
 import { isGenerationBasisStillCompatible } from "./compatibility.js";
 
 /**
- * Generation-bound verification depends on the full model basis. Direct
- * committed-turn verification is text-source work, so an unrelated board
- * revision does not invalidate it. New turns, transcript/config/problem
- * changes, and missing source provenance still fail closed.
+ * Verification is strict by default and therefore depends on the full basis.
+ * A narrowly authorized committed-turn text request may explicitly declare
+ * board-revision independence. That exception ignores only boardRevision;
+ * all text/config/problem/turn provenance remains fail-closed.
  */
 export function isVerificationBasisStillCompatible(
   basis: GenerationBasis,
   current: Readonly<SessionState>,
-  sourceGenerationId?: string
+  boardRevisionIndependent = false
 ): Compatibility {
-  if (sourceGenerationId !== undefined) {
+  if (!boardRevisionIndependent) {
     return isGenerationBasisStillCompatible(basis, current);
   }
 
