@@ -181,3 +181,11 @@ jobs:
       - name: Run installer persistence smoke
         shell: pwsh
         run: ./scripts/test-windows-installer.ps1
+
+      - name: Upload validated unsigned installer
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: InterviewApp-Windows-unsigned-${{ github.sha }}
+          path: dist/windows/InterviewApp-Setup-*.exe
+          if-no-files-found: error
+          retention-days: 3
