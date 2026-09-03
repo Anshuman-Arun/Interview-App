@@ -16,10 +16,6 @@ import {
   openProviderExecutionSession
 } from "../../../packages/providers/src/index.js";
 import { resolveSessionStateComposition } from "./interview-session-composition.js";
-import { resolveOxfordFormalAnalysisProfile } from "./oxford-formal-analysis-catalog.js";
-import {
-  isOxfordFormalCandidateTargetAdmissible
-} from "./oxford-formal-candidate-admission.js";
 import type { ProviderRuntimeResolver } from "./provider-runtime.js";
 import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 
@@ -53,8 +49,6 @@ implements FormalInterpretationProvider {
     }
 
     if (composition.mode !== "OXFORD_MATHEMATICS") return abstain(request);
-    const profile = resolveOxfordFormalAnalysisProfile(composition.problem);
-    if (profile === undefined) return abstain(request);
     const selection = composition.configuration.providerSelection;
 
     // Formal interpretation derives from the exact user-selected reasoning
@@ -133,30 +127,16 @@ implements FormalInterpretationProvider {
         return abstain(request);
       }
       try {
-        const publicProblem = {
-          id: composition.problem.id,
-          version: composition.problem.version,
-          prompt: composition.problem.public.prompt,
-          givenInformation: composition.problem.public.givenInformation
-        } as const;
-        const result = await adapter.interpret({
+        return await adapter.interpret({
           request,
-          publicProblem,
+          publicProblem: {
+            id: composition.problem.id,
+            version: composition.problem.version,
+            prompt: composition.problem.public.prompt,
+            givenInformation: composition.problem.public.givenInformation
+          },
           signal
         });
-        if (
-          result.candidates.some((candidate) =>
-            !isOxfordFormalCandidateTargetAdmissible({
-              profile,
-              request,
-              publicProblem,
-              candidate
-            })
-          )
-        ) {
-          return abstain(request);
-        }
-        return result;
       } catch (error) {
         if (
           error instanceof AntigravityCliFormalInterpretationError
