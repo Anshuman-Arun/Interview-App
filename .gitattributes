@@ -1,0 +1,2 @@
+workers/python/*.py text eol=lf
+workers/python/requirements-local-model-runtime.txt text eol=lf
