@@ -656,6 +656,7 @@ describe("generic interview session configuration", () => {
     const failure = ProtocolErrorResponseSchema.parse(await json(response));
     expect(failure.error.code).toBe("CONFLICT");
     expect(failure.error.message).toMatch(/provider|authentication|policy/i);
+    expect(failure.error.providerLaunchReason).toBeDefined();
     expect(registry.hasSession(sessionId)).toBe(false);
   });
 
@@ -741,7 +742,8 @@ describe("generic interview session configuration", () => {
     const failure = ProtocolErrorResponseSchema.parse(await json(response));
     expect(failure.error).toEqual({
       code: "CONFLICT",
-      message: "Selected provider is unavailable"
+      message: "Selected provider is unavailable",
+      providerLaunchReason: "PROVIDER_UNAVAILABLE"
     });
   });
 
