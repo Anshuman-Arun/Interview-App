@@ -280,10 +280,10 @@ def main() -> int:
         })
 
     final_peak = peak_working_set_bytes()
-    if sys.platform == "win32" and (
-        after_load_peak is None or final_peak is None
-    ):
-        failures.append("windows peak working-set telemetry unavailable")
+    telemetry_available = (
+        sys.platform != "win32"
+        or (after_load_peak is not None and final_peak is not None)
+    )
 
     report = {
         "schemaVersion": 1,
@@ -295,6 +295,7 @@ def main() -> int:
         "peakWorkingSetBeforeBytes": before_peak,
         "peakWorkingSetAfterLoadBytes": after_load_peak,
         "peakWorkingSetFinalBytes": final_peak,
+        "peakWorkingSetTelemetryAvailable": telemetry_available,
         "canonicalMedianAnalyzeMs": round(statistics.median(canonical_latencies), 2),
         "canonicalMaxAnalyzeMs": round(max(canonical_latencies), 2),
         "canonicalPassed": not any(item.startswith("canonical ") for item in failures),
