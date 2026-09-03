@@ -152,6 +152,24 @@ export class DesktopLocalRuntimeComposition {
     if (!isProductionLocalModelPlatformSupported(process.platform, process.arch)) {
       throw new Error("Local model installation is unavailable on this platform");
     }
+    if (abortRequested(signal)) throw abortError();
+    if (!await this.workerScriptIsSafe()) {
+      throw new Error("Local model installation requires the verified production worker");
+    }
+    const pythonExecutable = await resolvePythonExecutable(
+      this.pythonExecutableCandidate,
+      process.platform,
+      process.env
+    );
+    if (pythonExecutable === undefined) {
+      throw new Error("Local model installation requires a compatible Python runtime");
+    }
+    if (!this.pythonRuntimeCompatible(pythonExecutable, signal)) {
+      if (abortRequested(signal)) throw abortError();
+      throw new Error("Local model installation requires the pinned Python runtime");
+    }
+    this.pythonExecutable = pythonExecutable;
+
     await this.assetManager.cleanupTemporary(signal);
     for (const asset of DESKTOP_LOCAL_MODEL_ASSETS) {
       if (abortRequested(signal)) throw abortError();
