@@ -115,6 +115,8 @@ export function isOxfordFormalCandidateTargetAdmissible(input: {
     || candidate.target.problemId !== profile.target.problemId
     || candidate.target.subject.claimId !== profile.target.subject.claimId
     || candidate.target.dimension !== "CORRECTNESS"
+    || publicProblem.id !== request.problem.id
+    || publicProblem.version !== request.problem.version
     || !isOxfordFormalAnalysisSourceRelevant(profile, request.source.span.text)
   ) {
     return false;
@@ -128,11 +130,6 @@ export function isOxfordFormalCandidateTargetAdmissible(input: {
   }
 
   const sourceNumbers = extractMentionedIntegers(request.source.span.text);
-  const publicNumbers = extractMentionedIntegers([
-    publicProblem.prompt,
-    ...publicProblem.givenInformation
-  ].join("\n"));
-  const contextNumbers = new Set([...sourceNumbers, ...publicNumbers]);
 
   if (candidate.protocol.protocol === "RATIONAL_ARITHMETIC") {
     const parsed = RationalArithmeticInterpretationSchema.safeParse(rawStatement);
@@ -140,7 +137,7 @@ export function isOxfordFormalCandidateTargetAdmissible(input: {
     const statementNumbers = new Set<string>();
     collectRationalNumbers(parsed.data.claim.left, statementNumbers);
     collectRationalNumbers(parsed.data.claim.right, statementNumbers);
-    if (!numbersAreGrounded(statementNumbers, sourceNumbers, contextNumbers)) {
+    if (!numbersAreGrounded(statementNumbers, sourceNumbers)) {
       return false;
     }
 
@@ -182,7 +179,7 @@ export function isOxfordFormalCandidateTargetAdmissible(input: {
       statementNumbers.add(claim.divisor);
       collectIntegerNumbers(claim.dividend, statementNumbers);
     }
-    if (!numbersAreGrounded(statementNumbers, sourceNumbers, contextNumbers)) {
+    if (!numbersAreGrounded(statementNumbers, sourceNumbers)) {
       return false;
     }
     if (new Set([...statementNumbers].map(unsignedInteger)).size < 2) {
@@ -274,29 +271,10 @@ function collectIntegerNumbers(
 
 function numbersAreGrounded(
   statementNumbers: ReadonlySet<string>,
-  sourceNumbers: ReadonlySet<string>,
-  contextNumbers: ReadonlySet<string>
+  sourceNumbers: ReadonlySet<string>
 ): boolean {
-  if (statementNumbers.size === 0) return false;
-  for (const value of statementNumbers) {
-    if (!contextNumbers.has(value)) return false;
-  }
-  const allInSource = [...statementNumbers].every((value) =>
-    sourceNumbers.has(value)
-  );
-  if (allInSource) return true;
-  return [...statementNumbers].some((value) =>
-    sourceNumbers.has(value) && integerMagnitudeExceedsTwo(value)
-  );
-}
-
-function integerMagnitudeExceedsTwo(value: string): boolean {
-  try {
-    const parsed = BigInt(value);
-    return parsed > 2n || parsed < -2n;
-  } catch {
-    return false;
-  }
+  return statementNumbers.size > 0
+    && [...statementNumbers].every((value) => sourceNumbers.has(value));
 }
 
 function unsignedInteger(value: string): string {
