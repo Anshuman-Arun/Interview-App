@@ -24,10 +24,7 @@ import {
   type SocraticAction,
   type VerificationResult
 } from "../../domain/src/index.js";
-import {
-  isGenerationBasisStillCompatible,
-  type SessionState
-} from "../../events/src/index.js";
+import type { SessionState } from "../../events/src/index.js";
 import {
   canonicalJson,
   createProviderContextSpecFingerprintSync
@@ -999,7 +996,7 @@ function collectVerificationSignals(
     if (isVerificationBasisStillCompatible(
       basis.data,
       state,
-      sourceGenerationId as string | undefined
+      sourceGenerationId
     ) !== "COMPATIBLE") {
       continue;
     }
