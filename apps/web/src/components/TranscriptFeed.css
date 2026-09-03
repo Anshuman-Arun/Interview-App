@@ -20,17 +20,6 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 
-.transcript-feed__header > div {
-  display: grid;
-  gap: 2px;
-}
-
-.transcript-feed__index {
-  color: var(--accent);
-  font: 650 6.5px/1 var(--font-mono);
-  letter-spacing: 0.08em;
-}
-
 .transcript-feed__header strong {
   color: var(--text-primary);
   font: 620 10.5px/1.2 var(--font-display);
@@ -52,7 +41,7 @@
 
 .transcript-entry {
   display: grid;
-  grid-template-columns: 128px minmax(0, 1fr);
+  grid-template-columns: 108px minmax(0, 1fr);
   gap: 16px;
   padding: 16px 0;
   border-bottom: 1px solid var(--border-subtle);
@@ -62,11 +51,6 @@
   display: grid;
   align-content: start;
   gap: 5px;
-}
-
-.transcript-entry__number {
-  color: var(--text-muted);
-  font: 500 6.5px/1 var(--font-mono);
 }
 
 .transcript-entry__speaker {
@@ -144,16 +128,6 @@
   font: 650 8.5px/1 var(--font-ui);
 }
 
-.transcript-entry__meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 7px;
-  color: var(--text-muted);
-  font: 450 6.5px/1.25 var(--font-mono);
-  opacity: 0.62;
-}
-
 .transcript-feed__empty {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr);
@@ -195,4 +169,19 @@
   .transcript-entry__rail time {
     justify-self: end;
   }
+}
+
+
+/* KaTeX should follow the active product theme instead of browser defaults. */
+.math-text-container,
+.math-text-container .katex {
+  color: inherit;
+}
+
+:root[data-theme="light"] .math-text-container {
+  color: var(--text-primary);
+}
+
+:root[data-theme="light"] .transcript-entry[data-role="student"] .math-text-container {
+  color: var(--text-secondary);
 }

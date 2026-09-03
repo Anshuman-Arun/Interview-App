@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
-import { createShapeId } from "tldraw";
+import { b64Vecs, createShapeId } from "tldraw";
 import {
   createWhiteboardCanvasMount
 } from "../apps/web/src/components/WhiteboardCanvas.js";
@@ -286,6 +286,98 @@ describe("Real tldraw mounted browser integration", () => {
     expect(adapter.getBoardRevision()).toBe(3);
     expect(bridge.getShape(firstId)).toBeUndefined();
     expect(bridge.getShape(secondId)).toBeUndefined();
+
+    await act(async () => {
+      handle.unmount();
+    });
+    container.remove();
+  });
+
+  it("coalesces an in-progress freehand stroke into one authoritative mutation", async () => {
+    const container = document.createElement("div");
+    container.style.width = "800px";
+    container.style.height = "600px";
+    document.body.appendChild(container);
+
+    const adapter = new TldrawWhiteboardAdapter();
+    const changes: NormalizedStudentShapeChange[] = [];
+    const handle = createWhiteboardCanvasMount({
+      adapter,
+      onNormalizedBoardChange: (change) => changes.push(change)
+    });
+
+    await act(async () => {
+      handle.mount(container);
+    });
+    const bridge = requireRealTldrawBridge(handle);
+    const editor = bridge.getNativeEditor();
+    const id = createShapeId("freehand-coalesced");
+
+    await act(async () => {
+      editor.createShapes([{
+        id,
+        type: "draw",
+        x: 20,
+        y: 30,
+        props: {
+          segments: [{
+            type: "free",
+            path: b64Vecs.encodePoints([
+              { x: 0, y: 0, z: 0.5 },
+              { x: 12, y: 8, z: 0.5 }
+            ])
+          }],
+          color: "black",
+          fill: "none",
+          dash: "draw",
+          size: "m",
+          isComplete: false,
+          isClosed: false,
+          isPen: false,
+          scale: 1,
+          scaleX: 1,
+          scaleY: 1
+        }
+      }]);
+    });
+
+    expect(bridge.getShape(id)?.meta?.["shapeRevision"]).toBe(1);
+    expect(adapter.getBoardRevision()).toBe(0);
+    expect(changes).toHaveLength(0);
+
+    // Simulate the many store writes that one pointer gesture produces. The
+    // exact draw-path encoding belongs to tldraw; authority only cares that
+    // the shape remains an incomplete freehand gesture until pointer-up.
+    for (let sample = 1; sample <= 80; sample += 1) {
+      await act(async () => {
+        editor.updateShapes([{
+          id,
+          type: "draw",
+          x: 20 + sample
+        }]);
+      });
+    }
+
+    expect(bridge.getShape(id)?.meta?.["shapeRevision"]).toBe(1);
+    expect(adapter.getBoardRevision()).toBe(0);
+    expect(changes).toHaveLength(0);
+
+    await act(async () => {
+      editor.updateShapes([{
+        id,
+        type: "draw",
+        props: { isComplete: true }
+      }]);
+    });
+
+    expect(adapter.getBoardRevision()).toBe(1);
+    expect(changes).toHaveLength(1);
+    expect(changes[0]?.source).toBe("EDITOR");
+    expect(changes[0]?.added).toHaveLength(1);
+    expect(changes[0]?.added[0]?.id).toBe(id);
+    expect(changes[0]?.added[0]?.revision).toBe(1);
+    expect(changes[0]?.updated).toHaveLength(0);
+    expect(changes[0]?.deleted).toHaveLength(0);
 
     await act(async () => {
       handle.unmount();

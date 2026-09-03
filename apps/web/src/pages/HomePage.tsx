@@ -7,6 +7,7 @@ import "./HomePage.css";
 export function HomePage({
   activeSessionId,
   activeProblemTitle,
+  activeSessionPaused,
   sessions,
   onStartInterview,
   onResumeInterview,
@@ -18,6 +19,7 @@ export function HomePage({
 }: {
   readonly activeSessionId: SessionId | null;
   readonly activeProblemTitle?: string | null;
+  readonly activeSessionPaused?: boolean;
   readonly sessions: readonly StoredSessionSummary[];
   readonly onStartInterview: () => void;
   readonly onResumeInterview: (sessionId: SessionId) => void;
@@ -73,7 +75,11 @@ export function HomePage({
                 onClick={() => onResumeInterview(activeSessionId)}
                 disabled={sessionEntryPending}
               >
-                {sessionEntryPending ? "Opening room…" : "Return to room"}
+                {sessionEntryPending
+                  ? "Opening room…"
+                  : activeSessionPaused
+                    ? "Resume interview"
+                    : "Return to room"}
                 <span aria-hidden="true">↗</span>
               </button>
             )}
@@ -120,7 +126,11 @@ export function HomePage({
           <span className="expressive-home__active-index">NOW</span>
           <div>
             <strong>{activeProblemTitle ?? "Interview in progress"}</strong>
-            <p>An active room already exists. Resume it before starting anything else.</p>
+            <p>
+              {activeSessionPaused
+                ? "Paused. Resume when you are ready; nothing was ended or archived."
+                : "An active room already exists. Resume it before starting anything else."}
+            </p>
           </div>
           <button
             type="button"

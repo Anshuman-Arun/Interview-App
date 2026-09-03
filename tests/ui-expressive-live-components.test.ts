@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 describe("expressive live interview components", () => {
-  it("keeps voice state contracts while removing permanent device-control clutter", () => {
+  it("keeps voice device functionality without native select clutter", () => {
     const source = fs.readFileSync(
       path.resolve(process.cwd(), "apps/web/src/components/VoiceControls.tsx"),
       "utf8"
@@ -12,10 +12,14 @@ describe("expressive live interview components", () => {
     expect(source).toContain('data-testid="voice-speaking-status"');
     expect(source).toContain("selectInputDevice");
     expect(source).toContain("selectOutputDevice");
+    expect(source).toContain('role="radiogroup"');
+    expect(source).toContain('role="radio"');
     expect(source).toContain("<details");
+    expect(source).not.toContain("<select");
+    expect(source).toContain('document.addEventListener("pointerdown", closeOutside)');
   });
 
-  it("keeps transcript identity and delivery metadata available without chat bubbles", () => {
+  it("keeps speaker identity and math while hiding internal transcript identifiers", () => {
     const source = fs.readFileSync(
       path.resolve(process.cwd(), "apps/web/src/components/TranscriptFeed.tsx"),
       "utf8"
@@ -24,9 +28,9 @@ describe("expressive live interview components", () => {
     expect(source).toContain("Socratic Interviewer");
     expect(source).toContain("student-math-bubble");
     expect(source).toContain("ai-math-bubble");
-    expect(source).toContain("Turn:");
-    expect(source).toContain("Episode:");
-    expect(source).toContain("Delivery:");
+    expect(source).not.toContain("Turn:");
+    expect(source).not.toContain("Episode:");
+    expect(source).not.toContain("Delivery:");
     expect(source).not.toContain("rounded-2xl");
   });
 

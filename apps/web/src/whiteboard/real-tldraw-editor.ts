@@ -60,6 +60,12 @@ export class RealTldrawEditorBridge implements TldrawEditor {
   private normalizedStoreUnlisten: (() => void) | undefined;
   private readonly pendingAdapterMutationTokens = new Set<number>();
   private readonly pendingAdapterDeleteIds = new Set<string>();
+  /**
+   * tldraw updates a freehand shape repeatedly while the pointer is moving.
+   * Those transient updates are one user gesture, not dozens of authoritative
+   * board mutations. Keep them local until tldraw marks the stroke complete.
+   */
+  private readonly deferredFreehandShapeIds = new Set<string>();
 
   public constructor(
     private readonly nativeEditor: Editor,
@@ -342,7 +348,9 @@ export class RealTldrawEditorBridge implements TldrawEditor {
         const nextMeta = withoutAdapterMutationToken(metadata(next.meta));
         const now = new Date().toISOString();
         const previousRevision = existingShapeRevision(previousMeta["shapeRevision"]);
-        if (previousRevision >= Number.MAX_SAFE_INTEGER) {
+        const transientFreehandChange =
+          isIncompleteFreehandShape(previous) || isIncompleteFreehandShape(next);
+        if (!transientFreehandChange && previousRevision >= Number.MAX_SAFE_INTEGER) {
           return previous;
         }
         return {
@@ -351,7 +359,13 @@ export class RealTldrawEditorBridge implements TldrawEditor {
             ...nextMeta,
             layer: STUDENT_LAYER,
             origin: "STUDENT",
-            shapeRevision: previousRevision + 1,
+            // A freehand stroke is not authoritative until pointer-up. Keeping
+            // revision 1 through its transient updates lets the completed
+            // stroke be admitted as one ADD rather than flooding the bounded
+            // mutation queue with every pointer sample.
+            shapeRevision: transientFreehandChange
+              ? previousRevision
+              : previousRevision + 1,
             createdAt: stringMeta(previousMeta["createdAt"], now),
             lastModifiedAt: now
           }
@@ -394,6 +408,7 @@ export class RealTldrawEditorBridge implements TldrawEditor {
         this.normalizedStoreUnlisten = undefined;
         this.pendingAdapterMutationTokens.clear();
         this.pendingAdapterDeleteIds.clear();
+        this.deferredFreehandShapeIds.clear();
       }
     };
   }
@@ -414,11 +429,16 @@ export class RealTldrawEditorBridge implements TldrawEditor {
         for (const record of Object.values(entry.changes.added)) {
           if (record.typeName !== "shape") continue;
           collectAdapterMutationToken(record.meta, observedTokens);
+          const adapterAttributed = this.hasPendingAdapterMutationToken(record.meta);
+          if (!adapterAttributed && isIncompleteFreehandShape(record)) {
+            this.deferredFreehandShapeIds.add(record.id);
+            continue;
+          }
           const normalized = this.normalizeNativeShape(record);
           if (normalized !== null) {
             added.push(normalized);
             studentMutationCount += 1;
-            if (this.hasPendingAdapterMutationToken(record.meta)) {
+            if (adapterAttributed) {
               adapterAttributedStudentMutationCount += 1;
             }
           }
@@ -429,6 +449,17 @@ export class RealTldrawEditorBridge implements TldrawEditor {
           const afterRecord = pair[1];
           if (beforeRecord.typeName !== "shape" || afterRecord.typeName !== "shape") continue;
           collectAdapterMutationToken(afterRecord.meta, observedTokens);
+
+          if (this.deferredFreehandShapeIds.has(afterRecord.id)) {
+            if (isIncompleteFreehandShape(afterRecord)) continue;
+            this.deferredFreehandShapeIds.delete(afterRecord.id);
+            const completed = this.normalizeNativeShape(afterRecord);
+            if (completed !== null) {
+              added.push(completed);
+              studentMutationCount += 1;
+            }
+            continue;
+          }
 
           const before = this.normalizeNativeShape(beforeRecord);
           const after = this.normalizeNativeShape(afterRecord);
@@ -444,6 +475,9 @@ export class RealTldrawEditorBridge implements TldrawEditor {
         for (const record of Object.values(entry.changes.removed)) {
           if (record.typeName !== "shape") continue;
           collectAdapterMutationToken(record.meta, observedTokens);
+          if (this.deferredFreehandShapeIds.delete(record.id)) {
+            continue;
+          }
           const normalized = this.normalizeNativeShape(record);
           if (normalized !== null) {
             deleted.push(normalized);
@@ -732,6 +766,14 @@ function toNativeMeta(
   result["createdAt"] = stringMeta(meta?.["createdAt"], now);
   result["lastModifiedAt"] = stringMeta(meta?.["lastModifiedAt"], now);
   return result;
+}
+
+function isIncompleteFreehandShape(shape: TLShape): boolean {
+  if (shape.type !== "draw" && shape.type !== "highlight") return false;
+  const props = shape.props as unknown;
+  return typeof props === "object"
+    && props !== null
+    && (props as Record<string, unknown>)["isComplete"] === false;
 }
 
 function metadata(value: unknown): Record<string, unknown> {
