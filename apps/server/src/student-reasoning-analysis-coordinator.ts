@@ -19,7 +19,7 @@ import {
   type OxfordFormalAnalysisProfile
 } from "./oxford-formal-analysis-catalog.js";
 
-export const DEFAULT_STUDENT_REASONING_ANALYSIS_TIMEOUT_MS = 5_000 as const;
+export const DEFAULT_STUDENT_REASONING_ANALYSIS_TIMEOUT_MS = 1_500 as const;
 export const MAX_STUDENT_REASONING_ANALYSIS_IN_FLIGHT = 2 as const;
 export const MAX_STUDENT_REASONING_ANALYSIS_SESSION_CONTEXTS = 128 as const;
 
