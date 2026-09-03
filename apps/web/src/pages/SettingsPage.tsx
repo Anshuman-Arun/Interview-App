@@ -459,6 +459,7 @@ export function SettingsPage({
               disabled={
                 installingModels
                 || runtimeStatus?.modelSetup.state === "INSTALLING"
+                || runtimeStatus?.modelSetup.restartRequired === true
                 || (
                   runtimeStatus?.speech.state === "READY"
                   && runtimeStatus.tts.state === "READY"
@@ -488,9 +489,11 @@ export function SettingsPage({
             >
               {installingModels || runtimeStatus?.modelSetup.state === "INSTALLING"
                 ? "Installing verified models…"
-                : runtimeStatus?.speech.state === "READY" && runtimeStatus.tts.state === "READY"
-                  ? "Voice ready"
-                  : "Install / verify voice models"}
+                : runtimeStatus?.modelSetup.restartRequired
+                  ? "Restart to activate voice"
+                  : runtimeStatus?.speech.state === "READY" && runtimeStatus.tts.state === "READY"
+                    ? "Voice ready"
+                    : "Install / verify voice models"}
             </button>
           </div>
         </section>
