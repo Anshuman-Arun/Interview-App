@@ -64,4 +64,4 @@
   "version": "0.1.0",
   "productName": "Interview App",
   "main": "dist/desktop-runtime/apps/desktop/src/main.js"
-}\n
+}
