@@ -46,6 +46,7 @@ export const VerificationWorkItemSchema = z.object({
   interpretationConfidence: z.number().min(0).max(1),
   evidenceKey: EvidenceKeySchema,
   evidenceEventIds: z.array(EventIdSchema).min(1),
+  boardRevisionIndependent: z.literal(true).optional(),
   sourceGenerationId: GenerationIdSchema.optional(),
   sourceProposalRequestId: RequestIdSchema.optional()
 }).strict();
@@ -290,6 +291,7 @@ export class VerificationCoordinator {
     readonly interpretationConfidence: number;
     readonly evidenceKey: EvidenceKey;
     readonly expectedProblemVersion?: string;
+    readonly boardRevisionIndependent?: true;
     readonly envelope?: CommandEnvelope;
   }) {
     const verifier = VerifierIdSchema.parse(input.verifier);
@@ -325,7 +327,8 @@ export class VerificationCoordinator {
         candidateFormalInterpretation: interpretation.candidateFormalInterpretation,
         interpretationConfidence: interpretation.interpretationConfidence,
         evidenceKey,
-        ...(expectedProblemVersion === undefined ? {} : { expectedProblemVersion })
+        ...(expectedProblemVersion === undefined ? {} : { expectedProblemVersion }),
+        ...(input.boardRevisionIndependent === true ? { boardRevisionIndependent: true as const } : {})
       }
     }, VerificationWorkItemSchema, (state) => {
       if (state.status !== "ACTIVE") throw new Error("Verification requires an active session");
@@ -391,7 +394,8 @@ export class VerificationCoordinator {
         candidateFormalInterpretation: interpretation.candidateFormalInterpretation,
         interpretationConfidence: interpretation.interpretationConfidence,
         evidenceKey,
-        evidenceEventIds: [evidenceEventId]
+        evidenceEventIds: [evidenceEventId],
+        ...(input.boardRevisionIndependent === true ? { boardRevisionIndependent: true as const } : {})
       });
       return {
         drafts: [{
@@ -404,7 +408,10 @@ export class VerificationCoordinator {
             candidateFormalInterpretation: workItem.candidateFormalInterpretation,
             interpretationConfidence: workItem.interpretationConfidence,
             evidenceKey: workItem.evidenceKey,
-            evidenceEventIds: workItem.evidenceEventIds
+            evidenceEventIds: workItem.evidenceEventIds,
+            ...(workItem.boardRevisionIndependent === true
+              ? { boardRevisionIndependent: true as const }
+              : {})
           }
         }],
         result: workItem
@@ -512,7 +519,11 @@ export class VerificationCoordinator {
         || envelope.sourceRevision !== request.basis.committedInputSequence
       ) return discard("CALLBACK_BASIS_MISMATCH");
 
-      const compatibility = isVerificationBasisStillCompatible(request.basis, state, request.sourceGenerationId);
+      const compatibility = isVerificationBasisStillCompatible(
+        request.basis,
+        state,
+        request.boardRevisionIndependent === true
+      );
       if (compatibility === "INCOMPATIBLE") return discard("COMPATIBILITY_INCOMPATIBLE");
       if (compatibility === "UNKNOWN") return discard("COMPATIBILITY_UNKNOWN");
       if (!this.isScopeAuthorized(request.verifier, request.evidenceKey)) {
