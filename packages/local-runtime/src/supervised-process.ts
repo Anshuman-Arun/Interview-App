@@ -1038,13 +1038,17 @@ async function verifyWindowsSupervisorAssembly(
       lstat(assembly.path, { bigint: true }),
       realpath(assembly.path)
     ]);
+    const canonicalInfo = await lstat(canonical, { bigint: true });
     if (
       !info.isFile()
       || info.isSymbolicLink()
       || info.size <= 0n
       || info.size > BigInt(MAX_WINDOWS_SUPERVISOR_ASSEMBLY_BYTES)
-      || normalizeWindowsIdentityPath(assembly.path)
-        !== normalizeWindowsIdentityPath(canonical)
+      || !canonicalInfo.isFile()
+      || canonicalInfo.isSymbolicLink()
+      || canonicalInfo.dev !== info.dev
+      || canonicalInfo.ino !== info.ino
+      || canonicalInfo.size !== info.size
     ) {
       return false;
     }
