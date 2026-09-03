@@ -30,7 +30,7 @@ describe("configured launch browser boundaries", () => {
       "utf8"
     );
 
-    const quantGuard = app.indexOf("if (!isOxfordWorkspace && session.configuration !== null)");
+    const quantGuard = app.indexOf("if (!isOxfordWorkspace)");
     const oxfordProblem = app.indexOf("<ProblemCard");
     expect(quantGuard).toBeGreaterThan(-1);
     expect(oxfordProblem).toBeGreaterThan(quantGuard);
