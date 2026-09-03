@@ -822,7 +822,8 @@ export class QuantTraderInterviewEngine {
         counterparty: "QUOTE_ADMISSION_PREVIEW",
         timestamp: 0
       }, this.fairValueValue);
-    } catch {
+    } catch (error) {
+      if (!(error instanceof RangeError)) throw error;
       throw new QuantTraderActionError(
         "INVALID_QUOTE",
         "Quote could overflow bounded portfolio accounting"
