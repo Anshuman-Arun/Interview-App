@@ -107,10 +107,9 @@ export class BrowserCommandProtocolError extends Error {
   public constructor(
     public readonly status: number,
     code: ProtocolErrorResponse["error"]["code"],
-    public readonly requestId: RequestId,
-    public readonly serverMessage?: string
+    public readonly requestId: RequestId
   ) {
-    super(serverMessage ?? `Command rejected with protocol error ${code}`);
+    super(`Command rejected with protocol error ${code}`);
     this.name = "BrowserCommandProtocolError";
     this.code = code;
   }
@@ -715,8 +714,7 @@ export class BrowserCommandClient {
       throw new BrowserCommandProtocolError(
         response.status,
         protocolError.error.code,
-        command.requestId,
-        protocolError.error.message
+        command.requestId
       );
     }
 
