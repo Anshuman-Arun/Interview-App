@@ -218,11 +218,13 @@ describe("desktop local model runtime", () => {
     });
     compositions.push(composition);
 
-    await composition.start();
-
     const mutable = composition as unknown as {
       pythonExecutable?: string;
+      pythonRuntimeCompatible(executable: string, signal?: AbortSignal): boolean;
     };
+    mutable.pythonRuntimeCompatible = () => true;
+    await composition.start();
+
     expect(mutable.pythonExecutable).toBe(launcher);
   });
 
@@ -254,6 +256,30 @@ describe("desktop local model runtime", () => {
       vision: {
         state: "UNAVAILABLE",
         reasonCode: "NO_PRODUCTION_BACKEND_CONFIGURED"
+      }
+    });
+  });
+
+  it("reports an incompatible Python runtime before model admission", async () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-python-incompatible-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+
+    await expect(composition.start()).resolves.toBeUndefined();
+
+    expect(composition.getCapabilityStatus()).toMatchObject({
+      speech: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_INCOMPATIBLE"
+      },
+      tts: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_INCOMPATIBLE"
       }
     });
   });
@@ -330,9 +356,11 @@ describe("desktop local model runtime", () => {
 
     const mutable = composition as unknown as {
       speechStatus: { state: string; reasonCode?: string };
+      pythonRuntimeCompatible(executable: string, signal?: AbortSignal): boolean;
       startSpeech(signal?: AbortSignal): Promise<void>;
       startTts(signal?: AbortSignal): Promise<void>;
     };
+    mutable.pythonRuntimeCompatible = () => true;
     mutable.startSpeech = async () => {
       mutable.speechStatus = {
         state: "FAILED",
@@ -359,6 +387,10 @@ describe("desktop local model runtime", () => {
     });
     compositions.push(composition);
 
+    const mutable = composition as unknown as {
+      pythonRuntimeCompatible(executable: string, signal?: AbortSignal): boolean;
+    };
+    mutable.pythonRuntimeCompatible = () => true;
     await composition.start();
 
     expect(composition.voiceRuntime).toBeUndefined();
