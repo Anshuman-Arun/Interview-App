@@ -579,6 +579,29 @@ describe("browser command client", () => {
     expect(String(caught)).not.toContain("server message");
   });
 
+  it("surfaces only bounded whitelisted provider launch conflicts", async () => {
+    const requestId = RequestIdSchema.parse("request_provider_conflict");
+    const client = createClient({
+      requestIdFactory: () => requestId,
+      response: jsonResponse({
+        protocolVersion: 1,
+        ok: false,
+        error: {
+          code: "CONFLICT",
+          message: "Selected provider requires configured authentication"
+        }
+      }, 409)
+    });
+
+    await expect(client.startSession(SESSION_ID)).rejects.toMatchObject({
+      name: "BrowserCommandProtocolError",
+      code: "CONFLICT",
+      requestId,
+      publicMessage: "Selected provider requires configured authentication",
+      message: "Selected provider requires configured authentication"
+    });
+  });
+
   it("rejects a non-JSON content type before parsing the body", async () => {
     const requestId = RequestIdSchema.parse("request_bad_content_type");
     const client = createClient({
