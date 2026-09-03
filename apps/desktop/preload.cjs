@@ -5,6 +5,8 @@ const { contextBridge, ipcRenderer } = require("electron");
 const CHANNEL = "interview-desktop:get-bootstrap";
 const ZOOM_CHANNEL = "interview-desktop:set-zoom";
 const ZOOM_CHANGED_CHANNEL = "interview-desktop:zoom-changed";
+const LOCAL_RUNTIME_STATUS_CHANNEL = "interview-desktop:get-local-runtime-status";
+const INSTALL_LOCAL_MODELS_CHANNEL = "interview-desktop:install-local-models";
 const AUTH_HEADER_VALUE = "desktop-managed-v1";
 const MIN_ZOOM_FACTOR = 0.25;
 const MAX_ZOOM_FACTOR = 5;
@@ -94,6 +96,71 @@ function validateBootstrap(value) {
   });
 }
 
+const RUNTIME_STATES = new Set(["READY", "MISSING_ASSET", "FAILED", "UNAVAILABLE"]);
+const MODEL_SETUP_STATES = new Set(["IDLE", "INSTALLING", "INSTALLED", "FAILED"]);
+
+function validateCapabilityStatus(value) {
+  if (
+    typeof value !== "object"
+    || value === null
+    || !RUNTIME_STATES.has(value.state)
+    || (value.reasonCode !== undefined
+      && (typeof value.reasonCode !== "string"
+        || !/^[A-Z0-9_]{1,96}$/.test(value.reasonCode)))
+  ) {
+    throw new Error("Desktop local runtime status is malformed");
+  }
+  const keys = Object.keys(value).sort();
+  const expected = value.reasonCode === undefined ? ["state"] : ["reasonCode", "state"];
+  if (
+    keys.length !== expected.length
+    || !keys.every((key, index) => key === expected[index])
+  ) {
+    throw new Error("Desktop local runtime status is malformed");
+  }
+  return Object.freeze({
+    state: value.state,
+    ...(value.reasonCode === undefined ? {} : { reasonCode: value.reasonCode })
+  });
+}
+
+function validateLocalRuntimeStatus(value) {
+  if (
+    typeof value !== "object"
+    || value === null
+    || !hasExactKeys(value, ["protocolVersion", "speech", "tts", "python", "modelSetup"])
+    || value.protocolVersion !== 1
+    || typeof value.python !== "object"
+    || value.python === null
+    || !hasExactKeys(value.python, ["strategy", "supportedVersions"])
+    || value.python.strategy !== "SYSTEM_CPYTHON"
+    || !Array.isArray(value.python.supportedVersions)
+    || value.python.supportedVersions.length !== 2
+    || value.python.supportedVersions[0] !== "3.12"
+    || value.python.supportedVersions[1] !== "3.13"
+    || typeof value.modelSetup !== "object"
+    || value.modelSetup === null
+    || !hasExactKeys(value.modelSetup, ["state", "restartRequired"])
+    || !MODEL_SETUP_STATES.has(value.modelSetup.state)
+    || typeof value.modelSetup.restartRequired !== "boolean"
+  ) {
+    throw new Error("Desktop local runtime status is malformed");
+  }
+  return Object.freeze({
+    protocolVersion: 1,
+    speech: validateCapabilityStatus(value.speech),
+    tts: validateCapabilityStatus(value.tts),
+    python: Object.freeze({
+      strategy: "SYSTEM_CPYTHON",
+      supportedVersions: Object.freeze(["3.12", "3.13"])
+    }),
+    modelSetup: Object.freeze({
+      state: value.modelSetup.state,
+      restartRequired: value.modelSetup.restartRequired
+    })
+  });
+}
+
 const bootstrap = validateBootstrap(ipcRenderer.sendSync(CHANNEL));
 contextBridge.exposeInMainWorld("interviewDesktop", Object.freeze({
   getBootstrap: () => ({
@@ -108,6 +175,10 @@ contextBridge.exposeInMainWorld("interviewDesktop", Object.freeze({
       throw new Error("Desktop zoom request was rejected");
     }
   },
+  getLocalRuntimeStatus: async () =>
+    validateLocalRuntimeStatus(await ipcRenderer.invoke(LOCAL_RUNTIME_STATUS_CHANNEL)),
+  installLocalModels: async () =>
+    validateLocalRuntimeStatus(await ipcRenderer.invoke(INSTALL_LOCAL_MODELS_CHANNEL)),
   onZoomFactorChanged: (listener) => {
     if (typeof listener !== "function") {
       throw new Error("Desktop zoom listener must be a function");

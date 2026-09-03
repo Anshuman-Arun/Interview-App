@@ -56,7 +56,7 @@ pnpm start:desktop
 
 builds the existing Vite frontend and serves it from a desktop-owned ephemeral loopback HTTP server. This intentionally avoids a `file://` / opaque Origin, preserving the backend's exact-Origin security model. The production static server does not serve content until the backend origins have been configured and applies a restrictive CSP.
 
-Final installers, signing, and auto-update are deliberately deferred.
+Windows packaging now uses the repository `electron-builder.yml` and the `package:win` / `dist:win` scripts. Current installer artifacts are intentionally unsigned; code signing and auto-update remain deferred. See `docs/WINDOWS_DESKTOP_RELEASE.md` for the resource boundary and release checklist.
 
 ## Preload surface
 

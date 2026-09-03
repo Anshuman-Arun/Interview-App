@@ -1,11 +1,44 @@
 export const DESKTOP_BOOTSTRAP_CHANNEL = "interview-desktop:get-bootstrap";
 export const DESKTOP_ZOOM_CHANNEL = "interview-desktop:set-zoom";
 export const DESKTOP_ZOOM_CHANGED_CHANNEL = "interview-desktop:zoom-changed";
+export const DESKTOP_LOCAL_RUNTIME_STATUS_CHANNEL = "interview-desktop:get-local-runtime-status";
+export const DESKTOP_INSTALL_LOCAL_MODELS_CHANNEL = "interview-desktop:install-local-models";
 export const DESKTOP_AUTH_HEADER_VALUE = "desktop-managed-v1";
 
 export const DESKTOP_MIN_ZOOM_FACTOR = 0.25;
 export const DESKTOP_MAX_ZOOM_FACTOR = 5;
 export type DesktopZoomFactor = number;
+
+export type DesktopRendererRuntimeCapabilityState =
+  | "READY"
+  | "MISSING_ASSET"
+  | "FAILED"
+  | "UNAVAILABLE";
+
+export interface DesktopRendererRuntimeCapabilityStatus {
+  readonly state: DesktopRendererRuntimeCapabilityState;
+  readonly reasonCode?: string;
+}
+
+export type DesktopRendererModelSetupState =
+  | "IDLE"
+  | "INSTALLING"
+  | "INSTALLED"
+  | "FAILED";
+
+export interface DesktopRendererLocalRuntimeStatus {
+  readonly protocolVersion: 1;
+  readonly speech: DesktopRendererRuntimeCapabilityStatus;
+  readonly tts: DesktopRendererRuntimeCapabilityStatus;
+  readonly python: {
+    readonly strategy: "SYSTEM_CPYTHON";
+    readonly supportedVersions: readonly ["3.12", "3.13"];
+  };
+  readonly modelSetup: {
+    readonly state: DesktopRendererModelSetupState;
+    readonly restartRequired: boolean;
+  };
+}
 
 export function isDesktopZoomFactor(value: unknown): value is DesktopZoomFactor {
   return typeof value === "number"
