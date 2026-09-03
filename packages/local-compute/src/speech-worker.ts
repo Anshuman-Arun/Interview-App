@@ -16,10 +16,12 @@ import {
   MAX_SPEECH_IN_FLIGHT_REQUESTS,
   MAX_SPEECH_PRE_SPEECH_DURATION_MS,
   MAX_SPEECH_RECOGNIZER_TIMEOUT_MS,
+  SPEECH_RECOGNIZER_TIMEOUT_ABORT_REASON,
   MAX_SPEECH_REMEMBERED_MESSAGES,
   MAX_SPEECH_UTTERANCE_DURATION_MS,
   MAX_SPEECH_REMEMBERED_RESULT_CHARS,
   MAX_SPEECH_VAD_TIMEOUT_MS,
+  SPEECH_VAD_TIMEOUT_ABORT_REASON,
   SpeechCancelRequestSchema,
   SpeechControlRequestSchema,
   SpeechFlushRequestSchema,
@@ -503,7 +505,7 @@ export class SpeechWorkerCore {
         vadOperation,
         vadAbort.signal,
         this.vadTimeoutMs,
-        () => vadAbort.abort()
+        () => vadAbort.abort(SPEECH_VAD_TIMEOUT_ABORT_REASON)
       );
       try {
         observation = VadObservationSchema.parse(rawObservation);
@@ -726,7 +728,7 @@ export class SpeechWorkerCore {
         recognitionOperation,
         abortController.signal,
         this.recognizerTimeoutMs,
-        () => abortController.abort()
+        () => abortController.abort(SPEECH_RECOGNIZER_TIMEOUT_ABORT_REASON)
       );
       if (context.cancelled || context.terminal || abortController.signal.aborted || this.shuttingDown) return [];
       if (sha256(pcmBytes) !== basis.pcmSha256) {

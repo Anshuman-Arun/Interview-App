@@ -1,13 +1,22 @@
 import {
   SessionHistoryEntrySchema,
+  StoredSessionSummarySchema,
   type DeliveryId,
   type SessionHistoryEntry,
   type SessionId,
   type StoredSessionSummary
 } from "../../../packages/domain/src/index.js";
 import { DeliveryCoordinator } from "../../../packages/delivery/src/index.js";
-import { replaySession } from "../../../packages/events/src/index.js";
-import type { SqliteEventStore } from "../../../packages/persistence/src/index.js";
+import {
+  replaySession,
+  type SessionEvent
+} from "../../../packages/events/src/index.js";
+import {
+  CorruptEventStreamError,
+  type SqliteEventStore
+} from "../../../packages/persistence/src/index.js";
+import { assertReplayPrefixValidForRecovery } from "../../../packages/replay/src/index.js";
+import { resolveSessionStateComposition } from "./interview-session-composition.js";
 import {
   type SessionRuntimeRegistry,
   type SessionWriter
@@ -23,6 +32,17 @@ export interface TurnRecoveryDelegate {
 
 export interface VisionEvidenceRecoveryDelegate {
   readonly recoverPendingVisionEvidence: (sessionId: SessionId) => Promise<void>;
+}
+
+export class LegacyUninitializedQuantSessionError extends Error {
+  public readonly code = "LEGACY_UNINITIALIZED_QUANT_SESSION" as const;
+
+  public constructor() {
+    super(
+      "This Quant session predates deterministic runtime initialization and cannot be resumed; start a new Quant session"
+    );
+    this.name = "LegacyUninitializedQuantSessionError";
+  }
 }
 
 /**
@@ -41,7 +61,57 @@ export class SessionRecoveryCoordinator {
   ) {}
 
   public listSessions(): readonly StoredSessionSummary[] {
-    return this.store?.listSessions() ?? this.registry.listSessions();
+    const summaries = this.store === undefined
+      ? this.registry.listSessions()
+      : listStoreSessionsBestEffort(this.store);
+    const trusted: StoredSessionSummary[] = [];
+    for (const summary of summaries) {
+      const events = this.store?.load(summary.sessionId) ?? this.registry.loadEvents(summary.sessionId);
+      const eventFamilyIsQuant = eventsIdentifyQuantSession(events);
+      if (eventsAreLegacyUninitializedQuantSession(events)) {
+        // Historical pre-runtime Quant sessions may contain lifecycle events that
+        // modern deterministic reducers intentionally reject. Keep them
+        // discoverable for migration, but expose no synthetic problem identity
+        // and never open a modern writer for them.
+        trusted.push(sanitizedQuantInventorySummary(summary));
+        continue;
+      }
+
+      let state: ReturnType<typeof replaySession>;
+      try {
+        state = replaySession(summary.sessionId, events);
+      } catch (error) {
+        if (eventFamilyIsQuant) continue;
+        throw error;
+      }
+      if (!isQuantSessionState(state)) {
+        trusted.push(summary);
+        continue;
+      }
+
+      if (isLegacyUninitializedQuantSessionState(state)) {
+        assertSessionInventoryMatchesState(summary, state, events);
+      } else {
+        // Fail closed per deterministic session, not for the entire local
+        // inventory. A single corrupt historical Quant stream must never be
+        // advertised as trusted, but it also must not prevent healthy sessions
+        // from being listed or a new interview from being started.
+        try {
+          assertReplayPrefixValidForRecovery(summary.sessionId, events);
+          resolveSessionStateComposition(state);
+          assertSessionInventoryMatchesState(summary, state, events);
+        } catch {
+          continue;
+        }
+      }
+
+      // Quant Research persists a synthetic PROBLEM_PRESENTED only so generic
+      // replay can retain chronology. LIST_SESSIONS has no mode discriminator,
+      // so exposing that identity as problemId/problemVersion would make it
+      // indistinguishable from an Oxford problem to legacy consumers.
+      trusted.push(sanitizedQuantInventorySummary(summary));
+    }
+    return trusted;
   }
 
   public hasSession(sessionId: SessionId): boolean {
@@ -157,7 +227,36 @@ export class SessionRecoveryCoordinator {
     if (existing !== undefined) return existing;
 
     const recovery = (async () => {
+      const persistedEvents = this.registry.loadEvents(sessionId);
+      if (eventsAreLegacyUninitializedQuantSession(persistedEvents)) {
+        throw new LegacyUninitializedQuantSessionError();
+      }
+
       const writer = await this.getWriterAsync(sessionId);
+      // Resolve exact application-owned identity and specialized deterministic
+      // state before recovery may append anything. Quant streams additionally
+      // require generic event provenance/transition validation: unlike the older
+      // Oxford recovery fixtures, their production event family has no legacy
+      // recovery-only histories that intentionally bypass replay projection.
+      const state = writer.getState();
+      if (isLegacyUninitializedQuantSessionState(state)) {
+        throw new LegacyUninitializedQuantSessionError();
+      }
+
+      let composition: ReturnType<typeof resolveSessionStateComposition>;
+      try {
+        composition = resolveSessionStateComposition(state);
+        if (composition.mode !== "OXFORD_MATHEMATICS") {
+          assertReplayPrefixValidForRecovery(sessionId, persistedEvents);
+        }
+      } catch (error) {
+        if (isQuantSessionState(state)) {
+          // Never let corrupted persisted deterministic history masquerade as a
+          // malformed/stale candidate action at the HTTP error boundary.
+          throw new Error("Authoritative quant session recovery validation failed", { cause: error });
+        }
+        throw error;
+      }
       const deliveryIds = await new DeliveryCoordinator(writer).recoverUncertainDeliveries();
       if (this.visionEvidenceDelegate !== undefined) {
         await this.visionEvidenceDelegate.recoverPendingVisionEvidence(sessionId);
@@ -185,6 +284,138 @@ export class SessionRecoveryCoordinator {
     });
     return recovery;
   }
+}
+
+function listStoreSessionsBestEffort(
+  store: SqliteEventStore
+): readonly StoredSessionSummary[] {
+  try {
+    return store.listSessions();
+  } catch (error) {
+    if (!(error instanceof CorruptEventStreamError)) throw error;
+  }
+
+  const summaries: StoredSessionSummary[] = [];
+  for (const sessionId of store.listSessionIds()) {
+    let events: readonly SessionEvent[];
+    try {
+      events = store.load(sessionId);
+    } catch (error) {
+      if (error instanceof CorruptEventStreamError) continue;
+      throw error;
+    }
+    if (events.length === 0) continue;
+
+    let problemId: string | undefined;
+    let problemVersion: string | undefined;
+    let status: StoredSessionSummary["status"] = "CREATED";
+    for (const event of events) {
+      if (event.type === "PROBLEM_PRESENTED") {
+        problemId = event.payload.problemId;
+        problemVersion = event.payload.problemVersion;
+      } else if (event.type === "SESSION_STARTED") {
+        status = "ACTIVE";
+      } else if (event.type === "SESSION_COMPLETED") {
+        status = "COMPLETED";
+      } else if (event.type === "SESSION_ARCHIVED") {
+        status = "ARCHIVED";
+      }
+    }
+
+    const first = events[0];
+    const last = events.at(-1);
+    if (first === undefined || last === undefined) continue;
+    summaries.push(StoredSessionSummarySchema.parse({
+      sessionId,
+      ...(problemId === undefined ? {} : { problemId }),
+      ...(problemVersion === undefined ? {} : { problemVersion }),
+      status,
+      sequence: last.sequence,
+      createdAt: first.wallTime,
+      updatedAt: last.wallTime,
+      eventCount: events.length
+    }));
+  }
+
+  return summaries.sort((left, right) =>
+    right.updatedAt.localeCompare(left.updatedAt)
+    || left.sessionId.localeCompare(right.sessionId)
+  );
+}
+
+function eventsAreLegacyUninitializedQuantSession(
+  events: readonly SessionEvent[]
+): boolean {
+  const start = events.find((event) => event.type === "SESSION_STARTED");
+  const mode = start?.type === "SESSION_STARTED"
+    ? start.payload.configuration?.mode
+    : undefined;
+  if (mode !== "QUANT_TRADING" && mode !== "QUANT_RESEARCH") return false;
+  return !events.some((event) =>
+    event.type.startsWith("QUANT_TRADING_")
+    || event.type.startsWith("QUANT_RESEARCH_")
+  );
+}
+
+function eventsIdentifyQuantSession(events: readonly SessionEvent[]): boolean {
+  return events.some((event) =>
+    (
+      event.type === "SESSION_STARTED"
+      && (
+        event.payload.configuration?.mode === "QUANT_TRADING"
+        || event.payload.configuration?.mode === "QUANT_RESEARCH"
+      )
+    )
+    || event.type.startsWith("QUANT_TRADING_")
+    || event.type.startsWith("QUANT_RESEARCH_")
+  );
+}
+
+function sanitizedQuantInventorySummary(
+  summary: Readonly<StoredSessionSummary>
+): StoredSessionSummary {
+  return {
+    sessionId: summary.sessionId,
+    status: summary.status,
+    sequence: summary.sequence,
+    createdAt: summary.createdAt,
+    updatedAt: summary.updatedAt,
+    eventCount: summary.eventCount
+  };
+}
+
+function assertSessionInventoryMatchesState(
+  summary: Readonly<StoredSessionSummary>,
+  state: Readonly<ReturnType<SessionWriter["getState"]>>,
+  events: readonly SessionEvent[]
+): void {
+  if (
+    summary.status !== state.status
+    || summary.sequence !== state.sequence
+    || summary.eventCount !== events.length
+    || summary.problemId !== state.problem?.id
+    || summary.problemVersion !== state.problem?.version
+    || summary.createdAt !== events[0]?.wallTime
+    || summary.updatedAt !== events.at(-1)?.wallTime
+  ) {
+    throw new Error("Quant session inventory does not match authoritative state");
+  }
+}
+
+function isLegacyUninitializedQuantSessionState(
+  state: Readonly<ReturnType<SessionWriter["getState"]>>
+): boolean {
+  if (!state.started) return false;
+  if (state.quantTrading !== undefined || state.quantResearch !== undefined) return false;
+  return state.configuration?.mode === "QUANT_TRADING"
+    || state.configuration?.mode === "QUANT_RESEARCH";
+}
+
+function isQuantSessionState(state: Readonly<ReturnType<SessionWriter["getState"]>>): boolean {
+  return state.configuration?.mode === "QUANT_TRADING"
+    || state.configuration?.mode === "QUANT_RESEARCH"
+    || state.quantTrading !== undefined
+    || state.quantResearch !== undefined;
 }
 
 function semanticDeliveryKey(generationId: string, text: string): string {

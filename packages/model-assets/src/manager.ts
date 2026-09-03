@@ -423,7 +423,14 @@ export class ModelAssetManager {
     );
   }
 
-  public async inspect(manifestValue: unknown): Promise<AssetInspection> {
+  public async inspect(
+    manifestValue: unknown,
+    signal?: AbortSignal
+  ): Promise<AssetInspection> {
+    const validatedSignal = validateOptionalAbortSignal(signal);
+    if (isSignalAborted(validatedSignal)) {
+      throw new ModelAssetError("CANCELLED", "Artifact inspection was cancelled.");
+    }
     const manifest = parseAssetManifest(manifestValue);
     const key = artifactInstallationKey(manifest);
     const active = this.inFlight.get(key);
@@ -431,7 +438,7 @@ export class ModelAssetManager {
       return this.inspectionFor(manifest, active.stage);
     }
 
-    const check = await this.checkInstallation(manifest);
+    const check = await this.checkInstallation(manifest, validatedSignal);
     if (check.status === "INSTALLED") {
       return this.inspectionFor(manifest, "INSTALLED");
     }
@@ -457,9 +464,16 @@ export class ModelAssetManager {
     return this.inspectionFor(manifest, "NOT_PRESENT");
   }
 
-  public async verifyInstalledArtifact(manifestValue: unknown): Promise<boolean> {
+  public async verifyInstalledArtifact(
+    manifestValue: unknown,
+    signal?: AbortSignal
+  ): Promise<boolean> {
+    const validatedSignal = validateOptionalAbortSignal(signal);
+    if (isSignalAborted(validatedSignal)) {
+      throw new ModelAssetError("CANCELLED", "Artifact verification was cancelled.");
+    }
     const manifest = parseAssetManifest(manifestValue);
-    const check = await this.checkInstallation(manifest);
+    const check = await this.checkInstallation(manifest, validatedSignal);
     if (check.status === "FAILED") {
       throw new ModelAssetError(
         check.errorCode ?? "IO_ERROR",
@@ -469,9 +483,16 @@ export class ModelAssetManager {
     return check.status === "INSTALLED";
   }
 
-  public async getInstalledPath(manifestValue: unknown): Promise<string> {
+  public async getInstalledPath(
+    manifestValue: unknown,
+    signal?: AbortSignal
+  ): Promise<string> {
+    const validatedSignal = validateOptionalAbortSignal(signal);
+    if (isSignalAborted(validatedSignal)) {
+      throw new ModelAssetError("CANCELLED", "Artifact path inspection was cancelled.");
+    }
     const manifest = parseAssetManifest(manifestValue);
-    const check = await this.checkInstallation(manifest);
+    const check = await this.checkInstallation(manifest, validatedSignal);
     if (check.status === "FAILED") {
       throw new ModelAssetError(
         check.errorCode ?? "IO_ERROR",
@@ -621,9 +642,16 @@ export class ModelAssetManager {
     this.lastFailures.delete(key);
   }
 
-  public async cleanupTemporary(): Promise<void> {
+  public async cleanupTemporary(signal?: AbortSignal): Promise<void> {
+    const validatedSignal = validateOptionalAbortSignal(signal);
+    if (isSignalAborted(validatedSignal)) {
+      throw new ModelAssetError("CANCELLED", "Temporary artifact cleanup was cancelled.");
+    }
     const paths = await this.getSafeCachePaths();
     await this.withMutationGate(paths, async (shared) => {
+      if (isSignalAborted(validatedSignal)) {
+        throw new ModelAssetError("CANCELLED", "Temporary artifact cleanup was cancelled.");
+      }
       if (shared.activeInstallationCounts.size > 0) {
         throw new ModelAssetError(
           "ASSET_BUSY",
@@ -636,11 +664,17 @@ export class ModelAssetManager {
         "Temporary cache entry count exceeds the configured cleanup limit."
       );
       for (const entry of entries) {
+        if (isSignalAborted(validatedSignal)) {
+          throw new ModelAssetError("CANCELLED", "Temporary artifact cleanup was cancelled.");
+        }
         if (!TEMPORARY_ENTRY_PATTERN.test(entry)
             && !REMOVAL_TOMBSTONE_PATTERN.test(entry)) {
           continue;
         }
         await this.removeManagedEntry(paths, path.join(paths.temporary, entry));
+      }
+      if (isSignalAborted(validatedSignal)) {
+        throw new ModelAssetError("CANCELLED", "Temporary artifact cleanup was cancelled.");
       }
       await validateCachePaths(paths);
     });

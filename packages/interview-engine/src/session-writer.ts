@@ -2,6 +2,7 @@ import type {
   CommandEnvelope,
   CommandIdentity,
   CommandResult,
+  RequestId,
   SessionId,
   StoredSessionSummary
 } from "../../domain/src/index.js";
@@ -53,6 +54,33 @@ export class SessionWriter {
 
   public isClosed(): boolean {
     return !this.acceptingCommands;
+  }
+
+  /**
+   * Reconstructs authoritative state immediately after the event group committed
+   * by a durable RequestId. Command drafts are required to remain contiguous.
+   * This lets callers reproduce the original state-valued response without
+   * trusting separately persisted idempotency JSON.
+   */
+  public getStateAfterRequest(requestId: RequestId): Readonly<SessionState> | undefined {
+    const events = this.store.load(this.sessionId);
+    let lastIndex = -1;
+    let leftRequestGroup = false;
+
+    for (const [index, event] of events.entries()) {
+      if (event.causationId === requestId) {
+        if (leftRequestGroup) {
+          throw new Error("Authoritative RequestId event group is not contiguous");
+        }
+        lastIndex = index;
+      } else if (lastIndex >= 0) {
+        leftRequestGroup = true;
+      }
+    }
+
+    return lastIndex < 0
+      ? undefined
+      : replaySession(this.sessionId, events.slice(0, lastIndex + 1));
   }
 
   public async waitForIdle(): Promise<void> {
@@ -130,6 +158,12 @@ export class SessionWriter {
         if (prior.commandFingerprint !== commandFingerprint) throw new RequestIdConflictError();
         return { duplicate: true, value: resultSchema.parse(prior.result), appendedEventCount: 0 };
       }
+      if (isLegacyUninitializedQuantState(this.state)) {
+        // Pre-runtime Quant streams have no persisted seed/definition from which
+        // deterministic authority can be reconstructed. They remain replayable
+        // for migration compatibility, but no current command may extend them.
+        throw new Error("Cannot extend legacy Quant session without deterministic scenario state");
+      }
       const transition = handler(this.state);
       const validatedResult = resultSchema.parse(transition.result);
       const elapsedMs = this.elapsedOffset + Math.max(0, Date.now() - this.openedAt);
@@ -158,6 +192,13 @@ export class SessionWriter {
     this.tail = outcome.then(() => undefined, () => undefined);
     return outcome;
   }
+}
+
+function isLegacyUninitializedQuantState(state: Readonly<SessionState>): boolean {
+  if (!state.started) return false;
+  if (state.quantTrading !== undefined || state.quantResearch !== undefined) return false;
+  return state.configuration?.mode === "QUANT_TRADING"
+    || state.configuration?.mode === "QUANT_RESEARCH";
 }
 
 type SessionRuntimeEntry =

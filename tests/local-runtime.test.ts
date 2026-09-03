@@ -71,6 +71,11 @@ function readyDecision(message: unknown) {
     handshake: {
       ...(typeof value.componentVersion === "string" ? { componentVersion: value.componentVersion } : {}),
       ...(typeof value.protocolVersion === "number" ? { protocolVersion: value.protocolVersion } : {}),
+      ...(typeof value.workerType === "string" ? { workerType: value.workerType } : {}),
+      ...(typeof value.runtimeVersion === "string" ? { runtimeVersion: value.runtimeVersion } : {}),
+      ...(typeof value.modelVersionOrHash === "string"
+        ? { modelVersionOrHash: value.modelVersionOrHash }
+        : {}),
       capabilities: Array.isArray(value.capabilities)
         ? value.capabilities.filter((item): item is string => typeof item === "string")
         : []
@@ -215,7 +220,14 @@ describe("local worker lifecycle manager", () => {
   it("starts one process, coalesces duplicate starts, records readiness, and handshakes versions", async () => {
     const runtime = manager();
     runtime.register(definition("worker", "ready", {
-      expectedHandshake: { componentVersion: "fixture-1", protocolVersion: 1 }
+      expectedHandshake: {
+        componentVersion: "fixture-1",
+        protocolVersion: 1,
+        workerType: "fixture",
+        runtimeVersion: "fixture-runtime-1",
+        modelVersionOrHash: "fixture-model-1",
+        capabilities: ["FIXTURE"]
+      }
     }));
 
     const first = runtime.start("worker");
@@ -229,8 +241,56 @@ describe("local worker lifecycle manager", () => {
     expect(status.handshake).toMatchObject({
       componentVersion: "fixture-1",
       protocolVersion: 1,
+      workerType: "fixture",
+      runtimeVersion: "fixture-runtime-1",
+      modelVersionOrHash: "fixture-model-1",
       capabilities: ["FIXTURE"]
     });
+  });
+
+  it("fails closed on model identity or capability mismatches", async () => {
+    const wrongModel = manager();
+    wrongModel.register(definition("wrong-model", "ready", {
+      expectedHandshake: {
+        protocolVersion: 1,
+        modelVersionOrHash: "fixture-model-2",
+        capabilities: ["FIXTURE"]
+      },
+      terminationTimeoutMs: 300
+    }));
+    await expect(wrongModel.start("wrong-model"))
+      .rejects.toMatchObject({ code: "HANDSHAKE_MISMATCH" });
+    expect(wrongModel.getStatus("wrong-model")).not.toHaveProperty("pid");
+
+    const wrongRuntime = manager();
+    wrongRuntime.register(definition("wrong-runtime", "ready", {
+      expectedHandshake: {
+        protocolVersion: 1,
+        workerType: "fixture",
+        runtimeVersion: "fixture-runtime-2",
+        modelVersionOrHash: "fixture-model-1",
+        capabilities: ["FIXTURE"]
+      },
+      terminationTimeoutMs: 300
+    }));
+    await expect(wrongRuntime.start("wrong-runtime"))
+      .rejects.toMatchObject({ code: "HANDSHAKE_MISMATCH" });
+    expect(wrongRuntime.getStatus("wrong-runtime")).not.toHaveProperty("pid");
+
+    const wrongCapability = manager();
+    wrongCapability.register(definition("wrong-capability", "ready", {
+      expectedHandshake: {
+        protocolVersion: 1,
+        workerType: "fixture",
+        runtimeVersion: "fixture-runtime-1",
+        modelVersionOrHash: "fixture-model-1",
+        capabilities: ["FIXTURE", "EXTRA"]
+      },
+      terminationTimeoutMs: 300
+    }));
+    await expect(wrongCapability.start("wrong-capability"))
+      .rejects.toMatchObject({ code: "HANDSHAKE_MISMATCH" });
+    expect(wrongCapability.getStatus("wrong-capability")).not.toHaveProperty("pid");
   });
 
   it("returns deeply immutable observational status snapshots", async () => {
@@ -1164,7 +1224,8 @@ describe("local worker lifecycle manager", () => {
   it("drops oversized stdout frames without blocking a later valid readiness message", async () => {
     const runtime = manager();
     runtime.register(definition("oversized-output", "oversized-then-ready", {
-      output: { maxLines: 4, maxBytes: 256, maxLineBytes: 128 }
+      startupTimeoutMs: 5_000,
+      output: { maxLines: 4, maxBytes: 512, maxLineBytes: 256 }
     }, ["4096"]));
 
     const status = await runtime.start("oversized-output");
@@ -2636,6 +2697,45 @@ describe("local worker lifecycle manager", () => {
     }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
   });
 
+  it("rejects hostile expected capability arrays without executing traps or getters", () => {
+    const runtime = manager();
+    let proxyTraps = 0;
+    const proxied = new Proxy(["FIXTURE"], {
+      ownKeys: (target) => {
+        proxyTraps += 1;
+        return Reflect.ownKeys(target);
+      },
+      getOwnPropertyDescriptor: (target, key) => {
+        proxyTraps += 1;
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      }
+    });
+    expect(() => runtime.register(definition("proxied-expected-capabilities", "ready", {
+      expectedHandshake: {
+        capabilities: proxied
+      }
+    }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+    expect(proxyTraps).toBe(0);
+
+    let getterCalls = 0;
+    const accessorCapabilities: string[] = [];
+    Object.defineProperty(accessorCapabilities, "0", {
+      enumerable: true,
+      configurable: true,
+      get: () => {
+        getterCalls += 1;
+        return "FIXTURE";
+      }
+    });
+    accessorCapabilities.length = 1;
+    expect(() => runtime.register(definition("accessor-expected-capabilities", "ready", {
+      expectedHandshake: {
+        capabilities: accessorCapabilities
+      }
+    }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+    expect(getterCalls).toBe(0);
+  });
+
   it("rejects contradictory output bounds and effectively unbounded retry counts", () => {
     const runtime = manager();
 
@@ -2658,6 +2758,12 @@ describe("local worker lifecycle manager", () => {
 
     expect(() => runtime.register(definition("oversized-expected-version", "ready", {
       expectedHandshake: { componentVersion: "x".repeat(2_001) }
+    }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+    expect(() => runtime.register(definition("duplicate-expected-capability", "ready", {
+      expectedHandshake: { capabilities: ["A", "A"] }
+    }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+    expect(() => runtime.register(definition("oversized-expected-model", "ready", {
+      expectedHandshake: { modelVersionOrHash: "x".repeat(2_001) }
     }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
     expect(() => runtime.register(definition("implicit-backoff-cap", "ready", {
       restartPolicy: {

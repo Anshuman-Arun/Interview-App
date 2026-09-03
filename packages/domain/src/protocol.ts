@@ -10,6 +10,12 @@ import {
 } from "./ids.js";
 import { BoardRevisionSchema } from "./revisions.js";
 import {
+  QuantResearchCandidateActionSchema,
+  QuantResearchPublicStateSchema,
+  QuantTradingCandidateActionSchema,
+  QuantTradingPublicStateSchema
+} from "./quant-runtime.js";
+import {
   BoardShapeIdSchema,
   MAX_AUTHORITATIVE_BOARD_SHAPES,
   NormalizedBoardMutationSchema
@@ -127,6 +133,22 @@ export const GetInterviewSessionContextCommandSchema = ProtocolCommandBaseSchema
   type: z.literal("GET_INTERVIEW_SESSION_CONTEXT")
 }).strict();
 
+export const GetQuantSessionStateCommandSchema = ProtocolCommandBaseSchema.extend({
+  type: z.literal("GET_QUANT_SESSION_STATE")
+}).strict();
+
+export const SubmitQuantTradingActionCommandSchema = ProtocolCommandBaseSchema.extend({
+  type: z.literal("SUBMIT_QUANT_TRADING_ACTION"),
+  expectedRound: z.number().int().min(1).max(256),
+  action: QuantTradingCandidateActionSchema
+}).strict();
+
+export const SubmitQuantResearchActionCommandSchema = ProtocolCommandBaseSchema.extend({
+  type: z.literal("SUBMIT_QUANT_RESEARCH_ACTION"),
+  expectedActionCount: z.number().int().min(0).max(64),
+  action: QuantResearchCandidateActionSchema
+}).strict();
+
 export const ReconnectDeliveryCommandSchema = ProtocolCommandBaseSchema.extend({
   type: z.literal("RECONNECT_DELIVERY"),
   deliveryId: DeliveryIdSchema
@@ -155,6 +177,9 @@ export const ClientCommandSchema = z.discriminatedUnion("type", [
   GetBoardStateCommandSchema,
   GetSessionSummaryCommandSchema,
   GetInterviewSessionContextCommandSchema,
+  GetQuantSessionStateCommandSchema,
+  SubmitQuantTradingActionCommandSchema,
+  SubmitQuantResearchActionCommandSchema,
   ReconnectDeliveryCommandSchema,
   AcknowledgeDeliveryExposedCommandSchema,
   AcknowledgeDeliveryCompletedCommandSchema
@@ -192,6 +217,20 @@ export const InterviewCatalogResponseSchema = ResponseBaseSchema.extend({
   ok: z.literal(true),
   type: z.literal("INTERVIEW_CATALOG"),
   entries: z.array(InterviewCatalogEntrySchema).max(256)
+}).strict();
+
+export const QuantTradingStateResponseSchema = ResponseBaseSchema.extend({
+  ok: z.literal(true),
+  type: z.literal("QUANT_TRADING_STATE"),
+  sessionId: SessionIdSchema,
+  state: QuantTradingPublicStateSchema
+}).strict();
+
+export const QuantResearchStateResponseSchema = ResponseBaseSchema.extend({
+  ok: z.literal(true),
+  type: z.literal("QUANT_RESEARCH_STATE"),
+  sessionId: SessionIdSchema,
+  state: QuantResearchPublicStateSchema
 }).strict();
 
 export const SessionsListResponseSchema = ResponseBaseSchema.extend({
@@ -308,6 +347,8 @@ export const ProtocolSuccessResponseSchema = z.discriminatedUnion("type", [
   ConfiguredSessionStartedResponseSchema,
   InterviewSessionContextResponseSchema,
   InterviewCatalogResponseSchema,
+  QuantTradingStateResponseSchema,
+  QuantResearchStateResponseSchema,
   SessionsListResponseSchema,
   SessionResumedResponseSchema,
   SessionCompletedResponseSchema,

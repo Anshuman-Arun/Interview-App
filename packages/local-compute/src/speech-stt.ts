@@ -140,7 +140,13 @@ export interface MoonshineRuntimeResult {
 
 export interface MoonshineRuntime {
   readonly runtimeVersion: string;
+  /** True only when an already-started native recognition can be interrupted. */
   readonly supportsAbort: boolean;
+  /**
+   * Allows a runtime-owned queue to observe AbortSignal before native inference
+   * starts without claiming that an active native call is preemptible.
+   */
+  readonly observesPreStartAbort?: boolean;
   transcribe(input: {
     readonly requestId: RequestId;
     readonly utteranceId: UtteranceId;
@@ -167,6 +173,7 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
   private readonly modelPath: string;
   private readonly configPath: string | undefined;
   private readonly supportsAbort: boolean;
+  private readonly observesPreStartAbort: boolean;
   private readonly transcribeRuntime: MoonshineRuntime["transcribe"];
   private readonly cancelRuntime: MoonshineRuntime["cancel"];
 
@@ -181,6 +188,7 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
     const configPath = rawOptions.configPath;
     const runtimeVersion = rawRuntime.runtimeVersion;
     const supportsAbort = rawRuntime.supportsAbort;
+    const observesPreStartAbort = rawRuntime.observesPreStartAbort;
     const transcribeRuntime = rawRuntime.transcribe;
     const cancelRuntime = rawRuntime.cancel;
     const modelName = rawOptions.modelName;
@@ -192,6 +200,12 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
       : validateLocalPath(configPath, "Moonshine config path");
     validateRuntimeIdentity(runtimeVersion, "Moonshine runtime version");
     this.supportsAbort = validateBoolean(supportsAbort, "Moonshine runtime abort capability");
+    this.observesPreStartAbort = observesPreStartAbort === undefined
+      ? false
+      : validateBoolean(
+          observesPreStartAbort,
+          "Moonshine runtime pre-start abort observation capability"
+        );
     this.transcribeRuntime = bindMoonshineTranscribe(transcribeRuntime, rawRuntime);
     this.cancelRuntime = bindMoonshineCancel(cancelRuntime, rawRuntime);
 
@@ -264,7 +278,7 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
       sampleRate: sourceAudioBasis.sampleRate,
       modelPath: this.modelPath,
       ...(this.configPath === undefined ? {} : { configPath: this.configPath }),
-      ...(this.supportsAbort ? { signal } : {})
+      ...(this.supportsAbort || this.observesPreStartAbort ? { signal } : {})
     });
     let runtimeResult: z.infer<typeof MoonshineRuntimeResultSchema>;
     try {
@@ -311,7 +325,9 @@ const MoonshineRuntimeResultSchema = z.object({
   words: z.array(TranscriptWordTimingSchema).max(MAX_SPEECH_WORD_TIMINGS).optional()
 }).strict();
 
-function parseMoonshineRuntimeResult(raw: unknown): z.infer<typeof MoonshineRuntimeResultSchema> {
+export function parseMoonshineRuntimeResult(
+  raw: unknown
+): z.infer<typeof MoonshineRuntimeResultSchema> {
   if (!isRecord(raw)) throw new Error("Moonshine runtime result must be an object");
   assertAllowedOwnEnumerableKeys(raw, MOONSHINE_RESULT_KEYS, "Moonshine runtime result");
 

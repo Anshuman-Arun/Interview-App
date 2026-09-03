@@ -21,3 +21,4 @@ export * from "./vision.js";
 export * from "./whiteboard.js";
 export * from "./evaluation.js";
 export * from "./trading.js";
+export * from "./quant-runtime.js";

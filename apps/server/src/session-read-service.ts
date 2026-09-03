@@ -16,6 +16,7 @@ import {
 import {
   problemCatalog
 } from "../../../packages/problems/src/index.js";
+import { resolveSessionStateComposition } from "./interview-session-composition.js";
 import {
   DEFAULT_REPLAY_BOUNDS,
   MAX_HISTORY_READ_SESSIONS,
@@ -37,6 +38,13 @@ import {
 const HISTORY_TOTAL_EVENT_BUDGET = 50_000;
 const HISTORY_TIMELINE_ENTRY_LIMIT = 1_000;
 const HISTORY_TEXT_PREVIEW_LIMIT = 512;
+
+function isDeterministicQuantState(state: Readonly<SessionState>): boolean {
+  return state.configuration?.mode === "QUANT_TRADING"
+    || state.configuration?.mode === "QUANT_RESEARCH"
+    || state.quantTrading !== undefined
+    || state.quantResearch !== undefined;
+}
 
 export interface SessionReadSource {
   readonly hasSession: (sessionId: SessionId) => boolean;
@@ -166,7 +174,7 @@ function summaryFromAuthoritativeEvents(
 
   return {
     sessionId,
-    ...(state.problem === undefined
+    ...(state.problem === undefined || isDeterministicQuantState(state)
       ? {}
       : {
           problemId: state.problem.id,
@@ -299,14 +307,15 @@ export class SessionReadService {
       ) as SessionReplayReadResponse;
     }
 
-    const events = this.loadEventsConsistently(sessionId, expectedEventCount);
-    if (events === undefined) {
+    const loaded = this.loadAuthoritative(sessionId, expectedEventCount);
+    if (loaded === undefined) {
       return safeReadFailure(
         "SESSION_REPLAY_READ",
         sessionId,
         "AUTHORITATIVE_HISTORY_UNAVAILABLE"
       ) as SessionReplayReadResponse;
     }
+    const events = loaded.events;
 
     let history: ReturnType<typeof projectSessionHistory>;
     try {
@@ -445,11 +454,13 @@ export class SessionReadService {
         }
       }
 
-      // Longitudinal statistics are keyed by exact problem identity. Some
-      // authoritative configured modes (currently Quant Trading) intentionally
-      // have no InterviewProblem, so keep their history card/replay available
-      // without coercing them into problem-comparison statistics.
-      if (history.problem !== undefined) {
+      // Longitudinal statistics are Oxford exact-problem comparisons. Quant
+      // Research persists a synthetic problem identity for replay compatibility,
+      // so identity presence alone is not sufficient admission here.
+      if (
+        history.problem !== undefined
+        && !isDeterministicQuantState(loaded.state)
+      ) {
         longitudinalInputs.push(history);
       }
       cards.push({
@@ -556,6 +567,11 @@ export class SessionReadService {
     if (events === undefined) return undefined;
     try {
       const state = replaySession(sessionId, events);
+      if (isDeterministicQuantState(state)) {
+        // Generic event replay validates structure; deterministic quant replay
+        // additionally proves engine-authored outcomes and hidden scenario state.
+        resolveSessionStateComposition(state);
+      }
       const summary = summaryFromAuthoritativeEvents(sessionId, events, state);
       if (summary === undefined) return undefined;
       return { summary, events, state };
@@ -578,6 +594,12 @@ export class SessionReadService {
     const state = loaded.state;
     if (state.status !== "COMPLETED" && state.status !== "ARCHIVED") {
       return { available: false, reason: "SESSION_NOT_TERMINAL" };
+    }
+    if (isDeterministicQuantState(state)) {
+      // Deterministic Quant engines own their completion metrics. The generic
+      // Oxford evaluator must never reinterpret synthetic Quant problem state,
+      // even if a future catalog identity happens to collide.
+      return { available: false, reason: "EXACT_PROBLEM_UNAVAILABLE" };
     }
     if (state.problem === undefined) {
       return { available: false, reason: "EXACT_PROBLEM_UNAVAILABLE" };

@@ -36,7 +36,9 @@ import {
   VisionRequestedObservationKindSchema,
   VisionShapeRevisionBindingSchema,
   VisionSnapshotBasisSchema,
-  VerificationResultSchema
+  VerificationResultSchema,
+  OrderFillSchema,
+  QuantTradingCandidateActionSchema
 } from "../../domain/src/index.js";
 
 export const CURRENT_EVENT_SCHEMA_VERSION = 3 as const;
@@ -309,6 +311,204 @@ export const QuantResearchAuthoritativeSnapshotEventSchema = z.discriminatedUnio
 ]);
 export type QuantResearchAuthoritativeSnapshotEvent = z.infer<typeof QuantResearchAuthoritativeSnapshotEventSchema>;
 
+const QuantTradingFamilySchema = z.enum([
+  "BASIC_MARKET_MAKING",
+  "FAIR_VALUE_UPDATES",
+  "INVENTORY_PRESSURE",
+  "ADVERSE_SELECTION",
+  "RISK_MANAGEMENT"
+]);
+const QuantTradingVersionSchema = z.literal("1.0.0");
+const QuantTradingSeedSchema = NonnegativeSafeIntegerSchema.max(0xffff_ffff);
+const QuantTradingFiniteNumberSchema = z.number().refine(Number.isFinite, {
+  message: "Expected a finite number"
+});
+const QuantTradingPositiveFiniteSchema = z.number().refine(
+  (value) => Number.isFinite(value) && value > 0,
+  { message: "Expected a finite positive number" }
+);
+const QuantTradingPortfolioEventSchema = z.object({
+  cash: QuantTradingFiniteNumberSchema,
+  position: SafeIntegerSchema,
+  realizedPnL: QuantTradingFiniteNumberSchema,
+  unrealizedPnL: QuantTradingFiniteNumberSchema,
+  totalPnL: QuantTradingFiniteNumberSchema,
+  portfolioValue: QuantTradingFiniteNumberSchema,
+  averageCostBasis: QuantTradingFiniteNumberSchema,
+  maxDrawdown: z.number().refine((value) => Number.isFinite(value) && value >= 0),
+  tradeCount: NonnegativeSafeIntegerSchema
+}).strict();
+const QuantTradingMarketEventSchema = z.object({
+  type: z.literal("FAIR_VALUE_UPDATE"),
+  round: PositiveSafeIntegerSchema.max(256),
+  previousFairValue: QuantTradingPositiveFiniteSchema,
+  fairValue: QuantTradingPositiveFiniteSchema,
+  label: z.string().min(1).max(128)
+}).strict();
+const QuantTradingRiskBreachEventSchema = z.object({
+  round: PositiveSafeIntegerSchema.max(256),
+  source: z.enum(["POST_ROUND", "FAIR_VALUE_UPDATE"]),
+  reason: z.string().min(1).max(240)
+}).strict();
+const QuantTradingOrderFillEventSchema = OrderFillSchema.superRefine((fill, context) => {
+  for (const [field, value] of [
+    ["fillId", fill.fillId],
+    ["orderId", fill.orderId],
+    ["matchedOrderId", fill.matchedOrderId],
+    ["counterparty", fill.counterparty]
+  ] as const) {
+    if (value !== undefined && value.length > 128) {
+      context.addIssue({
+        code: "custom",
+        path: [field],
+        message: "Quant Trading persisted fill identifiers must be at most 128 characters"
+      });
+    }
+  }
+});
+
+export const QuantTradingScenarioDefinitionEventSchema = z.object({
+  family: QuantTradingFamilySchema,
+  version: QuantTradingVersionSchema,
+  seed: QuantTradingSeedSchema
+}).strict();
+export type QuantTradingScenarioDefinitionEvent = z.infer<typeof QuantTradingScenarioDefinitionEventSchema>;
+
+export const QuantTradingRoundEvidenceEventSchema = z.object({
+  round: PositiveSafeIntegerSchema.max(256),
+  fairValue: QuantTradingPositiveFiniteSchema,
+  marketEvents: z.array(QuantTradingMarketEventSchema).max(16),
+  orderFlowType: z.enum(["INFORMED", "NOISE", "NO_TRADE"]),
+  incomingMarketSide: z.enum(["BUY", "SELL"]).optional(),
+  studentFills: z.array(QuantTradingOrderFillEventSchema).max(64),
+  portfolio: QuantTradingPortfolioEventSchema,
+  riskBreached: z.boolean(),
+  riskReason: z.string().min(1).max(240).optional(),
+  accountingInvariantHolds: z.boolean(),
+  rngDrawCount: NonnegativeSafeIntegerSchema
+}).strict().superRefine((value, context) => {
+  if (value.riskBreached !== (value.riskReason !== undefined)) {
+    context.addIssue({
+      code: "custom",
+      path: ["riskReason"],
+      message: "Quant Trading risk reason must match breach state"
+    });
+  }
+  if (value.marketEvents.some((event) => event.round !== value.round)) {
+    context.addIssue({
+      code: "custom",
+      path: ["marketEvents"],
+      message: "Quant Trading market updates must belong to the resolved round"
+    });
+  }
+  if (
+    value.orderFlowType === "NO_TRADE"
+    && (value.incomingMarketSide !== undefined || value.studentFills.length !== 0)
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["orderFlowType"],
+      message: "No-trade rounds cannot contain an incoming side or fills"
+    });
+  }
+  if (value.orderFlowType === "NOISE" && value.incomingMarketSide === undefined) {
+    context.addIssue({
+      code: "custom",
+      path: ["incomingMarketSide"],
+      message: "Noise flow must record its incoming market side"
+    });
+  }
+  if (value.incomingMarketSide === undefined && value.studentFills.length !== 0) {
+    context.addIssue({
+      code: "custom",
+      path: ["studentFills"],
+      message: "Student fills require an incoming market side"
+    });
+  }
+  if (
+    value.incomingMarketSide !== undefined
+    && value.studentFills.some(
+      (fill) => fill.side !== (value.incomingMarketSide === "BUY" ? "SELL" : "BUY")
+    )
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["studentFills"],
+      message: "Student fill side must oppose the incoming market side"
+    });
+  }
+});
+export type QuantTradingRoundEvidenceEvent = z.infer<typeof QuantTradingRoundEvidenceEventSchema>;
+
+export const QuantTradingResultEventSchema = z.object({
+  family: QuantTradingFamilySchema,
+  version: QuantTradingVersionSchema,
+  seed: QuantTradingSeedSchema,
+  completionStatus: z.enum(["COMPLETED", "RISK_STOPPED"]),
+  plannedRounds: PositiveSafeIntegerSchema.max(256),
+  roundsCompleted: NonnegativeSafeIntegerSchema.max(256),
+  completionRate: z.number().min(0).max(1),
+  finalFairValue: QuantTradingPositiveFiniteSchema,
+  finalPortfolio: QuantTradingPortfolioEventSchema,
+  tradeCount: NonnegativeSafeIntegerSchema,
+  fillVolume: NonnegativeSafeIntegerSchema,
+  averageSpread: z.number().refine((value) => Number.isFinite(value) && value >= 0),
+  quoteParticipationRate: z.number().min(0).max(1),
+  riskBreaches: z.array(QuantTradingRiskBreachEventSchema).max(256),
+  informedFlowCount: NonnegativeSafeIntegerSchema,
+  noiseFlowCount: NonnegativeSafeIntegerSchema,
+  adverseSelectionPnL: QuantTradingFiniteNumberSchema,
+  accountingInvariantHolds: z.boolean(),
+  objectiveScore: z.number().int().min(0).max(100)
+}).strict().superRefine((value, context) => {
+  if (
+    value.roundsCompleted > value.plannedRounds
+    || value.completionRate !== value.roundsCompleted / value.plannedRounds
+    || (
+      value.completionStatus === "COMPLETED"
+      && value.roundsCompleted !== value.plannedRounds
+    )
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["roundsCompleted"],
+      message: "Quant Trading terminal round progress is inconsistent"
+    });
+  }
+  if (value.tradeCount !== value.finalPortfolio.tradeCount) {
+    context.addIssue({
+      code: "custom",
+      path: ["tradeCount"],
+      message: "Quant Trading terminal trade count must match final portfolio"
+    });
+  }
+  if (value.informedFlowCount + value.noiseFlowCount > value.roundsCompleted) {
+    context.addIssue({
+      code: "custom",
+      path: ["informedFlowCount"],
+      message: "Quant Trading terminal flow counts cannot exceed resolved rounds"
+    });
+  }
+  if (value.completionStatus === "RISK_STOPPED" && value.riskBreaches.length === 0) {
+    context.addIssue({
+      code: "custom",
+      path: ["riskBreaches"],
+      message: "Risk-stopped Quant Trading result requires a recorded risk breach"
+    });
+  }
+  const latestPossibleBreachRound = value.completionStatus === "RISK_STOPPED"
+    ? Math.min(value.plannedRounds, value.roundsCompleted + 1)
+    : value.roundsCompleted;
+  if (value.riskBreaches.some((breach) => breach.round > latestPossibleBreachRound)) {
+    context.addIssue({
+      code: "custom",
+      path: ["riskBreaches"],
+      message: "Quant Trading risk breach cannot occur beyond terminal round progress"
+    });
+  }
+});
+export type QuantTradingResultEvent = z.infer<typeof QuantTradingResultEventSchema>;
+
 const metadata = {
   eventId: EventIdSchema,
   sessionId: SessionIdSchema,
@@ -335,6 +535,18 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
     prompt: z.string().min(1),
     providerContextSpecSha256: ProviderContextSpecFingerprintSchema.optional()
   }).strict()),
+  event("QUANT_TRADING_SCENARIO_INITIALIZED", z.object({
+    definition: QuantTradingScenarioDefinitionEventSchema
+  }).strict()),
+  event("QUANT_TRADING_ACTION_ACCEPTED", z.object({
+    action: QuantTradingCandidateActionSchema
+  }).strict()),
+  event("QUANT_TRADING_ROUND_RESOLVED", z.object({
+    evidence: QuantTradingRoundEvidenceEventSchema
+  }).strict()),
+  event("QUANT_TRADING_SCENARIO_COMPLETED", z.object({
+    result: QuantTradingResultEventSchema
+  }).strict()),
   event("QUANT_RESEARCH_SCENARIO_INITIALIZED", z.object({
     definition: QuantResearchScenarioDefinitionEventSchema,
     authoritativeSnapshot: QuantResearchAuthoritativeSnapshotEventSchema
@@ -343,7 +555,13 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
     action: QuantResearchActionEventSchema
   }).strict()),
   event("QUANT_RESEARCH_SCENARIO_COMPLETED", z.object({
-    result: QuantResearchResultEventSchema
+    result: QuantResearchResultEventSchema.refine(
+      (result) => result.status === "COMPLETE",
+      {
+        path: ["status"],
+        message: "Quant Research completion event requires a complete result"
+      }
+    )
   }).strict()),
   event("UTTERANCE_STARTED", z.object({ utteranceId: UtteranceIdSchema }).strict()),
   event("UTTERANCE_DISCARDED", z.object({ utteranceId: UtteranceIdSchema, reason: z.string().min(1) }).strict()),

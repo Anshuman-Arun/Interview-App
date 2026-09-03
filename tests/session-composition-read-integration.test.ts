@@ -9,15 +9,13 @@ import {
 } from "../packages/domain/src/index.js";
 import {
   QuantResearchCoordinator,
+  QuantTradingSessionCoordinator,
   TurnCoordinator,
   createCommandEnvelope
 } from "../packages/interview-engine/src/index.js";
 import {
-  QUANT_RESEARCH_GENERATOR_VERSION,
-  QUANT_RESEARCH_RNG_VERSION,
   QUANT_RESEARCH_VERSION,
-  QUANT_TRADER_SCENARIO_VERSION,
-  type QuantResearchScenarioDefinition
+  QUANT_TRADER_SCENARIO_VERSION
 } from "../packages/local-compute/src/index.js";
 import { getProblemByIdentity } from "../packages/problems/src/index.js";
 import { createAndStartServer } from "../apps/server/src/server.js";
@@ -218,7 +216,19 @@ describe("generic session composition + grounded product reads", () => {
       tradingConfiguration
     );
     expect(tradingStarted.problem).toBeUndefined();
-    await command.completeSession(tradingId);
+    const trading = new QuantTradingSessionCoordinator(server.registry.get(tradingId));
+    let tradingState = trading.getPublicState();
+    while (tradingState.actionRequired) {
+      tradingState = (await trading.applyAction(
+        { type: "PASS" },
+        tradingState.currentRound,
+        createCommandEnvelope({
+          sessionId: tradingId,
+          producer: "composition-read-integration"
+        })
+      )).value;
+    }
+    expect(tradingState.status).toBe("COMPLETED");
 
     const researchId = newSessionId();
     const researchConfiguration = InterviewSessionConfigurationSchema.parse({
@@ -236,21 +246,25 @@ describe("generic session composition + grounded product reads", () => {
     );
     expect(researchStarted.problem).toBeUndefined();
 
-    const definition: QuantResearchScenarioDefinition = {
-      family: "MODEL_COMPARISON",
-      version: QUANT_RESEARCH_VERSION,
-      generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
-      rngVersion: QUANT_RESEARCH_RNG_VERSION,
-      seed: 97531,
-      config: {
-        observationCount: 10,
-        noiseRadius: 2,
-        outlierShift: 30
-      }
-    };
-    await new QuantResearchCoordinator(server.registry.get(researchId))
-      .initialize(definition);
-    await command.completeSession(researchId);
+    const research = new QuantResearchCoordinator(server.registry.get(researchId));
+    expect(research.getPublicState().stage).toBe("INITIAL_MODEL_CHOICE");
+    await research.applyAction({
+      actionId: "composition-model-choice-base",
+      kind: "CHOOSE_OPTION",
+      option: "CONSTANT"
+    }, createCommandEnvelope({
+      sessionId: researchId,
+      producer: "composition-read-integration"
+    }));
+    const completedResearch = await research.applyAction({
+      actionId: "composition-model-choice-perturbed",
+      kind: "CHOOSE_OPTION",
+      option: "CONSTANT"
+    }, createCommandEnvelope({
+      sessionId: researchId,
+      producer: "composition-read-integration"
+    }));
+    expect(completedResearch.value.state.status).toBe("COMPLETE");
 
     const tradingCount = server.store.eventCount(tradingId);
     const researchCount = server.store.eventCount(researchId);
@@ -273,6 +287,12 @@ describe("generic session composition + grounded product reads", () => {
     });
     expect(tradingReplay.available).toBe(true);
     expect(researchReplay.available).toBe(true);
+    if (tradingReplay.available) {
+      expect(tradingReplay.replay.problem).toBeUndefined();
+    }
+    if (researchReplay.available) {
+      expect(researchReplay.replay.problem).toBeUndefined();
+    }
 
     const tradingHistory = history.sessions.find(
       (entry) => entry.sessionId === tradingId
@@ -285,13 +305,13 @@ describe("generic session composition + grounded product reads", () => {
       readStatus: "AVAILABLE"
     });
     expect(researchHistory).toMatchObject({
-      problemId: "MODEL_COMPARISON",
-      problemVersion: QUANT_RESEARCH_VERSION,
       status: "COMPLETED",
       readStatus: "AVAILABLE"
     });
-    expect(history.longitudinal.includedSessionCount).toBe(1);
-    expect(history.longitudinal.sessionTruncation.remainingCount).toBe(1);
+    expect(researchHistory?.problemId).toBeUndefined();
+    expect(researchHistory?.problemVersion).toBeUndefined();
+    expect(history.longitudinal.includedSessionCount).toBe(0);
+    expect(history.longitudinal.sessionTruncation.remainingCount).toBe(2);
     expect(server.store.eventCount(tradingId)).toBe(tradingCount);
     expect(server.store.eventCount(researchId)).toBe(researchCount);
   });
