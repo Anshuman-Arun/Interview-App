@@ -148,6 +148,20 @@ const INTERVIEWER_PROPOSAL_JSON_SCHEMA = Object.freeze({
 export const ANTIGRAVITY_CLI_PROPOSAL_SCHEMA_ARGUMENT = JSON.stringify(
   INTERVIEWER_PROPOSAL_JSON_SCHEMA
 );
+export const ANTIGRAVITY_CLI_TURN_ARGUMENTS = Object.freeze([
+  "--input-format",
+  "stream-json",
+  "--output-format",
+  "stream-json",
+  "--json-schema",
+  ANTIGRAVITY_CLI_PROPOSAL_SCHEMA_ARGUMENT,
+  "--model",
+  ANTIGRAVITY_CLI_MODEL_ID,
+  "--agent",
+  ANTIGRAVITY_CLI_AGENT_ID,
+  "--print-timeout",
+  "2m"
+] as const);
 const INTERVIEWER_PROPOSAL_SCHEMA_CANONICAL = serializeBoundedPlainJson(
   INTERVIEWER_PROPOSAL_JSON_SCHEMA,
   MAX_SCHEMA_BYTES
@@ -259,20 +273,7 @@ export function createAntigravityCliReasoningProvider(
       let rawResult: unknown;
       try {
         rawResult = await execute({
-          args: [
-            "--input-format",
-            "stream-json",
-            "--output-format",
-            "stream-json",
-            "--json-schema",
-            ANTIGRAVITY_CLI_PROPOSAL_SCHEMA_ARGUMENT,
-            "--model",
-            modelId,
-            "--agent",
-            ANTIGRAVITY_CLI_AGENT_ID,
-            "--print-timeout",
-            "2m"
-          ],
+          args: ANTIGRAVITY_CLI_TURN_ARGUMENTS,
           stdin,
           timeoutMs: EXECUTION_TIMEOUT_MS,
           maxStdoutBytes: MAX_STDOUT_BYTES,
