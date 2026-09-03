@@ -1158,7 +1158,7 @@ export class InterpretationCoordinator {
     const compatibility = isVerificationBasisStillCompatible(
       request.basis,
       state,
-      request.generationId
+      request.generationId === undefined
     );
     if (compatibility === "INCOMPATIBLE") {
       return failed("STALE", "BASIS_INCOMPATIBLE", candidateCount, request.requestId);
