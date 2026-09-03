@@ -79,7 +79,7 @@ const ResearchActionEditor: React.FC<ActionEditorProps> = ({ state, disabled, pe
     if (disabled || pending) return;
     setLocalError(null);
     try {
-      await onSubmit({ ...action, actionId: newActionId() } as QuantResearchCandidateAction);
+      await onSubmit({ ...action, actionId: newActionId() });
       setPrimary("");
       setSecondary("");
     } catch {
