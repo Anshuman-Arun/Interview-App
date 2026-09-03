@@ -252,6 +252,27 @@ def require_runtime_environment() -> None:
         if version(distribution) != expected:
             raise RuntimeError(f"{distribution} package version mismatch")
 
+    # Metadata alone is insufficient for native wheels: a package can be
+    # installed at the expected version while a DLL/shared-library dependency
+    # is damaged or unavailable. Import the exact APIs this worker will use
+    # before model download is admitted.
+    try:
+        import moonshine_voice
+        import numpy  # noqa: F401
+        import onnxruntime as ort
+        from moonshine_voice.moonshine_api import ModelArch  # noqa: F401
+        from moonshine_voice.transcriber import Transcriber  # noqa: F401
+        from moonshine_voice.tts import TextToSpeech  # noqa: F401
+    except Exception as exc:
+        raise RuntimeError("desktop local model runtime imports failed") from exc
+
+    if getattr(moonshine_voice, "__version__", None) != MOONSHINE_VERSION:
+        raise RuntimeError("moonshine-voice version mismatch")
+    if getattr(ort, "__version__", None) != ONNXRUNTIME_VERSION:
+        raise RuntimeError("onnxruntime version mismatch")
+    if "CPUExecutionProvider" not in ort.get_available_providers():
+        raise RuntimeError("onnxruntime CPUExecutionProvider is unavailable")
+
 
 def require_worker_token() -> str:
     token = os.environ.get("INTERVIEW_LOCAL_WORKER_TOKEN", "")
