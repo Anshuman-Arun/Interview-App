@@ -85,10 +85,14 @@ The production executor itself performs a cached zero-turn preflight before it c
 interview turn: it starts the exact stream-json argument set, sends a deliberately unsupported
 control message, and requires the pinned `init` envelope (empty tool list, strict permission
 mode, exact agent/model/schema) followed by the documented exit-code-2, zero-turn, zero-token
-`ERROR` result. This verifies the resolved tool surface before model inference. The manual smoke
-then runs the read-only `/usage` command with the same agent/model selections to verify cached
-authentication and quota lookup through that already-preflighted production executor. It checks
-piped-process shutdown as well and deliberately does not print any account/quota payload. Each supervised turn receives a fresh temporary CLI profile rather
+`ERROR` result. This verifies the resolved tool surface before model inference.
+
+The manual smoke invokes only that production readiness verifier. It does **not** run `/usage`,
+`/quota`, or any prompt-like print command, because current upstream Antigravity does not
+document those slash commands as a safe non-interactive authentication probe. The smoke therefore
+verifies the exact CLI/version/profile/tool boundary with zero inference and zero quota use, while
+cached authentication remains a separate prerequisite verified by running `agy` interactively
+once before the first real interview turn. Each supervised turn receives a fresh temporary CLI profile rather
 than the user's normal `~/.gemini` profile. That profile pins strict tool review,
 non-workspace access off, AI-credit fallback off, telemetry off, an empty custom-agent tool list,
 and deny-all fine-grained permission rules. The concrete Windows path does not depend on
