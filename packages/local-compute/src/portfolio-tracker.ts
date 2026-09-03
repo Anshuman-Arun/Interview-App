@@ -104,6 +104,23 @@ export class PortfolioTracker {
     this.fillsHistory = checkpoint.fills.map((fill) => OrderFillSchema.parse({ ...fill }));
   }
 
+  /**
+   * @internal Quote-admission preview. Exercises the exact fill + mark-price
+   * accounting path and restores all state even when arithmetic fails.
+   */
+  public assertPotentialFillArithmetic(
+    fillInput: OrderFill,
+    markPrice: number
+  ): void {
+    const checkpoint = this.checkpoint();
+    try {
+      this.applyFill(fillInput);
+      this.updateMarkPrice(markPrice);
+    } finally {
+      this.restore(checkpoint);
+    }
+  }
+
   public applyFill(fillInput: OrderFill): void {
     const fill = OrderFillSchema.parse(fillInput);
     const notional = fill.price * fill.size;
