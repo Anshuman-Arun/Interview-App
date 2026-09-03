@@ -1,10 +1,8 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import process from "node:process";
 import { createAndStartServer } from "../../server/src/server.js";
 import { newSessionId } from "../../../packages/domain/src/index.js";
-import { TurnCoordinator } from "../../../packages/interview-engine/src/index.js";
-import { sixPeopleProblem } from "../../../packages/problems/src/index.js";
 import {
   app,
   BrowserWindow,
@@ -137,6 +135,7 @@ if (!app.requestSingleInstanceLock()) {
 
 async function startDesktop(): Promise<void> {
   app.setName("Interview App");
+  await configurePackagedSmokeUserData();
   if (process.platform === "win32") {
     app.setAppUserModelId("com.anshuman.interviewapp");
   }
@@ -335,6 +334,59 @@ function rendererCapability(
   });
 }
 
+async function configurePackagedSmokeUserData(): Promise<void> {
+  const requested = process.env["INTERVIEW_PACKAGED_SMOKE_USER_DATA"];
+  if (requested === undefined) return;
+  if (
+    !app.isPackaged
+    || !(
+      process.argv.includes("--packaged-smoke-test")
+      || process.argv.includes("--packaged-single-instance-smoke-host")
+      || process.argv.includes("--packaged-single-instance-smoke-probe")
+    )
+  ) {
+    throw new Error("Packaged smoke user-data override is only valid in packaged smoke mode");
+  }
+  if (!path.isAbsolute(requested) || requested.includes("\0")) {
+    throw new Error("Packaged smoke user-data path must be absolute");
+  }
+  await mkdir(requested, { recursive: true });
+  app.setPath("userData", requested);
+}
+
+async function postPackagedSmokeCommand(
+  commandUrl: string,
+  token: string,
+  origin: string,
+  command: Readonly<Record<string, unknown>>
+): Promise<unknown> {
+  const response = await fetch(commandUrl, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-interview-client-token": token,
+      origin
+    },
+    body: JSON.stringify(command),
+    cache: "no-store",
+    credentials: "omit",
+    redirect: "error"
+  });
+  const contentType = response.headers.get("content-type");
+  if (contentType?.split(";", 1)[0]?.trim().toLowerCase() !== "application/json") {
+    throw new Error(`Packaged command smoke returned invalid content type: ${contentType ?? "<none>"}`);
+  }
+  const body = await response.text();
+  if (!response.ok) {
+    throw new Error(`Packaged command smoke failed with HTTP ${String(response.status)}: ${body.slice(0, 512)}`);
+  }
+  try {
+    return JSON.parse(body) as unknown;
+  } catch {
+    throw new Error("Packaged command smoke returned malformed JSON");
+  }
+}
+
 async function runPackagedSmoke(
   server: Awaited<ReturnType<DesktopBackendController["start"]>>,
   backendConfig: Parameters<DesktopBackendController["start"]>[0]
@@ -344,23 +396,61 @@ async function runPackagedSmoke(
     throw new Error("Packaged smoke did not create a desktop window");
   }
   const rendererReady: unknown = await window.webContents.executeJavaScript(
-    `Boolean(document.body)
-      && document.readyState !== "loading"
-      && typeof globalThis.interviewDesktop?.getBootstrap === "function"
-      && typeof globalThis.interviewDesktop?.getLocalRuntimeStatus === "function"
-      && typeof globalThis.interviewDesktop?.installLocalModels === "function"`
+    `new Promise((resolve) => {
+      const deadline = Date.now() + 5000;
+      const check = () => {
+        const root = document.getElementById("root");
+        const mounted = root instanceof HTMLElement
+          && root.childElementCount > 0
+          && document.querySelector(".interview-app-container") instanceof HTMLElement
+          && typeof globalThis.interviewDesktop?.getBootstrap === "function"
+          && typeof globalThis.interviewDesktop?.getLocalRuntimeStatus === "function"
+          && typeof globalThis.interviewDesktop?.installLocalModels === "function";
+        if (mounted) {
+          resolve(true);
+          return;
+        }
+        if (Date.now() >= deadline) {
+          resolve(false);
+          return;
+        }
+        setTimeout(check, 50);
+      };
+      check();
+    })`
   );
   if (rendererReady !== true) {
-    throw new Error("Packaged renderer/preload smoke validation failed");
+    throw new Error("Packaged renderer did not mount the product shell");
   }
 
-  const sessionId = newSessionId();
-  const writer = server.registry.get(sessionId);
-  const turns = new TurnCoordinator(writer);
-  await turns.startSession(sixPeopleProblem);
-  await turns.commitInput("Packaged Windows desktop smoke input.");
-  const beforeRestart = JSON.stringify(writer.getState());
+  const token = backendConfig.clientToken;
+  const origin = backendConfig.allowedOrigins?.[0];
+  if (
+    typeof token !== "string"
+    || token.length < 32
+    || typeof origin !== "string"
+    || origin.length === 0
+  ) {
+    throw new Error("Packaged smoke backend authentication configuration is unavailable");
+  }
 
+  const commandUrl = `${server.bound.command.url}/v1/commands`;
+  const sessionId = newSessionId();
+  await postPackagedSmokeCommand(commandUrl, token, origin, {
+    protocolVersion: 1,
+    type: "START_SESSION",
+    requestId: `request_${randomUUID()}`,
+    sessionId
+  });
+  await postPackagedSmokeCommand(commandUrl, token, origin, {
+    protocolVersion: 1,
+    type: "COMMIT_TYPED_INPUT",
+    requestId: `request_${randomUUID()}`,
+    sessionId,
+    text: "Packaged Windows desktop smoke input."
+  });
+
+  const beforeRestart = JSON.stringify(server.registry.get(sessionId).getState());
   await backend.stop();
   const restarted = await backend.start(backendConfig);
   const afterRestart = JSON.stringify(restarted.registry.get(sessionId).getState());
