@@ -1,113 +1,81 @@
-# Live Oxford formal interpretation
+# Live formal interpretation for Oxford reasoning
 
-## Authority model
+## Authority boundary
 
-Production Oxford analysis remains:
+Production Oxford reasoning analysis remains a strict chain:
 
-```text
-committed candidate language
-    -> fallible formal interpreter
-    -> application schema/source/protocol admission
-    -> deterministic verifier
-    -> authoritative evidence
-    -> pedagogical policy
-```
+committed candidate language -> fallible formal interpretation -> application validation -> deterministic verifier -> authoritative evidence -> pedagogical policy.
 
-The interpreter is never a correctness oracle. Interpretation confidence means only confidence that the proposed formal object represents what the candidate meant. Liam's deterministic admission currently requires confidence `1`, so the live adapter asks the provider to emit a candidate only when that interpretation is fully unambiguous and to abstain otherwise. This threshold is about interpretation fidelity, not mathematical correctness. A provider cannot commit evidence, cannot mark a claim verified, and cannot bypass `InterpretationCoordinator` or the deterministic verifier registry.
+A provider result never directly becomes correctness evidence. InterpretationCoordinator continues to require exact request/source/target/protocol binding, statement-schema validation and canonicalization, and deterministic verifier execution before any CORRECT evidence can be committed. A provider can propose a false statement; the deterministic verifier then returns CONTRADICTED, and no correctness evidence is committed.
 
-## Provider selection and policy
+## Provider selection
 
-The default live adapter derives formal interpretation identity from the session's explicitly configured reasoning provider. The only production provider currently supported for this purpose is the supervised Antigravity `gemini-3.7-flash-medium` runtime supplied by the provider work in PR #100.
+The production formal interpreter derives from the exact session-configured reasoning provider. The first supported live adapter is Antigravity CLI / Gemini 3.7 Flash Medium, reusing the application-owned supervised runtime introduced for interviewer generation.
 
-There is no hidden provider fallback. Mock, legacy/unconfigured, unsupported, unavailable, or differently selected providers abstain unless the application explicitly injects another `FormalInterpretationProvider`.
+Selection is fail-closed. The session must explicitly select the supported Antigravity provider/model, ProviderRuntimeResolver must resolve that exact selection, the normal provider policy must admit its billing/data-use behavior, and the same supervised runtime must be available. Otherwise formal interpretation returns an empty candidate set.
 
-Before a real interpretation inference starts, the selected provider is resolved by `ProviderRuntimeResolver` and admitted through `openProviderExecutionSession`. This preserves the normal provider availability, capability, data-use, metered-usage, billing-verification, and runtime policy boundary. A policy or runtime failure becomes an interpretation abstention; it does not fall back to mock execution.
+There is no fallback to mock, Gemini API, another paid provider, or an application default when the selected provider cannot perform formal interpretation.
 
-The production composition creates one `ApplicationProviderAdapterRuntimeSource` and shares it between interviewer generation and formal interpretation. The formal adapter therefore reuses the #100 `SupervisedProcessRunner` and executor rather than creating another raw CLI supervisor. The Windows runtime source returns one stable frozen runtime object for repeated resolution of the selected Antigravity model; CI asserts that stability.
+## Separate request and runtime
 
-## Separate purpose-specific call
+Formal interpretation is not interviewer generation. It has a deterministic application-owned formal request identity, a dedicated no-tools formal-interpreter agent, its own native JSON schema and purpose-specific prompt, a 4.5 second supervised process budget, a 5 second end-to-end pre-policy analysis deadline, a 256 KiB stdout bound, a 64 KiB stderr bound, a 16,384-character aggregate formal-statement bound, and an AbortSignal propagated from supersession/timeout to the supervised process.
 
-Formal interpretation is a distinct provider request, not interviewer realization and not Delivery generation. Antigravity receives a dedicated `formal-interpreter` agent with:
+StudentReasoningAnalysisCoordinator still runs before pedagogical policy selection. Timeout or provider unavailability produces no new deterministic evidence and policy continues from application-owned state.
 
-- no tools;
-- no subagents;
-- inherited customizations disabled;
-- the same restricted application-owned runtime profile;
-- its own bounded process timeout and byte limits;
-- a request-specific JSON schema.
+## Interpretation-specific context
 
-The prompt contains only:
+The model receives only the exact candidate source text/span and provenance, the exact public Oxford problem prompt and public given information, exact problem ID/version, target claim identity, protocols authorized by the Oxford formal-analysis catalog for that exact problem/version, small protocol-shape guidance, and the expected output contract.
 
-- the exact committed source identity and source span;
-- the public problem prompt and given information needed for disambiguation;
-- the exact allowed formal protocol identities for that problem/version;
-- compact syntax guidance for supported protocols;
-- the strict result contract.
+It does not receive canonical solutions, protected disclosure material, interviewer hidden reasoning graphs, credentials, unrelated prior provider output, or previous conversation state. Candidate text is explicitly framed as untrusted data, so candidate instructions do not alter the interpreter's authority or verifier path.
 
-It does not include the canonical solution, protected disclosures, interviewer hidden reasoning, unrelated model output, credentials, or board-image semantics.
+## Schema contract
 
-Candidate text is explicitly delimited as application data. Instructions embedded in candidate text, including requests to output `VERIFIED`, have no authority.
+The Antigravity call uses native structured output and then application-side validation. The request-specific schema binds the exact request ID, source basis, committed turn, source revision, source span text, problem/version, and target claim; it permits only confidence 1 and at most one atomic candidate. The stream parser additionally requires the exact model, dedicated formal-interpreter agent, strict permission mode, zero tools/subagents, one successful turn, exact schema echo, strict JSON with no duplicate keys or trailing prose, canonical equality between textual response and structured_output, InterpretationProviderResultSchema, and bounded candidate/formal-statement output.
 
-## Schema and bounds
+Liam's InterpretationCoordinator remains authoritative for exact source, target, allowed protocol, candidate ambiguity, formal statement schema/canonicalization, verifier authorization, staleness, and verification-result admission.
 
-The provider must return the existing `InterpretationProviderResultSchema` shape. The Antigravity call additionally supplies a request-specific JSON schema that fixes the request/source/target identity and restricts protocols to the exact Oxford analysis profile.
+## Confidence and abstention
 
-Production currently asks for at most one independently verifiable atomic claim per call. Liam's existing admission semantics treat multiple distinct candidates as ambiguous, so the model is instructed to choose one clear atomic claim or abstain rather than manufacture a compound interpretation. The request-specific schema also fixes candidate confidence to `1`; if interpretation confidence would be lower, the model must return `candidates: []`. This remains below the domain-wide candidate bound and prevents claim explosion.
+confidence means confidence that the formal object exactly represents what the candidate meant. It never means probability the mathematical claim is true. The current deterministic admission threshold remains 1, so anything less than exact interpretation confidence abstains from deterministic verification.
 
-Extra provider fields, prose around JSON, wrong request/source/problem/version identity, unsupported protocols, non-finite confidence, oversized output, tool activity, schema disagreement, and malformed formal statements are rejected or safely abstained. The application does not heuristically repair malformed formal syntax into something that happens to verify.
+The prompt encourages an empty candidates array for incomplete, ambiguous, strategic, unsupported, or whiteboard-dependent statements. Whiteboard semantics are intentionally not added here.
 
-## Abstention
+Production asks for at most one atomic candidate. If the language needs multiple distinct interpretations, the model must abstain. The coordinator independently retains its ambiguity checks, so alternate injected providers still cannot force a choice among distinct meanings.
 
-`candidates: []` is a normal outcome. The model is instructed to abstain for strategy comments, incomplete or ambiguous ideas, unsupported theorem statements, uncertain pronouns, or text that depends on an unresolved whiteboard reference.
+## Cancellation and recovery
 
-No board image is sent in this PR. Board semantic observations remain Agent Noah's responsibility and can be combined with language only through a future authoritative-source integration.
+InterpretationCoordinator.cancel() and abandon() abort a provider-owned AbortController. The provider races runtime resolution and billing/policy admission against that signal, rechecks authoritative source freshness after asynchronous control-plane boundaries, and passes the same signal into the supervised process runner. A resolver or billing verifier that ignores cancellation therefore cannot permanently consume an interpretation slot. Admission-session close is best-effort cleanup and cannot block bounded completion. Late output remains suppressed by existing current-request and verification-admission checks.
 
-## Timing, cancellation, and stale results
+Recovery behavior is unchanged: if deterministic verification work was already durably admitted, the coordinator resumes or recomputes from the persisted application formal statement before considering provider execution. The fallible interpreter is not rerun merely because the process restarted. Repeated analysis of the same authoritative source uses the deterministic formal-analysis request identity and cached request result.
 
-The outer student-reasoning budget remains 1.5 seconds. The supervised formal subprocess request has a 1.25-second process budget plus bounded stdout/stderr/stdin sizes.
+Typed input and final speech transcripts share the same committed-turn path. Interim STT text is never interpreted.
 
-`StudentReasoningAnalysisCoordinator` continues to abandon a request on timeout or source supersession. It now also asks cancellable formal providers to abort local execution best-effort. Shutdown uses the same path. `InterpretationCoordinator` remains authoritative for suppressing late/stale results, so physical cancellation success is never required for safety.
+## Billing and data-use policy
 
-Typed input and final speech transcripts converge at the same committed-turn analysis path. Interim STT text is not interpreted.
+Formal interpretation is real provider execution. The production adapter resolves the exact session-selected provider through ProviderRuntimeResolver and opens a guarded provider execution session solely to execute the existing billing/data-use admission. Only after that admission succeeds can the separate formal interpreter execute.
 
-## Recovery
+Antigravity remains denied by the default no-metered policy unless the trusted host explicitly opts into its declared billing/data-use behavior. Formal interpretation cannot bypass that rule by calling the supervised executable directly.
 
-The existing deterministic request/source identity and Liam's recovery semantics are unchanged. Already admitted deterministic verification work resumes from the persisted application-owned formal statement. The application does not rerun the fallible interpreter merely because deterministic verification can be recomputed after recovery.
+## Automated validation
 
-Provider disappearance during a session causes new formal analysis to abstain. Previously committed deterministic evidence remains authoritative.
+Credential-free fixtures cover valid supported interpretation leading to deterministic VERIFIED, false supported interpretation leading to deterministic CONTRADICTED, provider abstention, prompt-injection-like candidate text, trailing prose, correctness/evidence-field smuggling, tool/subagent activity, oversized output, non-finite confidence, physical cancellation, unsupported configured providers, billing/data-use denial, analysis timeout, deterministic request idempotence, repeated resolver calls that never settle without permanently exhausting capacity, and a source becoming stale while runtime resolution is in flight without sending the stale candidate text to inference.
 
-## Validation and smoke testing
+Existing formal-admission tests continue to cover wrong source spans, previous-turn sources, unauthorized protocols, wrong problem/version, duplicate/ambiguous candidates, stale results, deterministic-verifier disagreement, and recovery of persisted verifier work.
 
-Automated tests use deterministic provider/runtime fixtures; CI does not require Antigravity credentials. The focused tests cover:
+## Real Antigravity smoke
 
-- a supported claim that becomes deterministic `VERIFIED` evidence;
-- a mathematically false claim that becomes deterministic `CONTRADICTED` with no false correctness evidence;
-- prompt-injection-like candidate text requesting `VERIFIED`;
-- provider attempts to add an authoritative correctness field;
-- unauthorized protocol output;
-- provider policy/runtime denial before inference;
-- no-metered billing denial before subprocess execution;
-- exact echoed source-span mismatch;
-- trailing prose around otherwise valid JSON;
-- physical subprocess abort on cancellation;
-- stable shared Antigravity runtime identity on Windows;
-- the dedicated no-tools Antigravity agent profile;
-- existing formal source/protocol/staleness/recovery tests in the repository.
+The real smoke is intentionally separate from CI because GitHub-hosted runners must not require user credentials or a paid/subscription session.
 
-A real-provider performance smoke must be run on the supported Windows host with Antigravity 1.1.25 and the same configured account/policy used for interviews. CI intentionally cannot supply those credentials. Record at least several short supported claims plus strategy/ambiguous statements and report:
+On the trusted Windows host with the reviewed Antigravity profile available, set INTERVIEW_ALLOW_METERED_REMOTE_REASONING to 1 only after intentionally accepting the selected account's billing/data-use behavior, then run:
 
-| Metric | Manual smoke result |
-| --- | --- |
-| Median interpretation latency | Not measured in credential-free CI |
-| Approximate worst case below the application timeout | Not measured in credential-free CI |
-| Abstention percentage on curated corpus | Not measured in credential-free CI |
-| Malformed-result frequency | Not measured in credential-free CI |
-| Deterministic verification acceptance rate | Not measured in credential-free CI |
+    corepack pnpm smoke:formal-interpretation
 
-Do not replace these with fixture timings: fixture latency does not measure the real provider. The safety behavior on timeout is already deterministic: formal analysis abstains and policy proceeds.
+The command first runs the exact product launch/readiness checks so one-time executable hashing and zero-turn profile verification are not counted as interpretation latency. It then prints median interpretation latency, approximate worst-case latency, abstention rate, malformed-result rate, deterministic-verification acceptance rate, and per-sample statuses.
 
-## Adversarial audit
+Do not report fixture timings as real-provider timings. Record the JSON emitted by this command in the PR before treating it as real latency evidence.
 
-Central question: **Can any fallible provider output become authoritative mathematical correctness without deterministic verification?**
+## Adversarial audit question
 
-**No.** Provider output can only propose an interpretation. Request-specific structured-output constraints are followed by application-owned schema/source/protocol admission, formal-statement canonicalization, deterministic verifier dispatch, and evidence admission. A provider's prose, confidence, attempted `VERIFIED` field, or apparent mathematical implication is never itself authoritative evidence.
+**Can any fallible provider output become authoritative mathematical correctness without deterministic verification?**
+
+No. Provider output is schema-constrained but still untrusted. The only path to authoritative correctness remains application admission followed by an authorized deterministic verifier and verification-result admission.
