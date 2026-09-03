@@ -2,6 +2,8 @@
 # Supported interpreter: CPython 3.12 or 3.13.
 moonshine-voice==0.1.5
 onnxruntime==1.29.0
+Pillow==12.3.0
+tokenizers==0.23.1
 numpy==2.5.2
 sounddevice==0.5.6
 requests==2.34.2
