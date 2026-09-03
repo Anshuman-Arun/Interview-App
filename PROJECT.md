@@ -51,7 +51,7 @@ apps/server
                   +--> bounded replay / history / longitudinal views
 ```
 
-The server boxes above are the **current production path**. Session configuration binds exact problem/scenario and provider/model identity. On Windows, an explicitly selected `antigravity-cli / gemini-3.7-flash-medium` session can reach a real supervised local CLI process and remote Antigravity inference when the host policy opt-in is enabled and the CLI is locally authenticated. The same selection fails closed on non-Windows hosts in the current production composition. Registration alone still does not authorize execution: provider policy, billing/data-use admission, proposal validation, generation compatibility, and delivery remain application-owned. Speech model seams and live vision backends remain separate runtime concerns.
+The server boxes above are the **current production path**. Session configuration binds exact problem/scenario and provider/model identity. On Windows, an explicitly selected `antigravity-cli / gemini-3.7-flash-medium` session can reach a real supervised local CLI process and remote Antigravity inference through the default no-metered account-quota policy when the CLI is locally authenticated. The same selection fails closed on non-Windows hosts in the current production composition. Registration alone still does not authorize execution: provider policy, billing/data-use admission, proposal validation, generation compatibility, and delivery remain application-owned. Speech model seams and live vision backends remain separate runtime concerns.
 
 ## Component inventory
 
@@ -78,7 +78,7 @@ The server boxes above are the **current production path**. Session configuratio
 | Quant Research engine | `BACKEND_IMPLEMENTED` | Deterministic scenario/evidence/result engine and coordinator/persistence coverage; no main UI mode. |
 | Curated Oxford + quant problem catalogs | `BACKEND_IMPLEMENTED` | Generic server configuration/catalog resolution uses exact catalog identities; selectable mode/problem launch UI remains deferred. |
 | Provider control plane | `PRODUCTION_WIRED` | Authoritative provider/model selection resolves through the registry/factory path and ProviderCoordinator policy/billing admission before proposal validation. |
-| Antigravity CLI reasoning provider | `PRODUCTION_WIRED` | Windows-only in current composition. Explicitly configured sessions can execute `gemini-3.7-flash-medium` through a fresh Job-Object-supervised `agy` process per turn. The host must opt into remote reasoning, the CLI must be locally authenticated, and no mock fallback occurs on failure. Non-Windows hosts fail closed. |
+| Antigravity CLI reasoning provider | `PRODUCTION_WIRED` | Windows-only in current composition. Explicitly configured sessions can execute `gemini-3.7-flash-medium` through a fresh Job-Object-supervised `agy` process per turn. The trusted runtime pins a no-overage account profile, uses OS-native CLI authentication, and admits the path under the default no-metered policy without an API key. No mock fallback occurs on failure; non-Windows hosts fail closed. |
 | Gemini API adapter | `RUNTIME_SEAM_ONLY` | The API-key adapter remains available behind the same control plane and policy machinery; ordinary key configuration still cannot prove no incremental spend under the default no-metered policy. |
 | Synthetic interview | `TEST/HARNESS_ONLY` | Smoke/demo path used by validation. |
 
@@ -87,7 +87,7 @@ The server boxes above are the **current production path**. Session configuratio
 As of the 2026-09-02 provider-runtime integration:
 
 1. the default main-UI new-session action still uses the legacy Ramsey compatibility start and does not expose provider/model selection, even though server/session composition supports exact configured Oxford and quant identities;
-2. supervised Antigravity reasoning is available only for sessions explicitly configured with its provider/model identity and only when the trusted host permits remote reasoning and the local CLI is installed/authenticated;
+2. supervised Antigravity reasoning is available only for sessions explicitly configured with its provider/model identity and when the local CLI is installed/authenticated; the default path uses the trusted no-overage account profile rather than an API key;
 3. there is no automatic provider fallback or escalation; an unavailable/unauthenticated Antigravity runtime fails closed and requires explicit retry rather than silently switching to mock;
 4. the main UI does not yet expose Quant Trading or Quant Research as selectable interview modes;
 5. live speech/TTS/vision model availability remains determined by their separate runtime composition work;
