@@ -14,6 +14,10 @@ import {
 } from "../../../packages/providers/src/index.js";
 
 const ANTIGRAVITY_EXECUTABLE_ID = "antigravity-cli";
+const ANTIGRAVITY_MINIMUM_SAFE_CLI_VERSION = Object.freeze([1, 1, 4] as const);
+const ANTIGRAVITY_VERSION_CHECK_TIMEOUT_MS = 10_000;
+const ANTIGRAVITY_VERSION_STDOUT_BYTES = 256;
+const ANTIGRAVITY_VERSION_STDERR_BYTES = 4 * 1024;
 const ANTIGRAVITY_SAFE_SETTINGS = Object.freeze({
   toolPermission: "strict",
   artifactReviewPolicy: "asks-for-review",
@@ -75,6 +79,7 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
   }
 
   let runner: SupervisedProcessRunner | undefined;
+  let versionVerification: Promise<void> | undefined;
 
   const getRunner = (): SupervisedProcessRunner => {
     if (runner !== undefined) return runner;
@@ -96,8 +101,41 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
     return created;
   };
 
+  const ensureSupportedVersion = async (): Promise<void> => {
+    const existing = versionVerification;
+    if (existing !== undefined) {
+      await existing;
+      return;
+    }
+
+    const check = (async () => {
+      const result = await getRunner().execute({
+        executableId: ANTIGRAVITY_EXECUTABLE_ID,
+        args: ["--version"],
+        stdin: "",
+        timeoutMs: ANTIGRAVITY_VERSION_CHECK_TIMEOUT_MS,
+        maxStdoutBytes: ANTIGRAVITY_VERSION_STDOUT_BYTES,
+        maxStderrBytes: ANTIGRAVITY_VERSION_STDERR_BYTES
+      });
+      if (
+        result.exitCode !== 0
+        || !isSupportedAntigravityCliVersionOutput(result.stdout)
+      ) {
+        throw new Error("Installed Antigravity CLI version is unsupported");
+      }
+    })();
+    versionVerification = check;
+    try {
+      await check;
+    } catch (error) {
+      if (versionVerification === check) versionVerification = undefined;
+      throw error;
+    }
+  };
+
   const executor: SupervisedCliExecutor = Object.freeze({
     execute: async (request: SupervisedCliExecutionRequest) => {
+      await ensureSupportedVersion();
       return await getRunner().execute({
         executableId: ANTIGRAVITY_EXECUTABLE_ID,
         args: request.args,
@@ -110,14 +148,15 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
       });
     }
   });
-  const billingVerificationFactory = (now: Date): unknown => {
-    // resolveRuntime() calls getRunner() before exposing this factory, so this
-    // proof is available only after the trusted host has validated the exact
-    // isolated profile/environment used by the supervised process.
+  const billingVerificationFactory = async (now: Date): Promise<unknown> => {
+    // The billing proof depends on current headless policy enforcement. Verify
+    // the installed CLI before admitting a turn, then re-use that proof only
+    // while the runner's pinned executable identity remains unchanged.
+    await ensureSupportedVersion();
     return Object.freeze({
       billingClass: "ACCOUNT_QUOTA" as const,
       enforcementMechanism:
-        "Isolated Antigravity account profile forces useG1Credits=false and excludes API-key/custom-endpoint authentication from the child environment",
+        "Antigravity CLI >=1.1.4 with isolated useG1Credits=false account profile and no API-key/custom-endpoint child environment",
       verifiedAt: now.toISOString(),
       adapterVersion: ANTIGRAVITY_CLI_ADAPTER_VERSION,
       spendImpossible: true
@@ -175,6 +214,35 @@ function antigravityEnvironment(): {
   });
 }
 
+
+export function isSupportedAntigravityCliVersionOutput(
+  value: string
+): boolean {
+  if (value.length === 0 || value.length > ANTIGRAVITY_VERSION_STDOUT_BYTES) {
+    return false;
+  }
+  const normalized = value.trim();
+  const match = /^(?:(?:agy)(?:\s+version)?\s+)?v?([0-9]+)\.([0-9]+)\.([0-9]+)$/u.exec(
+    normalized
+  );
+  if (match === null) return false;
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  const patch = Number(match[3]);
+  if (
+    !Number.isSafeInteger(major)
+    || !Number.isSafeInteger(minor)
+    || !Number.isSafeInteger(patch)
+  ) {
+    return false;
+  }
+
+  const [minimumMajor, minimumMinor, minimumPatch] =
+    ANTIGRAVITY_MINIMUM_SAFE_CLI_VERSION;
+  if (major !== minimumMajor) return major > minimumMajor;
+  if (minor !== minimumMinor) return minor > minimumMinor;
+  return patch >= minimumPatch;
+}
 
 function assertNoMeteredAntigravityProfile(environment: {
   readonly inherit: readonly string[];
