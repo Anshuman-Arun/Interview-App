@@ -1291,8 +1291,13 @@ async function windowsCSharpCompilerExecutablePath(
   ];
   for (const candidate of candidates) {
     try {
+      // Windows servicing commonly hard-links protected framework binaries
+      // into the component store. The compiler is selected only from these
+      // fixed SystemRoot locations and still passes canonical-path/reparse/
+      // file-identity validation; do not apply the provider-image single-link
+      // rule to this trusted OS tool.
       const identity = await inspectExecutable(candidate, "win32");
-      if (identity.linkCount === 1n) return identity.canonicalPath;
+      return identity.canonicalPath;
     } catch {
       // Try the next application-owned framework location.
     }
