@@ -377,7 +377,8 @@ export function useInterviewSession(
   const sessionMutationAdmissionRef = useRef(false);
   const transportEpochRef = useRef(0);
   const sessionListRequestEpochRef = useRef(0);
-  const launchMetadataRequestEpochRef = useRef(0);
+  const catalogRequestEpochRef = useRef(0);
+  const providerOptionsRequestEpochRef = useRef(0);
   const rendererRestartRef = useRef<((targetSessionId: SessionId) => void) | null>(null);
   const rendererClientRef = useRef<RendererClient | null>(null);
   const boardSyncRef = useRef<AuthoritativeBoardSyncCoordinator | null>(null);
@@ -493,7 +494,8 @@ export function useInterviewSession(
     // transition/list read before clearing state from the previous server.
     transportEpochRef.current += 1;
     sessionListRequestEpochRef.current += 1;
-    launchMetadataRequestEpochRef.current += 1;
+    catalogRequestEpochRef.current += 1;
+    providerOptionsRequestEpochRef.current += 1;
     sessionTransitionEpochRef.current += 1;
     sessionMutationAdmissionRef.current = false;
     pendingSubmissionsRef.current.clear();
@@ -686,15 +688,15 @@ export function useInterviewSession(
 
   const refreshInterviewCatalog = useCallback(async (): Promise<readonly InterviewCatalogEntry[]> => {
     const transportEpoch = transportEpochRef.current;
-    const requestEpoch = launchMetadataRequestEpochRef.current + 1;
-    launchMetadataRequestEpochRef.current = requestEpoch;
+    const requestEpoch = catalogRequestEpochRef.current + 1;
+    catalogRequestEpochRef.current = requestEpoch;
     setInterviewCatalogLoading(true);
     setInterviewCatalogError(null);
     try {
       const entries = await getCommandClient().listInterviewCatalog();
       if (
         transportEpochRef.current !== transportEpoch
-        || launchMetadataRequestEpochRef.current !== requestEpoch
+        || catalogRequestEpochRef.current !== requestEpoch
       ) {
         throw new Error("Interview catalog read was superseded");
       }
@@ -703,7 +705,7 @@ export function useInterviewSession(
     } catch (err) {
       if (
         transportEpochRef.current === transportEpoch
-        && launchMetadataRequestEpochRef.current === requestEpoch
+        && catalogRequestEpochRef.current === requestEpoch
       ) {
         setInterviewCatalog([]);
         setInterviewCatalogError(
@@ -714,7 +716,7 @@ export function useInterviewSession(
     } finally {
       if (
         transportEpochRef.current === transportEpoch
-        && launchMetadataRequestEpochRef.current === requestEpoch
+        && catalogRequestEpochRef.current === requestEpoch
       ) {
         setInterviewCatalogLoading(false);
       }
@@ -723,15 +725,15 @@ export function useInterviewSession(
 
   const refreshProviderOptions = useCallback(async (): Promise<readonly ProviderLaunchOption[]> => {
     const transportEpoch = transportEpochRef.current;
-    const requestEpoch = launchMetadataRequestEpochRef.current + 1;
-    launchMetadataRequestEpochRef.current = requestEpoch;
+    const requestEpoch = providerOptionsRequestEpochRef.current + 1;
+    providerOptionsRequestEpochRef.current = requestEpoch;
     setProviderOptionsLoading(true);
     setProviderOptionsError(null);
     try {
       const options = await getCommandClient().listProviderOptions();
       if (
         transportEpochRef.current !== transportEpoch
-        || launchMetadataRequestEpochRef.current !== requestEpoch
+        || providerOptionsRequestEpochRef.current !== requestEpoch
       ) {
         throw new Error("Provider option read was superseded");
       }
@@ -740,7 +742,7 @@ export function useInterviewSession(
     } catch (err) {
       if (
         transportEpochRef.current === transportEpoch
-        && launchMetadataRequestEpochRef.current === requestEpoch
+        && providerOptionsRequestEpochRef.current === requestEpoch
       ) {
         setProviderOptions([]);
         setProviderOptionsError(
@@ -751,7 +753,7 @@ export function useInterviewSession(
     } finally {
       if (
         transportEpochRef.current === transportEpoch
-        && launchMetadataRequestEpochRef.current === requestEpoch
+        && providerOptionsRequestEpochRef.current === requestEpoch
       ) {
         setProviderOptionsLoading(false);
       }
