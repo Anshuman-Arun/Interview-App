@@ -14,6 +14,7 @@ import {
 
 const ANTIGRAVITY_EXECUTABLE_ID = "antigravity-cli";
 const ANTIGRAVITY_MINIMUM_SAFE_CLI_VERSION = Object.freeze([1, 1, 15] as const);
+const ANTIGRAVITY_MAXIMUM_SAFE_CLI_VERSION = Object.freeze([1, 1, 16] as const);
 const ANTIGRAVITY_VERSION_CHECK_TIMEOUT_MS = 10_000;
 const ANTIGRAVITY_VERSION_STDOUT_BYTES = 256;
 const ANTIGRAVITY_VERSION_STDERR_BYTES = 4 * 1024;
@@ -45,6 +46,7 @@ export const ANTIGRAVITY_REALIZER_AGENT_MARKDOWN = `---
 name: interview-realizer
 description: Stateless interviewer proposal realization engine.
 tools: []
+inheritCustomizations: false
 mainAgent: true
 subagent: false
 ---
@@ -228,11 +230,20 @@ export function isSupportedAntigravityCliVersionOutput(
 
   const [minimumMajor, minimumMinor, minimumPatch] =
     ANTIGRAVITY_MINIMUM_SAFE_CLI_VERSION;
-  // A new major or minor may change headless, profile, auth, or protocol
-  // semantics. This adapter is audited only against the 1.1.x stream-json
-  // contract, so fail closed until another line has been explicitly reviewed.
-  if (major !== minimumMajor || minor !== minimumMinor) return false;
-  return patch >= minimumPatch;
+  const [maximumMajor, maximumMinor, maximumPatch] =
+    ANTIGRAVITY_MAXIMUM_SAFE_CLI_VERSION;
+  // Headless, profile, auth, and protocol behavior can change even in a patch
+  // release. Admit only the exact upstream release window reviewed for this
+  // adapter instead of silently trusting future 1.1.x builds.
+  if (
+    major !== minimumMajor
+    || minor !== minimumMinor
+    || major !== maximumMajor
+    || minor !== maximumMinor
+  ) {
+    return false;
+  }
+  return patch >= minimumPatch && patch <= maximumPatch;
 }
 
 function assertRestrictedAntigravityProfile(environment: {

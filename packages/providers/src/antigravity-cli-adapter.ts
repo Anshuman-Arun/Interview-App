@@ -17,7 +17,7 @@ export const ANTIGRAVITY_CLI_MODEL_ID = "gemini-3.7-flash-medium";
 export const ANTIGRAVITY_CLI_AGENT_ID = "interview-realizer";
 export const ANTIGRAVITY_CLI_ADAPTER_VERSION = "1.0.0";
 
-const MAX_CONTEXT_BYTES = 96 * 1024;
+const MAX_CONTEXT_BYTES = 40 * 1024;
 const MAX_SCHEMA_BYTES = 64 * 1024;
 const MAX_SPEECH_CHARACTERS = 12_000;
 const MAX_DISCLOSURE_IDS = 256;

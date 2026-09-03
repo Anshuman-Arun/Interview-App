@@ -316,7 +316,12 @@ export class SupervisedProcessRunner {
     let removeInterruptListener = (): void => undefined;
     const interrupted = new Promise<never>((_resolve, reject) => {
       const onInterrupt = (): void => {
-        reject(interruptionError);
+        reject(
+          this.containmentCompromised
+            || this.quarantinedExecutableIds.has(request.executableId)
+            ? new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED")
+            : interruptionError
+        );
       };
       removeInterruptListener = () => {
         removeAbortSignalListener(controller.signal, onInterrupt);
@@ -2430,6 +2435,16 @@ async function terminateProcessTree(
         return await promiseSettledWithin(registeredClose, TREE_FORCE_MS);
       }
       return await waitForChildExit(child, TREE_FORCE_MS);
+    }
+
+    // taskkill can lose a benign race with a bootstrap that finishes naturally
+    // after the initial liveness check. Accept only the pre-registered close
+    // promise as proof; root absence by itself is still insufficient.
+    if (
+      registeredClose !== undefined
+      && await promiseSettledWithin(registeredClose, TREE_GRACE_MS)
+    ) {
+      return true;
     }
 
     // Root-only termination still closes the bootstrap's Job Object, but it

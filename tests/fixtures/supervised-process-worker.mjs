@@ -94,7 +94,9 @@ switch (mode) {
           || process.env.INTERVIEW_SUPERVISED_CONFIG_JSON !== undefined
           || process.env.INTERVIEW_SUPERVISED_BOOTSTRAP !== undefined,
         powershellModulePathExisted:
-          process.env.PSModulePath !== undefined
+          process.env.PSModulePath !== undefined,
+        unicodeEnvironmentValue:
+          process.env.INTERVIEW_TEST_UNICODE
       };
       writeFileSync(marker, "created", "utf8");
       process.stdout.write(JSON.stringify(payload), () => process.exit(0));

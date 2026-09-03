@@ -95,12 +95,14 @@ describe("supervised Antigravity runtime profile", () => {
     }
   );
 
-  it("requires the audited 1.1.x stream-json contract", () => {
+  it("requires the explicitly audited 1.1.15-1.1.16 stream-json contract", () => {
     expect(isSupportedAntigravityCliVersionOutput("1.1.13\n")).toBe(false);
     expect(isSupportedAntigravityCliVersionOutput("1.1.14\n")).toBe(false);
     expect(isSupportedAntigravityCliVersionOutput("1.1.15\n")).toBe(true);
-    expect(isSupportedAntigravityCliVersionOutput("1.1.23\n")).toBe(true);
-    expect(isSupportedAntigravityCliVersionOutput("agy version 1.1.23\n")).toBe(true);
+    expect(isSupportedAntigravityCliVersionOutput("1.1.16\n")).toBe(true);
+    expect(isSupportedAntigravityCliVersionOutput("agy version 1.1.16\n")).toBe(true);
+    expect(isSupportedAntigravityCliVersionOutput("1.1.17\n")).toBe(false);
+    expect(isSupportedAntigravityCliVersionOutput("1.1.23\n")).toBe(false);
     expect(isSupportedAntigravityCliVersionOutput("v1.2.0\n")).toBe(false);
     expect(isSupportedAntigravityCliVersionOutput("2.0.0\n")).toBe(false);
     expect(isSupportedAntigravityCliVersionOutput("1.1.15-rc.1\n")).toBe(false);
@@ -113,6 +115,9 @@ describe("supervised Antigravity runtime profile", () => {
       "name: interview-realizer"
     );
     expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain("tools: []");
+    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain(
+      "inheritCustomizations: false"
+    );
     expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain("mainAgent: true");
     expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain("subagent: false");
     expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).not.toContain("run_command");

@@ -658,6 +658,136 @@ describe("production provider runtime resolution", () => {
     }
   });
 
+  it("executes Antigravity only after the exact trusted-host metered opt-in without synthetic billing proof", async () => {
+    const originalMeteredOverride = process.env["INTERVIEW_ALLOW_METERED_REMOTE_REASONING"];
+    process.env["INTERVIEW_ALLOW_METERED_REMOTE_REASONING"] = "1";
+    const harness = createHarness();
+    try {
+      const committed = await startConfiguredTurn(harness, ANTIGRAVITY_SELECTION);
+      const turns = new TurnCoordinator(harness.writer);
+      const request = await turns.selectAction(committed.turnId, sixPeopleProblem);
+      const proposal = realizeProblemInterviewerProposal(
+        sixPeopleProblem,
+        STUDENT_TEXT,
+        request
+      );
+      let executeCalls = 0;
+      const resolver = new ProviderRuntimeResolver({
+        adapterRuntimeSource: {
+          resolveRuntime(selection) {
+            if (
+              selection.providerId !== ANTIGRAVITY_SELECTION.providerId
+              || selection.modelId !== ANTIGRAVITY_SELECTION.modelId
+            ) {
+              return undefined;
+            }
+            return {
+              executor: {
+                async execute(executionRequest: {
+                  readonly onProcessStart: () => void;
+                }) {
+                  executeCalls += 1;
+                  executionRequest.onProcessStart();
+                  const stdout = createAntigravityResponse(proposal);
+                  return {
+                    exitCode: 0,
+                    stdout,
+                    stdoutBytes: new TextEncoder().encode(stdout).byteLength,
+                    stderrBytes: 0
+                  };
+                }
+              }
+            };
+          }
+        }
+      });
+      const orchestrator = new ServerTurnOrchestrator(
+        harness.sessions,
+        () => undefined,
+        undefined,
+        resolver
+      );
+
+      await orchestrator.orchestrateTurn({
+        sessionId: harness.sessionId,
+        turnId: committed.turnId,
+        inputEpisodeId: committed.inputEpisodeId,
+        studentText: STUDENT_TEXT
+      });
+
+      expect(executeCalls).toBe(1);
+      expect(Object.values(harness.writer.getState().generations)).toEqual([
+        expect.objectContaining({
+          provider: ANTIGRAVITY_CLI_PROVIDER_ID,
+          status: "VALIDATED"
+        })
+      ]);
+      expect(Object.values(harness.writer.getState().deliveries)).toHaveLength(1);
+    } finally {
+      if (originalMeteredOverride === undefined) {
+        delete process.env["INTERVIEW_ALLOW_METERED_REMOTE_REASONING"];
+      } else {
+        process.env["INTERVIEW_ALLOW_METERED_REMOTE_REASONING"] =
+          originalMeteredOverride;
+      }
+      await harness.close();
+    }
+  });
+
+  it("does not treat non-exact metered opt-in values as authorization", async () => {
+    const originalMeteredOverride = process.env["INTERVIEW_ALLOW_METERED_REMOTE_REASONING"];
+    process.env["INTERVIEW_ALLOW_METERED_REMOTE_REASONING"] = "true";
+    const harness = createHarness();
+    try {
+      const committed = await startConfiguredTurn(harness, ANTIGRAVITY_SELECTION);
+      let executeCalls = 0;
+      const resolver = new ProviderRuntimeResolver({
+        adapterRuntimeSource: {
+          resolveRuntime(selection) {
+            if (
+              selection.providerId !== ANTIGRAVITY_SELECTION.providerId
+              || selection.modelId !== ANTIGRAVITY_SELECTION.modelId
+            ) {
+              return undefined;
+            }
+            return {
+              executor: {
+                async execute() {
+                  executeCalls += 1;
+                  throw new Error("non-exact metered opt-in must not execute");
+                }
+              }
+            };
+          }
+        }
+      });
+      const orchestrator = new ServerTurnOrchestrator(
+        harness.sessions,
+        () => undefined,
+        undefined,
+        resolver
+      );
+
+      await orchestrator.orchestrateTurn({
+        sessionId: harness.sessionId,
+        turnId: committed.turnId,
+        inputEpisodeId: committed.inputEpisodeId,
+        studentText: STUDENT_TEXT
+      });
+
+      expect(executeCalls).toBe(0);
+      expect(Object.keys(harness.writer.getState().deliveries)).toHaveLength(0);
+    } finally {
+      if (originalMeteredOverride === undefined) {
+        delete process.env["INTERVIEW_ALLOW_METERED_REMOTE_REASONING"];
+      } else {
+        process.env["INTERVIEW_ALLOW_METERED_REMOTE_REASONING"] =
+          originalMeteredOverride;
+      }
+      await harness.close();
+    }
+  });
+
   it("performs zero Antigravity execution under denied provider policy and never falls back to mock", async () => {
     const harness = createHarness();
     try {
@@ -718,6 +848,70 @@ describe("production provider runtime resolution", () => {
       )).toBe(false);
       expect(Object.keys(harness.writer.getState().deliveries)).toHaveLength(0);
     } finally {
+      await harness.close();
+    }
+  });
+
+  it("does not let the Antigravity metered opt-in authorize Gemini API execution", async () => {
+    const originalMeteredOverride = process.env["INTERVIEW_ALLOW_METERED_REMOTE_REASONING"];
+    process.env["INTERVIEW_ALLOW_METERED_REMOTE_REASONING"] = "1";
+    const harness = createHarness();
+    try {
+      const committed = await startConfiguredTurn(harness, GEMINI_SELECTION);
+      let fetchCalls = 0;
+      const resolver = new ProviderRuntimeResolver({
+        configurationSource: credentialReferenceSource(),
+        secretResolver: {
+          async resolveSecret() {
+            return "runtime-only-gemini-test-secret";
+          }
+        },
+        adapterRuntimeSource: {
+          resolveRuntime(selection) {
+            if (
+              selection.providerId !== GEMINI_SELECTION.providerId
+              || selection.modelId !== GEMINI_SELECTION.modelId
+            ) {
+              return undefined;
+            }
+            return {
+              fetchImpl: async () => {
+                fetchCalls += 1;
+                throw new Error("Antigravity metered opt-in must not authorize Gemini");
+              }
+            };
+          }
+        }
+      });
+      const orchestrator = new ServerTurnOrchestrator(
+        harness.sessions,
+        () => undefined,
+        undefined,
+        resolver
+      );
+
+      await orchestrator.orchestrateTurn({
+        sessionId: harness.sessionId,
+        turnId: committed.turnId,
+        inputEpisodeId: committed.inputEpisodeId,
+        studentText: STUDENT_TEXT
+      });
+
+      expect(fetchCalls).toBe(0);
+      expect(Object.values(harness.writer.getState().generations)).toEqual([
+        expect.objectContaining({
+          provider: GEMINI_SELECTION.providerId,
+          status: "SUPERSEDED"
+        })
+      ]);
+      expect(Object.keys(harness.writer.getState().deliveries)).toHaveLength(0);
+    } finally {
+      if (originalMeteredOverride === undefined) {
+        delete process.env["INTERVIEW_ALLOW_METERED_REMOTE_REASONING"];
+      } else {
+        process.env["INTERVIEW_ALLOW_METERED_REMOTE_REASONING"] =
+          originalMeteredOverride;
+      }
       await harness.close();
     }
   });

@@ -270,6 +270,11 @@ describe("supervised one-shot process execution", () => {
       isolatedWorkingDirectory: true,
       isolatedHomeFiles: {
         ".fixture/settings.txt": "application-owned-settings"
+      },
+      environment: {
+        values: {
+          INTERVIEW_TEST_UNICODE: "snowman-☃-emoji-😀"
+        }
       }
     }]);
 
@@ -292,6 +297,7 @@ describe("supervised one-shot process execution", () => {
       readonly mutationExisted: boolean;
       readonly supervisorVariablesExisted: boolean;
       readonly powershellModulePathExisted: boolean;
+      readonly unicodeEnvironmentValue?: string;
     };
     const secondPayload = JSON.parse(second.stdout) as typeof firstPayload;
 
@@ -306,6 +312,8 @@ describe("supervised one-shot process execution", () => {
     expect(firstPayload.temp).not.toBe(secondPayload.temp);
     expect(firstPayload.supervisorVariablesExisted).toBe(false);
     expect(secondPayload.supervisorVariablesExisted).toBe(false);
+    expect(firstPayload.unicodeEnvironmentValue).toBe("snowman-☃-emoji-😀");
+    expect(secondPayload.unicodeEnvironmentValue).toBe("snowman-☃-emoji-😀");
     if (process.platform === "win32") {
       expect(firstPayload.powershellModulePathExisted).toBe(false);
       expect(secondPayload.powershellModulePathExisted).toBe(false);
@@ -315,6 +323,24 @@ describe("supervised one-shot process execution", () => {
     expect(existsSync(firstPayload.cwd)).toBe(false);
     expect(existsSync(secondPayload.cwd)).toBe(false);
   });
+
+  it.runIf(process.platform === "win32")(
+    "rejects provider environment keys reserved for the trusted Windows supervisor",
+    async () => {
+      const runtime = new SupervisedProcessRunner([{
+        id: "fixture",
+        executable: process.execPath,
+        environment: {
+          values: {
+            INTERVIEW_SUPERVISED_PROVIDER_ENVIRONMENT: "attacker-controlled"
+          }
+        }
+      }]);
+
+      await expect(runtime.execute(request([FIXTURE, "echo"])))
+        .rejects.toMatchObject({ code: "INVALID_DEFINITION" });
+    }
+  );
 
   it("rejects hostile isolated-home definitions without invoking accessors", () => {
     let getterCalls = 0;
