@@ -281,6 +281,7 @@ public static class InterviewJobSupervisor
         bool resumed = false;
         try
         {
+            Console.Error.WriteLine("INTERVIEW_SUPERVISOR_STAGE:RUN_ENTER");
             using (FileStream executableLock = new FileStream(
                 executable,
                 FileMode.Open,
@@ -304,6 +305,7 @@ public static class InterviewJobSupervisor
                     throw new InvalidOperationException("stdin identity mismatch");
                 }
                 stdinLock.Position = 0;
+                Console.Error.WriteLine("INTERVIEW_SUPERVISOR_STAGE:INPUT_OK");
 
                 string actualSha256 = Sha256Hex(executableLock);
                 if (!String.Equals(
@@ -314,6 +316,7 @@ public static class InterviewJobSupervisor
                     throw new InvalidOperationException("executable identity mismatch");
                 }
 
+                Console.Error.WriteLine("INTERVIEW_SUPERVISOR_STAGE:EXE_OK");
                 job = CreateJobObjectW(IntPtr.Zero, null);
             if (job == IntPtr.Zero)
                 throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
@@ -339,6 +342,7 @@ public static class InterviewJobSupervisor
                 Marshal.FreeHGlobal(limitsPointer);
             }
 
+            Console.Error.WriteLine("INTERVIEW_SUPERVISOR_STAGE:JOB_OK");
             IntPtr childStdin = IntPtr.Zero;
             IntPtr childStdout = IntPtr.Zero;
             IntPtr childStderr = IntPtr.Zero;
@@ -356,6 +360,7 @@ public static class InterviewJobSupervisor
                 childStdout = DuplicateInheritable(GetStdHandle(STD_OUTPUT_HANDLE));
                 childStderr = DuplicateInheritable(GetStdHandle(STD_ERROR_HANDLE));
 
+                Console.Error.WriteLine("INTERVIEW_SUPERVISOR_STAGE:HANDLES_OK");
                 startup.StartupInfo.cb = (uint)Marshal.SizeOf(typeof(STARTUPINFOEX));
                 startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
                 startup.StartupInfo.hStdInput = childStdin;
@@ -411,6 +416,7 @@ public static class InterviewJobSupervisor
                 }
                 process = info.hProcess;
                 thread = info.hThread;
+                Console.Error.WriteLine("INTERVIEW_SUPERVISOR_STAGE:CREATE_OK");
             }
             finally
             {
@@ -442,12 +448,14 @@ public static class InterviewJobSupervisor
                 throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
             }
 
+            Console.Error.WriteLine("INTERVIEW_SUPERVISOR_STAGE:ASSIGN_OK");
             if (ResumeThread(thread) == 0xFFFFFFFF)
             {
                 TerminateProcess(process, 194);
                 throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
             }
             resumed = true;
+            Console.Error.WriteLine("INTERVIEW_SUPERVISOR_STAGE:RESUME_OK");
 
             if (WaitForSingleObject(process, INFINITE) != WAIT_OBJECT_0)
             {
@@ -455,6 +463,7 @@ public static class InterviewJobSupervisor
                 throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
             }
 
+            Console.Error.WriteLine("INTERVIEW_SUPERVISOR_STAGE:WAIT_OK");
             uint exitCode;
             if (!GetExitCodeProcess(process, out exitCode))
                 throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
