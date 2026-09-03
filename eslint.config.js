@@ -35,7 +35,11 @@ export default tseslint.config(
     }
   },
   {
-    files: ["tests/fixtures/local-runtime-worker.mjs", "tests/fixtures/local-model-http-worker.mjs"],
+    files: [
+      "tests/fixtures/local-runtime-worker.mjs",
+      "tests/fixtures/local-model-http-worker.mjs",
+      "tests/fixtures/supervised-process-worker.mjs"
+    ],
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: {
       globals: {

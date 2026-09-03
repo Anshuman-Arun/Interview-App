@@ -4,10 +4,13 @@ import {
 
 const REFLECT_APPLY_INTRINSIC = Reflect.apply;
 const SET_CONSTRUCTOR_INTRINSIC = Set;
+const VALIDATED_CAPABILITY_SNAPSHOTS = new WeakSet<object>();
 
 /* eslint-disable @typescript-eslint/unbound-method -- Captured Set methods are invoked only via Reflect.apply. */
 const SET_HAS_INTRINSIC = Set.prototype.has;
 const SET_ADD_INTRINSIC = Set.prototype.add;
+const WEAK_SET_ADD_INTRINSIC = WeakSet.prototype.add;
+const WEAK_SET_HAS_INTRINSIC = WeakSet.prototype.has;
 /* eslint-enable @typescript-eslint/unbound-method */
 
 type InputModality = "text" | "image";
@@ -79,5 +82,23 @@ export function snapshotValidatedModelCapabilities(
     },
     dataUse: capabilities.dataUse
   };
-  return Object.freeze(snapshot);
+  const frozen = Object.freeze(snapshot);
+  REFLECT_APPLY_INTRINSIC(
+    WEAK_SET_ADD_INTRINSIC,
+    VALIDATED_CAPABILITY_SNAPSHOTS,
+    [frozen]
+  );
+  return frozen;
+}
+
+export function isValidatedModelCapabilitiesSnapshot(
+  value: unknown
+): value is ModelCapabilities {
+  if (typeof value !== "object" || value === null) return false;
+  const result: unknown = REFLECT_APPLY_INTRINSIC(
+    WEAK_SET_HAS_INTRINSIC,
+    VALIDATED_CAPABILITY_SNAPSHOTS,
+    [value]
+  );
+  return result === true;
 }

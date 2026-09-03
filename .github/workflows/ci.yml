@@ -86,6 +86,9 @@ jobs:
       - name: Run Electron desktop bootstrap tests
         run: pnpm test:desktop
 
+      - name: Run supervised provider process safety tests
+        run: pnpm exec vitest run tests/supervised-process.test.ts
+
       - name: Run complete Vitest suite
         # The CI variant keeps full discovery while bounding file-level
         # parallelism for GitHub-hosted Windows runner stability.

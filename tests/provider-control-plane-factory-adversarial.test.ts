@@ -497,7 +497,7 @@ describe("registry provenance and batch input hardening", () => {
 
       const builtInRegistry = registerBuiltInProviders(new ProviderRegistry());
       expect(builtInRegistry.enumerateProviders().map((provider) => provider.id))
-        .toEqual(["gemini-api", "mock-model"]);
+        .toEqual(["antigravity-cli", "gemini-api", "mock-model"]);
     } finally {
       if (originalGetProviderCall === undefined) {
         Reflect.deleteProperty(getProviderMethod, "call");
@@ -545,7 +545,7 @@ describe("registry provenance and batch input hardening", () => {
 
     const registry = registerBuiltInProviders(new HostileRegistry());
     expect(registry.enumerateProviders().map((provider) => provider.id))
-      .toEqual(["gemini-api", "mock-model"]);
+      .toEqual(["antigravity-cli", "gemini-api", "mock-model"]);
   });
 
   it("rejects accessor-backed registration batches without invoking accessors", () => {

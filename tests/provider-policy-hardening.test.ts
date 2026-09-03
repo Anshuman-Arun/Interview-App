@@ -174,6 +174,137 @@ describe("provider policy hardening", () => {
     }), "INVALID_BILLING_VERIFICATION");
   });
 
+  it.each([
+    {
+      name: "oversized enforcement mechanism",
+      value: {
+        ...verification(),
+        enforcementMechanism: "x".repeat(2_049)
+      }
+    },
+    {
+      name: "oversized evidence adapter version",
+      value: {
+        ...verification(),
+        adapterVersion: "x".repeat(257)
+      }
+    },
+    {
+      name: "oversized timestamp text",
+      value: {
+        ...verification(),
+        verifiedAt: "2".repeat(65)
+      }
+    }
+  ])("bounds billing verification text before schema parsing: $name", ({ value }) => {
+    expectPolicyError(() => assertProviderPermitted({
+      policy: noMeteredPolicy,
+      capabilities: localCapabilities,
+      adapterVersion: ADAPTER_VERSION,
+      now: NOW,
+      billingVerification: value
+    }), "INVALID_BILLING_VERIFICATION");
+  });
+
+  it("rejects accessor and Proxy policy/billing inputs without invoking traps", () => {
+    let getterCalls = 0;
+    const accessorPolicy = Object.defineProperty(
+      {
+        maximumDataUse: "LOCAL_ONLY",
+        billingVerificationMaxAgeMs: 1_000
+      },
+      "allowMeteredUsage",
+      {
+        enumerable: true,
+        get() {
+          getterCalls += 1;
+          return false;
+        }
+      }
+    );
+    expectPolicyError(() => assertProviderPermitted({
+      policy: accessorPolicy,
+      capabilities: localCapabilities,
+      adapterVersion: ADAPTER_VERSION,
+      now: NOW,
+      billingVerification: verification()
+    }), "INVALID_POLICY");
+    expect(getterCalls).toBe(0);
+
+    let policyProxyTraps = 0;
+    const policyProxy = new Proxy(noMeteredPolicy, {
+      ownKeys() {
+        policyProxyTraps += 1;
+        throw new Error("must-not-run");
+      },
+      getOwnPropertyDescriptor() {
+        policyProxyTraps += 1;
+        throw new Error("must-not-run");
+      }
+    });
+    expectPolicyError(() => assertProviderPermitted({
+      policy: policyProxy,
+      capabilities: localCapabilities,
+      adapterVersion: ADAPTER_VERSION,
+      now: NOW,
+      billingVerification: verification()
+    }), "INVALID_POLICY");
+    expect(policyProxyTraps).toBe(0);
+
+    let billingProxyTraps = 0;
+    const billingProxy = new Proxy(verification(), {
+      ownKeys() {
+        billingProxyTraps += 1;
+        throw new Error("must-not-run");
+      },
+      getOwnPropertyDescriptor() {
+        billingProxyTraps += 1;
+        throw new Error("must-not-run");
+      }
+    });
+    expectPolicyError(() => assertProviderPermitted({
+      policy: noMeteredPolicy,
+      capabilities: localCapabilities,
+      adapterVersion: ADAPTER_VERSION,
+      now: NOW,
+      billingVerification: billingProxy
+    }), "INVALID_BILLING_VERIFICATION");
+    expect(billingProxyTraps).toBe(0);
+  });
+
+  it("fails closed for invalid or Proxy-backed provider data-use capabilities", () => {
+    expectPolicyError(() => assertProviderPermitted({
+      policy: {
+        ...noMeteredPolicy,
+        allowMeteredUsage: true
+      },
+      capabilities: {
+        ...localCapabilities,
+        dataUse: "UNRECOGNIZED"
+      } as unknown as ModelCapabilities,
+      adapterVersion: ADAPTER_VERSION,
+      now: NOW
+    }), "INVALID_CAPABILITIES");
+
+    let capabilityProxyTraps = 0;
+    const capabilityProxy = new Proxy(localCapabilities, {
+      getOwnPropertyDescriptor() {
+        capabilityProxyTraps += 1;
+        throw new Error("must-not-run");
+      }
+    });
+    expectPolicyError(() => assertProviderPermitted({
+      policy: {
+        ...noMeteredPolicy,
+        allowMeteredUsage: true
+      },
+      capabilities: capabilityProxy,
+      adapterVersion: ADAPTER_VERSION,
+      now: NOW
+    }), "INVALID_CAPABILITIES");
+    expect(capabilityProxyTraps).toBe(0);
+  });
+
   it.each([0, -1, Number.POSITIVE_INFINITY, Number.NaN])(
     "rejects invalid billing-verification max age %s",
     (billingVerificationMaxAgeMs) => {
@@ -228,6 +359,18 @@ describe("provider policy hardening", () => {
       },
       capabilities: localCapabilities,
       adapterVersion: "   ",
+      now: NOW
+    }), "INVALID_ADAPTER_VERSION");
+  });
+
+  it("rejects oversized adapter versions even when metered use is allowed", () => {
+    expectPolicyError(() => assertProviderPermitted({
+      policy: {
+        ...noMeteredPolicy,
+        allowMeteredUsage: true
+      },
+      capabilities: localCapabilities,
+      adapterVersion: "x".repeat(257),
       now: NOW
     }), "INVALID_ADAPTER_VERSION");
   });

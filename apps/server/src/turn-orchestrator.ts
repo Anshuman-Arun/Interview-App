@@ -161,6 +161,10 @@ export class ServerTurnOrchestrator {
     );
   }
 
+  public async drainProviderRuntime(): Promise<void> {
+    await this.providerRuntime.drain();
+  }
+
   public async recoverPendingTurns(
     sessionId: SessionId
   ): Promise<TurnRecoveryDisposition> {

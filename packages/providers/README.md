@@ -14,7 +14,7 @@ The control plane provides:
 - informational readiness states;
 - deterministic capability requirement matching and configuration resolution;
 - adapter-factory resolution without executing interview turns;
-- built-in metadata/factories for the existing mock and Gemini API adapters;
+- built-in metadata/factories for the mock, Gemini API, and supervised Antigravity CLI adapters;
 - plain diagnostics metadata and deterministic configuration fingerprint material.
 
 ## Safety boundary
@@ -53,13 +53,74 @@ Raw credentials are obtained only at runtime through `ProviderSecretResolver`. F
 
 - `mock-model / mock-default`
 - `gemini-api / gemini-2.5-flash`
+- `antigravity-cli / gemini-3.7-flash-medium`
 
-The Gemini definition describes the existing adapter only. Registration does not mark Gemini
-as production-approved, does not bypass provider policy, and does not change its existing
+The Gemini definition describes the existing API-key adapter only. Registration does not mark
+Gemini as production-approved, does not bypass provider policy, and does not change its existing
 fail-closed behavior under no-metered policy.
 
-No automatic routing, fallback, escalation, settings UI, or interview-runtime integration is
-implemented here.
+The Antigravity definition describes the documented headless `agy` CLI contract rather than
+a generic shell command. It uses one fresh process per reasoning turn, one `stream-json`
+`user` event on stdin, native JSON-schema structured output, and no `--continue` or
+`--conversation` state. The adapter rejects tool/subagent events and validates the terminal
+`structured_output` again with the application-owned `InterviewerProposalSchema`. Process
+execution is injected by the trusted server/local-runtime layer; provider configuration cannot
+choose an executable path or arbitrary process environment.
+
+Antigravity authentication is deliberately outside provider/session state. The trusted runtime
+relies only on the CLI's documented OS-native keyring sign-in and does not inspect, copy, persist,
+or return those credentials.
+Before using this provider, run `agy` interactively once outside Interview App and complete
+sign-in. A supervised/headless interview does not perform onboarding; if cached authentication is
+unavailable, the CLI exits and the turn fails closed.
+
+On Windows, validate that the production isolation boundary can still recover that cached
+Credential Manager session without starting a model turn:
+
+```bash
+corepack pnpm smoke:antigravity-readiness
+```
+
+The production executor itself performs a cached zero-turn preflight before it can launch any
+interview turn: it starts the exact stream-json argument set, sends a deliberately unsupported
+control message, and requires the pinned `init` envelope (empty tool list, strict permission
+mode, exact agent/model/schema) followed by the documented exit-code-2, zero-turn, zero-token
+`ERROR` result. This verifies the resolved tool surface before model inference.
+
+The manual smoke invokes only that production readiness verifier. It does **not** run `/usage`,
+`/quota`, or any prompt-like print command, because current upstream Antigravity does not
+document those slash commands as a safe non-interactive authentication probe. The smoke therefore
+verifies the exact CLI/version/profile/tool boundary with zero inference and zero quota use, while
+cached authentication remains a separate prerequisite verified by running `agy` interactively
+once before the first real interview turn. Each supervised turn receives a fresh temporary CLI profile rather
+than the user's normal `~/.gemini` profile. That profile pins strict tool review,
+non-workspace access off, AI-credit fallback off, telemetry off, an empty custom-agent tool list,
+and deny-all fine-grained permission rules. The concrete Windows path does not depend on
+Antigravity terminal sandbox mode because that CLI feature is not currently supported on Windows.
+The isolated profile does not inherit the user's normal CLI customizations; instead it contains
+one application-owned documented custom agent with an empty tool list and subagent invocation
+disabled. Runtime admission additionally requires the CLI's `init.tools` list to be empty.
+The CLI self-updater is disabled for the supervised child.
+
+Antigravity remains a remote inference path even though the client process is local. Its model
+capabilities therefore declare both local process execution and remote execution, conservative
+remote data use, and unknown metered-execution status. The standalone adapter remains fail-closed
+under no-metered policy unless a trusted runtime supplies current billing evidence.
+
+The concrete Windows application runtime requires the audited `agy 1.1.25` stream-json
+contract, including the later 1.1.x fixes for restored-keyring account state,
+headless stream integrity, and piped stdout/stderr shutdown. Its restricted profile forces
+AI-credit fallback off, leaves `modelProvider` absent, and does not inherit API-key or
+custom-endpoint environment variables. The CLI still authenticates through its OS-native
+account keyring, which can represent subscription, enterprise, or Google Cloud project modes.
+Those local profile restrictions therefore do not prove that incremental spend is technically
+impossible. The production runtime does not fabricate `ACCOUNT_QUOTA` evidence; default
+no-metered policy fails closed before remote inference. Personal use requires the trusted-host
+opt-in `INTERVIEW_ALLOW_METERED_REMOTE_REASONING=1`, which permits metered-unknown execution
+without weakening the separately enforced remote data-use boundary.
+
+No automatic routing, fallback, escalation, provider settings UI, or secret-bearing session
+configuration is implemented here.
 
 
 ## Registration and factory hardening
@@ -75,3 +136,23 @@ checks the returned adapter's execution identity/capabilities against registered
 the existing `ReasoningProvider` interface exposes a corresponding fact. It still does not call
 `createSession()`; production session creation remains exclusively behind the existing provider
 execution/policy boundary.
+
+
+## Supervised CLI trust boundary
+
+`SupervisedCliReasoningProvider` is the reusable provider-side half of the CLI boundary. It
+knows only a narrow injected executor contract: bounded argument strings, bounded stdin,
+bounded stdout/stderr byte budgets, an execution deadline, cancellation signal, and a
+process-start acknowledgement. It cannot import child-process APIs or select an executable.
+
+The trusted process half lives in `packages/local-runtime`. The concrete Antigravity desktop
+runtime is currently Windows-only: Windows execution uses an application-owned Job Object
+bootstrap so the provider is created suspended, assigned to a kill-on-job-close containment
+object before it executes, and given only stdin/stdout/stderr handles. Non-Windows application
+composition fails closed instead of claiming POSIX process-group containment is equivalent for
+hostile descendants that can re-session themselves.
+
+This split preserves the frozen architecture rule that provider adapters are untrusted
+realization engines and do not gain general filesystem/process authority. Future Ollama,
+llama.cpp, or Codex-like adapters can reuse the same executor seam while defining their own
+application-owned executable identities and exact output protocols.

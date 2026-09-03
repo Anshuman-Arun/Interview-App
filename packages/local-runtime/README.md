@@ -44,6 +44,53 @@ The default policy is `NEVER`. `ON_FAILURE` requires an explicit finite retry bu
 
 Node core cannot create Windows Job Objects, and no portable API can retain a durable Windows tree handle after the root process exits. Tree-aware `taskkill /T` escalation is therefore verified when escalation owns a live root process; if that mechanism is unavailable, shutdown fails closed rather than treating a root-only kill as proof that descendants are gone. A component with unverified residual-tree cleanup cannot be started again until cleanup can be verified. A Windows root that exits before tree-aware escalation cannot provide the same descendant-absence guarantee through Node core alone. Local components must not daemonize or intentionally leave long-lived descendants behind.
 
+## Supervised one-shot execution
+
+`SupervisedProcessRunner` is a separate one-shot process boundary for adapters that need a
+fresh bounded child process per request rather than a long-lived ready/degraded component.
+
+Executable definitions are registered by trusted application code and snapshotted before use.
+The public execution request identifies only a registered executable ID plus bounded arguments,
+stdin, output budgets, deadline, and cancellation signal; it cannot supply an executable path,
+working directory, environment, or home-profile contents. Executables must be absolute regular
+files and symbolic-link indirection is rejected. If the executable exists at runner construction,
+its device/inode/size/mtime identity is pinned immediately; if it is initially unavailable, the
+first successful execution pins it. Every later execution must match the pinned identity before
+spawn and is checked again immediately after spawn, so upgrades/replacements require an explicit
+application-runtime restart and detectable replacement races fail closed.
+
+Each execution uses `shell: false`, bounded stdin/stdout/stderr, fatal UTF-8 validation for
+returned stdout, and optional private temporary working directories. Definitions may also request
+a fresh isolated home directory populated only with a bounded set of application-owned files.
+Home/profile environment variables are redirected to that temporary directory for the child and
+the directory is removed after every execution, preventing provider conversation/settings state
+from crossing turns through ordinary home-profile files. Stderr content is never returned through
+the result surface. Timeout, cancellation, output-budget violations, unsafe executable
+replacement, and unverifiable isolation cleanup fail closed.
+
+On POSIX, each one-shot process receives its own process group. Cancellation escalates from
+group SIGTERM to SIGKILL, and a normally exiting root is followed by a residual process-group
+check so descendants cannot intentionally remain in that owned group.
+
+On Windows, one-shot executions are launched through an application-owned Windows PowerShell
+bootstrap that creates a kernel Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`. The
+provider image is opened read-only, checked against the application-pinned SHA-256, created
+suspended, re-hashed while still suspended, assigned to the Job Object before it executes, and
+only then resumed. Bootstrap configuration is carried in the private snapshotted child
+environment rather than a mutable temporary control file and is removed before the provider is
+created. A
+`STARTUPINFOEX` handle list restricts inherited handles to stdin/stdout/stderr. Killing or
+crashing the bootstrap closes the sole Job handle and the kernel terminates remaining processes
+in that job, including descendants after the original provider root exits.
+
+The generic POSIX path still uses a dedicated process group and can verify ordinary residual
+members of that group, but it does not claim kernel ownership of descendants that deliberately
+escape into another session. The concrete supervised Antigravity runtime therefore remains
+Windows-only until an equivalently strong non-Windows containment owner is available.
+
+The one-shot boundary is non-authoritative. It does not parse provider semantics, own interview
+state, or decide billing/data-use policy.
+
 ## Relationship to local-compute
 
 `packages/local-compute` keeps its existing bounded NDJSON protocol and admission behavior unchanged in this PR. A later integration can use `LocalRuntimeManager` to own the Python worker process while retaining the existing protocol client, without changing the worker schema or interview semantics.

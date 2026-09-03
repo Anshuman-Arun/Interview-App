@@ -7,7 +7,7 @@ Provider eligibility is decided by application-owned deterministic policy before
 1. whether provider data use is within the configured privacy boundary;
 2. whether the configured billing mode permits the provider.
 
-This slice does not implement or enable any real provider adapter. Provider-specific experiments still have to produce independently audited evidence before they can pass this generic gate.
+The repository now contains real provider adapters, including the supervised Antigravity CLI path and the existing Gemini API path. Registration or runtime availability still does not authorize either provider. Provider-specific execution must pass this generic gate using the adapter's truthful data-use, billing, capability, and cancellation declarations.
 
 ## Data-use ordering
 
@@ -103,7 +103,7 @@ This policy module:
 - does not infer that a provider is safe merely because it is free-labeled;
 - does not weaken data-use policy when metered use is enabled.
 
-Real provider adapters must separately demonstrate the provider-specific enforcement mechanism described by the architecture freeze. This generic gate validates evidence; it does not manufacture that evidence.
+Real provider adapters must separately demonstrate the provider-specific enforcement mechanism described by the architecture freeze. The Antigravity adapter intentionally remains unable to prove spend safety by itself, and the current supervised Windows runtime does not upgrade restricted profile shape into `ACCOUNT_QUOTA` evidence because cached authentication may still select a billable account/project mode. A future runtime may supply proof only if it can technically establish `spendImpossible=true`. This generic gate validates evidence; it does not manufacture that evidence.
 
 ## Execution ordering
 

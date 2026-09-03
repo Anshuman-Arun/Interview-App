@@ -31,7 +31,8 @@
     "test:package:win": "vitest run tests/desktop-packaging.test.ts",
     "verify:package:win": "node scripts/check-packaged-desktop.mjs",
     "package:win": "node scripts/clean-windows-package.mjs && pnpm build:web && pnpm build:desktop && pnpm security:public && npx --yes electron-builder@26.15.3 --win --x64 --dir --publish never && pnpm verify:package:win",
-    "dist:win": "node scripts/clean-windows-package.mjs && pnpm build:web && pnpm build:desktop && pnpm security:public && npx --yes electron-builder@26.15.3 --win nsis --x64 --publish never && pnpm verify:package:win"
+    "dist:win": "node scripts/clean-windows-package.mjs && pnpm build:web && pnpm build:desktop && pnpm security:public && npx --yes electron-builder@26.15.3 --win nsis --x64 --publish never && pnpm verify:package:win",
+    "smoke:antigravity-readiness": "tsx apps/server/src/run-antigravity-readiness.ts"
   },
   "dependencies": {
     "pngjs": "^7.0.0",
