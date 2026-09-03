@@ -524,7 +524,7 @@ describe("Quant workspace public rendering", () => {
     expect(markup).toContain("Submit quote");
     expect(markup).toContain("Public fair value");
     expect(markup).toContain("position limit");
-    expect(markup).toContain('inputmode="decimal"');
+    expect(markup).toContain('inputMode="decimal"');
     expect(markup).not.toContain('type="number"');
     expect(markup).not.toContain("seed");
     expect(markup).not.toContain("futureFlow");
