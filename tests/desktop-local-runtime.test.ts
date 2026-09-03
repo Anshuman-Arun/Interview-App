@@ -173,7 +173,7 @@ describe("desktop local model runtime", () => {
       pythonExecutable?: string;
       workerDefinition(input: {
         readonly componentId: string;
-        readonly component: "speech" | "tts";
+        readonly component: "speech" | "tts" | "vision";
         readonly token: string;
         readonly modelIdentity: string;
         readonly runtimeVersion: string;
@@ -253,10 +253,15 @@ describe("desktop local model runtime", () => {
         state: "UNAVAILABLE",
         reasonCode: "PYTHON_RUNTIME_UNAVAILABLE"
       },
-      vision: {
-        state: "UNAVAILABLE",
-        reasonCode: "NO_PRODUCTION_BACKEND_CONFIGURED"
-      }
+      vision: process.platform === "win32"
+        ? {
+            state: "UNAVAILABLE",
+            reasonCode: "PYTHON_RUNTIME_UNAVAILABLE"
+          }
+        : {
+            state: "UNAVAILABLE",
+            reasonCode: "UNSUPPORTED_RUNTIME_PLATFORM"
+          }
     });
   });
 
@@ -375,7 +380,7 @@ describe("desktop local model runtime", () => {
       },
       vision: {
         state: "UNAVAILABLE",
-        reasonCode: "NO_PRODUCTION_BACKEND_CONFIGURED"
+        reasonCode: "START_CANCELLED"
       }
     });
   });
@@ -439,10 +444,15 @@ describe("desktop local model runtime", () => {
         state: "MISSING_ASSET",
         reasonCode: "TTS_ASSET_MISSING"
       },
-      vision: {
-        state: "UNAVAILABLE",
-        reasonCode: "NO_PRODUCTION_BACKEND_CONFIGURED"
-      }
+      vision: process.platform === "win32"
+        ? {
+            state: "MISSING_ASSET",
+            reasonCode: "VISION_ASSET_MISSING"
+          }
+        : {
+            state: "UNAVAILABLE",
+            reasonCode: "UNSUPPORTED_RUNTIME_PLATFORM"
+          }
     });
   });
 
