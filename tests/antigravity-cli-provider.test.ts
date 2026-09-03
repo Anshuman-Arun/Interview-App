@@ -527,6 +527,29 @@ describe("Antigravity CLI one-turn protocol", () => {
     }
   });
 
+  it("accepts bounded structured output above the former 128 KiB text ceiling", async () => {
+    const largeButBounded: InterviewerProposal = {
+      ...PROPOSAL,
+      boardActions: Array.from({ length: 18 }, (_, index) => ({
+        operation: "write_text" as const,
+        layer: "AI_ANNOTATION" as const,
+        content: `${String(index)}:${"x".repeat(7_500)}`,
+        annotationPurpose: "bounded large-output regression"
+      }))
+    };
+    const stdout = antigravityStream(largeButBounded);
+    expect(new TextEncoder().encode(stdout).byteLength).toBeLessThan(384 * 1024);
+
+    const provider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async () => executionResult(stdout))
+    );
+    const session = await provider.createSession();
+    await expect(collectProposals(
+      session.sendTurn(turnInput({ safe: true }))
+    )).resolves.toEqual([largeButBounded]);
+    await session.close();
+  });
+
   it("preserves a data-method executor receiver without exposing it to the provider", async () => {
     const executor = {
       prefix: "receiver:",
