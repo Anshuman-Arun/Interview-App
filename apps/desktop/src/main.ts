@@ -137,6 +137,9 @@ if (!app.requestSingleInstanceLock()) {
 
 async function startDesktop(): Promise<void> {
   app.setName("Interview App");
+  if (process.platform === "win32") {
+    app.setAppUserModelId("com.anshuman.interviewapp");
+  }
   const mode = resolveDesktopMode(app.isPackaged, process.argv);
   const paths = resolveDesktopPaths({
     cwd: process.cwd(),
