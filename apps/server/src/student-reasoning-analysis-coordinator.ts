@@ -100,10 +100,7 @@ export class StudentReasoningAnalysisCoordinator {
     }
     if (turn.studentText.length === 0) return { status: "SKIPPED", reason: "EMPTY_SOURCE" };
 
-    const profile = resolveOxfordFormalAnalysisProfile({
-      id: state.problem.id,
-      version: state.problem.version
-    });
+    const profile = resolveOxfordFormalAnalysisProfile(state.problem);
     if (profile === undefined) return { status: "SKIPPED", reason: "UNSUPPORTED_PROBLEM" };
 
     let context: SessionAnalysisContext | undefined;
