@@ -429,7 +429,14 @@ export function useInterviewSession(
   }, []);
   const voiceIntegration = useInterviewVoice({
     sessionId,
-    sessionActive: isSessionStarted && sessionStatus === "ACTIVE" && !isPaused,
+    sessionActive:
+      isSessionStarted
+      && sessionStatus === "ACTIVE"
+      && !isPaused
+      && (
+        options.whiteboardAdapter === undefined
+        || whiteboardSync.status === "SYNCED"
+      ),
     voiceBaseUrl,
     authenticatedFetch,
     speaking: isSpeaking,
@@ -555,9 +562,10 @@ export function useInterviewSession(
 
   const synchronizeWhiteboardFor = useCallback(async (
     targetSessionId: SessionId
-  ): Promise<void> => {
+  ): Promise<boolean> => {
     const adapter = options.whiteboardAdapter;
-    if (adapter === undefined || adapter.getEditor() === null) return;
+    if (adapter === undefined) return true;
+    if (adapter.getEditor() === null) return false;
     const coordinator = getBoardSyncCoordinator(targetSessionId);
     const allowBootstrap =
       boardBootstrapSessionRef.current === targetSessionId;
@@ -570,13 +578,17 @@ export function useInterviewSession(
       boardSyncRef.current !== coordinator
       || boardSyncSessionRef.current !== targetSessionId
     ) {
-      return;
+      return false;
     }
     if (allowBootstrap && snapshot.status === "SYNCED") {
       boardBootstrapSessionRef.current = null;
     }
     setWhiteboardSync(snapshot);
-    getVisionScheduler(targetSessionId)?.wake();
+    if (snapshot.status === "SYNCED") {
+      getVisionScheduler(targetSessionId)?.wake();
+      return true;
+    }
+    return false;
   }, [
     getBoardSyncCoordinator,
     getVisionScheduler,
@@ -899,8 +911,9 @@ export function useInterviewSession(
         setProblem(problemView);
         setTranscript([]);
 
+        let whiteboardBound = options.whiteboardAdapter === undefined;
         try {
-          await synchronizeWhiteboardFor(targetSessionId);
+          whiteboardBound = await synchronizeWhiteboardFor(targetSessionId);
         } catch {
           if (sessionTransitionEpochRef.current !== transitionEpoch) return;
           setWhiteboardSync({
@@ -908,10 +921,13 @@ export function useInterviewSession(
             pendingMutationCount: 0,
             reason: "Whiteboard authority synchronization failed"
           });
+          whiteboardBound = false;
         }
         if (sessionTransitionEpochRef.current !== transitionEpoch) return;
-        sessionMutationAdmissionRef.current = true;
-        launchRendererStream(targetSessionId);
+        sessionMutationAdmissionRef.current = whiteboardBound;
+        if (whiteboardBound) {
+          launchRendererStream(targetSessionId);
+        }
       } catch (err) {
         if (sessionTransitionEpochRef.current !== transitionEpoch) return;
         let msg = "Failed to start interview session";
@@ -928,6 +944,7 @@ export function useInterviewSession(
       beginSessionTransition,
       getCommandClient,
       launchRendererStream,
+      options.whiteboardAdapter,
       resetBoardSync,
       sessionId,
       sessionStatus,
@@ -999,8 +1016,9 @@ export function useInterviewSession(
 
         setTranscript(response.history.map(historyEntryToTranscriptItem));
 
+        let whiteboardBound = options.whiteboardAdapter === undefined;
         try {
-          await synchronizeWhiteboardFor(targetSessionId);
+          whiteboardBound = await synchronizeWhiteboardFor(targetSessionId);
         } catch {
           if (sessionTransitionEpochRef.current !== transitionEpoch) return null;
           setWhiteboardSync({
@@ -1008,9 +1026,10 @@ export function useInterviewSession(
             pendingMutationCount: 0,
             reason: "Recovered whiteboard does not have a verified local revision correspondence"
           });
+          whiteboardBound = false;
         }
         if (sessionTransitionEpochRef.current !== transitionEpoch) return null;
-        if (response.status === "ACTIVE") {
+        if (response.status === "ACTIVE" && whiteboardBound) {
           sessionMutationAdmissionRef.current = true;
           launchRendererStream(targetSessionId);
         } else {
@@ -1126,11 +1145,33 @@ export function useInterviewSession(
       sessionId === null
       || sessionStatus !== "ACTIVE"
       || !isSessionStarted
-      || !sessionMutationAdmissionRef.current
+      || isPaused
+      || terminalTransitionInFlightRef.current
     ) return;
-    await synchronizeWhiteboardFor(sessionId);
+
+    const targetSessionId = sessionId;
+    const transitionEpoch = sessionTransitionEpochRef.current;
+    const wasAdmitted = sessionMutationAdmissionRef.current;
+    const whiteboardBound = await synchronizeWhiteboardFor(targetSessionId);
+    if (
+      !whiteboardBound
+      || sessionTransitionEpochRef.current !== transitionEpoch
+      || sessionId !== targetSessionId
+      || sessionStatus !== "ACTIVE"
+      || isPaused
+      || terminalTransitionInFlightRef.current
+    ) {
+      return;
+    }
+
+    if (!wasAdmitted) {
+      sessionMutationAdmissionRef.current = true;
+      launchRendererStream(targetSessionId);
+    }
   }, [
+    isPaused,
     isSessionStarted,
+    launchRendererStream,
     sessionId,
     sessionStatus,
     synchronizeWhiteboardFor
