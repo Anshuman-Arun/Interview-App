@@ -157,6 +157,8 @@ describe("Windows desktop packaging contract", () => {
     expect(main).toContain("Upgraded package did not preserve the prior authoritative session");
     expect(smoke).toContain("--packaged-smoke-test");
     expect(smoke).toContain("--packaged-single-instance-smoke-host");
+    expect(smoke).toContain("$instanceHost");
+    expect(smoke).not.toContain("$host =");
     expect(installer).toContain("preserve-across-upgrade-and-uninstall");
     expect(installer).toContain("PriorInstaller");
     expect(installer).toContain("Versioned upgrade did not replace");
