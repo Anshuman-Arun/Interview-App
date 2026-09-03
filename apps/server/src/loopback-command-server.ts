@@ -602,10 +602,7 @@ export class LoopbackCommandServer {
           requestId: command.requestId,
           sessionId: command.sessionId,
           configuration: composition.configuration,
-          configurationSource:
-            writer.getState().configuration === undefined
-              ? "LEGACY_COMPATIBILITY"
-              : "CONFIGURED",
+          configurationSource: this.options.sessions.getConfigurationSource(command.sessionId),
           ...(problem === undefined ? {} : { problem })
         };
       }
