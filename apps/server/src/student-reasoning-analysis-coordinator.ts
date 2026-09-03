@@ -65,7 +65,7 @@ export class StudentReasoningAnalysisCoordinator {
   public constructor(
     private readonly sessions: SessionRecoveryCoordinator,
     private readonly provider: FormalInterpretationProvider = new UnavailableFormalInterpretationProvider(),
-    private readonly timeoutMs = DEFAULT_STUDENT_REASONING_ANALYSIS_TIMEOUT_MS
+    private readonly timeoutMs: number = DEFAULT_STUDENT_REASONING_ANALYSIS_TIMEOUT_MS
   ) {
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30_000) {
       throw new Error("Student reasoning analysis timeout must be a bounded positive integer");
