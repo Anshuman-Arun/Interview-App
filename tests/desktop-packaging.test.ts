@@ -162,6 +162,9 @@ describe("Windows desktop packaging contract", () => {
     expect(smoke).toContain("--packaged-single-instance-smoke-host");
     expect(smoke).toContain("$instanceHost");
     expect(smoke).not.toContain("$host =");
+    expect(smoke).toContain("Get-PackagedAppPids");
+    expect(smoke).toContain("taskkill.exe /PID $Process.Id /T /F");
+    expect(smoke).toContain("Packaged shutdown left Electron process descendants");
     expect(installer).toContain("preserve-across-upgrade-and-uninstall");
     expect(installer).toContain("PriorInstaller");
     expect(installer).toContain("Resolve-InstalledExecutable");
