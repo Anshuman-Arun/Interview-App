@@ -61,7 +61,7 @@ function antigravityStream(
       init: {
         cwd: "/isolated",
         tools: [],
-        permission_mode: "request-review",
+        permission_mode: "strict",
         model: ANTIGRAVITY_CLI_MODEL_ID,
         agent: ANTIGRAVITY_CLI_AGENT_ID,
         json_schema: ANTIGRAVITY_CLI_PROPOSAL_SCHEMA
@@ -453,19 +453,23 @@ describe("Antigravity CLI one-turn protocol", () => {
         '"event":"init","__proto__":{"polluted":true}'
       ),
       antigravityStream().replace(
-        '"permission_mode":"request-review"',
+        '"permission_mode":"strict"',
+        '"permission_mode":"request-review"'
+      ),
+      antigravityStream().replace(
+        '"permission_mode":"strict"',
         '"permission_mode":"always-proceed"'
       ),
       antigravityStream().replace(
-        '"permission_mode":"request-review"',
+        '"permission_mode":"strict"',
         '"permission_mode":"always-proceed","permission_mode":"request-review"'
       ),
       antigravityStream().replace(
-        '"permission_mode":"request-review"',
+        '"permission_mode":"strict"',
         '"permissi\\u006fn_mode":"always-proceed","permission_mode":"request-review"'
       ),
       antigravityStream().replace(
-        '"permission_mode":"request-review"',
+        '"permission_mode":"strict"',
         '"permission_mode":"proceed-in-sandbox"'
       ),
       antigravityStream().replace(
