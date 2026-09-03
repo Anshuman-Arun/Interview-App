@@ -69,7 +69,12 @@ function setSelect(testId: string, value: string): void {
   if (!(element instanceof HTMLSelectElement)) {
     throw new Error(`Expected select ${testId}`);
   }
-  element.value = value;
+  const setter = Object.getOwnPropertyDescriptor(
+    HTMLSelectElement.prototype,
+    "value"
+  )?.set?.bind(element);
+  if (setter === undefined) throw new Error("select value setter unavailable");
+  setter(value);
   element.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
@@ -80,9 +85,13 @@ function setInput(testId: string, value: string): void {
   if (!(element instanceof HTMLInputElement)) {
     throw new Error(`Expected input ${testId}`);
   }
-  element.value = value;
+  const setter = Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value"
+  )?.set?.bind(element);
+  if (setter === undefined) throw new Error("input value setter unavailable");
+  setter(value);
   element.dispatchEvent(new Event("input", { bubbles: true }));
-  element.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
 describe("configured interview setup product flow", () => {
