@@ -143,8 +143,8 @@ export class ProviderRuntimeResolver {
     inputSelection?: ProviderSelectionReference
   ): Promise<ProviderLaunchOption> {
     const selection = snapshotProviderSelection(inputSelection);
-    let provider;
-    let model;
+    let provider: ReturnType<ProviderRegistry["getProvider"]>;
+    let model: ReturnType<ProviderRegistry["getModel"]>;
     try {
       provider = this.registry.getProvider(selection.providerId);
       model = this.registry.getModel(selection.providerId, selection.modelId);
@@ -172,6 +172,20 @@ export class ProviderRuntimeResolver {
     }
 
     const configuration = composeProviderConfiguration(selection, runtimeConfiguration);
+    let resolved: ReturnType<typeof resolveProviderConfiguration>;
+    try {
+      resolved = resolveProviderConfiguration({
+        registry: this.registry,
+        configuration,
+        requirements: ["TEXT_GENERATION"]
+      });
+    } catch {
+      return ProviderLaunchOptionSchema.parse({
+        ...base,
+        availability: "UNAVAILABLE",
+        reason: "CAPABILITY_UNAVAILABLE"
+      });
+    }
     const readiness = await evaluateProviderReadiness({
       registry: this.registry,
       configuration,
@@ -211,7 +225,13 @@ export class ProviderRuntimeResolver {
 
     if (!(selection.providerId === "mock-model" && selection.modelId === "mock-default")) {
       try {
-        await invokeRuntimeSource(this.adapterRuntimeOperation, selection);
+        const runtime = await invokeRuntimeSource(this.adapterRuntimeOperation, selection);
+        const factory = resolveAdapterFactory(resolved);
+        await factory.createAdapter({
+          resolved,
+          ...(this.secretResolver === undefined ? {} : { secretResolver: this.secretResolver }),
+          ...(runtime === undefined ? {} : { runtime })
+        });
       } catch {
         return ProviderLaunchOptionSchema.parse({
           ...base,
