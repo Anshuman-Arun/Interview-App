@@ -27,27 +27,27 @@ const selection: ProviderSelectionReference = {
 const corpus = Object.freeze([
   {
     problemId: "oxford-domino-chessboard",
-    text: "There are 64 squares, so 64 divided by 2 equals 32."
+    text: "There are 32 squares of each color; removing two same-colored corners leaves 30 of that color."
   },
   {
     problemId: "oxford-euclid-primes",
-    text: "Two divides four."
+    text: "For the concrete list 2, 3, and 5, the product plus one is 31, which leaves remainder 1 modulo 2."
   },
   {
     problemId: "oxford-prefix-sums-mod-n",
-    text: "Three divides six."
+    text: "For n = 5, two prefix sums are 12 and 7, so their difference 5 is divisible by 5."
   },
   {
     problemId: "oxford-triangle-medians",
-    text: "Two thirds equals 2 divided by 3."
+    text: "The centroid lies two thirds of the way from a vertex along each median, giving the 2 to 1 ratio."
   },
   {
     problemId: "oxford-divisibility-chain",
-    text: "Three divides twelve."
+    text: "The chosen numbers 6 and 24 have the same odd part, and 6 divides 24."
   },
   {
     problemId: "oxford-domino-chessboard",
-    text: "Maybe induction would work here."
+    text: "Maybe the checkerboard coloring is useful, but I am not sure what arithmetic claim follows."
   }
 ]);
 
