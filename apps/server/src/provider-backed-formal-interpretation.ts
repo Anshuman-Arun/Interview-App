@@ -113,7 +113,7 @@ export class ProviderBackedFormalInterpretationProvider implements FormalInterpr
           provider: resolution.provider,
           policy: resolution.policy
         });
-        if (record.controller.signal.aborted) return abstention(request);
+        if (abortRequested(record.controller.signal)) return abstention(request);
 
         const executor = resolveSelectedSupervisedExecutor(
           this.adapterRuntimeSource,
@@ -130,7 +130,7 @@ export class ProviderBackedFormalInterpretationProvider implements FormalInterpr
           context,
           signal: record.controller.signal
         });
-        return record.controller.signal.aborted ? abstention(request) : result;
+        return abortRequested(record.controller.signal) ? abstention(request) : result;
       } finally {
         if (admissionSession !== undefined) {
           await admissionSession.close().catch(() => undefined);
