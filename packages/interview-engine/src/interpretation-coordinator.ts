@@ -297,8 +297,12 @@ function providerResultExceedsStructuralBounds(input: unknown): boolean {
     return source !== undefined
       && exceedsArrayBound(source.eventIds, MAX_FORMAL_INTERPRETATION_SOURCE_EVENTS);
   });
-  if (exceedsCandidateBounds) return true;
+  return exceedsCandidateBounds;
+}
 
+function validatedProviderResultExceedsByteBound(
+  result: InterpretationProviderResult
+): boolean {
   const serialized = JSON.stringify(result);
   return new TextEncoder().encode(serialized).byteLength
     > MAX_FORMAL_INTERPRETATION_PROVIDER_OUTPUT_BYTES;
@@ -566,6 +570,14 @@ export class InterpretationCoordinator {
         "INVALID_PROVIDER_OUTPUT",
         "MALFORMED_PROVIDER_RESULT",
         0,
+        request.requestId
+      ));
+    }
+    if (validatedProviderResultExceedsByteBound(providerResult.data)) {
+      return this.finishFailure(failed(
+        "RESOURCE_LIMIT",
+        "RESOURCE_LIMIT",
+        providerResult.data.candidates.length,
         request.requestId
       ));
     }
