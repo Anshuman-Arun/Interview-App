@@ -105,6 +105,12 @@ export const VerificationAdmissionResultSchema = z.discriminatedUnion("accepted"
 ]);
 export type VerificationAdmissionResult = z.infer<typeof VerificationAdmissionResultSchema>;
 
+export const PendingVerificationDiscardResultSchema = z.object({
+  verificationRequestId: RequestIdSchema,
+  discarded: z.boolean()
+}).strict();
+export type PendingVerificationDiscardResult = z.infer<typeof PendingVerificationDiscardResultSchema>;
+
 type Recomputed =
   | { readonly ok: true; readonly result: VerificationResult }
   | { readonly ok: false; readonly reason: "VERIFIER_EXECUTION_FAILED" | "VERIFIER_OUTPUT_INVALID" };
@@ -372,6 +378,53 @@ export class VerificationCoordinator {
           }
         }],
         result: workItem
+      };
+    });
+  }
+
+  public discardPendingVerification(input: {
+    readonly verificationRequestId: RequestId;
+    readonly reason: string;
+  }) {
+    const verificationRequestId = RequestIdSchema.parse(input.verificationRequestId);
+    const reason = z.string().trim().min(1).max(240).parse(input.reason);
+    const snapshot = this.writer.getState().verificationRequests[verificationRequestId];
+    const envelope = createCommandEnvelope({
+      sessionId: this.writer.sessionId,
+      producer: "verification-coordinator",
+      correlationId: verificationRequestId,
+      ...(snapshot?.basis.inputEpisodeId === undefined
+        ? {}
+        : { inputEpisodeId: snapshot.basis.inputEpisodeId }),
+      ...(snapshot?.basis.turnId === undefined ? {} : { turnId: snapshot.basis.turnId }),
+      ...(snapshot === undefined ? {} : {
+        contextEpoch: snapshot.basis.contextEpoch,
+        sourceRevision: snapshot.basis.committedInputSequence
+      })
+    });
+
+    return this.writer.execute(envelope, {
+      operation: "DISCARD_PENDING_VERIFICATION",
+      payload: { verificationRequestId, reason }
+    }, PendingVerificationDiscardResultSchema, (state) => {
+      const request = state.verificationRequests[verificationRequestId];
+      if (
+        request === undefined
+        || request.status !== "PENDING"
+        || !this.isScopeAuthorized(request.verifier, request.evidenceKey)
+      ) {
+        return {
+          drafts: [],
+          result: { verificationRequestId, discarded: false }
+        };
+      }
+      return {
+        drafts: [{
+          source: "APPLICATION" as const,
+          type: "VERIFICATION_RESULT_DISCARDED" as const,
+          payload: { verificationRequestId, reason }
+        }],
+        result: { verificationRequestId, discarded: true }
       };
     });
   }
