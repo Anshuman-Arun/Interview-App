@@ -30,7 +30,7 @@ const MAX_VISION_WORKER_RESPONSE_BYTES = 16 * 1024;
 const VISION_WORKER_TIMEOUT_MS = 60_000;
 
 export const LOCAL_VISION_RUNTIME_VERSION =
-  "onnxruntime/1.29.0;numpy/2.5.2;pillow/12.3.0;tokenizers/0.23.1;vision/2";
+  "onnxruntime/1.29.0;numpy/2.5.2;pillow/12.3.0;tokenizers/0.23.1;vision/3";
 export const LOCAL_VISION_MODEL_IDENTITY = VISION_WORKER_MODEL_IDENTITY;
 
 const LOCAL_VISION_PROVENANCE: VisionBackendProvenance =
