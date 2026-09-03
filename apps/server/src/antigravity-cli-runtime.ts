@@ -147,7 +147,12 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
       });
     }
   });
-  // Profile isolation disables AI-credit fallback and inherited API-key/custom-endpoint\n  // configuration, but cached authentication can still select a subscription, enterprise,\n  // or Google Cloud project billing mode. Do not fabricate spend-impossible evidence.\n  // The default no-metered policy therefore rejects before remote inference; explicit\n  // trusted-host opt-in is required for this provider.\n  const runtime = Object.freeze({ executor });\n
+  // Profile isolation disables AI-credit fallback and inherited API-key/custom-endpoint
+  // configuration, but cached authentication can still select a subscription, enterprise,
+  // or Google Cloud project billing mode. Do not fabricate spend-impossible evidence.
+  // The default no-metered policy therefore rejects before remote inference; explicit
+  // trusted-host opt-in is required for this provider.
+  const runtime = Object.freeze({ executor });
   return Object.freeze({
     resolveRuntime(selection: ProviderSelectionReference): unknown {
       if (
