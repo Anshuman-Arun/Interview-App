@@ -818,6 +818,9 @@ export class InterpretationCoordinator {
     }
 
     if (!verificationResult.value.accepted) {
+      if (this.isCancelled(record)) {
+        return this.finishFailure(failed("STALE", "CANCELLED", candidateCount, request.requestId));
+      }
       return this.finishFailure(failed(
         "VERIFICATION_REJECTED",
         "VERIFICATION_RESULT_REJECTED",
