@@ -81,9 +81,32 @@ describe("supervised Antigravity runtime profile", () => {
     }
   );
 
-  it.runIf(process.platform === "win32")(\n    "does not claim spend-impossible billing proof from profile isolation alone",\n    async () => {\n      const source = createApplicationProviderAdapterRuntimeSource();\n      const runtime = source.resolveRuntime({\n        providerId: ANTIGRAVITY_CLI_PROVIDER_ID,\n        modelId: ANTIGRAVITY_CLI_MODEL_ID\n      });\n\n      expect(hasRuntimeBillingVerificationFactory(runtime)).toBe(false);\n      await expect(source.drain()).resolves.toBeUndefined();\n    }\n  );
+  it.runIf(process.platform === "win32")(
+    "does not claim spend-impossible billing proof from profile isolation alone",
+    async () => {
+      const source = createApplicationProviderAdapterRuntimeSource();
+      const runtime = source.resolveRuntime({
+        providerId: ANTIGRAVITY_CLI_PROVIDER_ID,
+        modelId: ANTIGRAVITY_CLI_MODEL_ID
+      });
 
-  it("requires the audited 1.1.x stream-json contract", () => {\n    expect(isSupportedAntigravityCliVersionOutput("1.1.13\\n")).toBe(false);\n    expect(isSupportedAntigravityCliVersionOutput("1.1.14\\n")).toBe(false);\n    expect(isSupportedAntigravityCliVersionOutput("1.1.15\\n")).toBe(true);\n    expect(isSupportedAntigravityCliVersionOutput("1.1.23\\n")).toBe(true);\n    expect(isSupportedAntigravityCliVersionOutput("agy version 1.1.23\\n")).toBe(true);\n    expect(isSupportedAntigravityCliVersionOutput("v1.2.0\\n")).toBe(false);\n    expect(isSupportedAntigravityCliVersionOutput("2.0.0\\n")).toBe(false);\n    expect(isSupportedAntigravityCliVersionOutput("1.1.15-rc.1\\n")).toBe(false);\n    expect(isSupportedAntigravityCliVersionOutput("1.1.15\\nextra")).toBe(false);\n    expect(isSupportedAntigravityCliVersionOutput("not-a-version")).toBe(false);\n  });
+      expect(hasRuntimeBillingVerificationFactory(runtime)).toBe(false);
+      await expect(source.drain()).resolves.toBeUndefined();
+    }
+  );
+
+  it("requires the audited 1.1.x stream-json contract", () => {
+    expect(isSupportedAntigravityCliVersionOutput("1.1.13\n")).toBe(false);
+    expect(isSupportedAntigravityCliVersionOutput("1.1.14\n")).toBe(false);
+    expect(isSupportedAntigravityCliVersionOutput("1.1.15\n")).toBe(true);
+    expect(isSupportedAntigravityCliVersionOutput("1.1.23\n")).toBe(true);
+    expect(isSupportedAntigravityCliVersionOutput("agy version 1.1.23\n")).toBe(true);
+    expect(isSupportedAntigravityCliVersionOutput("v1.2.0\n")).toBe(false);
+    expect(isSupportedAntigravityCliVersionOutput("2.0.0\n")).toBe(false);
+    expect(isSupportedAntigravityCliVersionOutput("1.1.15-rc.1\n")).toBe(false);
+    expect(isSupportedAntigravityCliVersionOutput("1.1.15\nextra")).toBe(false);
+    expect(isSupportedAntigravityCliVersionOutput("not-a-version")).toBe(false);
+  });
 
   it("pins a primary-only custom agent using only documented capability fields", () => {
     expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain(
@@ -128,7 +151,16 @@ describe("supervised Antigravity runtime profile", () => {
   });
 });
 
-\nfunction hasRuntimeBillingVerificationFactory(value: unknown): boolean {\n  if (typeof value !== "object" || value === null) return false;\n  const descriptor = Object.getOwnPropertyDescriptor(\n    value,\n    "billingVerificationFactory"\n  );\n  return descriptor !== undefined\n    && "value" in descriptor\n    && typeof descriptor.value === "function";\n}
+function hasRuntimeBillingVerificationFactory(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const descriptor = Object.getOwnPropertyDescriptor(
+    value,
+    "billingVerificationFactory"
+  );
+  return descriptor !== undefined
+    && "value" in descriptor
+    && typeof descriptor.value === "function";
+}
 
 function hasRuntimeExecutor(value: unknown): boolean {
   if (typeof value !== "object" || value === null) return false;
