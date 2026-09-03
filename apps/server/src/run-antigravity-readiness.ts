@@ -24,30 +24,63 @@ async function main(): Promise<void> {
       modelId: ANTIGRAVITY_CLI_MODEL_ID
     });
     const executor = readExecutor(runtime);
-    const controller = new AbortController();
-    const result = await executor.execute({
-      args: ["-p", "/usage", "--output-format", "json"],
-      stdin: "",
-      timeoutMs: READINESS_TIMEOUT_MS,
-      maxStdoutBytes: READINESS_STDOUT_BYTES,
-      maxStderrBytes: READINESS_STDERR_BYTES,
-      signal: controller.signal,
-      onProcessStart: () => undefined
-    });
-    if (
-      result.exitCode !== 0
-      || result.stdoutBytes <= 0
-      || result.stdout.trim().length === 0
-    ) {
-      throw new Error("Antigravity account readiness probe failed");
+    const agents = await executeReadinessCommand(executor, [
+      "agents",
+      "--output-format",
+      "json"
+    ]);
+    if (!agents.stdout.includes("interview-realizer")) {
+      throw new Error("Antigravity isolated custom agent was not discovered");
     }
+
+    const models = await executeReadinessCommand(executor, [
+      "models",
+      "--output-format",
+      "json"
+    ]);
+    if (!models.stdout.includes(ANTIGRAVITY_CLI_MODEL_ID)) {
+      throw new Error("Pinned Antigravity model is unavailable");
+    }
+
+    await executeReadinessCommand(executor, [
+      "-p",
+      "/usage",
+      "--output-format",
+      "json"
+    ]);
   } finally {
     await source.drain();
   }
 
   process.stdout.write(
-    "Antigravity readiness smoke passed: supervised launch, isolated profile, cached authentication, and quota lookup are usable.\n"
+    "Antigravity readiness smoke passed: supervised launch, isolated custom agent discovery, pinned model availability, cached authentication, and quota lookup are usable.\n"
   );
+}
+
+async function executeReadinessCommand(
+  executor: SupervisedCliExecutor,
+  args: readonly string[]
+): Promise<{
+  readonly stdout: string;
+}> {
+  const controller = new AbortController();
+  const result = await executor.execute({
+    args,
+    stdin: "",
+    timeoutMs: READINESS_TIMEOUT_MS,
+    maxStdoutBytes: READINESS_STDOUT_BYTES,
+    maxStderrBytes: READINESS_STDERR_BYTES,
+    signal: controller.signal,
+    onProcessStart: () => undefined
+  });
+  if (
+    result.exitCode !== 0
+    || result.stdoutBytes <= 0
+    || result.stdout.trim().length === 0
+  ) {
+    throw new Error("Antigravity readiness command failed");
+  }
+  return Object.freeze({ stdout: result.stdout });
 }
 
 function readExecutor(value: unknown): SupervisedCliExecutor {
