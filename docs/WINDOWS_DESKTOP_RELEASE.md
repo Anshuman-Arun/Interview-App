@@ -30,7 +30,7 @@ ASAR:
 <resources>/workers/python/requirements-local-model-runtime.txt
 ```
 
-The production worker path remains Ivy's packaged boundary:
+The production worker path remains packaged boundary:
 
 ```text
 <process.resourcesPath>/workers/python/local_model_worker.py
@@ -63,7 +63,7 @@ Settings exposes **Install / verify voice models**. It invokes the existing
 digests remain authoritative. Interrupted downloads stay in staging and are
 cleaned/retried by the existing manager.
 
-After a successful model install, restart Interview App. Ivy's runtime is
+After a successful model install, restart Interview App. runtime is
 one-shot per application lifecycle, so the packaging layer does not hot-restart
 it after changing the verified asset set.
 
