@@ -633,7 +633,11 @@ function stringWithinCodePointLimit(
   maximum: number
 ): boolean {
   let count = 0;
-  for (const _character of value) {
+  let offset = 0;
+  while (offset < value.length) {
+    const codePoint = value.codePointAt(offset);
+    if (codePoint === undefined) return false;
+    offset += codePoint > 0xffff ? 2 : 1;
     count += 1;
     if (count > maximum) return false;
   }
