@@ -1,5 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { SessionIdSchema, type SessionId } from "../../../packages/domain/src/index.js";
+import {
+  SessionIdSchema,
+  type InterviewSessionConfiguration,
+  type SessionId
+} from "../../../packages/domain/src/index.js";
 import { AppearanceDock } from "./components/AppearanceDock.js";
 import { BrandMark } from "./components/BrandMark.js";
 import { ProblemCard } from "./components/ProblemCard.js";
@@ -56,7 +60,14 @@ export const App: React.FC = () => {
   const recoverySessionInputInvalid =
     recoverySessionInput.trim().length > 0 && recoverySessionId === null;
 
-  const handleStartSession = async (): Promise<void> => {
+  const handleOpenNewInterview = (): void => {
+    if (sessionEntryPendingRef.current || sessionTerminalPendingRef.current) return;
+    navigate({ page: "new" });
+  };
+
+  const handleStartConfiguredSession = async (
+    configuration: InterviewSessionConfiguration
+  ): Promise<void> => {
     if (sessionEntryPendingRef.current || sessionTerminalPendingRef.current) return;
     sessionEntryPendingRef.current = true;
     setSessionEntryPending(true);
@@ -79,10 +90,10 @@ export const App: React.FC = () => {
         );
         return;
       }
-      await session.startSession();
+      await session.startConfiguredSession(configuration);
       navigate({ page: "interview" });
     } catch {
-      // Error handled in session.error
+      // Error handled by the authoritative session hook.
     } finally {
       sessionEntryPendingRef.current = false;
       setSessionEntryPending(false);
