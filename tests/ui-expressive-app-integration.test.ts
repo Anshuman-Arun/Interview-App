@@ -111,6 +111,26 @@ describe("expressive product integration invariants", () => {
     expect(hook).toContain("stopRendererTransport()");
   });
 
+  it("keeps the live workspace mounted behind paused Home so whiteboard state survives", () => {
+    const app = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+    const whiteboard = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/components/WhiteboardCanvas.tsx"),
+      "utf8"
+    );
+
+    expect(app).toContain("const showingPausedHome =");
+    expect(app).toContain('key="paused-home"');
+    expect(app).toContain('key="live-workspace"');
+    expect(app).toContain("hidden={showingPausedHome}");
+    expect(app).toContain('style={showingPausedHome ? { display: "none" } : undefined}');
+    expect(app).toContain("{showingPausedHome && (");
+    expect(app).not.toContain("if (showingPausedHome) {\n    return productPage;");
+    expect(whiteboard).toContain("effectiveAdapter.detachEditor()");
+  });
+
   it("route-locks live ACTIVE interviews while permitting an explicit paused Home", () => {
     const app = fs.readFileSync(
       path.resolve(process.cwd(), "apps/web/src/App.tsx"),
