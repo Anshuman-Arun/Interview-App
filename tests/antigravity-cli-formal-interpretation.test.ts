@@ -273,7 +273,7 @@ describe("Antigravity formal interpretation adapter", () => {
       ANTIGRAVITY_CLI_FORMAL_INTERPRETER_AGENT_ID
     );
 
-    const envelope = JSON.parse((captured?.stdin ?? "").trim()) as {
+    const envelope = JSON.parse(captured.stdin.trim()) as {
       readonly message?: { readonly content?: unknown };
     };
     const prompt = envelope.message?.content;
