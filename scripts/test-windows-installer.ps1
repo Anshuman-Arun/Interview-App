@@ -1,5 +1,5 @@
 param(
-  [string]$Installer = "dist/windows/InterviewApp-Setup-0.1.0.exe"
+  [string]$Installer = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -7,6 +7,10 @@ if ($env:CI -ne "true") {
   throw "This destructive silent install/uninstall check is CI-only. Use docs/WINDOWS_DESKTOP_RELEASE.md for manual release validation."
 }
 
+if ([string]::IsNullOrWhiteSpace($Installer)) {
+  $package = Get-Content -Raw "package.json" | ConvertFrom-Json
+  $Installer = "dist/windows/InterviewApp-Setup-$($package.version).exe"
+}
 $installerPath = (Resolve-Path $Installer).Path
 $installRoot = Join-Path $env:LOCALAPPDATA "Programs\Interview App"
 $userData = Join-Path $env:APPDATA "Interview App"
