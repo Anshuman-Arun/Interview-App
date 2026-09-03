@@ -96,7 +96,7 @@ function deterministicProvider(
   truth: "CORRECT" | "FALSE"
 ): DeterministicFormalInterpretationProvider {
   return new DeterministicFormalInterpretationProvider(
-    (request) => interpretationResult(request, truth)
+    (request: FormalInterpretationRequest) => interpretationResult(request, truth)
   );
 }
 
@@ -221,7 +221,7 @@ describe("live Oxford formal reasoning analysis", () => {
       await turns.startSession(selectedProblem);
       const committed = await turns.commitInput("I think symmetry might help, but I am not sure.");
 
-      const provider = new DeterministicFormalInterpretationProvider((request) =>
+      const provider = new DeterministicFormalInterpretationProvider((request: FormalInterpretationRequest) =>
         providerResultFor(request, [])
       );
       const outcome = await new StudentReasoningAnalysisCoordinator(
