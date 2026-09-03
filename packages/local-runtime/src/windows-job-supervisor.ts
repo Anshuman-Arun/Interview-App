@@ -22,7 +22,7 @@ public static class InterviewJobSupervisor
     private const uint CREATE_NO_WINDOW = 0x08000000;
     private const uint STARTF_USESTDHANDLES = 0x00000100;
     private const int PROC_THREAD_ATTRIBUTE_HANDLE_LIST = 0x00020002;
-    private const uint HANDLE_FLAG_INHERIT = 0x00000001;
+    private const uint DUPLICATE_SAME_ACCESS = 0x00000002;
     private const uint INFINITE = 0xFFFFFFFF;
     private const uint WAIT_OBJECT_0 = 0x00000000;
     private const int STD_OUTPUT_HANDLE = -11;
@@ -167,11 +167,18 @@ public static class InterviewJobSupervisor
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern IntPtr GetStdHandle(int handle);
 
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr GetCurrentProcess();
+
     [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool SetHandleInformation(
-        IntPtr handle,
-        uint mask,
-        uint flags);
+    private static extern bool DuplicateHandle(
+        IntPtr sourceProcess,
+        IntPtr sourceHandle,
+        IntPtr targetProcess,
+        out IntPtr targetHandle,
+        uint desiredAccess,
+        bool inheritHandle,
+        uint options);
 
     private static string Quote(string value)
     {
@@ -226,12 +233,25 @@ public static class InterviewJobSupervisor
         return builder;
     }
 
-    private static void RequireInheritable(IntPtr handle)
+    private static IntPtr DuplicateInheritable(IntPtr source)
     {
-        if (handle == IntPtr.Zero || handle == new IntPtr(-1))
+        if (source == IntPtr.Zero || source == new IntPtr(-1))
             throw new InvalidOperationException("standard handle unavailable");
-        if (!SetHandleInformation(handle, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT))
+
+        IntPtr duplicate;
+        IntPtr currentProcess = GetCurrentProcess();
+        if (!DuplicateHandle(
+            currentProcess,
+            source,
+            currentProcess,
+            out duplicate,
+            0,
+            true,
+            DUPLICATE_SAME_ACCESS))
+        {
             throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+        }
+        return duplicate;
     }
 
     private static string Sha256Hex(Stream stream)
@@ -319,29 +339,36 @@ public static class InterviewJobSupervisor
                 Marshal.FreeHGlobal(limitsPointer);
             }
 
-            IntPtr stdin = stdinLock.SafeFileHandle.DangerousGetHandle();
-            IntPtr stdout = GetStdHandle(STD_OUTPUT_HANDLE);
-            IntPtr stderr = GetStdHandle(STD_ERROR_HANDLE);
-            RequireInheritable(stdin);
-            RequireInheritable(stdout);
-            RequireInheritable(stderr);
-
+            IntPtr childStdin = IntPtr.Zero;
+            IntPtr childStdout = IntPtr.Zero;
+            IntPtr childStderr = IntPtr.Zero;
             var startup = new STARTUPINFOEX();
-            startup.StartupInfo.cb = (uint)Marshal.SizeOf(typeof(STARTUPINFOEX));
-            startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
-            startup.StartupInfo.hStdInput = stdin;
-            startup.StartupInfo.hStdOutput = stdout;
-            startup.StartupInfo.hStdError = stderr;
-
-            IntPtr attributeSize = IntPtr.Zero;
-            InitializeProcThreadAttributeList(IntPtr.Zero, 1, 0, ref attributeSize);
-            if (attributeSize == IntPtr.Zero)
-                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
-
-            startup.lpAttributeList = Marshal.AllocHGlobal(attributeSize);
-            IntPtr handleList = Marshal.AllocHGlobal(IntPtr.Size * 3);
+            IntPtr handleList = IntPtr.Zero;
             try
             {
+                // Never mutate the bootstrap's own std-handle inheritance flags.
+                // Node/PowerShell may back those handles with runtime-owned pipe
+                // objects. Give the provider fresh, explicitly inheritable
+                // duplicates and admit only those duplicates through the
+                // STARTUPINFOEX handle allow-list.
+                childStdin = DuplicateInheritable(
+                    stdinLock.SafeFileHandle.DangerousGetHandle());
+                childStdout = DuplicateInheritable(GetStdHandle(STD_OUTPUT_HANDLE));
+                childStderr = DuplicateInheritable(GetStdHandle(STD_ERROR_HANDLE));
+
+                startup.StartupInfo.cb = (uint)Marshal.SizeOf(typeof(STARTUPINFOEX));
+                startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+                startup.StartupInfo.hStdInput = childStdin;
+                startup.StartupInfo.hStdOutput = childStdout;
+                startup.StartupInfo.hStdError = childStderr;
+
+                IntPtr attributeSize = IntPtr.Zero;
+                InitializeProcThreadAttributeList(IntPtr.Zero, 1, 0, ref attributeSize);
+                if (attributeSize == IntPtr.Zero)
+                    throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+
+                startup.lpAttributeList = Marshal.AllocHGlobal(attributeSize);
+                handleList = Marshal.AllocHGlobal(IntPtr.Size * 3);
                 if (!InitializeProcThreadAttributeList(
                     startup.lpAttributeList,
                     1,
@@ -351,9 +378,9 @@ public static class InterviewJobSupervisor
                     throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
                 }
 
-                Marshal.WriteIntPtr(handleList, 0 * IntPtr.Size, stdin);
-                Marshal.WriteIntPtr(handleList, 1 * IntPtr.Size, stdout);
-                Marshal.WriteIntPtr(handleList, 2 * IntPtr.Size, stderr);
+                Marshal.WriteIntPtr(handleList, 0 * IntPtr.Size, childStdin);
+                Marshal.WriteIntPtr(handleList, 1 * IntPtr.Size, childStdout);
+                Marshal.WriteIntPtr(handleList, 2 * IntPtr.Size, childStderr);
 
                 if (!UpdateProcThreadAttribute(
                     startup.lpAttributeList,
@@ -392,7 +419,10 @@ public static class InterviewJobSupervisor
                     DeleteProcThreadAttributeList(startup.lpAttributeList);
                     Marshal.FreeHGlobal(startup.lpAttributeList);
                 }
-                Marshal.FreeHGlobal(handleList);
+                if (handleList != IntPtr.Zero) Marshal.FreeHGlobal(handleList);
+                if (childStdin != IntPtr.Zero) CloseHandle(childStdin);
+                if (childStdout != IntPtr.Zero) CloseHandle(childStdout);
+                if (childStderr != IntPtr.Zero) CloseHandle(childStderr);
             }
 
             executableLock.Position = 0;
