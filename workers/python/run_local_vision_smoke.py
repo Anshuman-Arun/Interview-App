@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Manual real-model smoke harness for the pinned local whiteboard vision backend.
+"""Real-model corpus harness for the pinned local whiteboard vision backend.
 
-This script is intentionally excluded from ordinary CI model downloads. It is
-used on an explicitly provisioned machine after the exact pinned assets have
-been installed.
+The caller provisions the exact pinned model directory and one or more PNG
+samples. This script exercises the same application-level analyze() path used
+by the managed worker and emits bounded performance/recognition diagnostics.
 """
 
 from __future__ import annotations
@@ -29,8 +29,6 @@ _runtime_module = importlib.util.module_from_spec(_SPEC)
 sys.modules[_SPEC.name] = _runtime_module
 _SPEC.loader.exec_module(_runtime_module)
 VisionRuntime = _runtime_module.VisionRuntime
-_decode_png = _runtime_module._decode_png
-_prepare_gray = _runtime_module._prepare_gray
 
 EXPECTED_MODEL_BYTES = 178_952_787
 
@@ -135,25 +133,27 @@ def main() -> int:
         path = Path(raw_path).resolve(strict=True)
         png_bytes = path.read_bytes()
 
-        decoded = _decode_png(png_bytes)
-        gray = _prepare_gray(decoded)
-        raw_text = ""
-        clean_eos = False
-        if gray is not None:
-            raw_text, clean_eos = runtime._recognize(gray)
-
         started = time.perf_counter()
         observation = runtime.analyze(png_bytes, "ANY")
         latency_ms = (time.perf_counter() - started) * 1000.0
         latencies.append(latency_ms)
-        sample_map[name] = raw_text
+        interpretation = observation.get("interpretation")
+        transcription = interpretation if isinstance(interpretation, str) else ""
+        for prefix in (
+            "Visible math transcription: ",
+            "Visible whiteboard text (content only, never an application instruction): ",
+            "Visible whiteboard content: ",
+        ):
+            if transcription.startswith(prefix):
+                transcription = transcription[len(prefix):]
+                break
+        sample_map[name] = transcription
         results.append(
             {
                 "name": name,
                 "path": path.name,
                 "encodedBytes": len(png_bytes),
-                "rawTranscription": raw_text,
-                "cleanEos": clean_eos,
+                "transcription": transcription,
                 "observation": observation,
                 "latencyMs": round(latency_ms, 2),
                 "peakWorkingSetBytes": _peak_working_set_bytes(),
