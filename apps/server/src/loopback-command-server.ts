@@ -845,7 +845,7 @@ function parseCommand(body: string): ClientCommand {
 }
 
 function providerLaunchFailureMessage(
-  reason: import("../../../packages/domain/src/index.js").ProviderLaunchAvailabilityReason | undefined
+  reason: ProviderLaunchAvailabilityReason | undefined
 ): string {
   switch (reason) {
     case "CREDENTIALS_REQUIRED":
