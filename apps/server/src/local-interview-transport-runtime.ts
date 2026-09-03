@@ -75,20 +75,24 @@ export class LocalInterviewTransportRuntime {
   private voiceWorkersTerminated = false;
 
   public constructor(options: LocalInterviewTransportRuntimeOptions) {
+    const orchestratorProviderRuntime =
+      options.orchestrator?.getProviderRuntimeResolver();
     if (
-      options.orchestrator !== undefined
-      && options.providerRuntimeResolver !== undefined
+      options.providerRuntimeResolver !== undefined
+      && orchestratorProviderRuntime !== undefined
+      && options.providerRuntimeResolver !== orchestratorProviderRuntime
     ) {
       throw new Error(
-        "Local interview transport cannot accept both an orchestrator and a provider runtime resolver"
+        "Local interview transport orchestrator and command server must share the same provider runtime resolver"
       );
     }
     const voiceRuntime = options.voiceRuntime;
     const speechWorker = voiceRuntime?.speechWorker;
     const ttsRuntime = voiceRuntime?.tts;
-    const providerRuntimeResolver = options.orchestrator === undefined
-      ? options.providerRuntimeResolver ?? new ProviderRuntimeResolver()
-      : undefined;
+    const providerRuntimeResolver =
+      options.providerRuntimeResolver
+      ?? orchestratorProviderRuntime
+      ?? new ProviderRuntimeResolver();
 
     this.registry = options.registry;
     this.sessions = new SessionRecoveryCoordinator(options.registry, options.store);
@@ -137,7 +141,7 @@ export class LocalInterviewTransportRuntime {
       sessions: this.sessions,
       reads: this.readService,
       orchestrator: this.orchestrator,
-      ...(providerRuntimeResolver === undefined ? {} : { providerRuntimeResolver }),
+      providerRuntimeResolver,
       whiteboardVision: this.whiteboardVision,
       onSessionTerminal: (sessionId) => this.handleSessionTerminal(sessionId),
       ...(options.commandPort === undefined ? {} : { port: options.commandPort })
