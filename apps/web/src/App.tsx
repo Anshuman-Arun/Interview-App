@@ -332,7 +332,7 @@ export const App: React.FC = () => {
       return;
     }
     if (session.isPaused) {
-      if (route.page !== "home") {
+      if (route.page !== "home" && route.page !== "new") {
         navigate({ page: "home" }, { replace: true });
       }
       return;
@@ -370,9 +370,16 @@ export const App: React.FC = () => {
         }
         onNavigatePage={navigateProductPage}
         sessionEntryPending={sessionEntryPending}
-        onEnterInterview={() => {
-          void handleStartSession();
-        }}
+        onEnterInterview={handleOpenNewInterview}
+        launchCatalog={session.interviewCatalog}
+        launchCatalogLoading={session.interviewCatalogLoading}
+        launchCatalogError={session.interviewCatalogError}
+        providerOptions={session.providerOptions}
+        providerOptionsLoading={session.providerOptionsLoading}
+        providerOptionsError={session.providerOptionsError}
+        onRefreshLaunchCatalog={session.refreshInterviewCatalog}
+        onRefreshProviderOptions={session.refreshProviderOptions}
+        onStartConfiguredInterview={handleStartConfiguredSession}
         onResume={(sessionId) => {
           if (session.isPaused && session.sessionId === sessionId) {
             void handleResumePausedSession();
@@ -580,12 +587,12 @@ export const App: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => void handleStartSession()}
+                  onClick={handleOpenNewInterview}
                   disabled={sessionEntryPending}
                   className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md shadow-sm transition-colors cursor-pointer"
                   data-testid="start-session-btn"
                 >
-                  {sessionEntryPending ? "Opening…" : "Start Session"}
+                  {sessionEntryPending ? "Opening…" : "New interview"}
                 </button>
                 <form
                   onSubmit={(e) => {
