@@ -354,7 +354,7 @@ describe("Antigravity CLI one-turn protocol", () => {
     expect(request?.args).toContain("--input-format");
     expect(request?.args).toContain("stream-json");
     expect(request?.args).toContain("--json-schema");
-    expect(request?.args).toContain("--sandbox");
+    expect(request?.args).not.toContain("--sandbox");
     expect(request?.args).toContain(ANTIGRAVITY_CLI_MODEL_ID);
     expect(request?.args).toContain("--agent");
     expect(request?.args).toContain(ANTIGRAVITY_CLI_AGENT_ID);
