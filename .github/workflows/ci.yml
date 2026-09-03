@@ -78,7 +78,16 @@ jobs:
         run: pnpm test:desktop
 
       - name: Run supervised provider process safety tests
+        env:
+          INTERVIEW_SUPERVISED_DEBUG_FILE: ${{ runner.temp }}/supervised-stderr.log
         run: pnpm exec vitest run tests/supervised-process.test.ts
+
+      - name: Print Windows supervisor diagnostics
+        if: failure() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $path = Join-Path $env:RUNNER_TEMP "supervised-stderr.log"
+          if (Test-Path $path) { Get-Content -Raw $path }
 
       - name: Run complete Vitest suite
         # The CI variant keeps full discovery while bounding file-level
