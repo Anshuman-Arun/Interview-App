@@ -466,6 +466,41 @@ describe("generic interview session configuration", () => {
     }
   });
 
+  it("keeps an exact configured retry idempotent after its provider registration disappears", async () => {
+    const sessionId = newSessionId();
+    const requestId = newRequestId();
+    const configuration = InterviewSessionConfigurationSchema.parse({
+      ...oxfordConfiguration(
+        sixPeopleProblem.id,
+        sixPeopleProblem.version,
+        sixPeopleProblem.interviewer.difficulty
+      ),
+      providerSelection: {
+        providerId: "retired-provider",
+        modelId: "retired-model"
+      }
+    });
+    const writer = registry.get(sessionId);
+    const envelope = createCommandEnvelope({
+      sessionId,
+      requestId,
+      producer: "authenticated-local-client"
+    });
+
+    await new TurnCoordinator(writer).startConfiguredSession({
+      configuration,
+      problem: sixPeopleProblem
+    }, envelope);
+    const eventCount = store.eventCount(sessionId);
+
+    const retried = await postStart(sessionId, configuration, requestId);
+    expect(retried.status).toBe(200);
+    expect(ConfiguredSessionStartedResponseSchema.parse(await json(retried)).configuration)
+      .toEqual(configuration);
+    expect(store.eventCount(sessionId)).toBe(eventCount);
+    expect(registry.get(sessionId).getState().configuration).toEqual(configuration);
+  });
+
   it("serializes concurrent starts so only one authoritative configuration can win", async () => {
     const sessionId = newSessionId();
     const firstConfiguration = oxfordConfiguration(
