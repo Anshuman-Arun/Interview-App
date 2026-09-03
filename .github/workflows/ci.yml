@@ -78,6 +78,8 @@ jobs:
         run: pnpm test:desktop
 
       - name: Run supervised provider process safety tests
+        env:
+          INTERVIEW_SUPERVISED_DEBUG_STDERR: "1"
         run: pnpm exec vitest run tests/supervised-process.test.ts
 
       - name: Run complete Vitest suite
