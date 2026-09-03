@@ -457,23 +457,40 @@ function inferUnmarkedConfigurationSource(
     return "CONFIGURED";
   }
 
-  const legacy = createLegacyDefaultSessionConfiguration();
+  // Historical START_SESSION could only emit the Ramsey compatibility target,
+  // with no duration/provider override and BALANCED intervention. Reject
+  // impossible legacy shapes before consulting today's problem registry so a
+  // configured non-Ramsey session never depends on Ramsey still being present.
+  if (
+    candidate.problem?.id !== "oxford-six-people"
+    || candidate.durationMinutes !== undefined
+    || candidate.providerSelection !== undefined
+    || candidate.interventionPolicy !== "BALANCED"
+  ) {
+    return "CONFIGURED";
+  }
+
+  let legacy: ReturnType<typeof createLegacyDefaultSessionConfiguration>;
+  try {
+    legacy = createLegacyDefaultSessionConfiguration();
+  } catch {
+    // If the historical compatibility target itself is no longer available,
+    // the remaining Ramsey-like unmarked shape is genuinely ambiguous. Do not
+    // promote it to CONFIGURED on a guess.
+    return "LEGACY_COMPATIBILITY";
+  }
   if (legacy.mode !== "OXFORD_MATHEMATICS") {
-    throw new Error("Legacy compatibility configuration must remain Oxford Mathematics");
+    return "LEGACY_COMPATIBILITY";
   }
 
   const exactLegacyShape =
-    candidate.problem?.id === legacy.problem.id
-    && candidate.problem?.version === legacy.problem.version
-    && candidate.difficulty === legacy.difficulty
-    && candidate.interventionPolicy === legacy.interventionPolicy
-    && candidate.durationMinutes === undefined
-    && candidate.providerSelection === undefined;
+    candidate.problem?.version === legacy.problem.version
+    && candidate.difficulty === legacy.difficulty;
 
   // Before provenance was persisted, configured sessions already stored their
-  // exact configuration. Any shape that could not have been emitted by legacy
-  // START_SESSION is therefore known to be configured. The one historically
-  // ambiguous Ramsey/default shape remains conservatively legacy.
+  // exact configuration. Any shape legacy START_SESSION could not have emitted
+  // is therefore known to be configured. The one historically indistinguishable
+  // Ramsey/default shape remains conservatively legacy.
   return exactLegacyShape ? "LEGACY_COMPATIBILITY" : "CONFIGURED";
 }
 
