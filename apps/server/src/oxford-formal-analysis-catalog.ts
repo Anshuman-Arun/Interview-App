@@ -2,7 +2,6 @@ import type {
   EvidenceKey,
   FormalProtocolRef
 } from "../../../packages/domain/src/index.js";
-import { getProblemByIdentity } from "../../../packages/problems/src/index.js";
 import {
   FORMAL_PROTOCOL_ROUTES,
   type FormalProtocolRoutingScope
@@ -19,7 +18,7 @@ export interface OxfordFormalAnalysisProfile {
 interface ProfileSpec {
   readonly problemId: string;
   readonly problemVersion: string;
-  readonly milestoneId: string;
+  readonly claimId: string;
   readonly allowedProtocols: readonly FormalProtocolRef[];
 }
 
@@ -27,31 +26,31 @@ const PROFILE_SPECS: readonly ProfileSpec[] = Object.freeze([
   {
     problemId: "oxford-domino-chessboard",
     problemVersion: "1.0.0",
-    milestoneId: "compare-color-counts",
+    claimId: "color-count-arithmetic",
     allowedProtocols: [{ protocol: "RATIONAL_ARITHMETIC", version: 1 }]
   },
   {
     problemId: "oxford-euclid-primes",
     problemVersion: "1.0.0",
-    milestoneId: "mod-listed-primes",
+    claimId: "listed-prime-remainder",
     allowedProtocols: [{ protocol: "MODULAR_ARITHMETIC", version: 1 }]
   },
   {
     problemId: "oxford-prefix-sums-mod-n",
     problemVersion: "1.0.0",
-    milestoneId: "subtract-equal",
+    claimId: "prefix-residue-arithmetic",
     allowedProtocols: [{ protocol: "MODULAR_ARITHMETIC", version: 1 }]
   },
   {
     problemId: "oxford-triangle-medians",
     problemVersion: "1.0.0",
-    milestoneId: "place-on-median",
+    claimId: "median-ratio-arithmetic",
     allowedProtocols: [{ protocol: "RATIONAL_ARITHMETIC", version: 1 }]
   },
   {
     problemId: "oxford-divisibility-chain",
     problemVersion: "1.0.0",
-    milestoneId: "divisibility-finish",
+    claimId: "divisibility-step",
     allowedProtocols: [{ protocol: "MODULAR_ARITHMETIC", version: 1 }]
   }
 ]);
@@ -60,7 +59,7 @@ const PROFILES = new Map<string, OxfordFormalAnalysisProfile>(
   PROFILE_SPECS.map((spec) => {
     const target: EvidenceKey = {
       problemId: spec.problemId,
-      subject: { kind: "MILESTONE", milestoneId: spec.milestoneId },
+      subject: { kind: "CLAIM", claimId: spec.claimId },
       dimension: "CORRECTNESS"
     };
     const scopes = spec.allowedProtocols.map((protocol) => {
@@ -95,16 +94,7 @@ const PROFILES = new Map<string, OxfordFormalAnalysisProfile>(
 export function resolveOxfordFormalAnalysisProfile(
   problem: { readonly id: string; readonly version: string }
 ): OxfordFormalAnalysisProfile | undefined {
-  const profile = PROFILES.get(problem.id + "\u0000" + problem.version);
-  if (profile === undefined || profile.target.subject.kind !== "MILESTONE") return undefined;
-
-  const catalogProblem = getProblemByIdentity(problem.id, problem.version);
-  if (catalogProblem === undefined) return undefined;
-  const milestoneId = profile.target.subject.milestoneId;
-  const milestone = catalogProblem.interviewer.reasoningGraph.milestones.find(
-    (item) => item.id === milestoneId
-  );
-  return milestone === undefined ? undefined : profile;
+  return PROFILES.get(problem.id + "\u0000" + problem.version);
 }
 
 export function listOxfordFormalAnalysisProfiles(): readonly OxfordFormalAnalysisProfile[] {
