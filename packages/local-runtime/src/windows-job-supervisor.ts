@@ -520,6 +520,7 @@ Write-InterviewSupervisorStage "PS_REMOVE_BOOTSTRAP"
 Write-InterviewSupervisorStage "PS_CONFIG_OK"
 
 $config = $configJson | ConvertFrom-Json
+Write-InterviewSupervisorStage "PS_JSON_OK"
 $configJson = $null
 
 $stream = New-Object System.IO.FileStream(
@@ -528,10 +529,12 @@ $stream = New-Object System.IO.FileStream(
   [System.IO.FileAccess]::Read,
   [System.IO.FileShare]::Read
 )
+Write-InterviewSupervisorStage "PS_STREAM_OPEN"
 try {
   if ($stream.Length -le 0 -or $stream.Length -gt 5242880) {
     exit 190
   }
+  Write-InterviewSupervisorStage "PS_STREAM_SIZE_OK"
 
   $sha = [System.Security.Cryptography.SHA256]::Create()
   try {
@@ -540,6 +543,7 @@ try {
   finally {
     $sha.Dispose()
   }
+  Write-InterviewSupervisorStage "PS_HASH_OK"
   $actualSha256 = ([System.BitConverter]::ToString($digest)).Replace("-", "").ToLowerInvariant()
   if (-not [string]::Equals(
     $actualSha256,
@@ -548,6 +552,7 @@ try {
   )) {
     exit 190
   }
+  Write-InterviewSupervisorStage "PS_HASH_MATCH"
 
   $stream.Position = 0
   $bytes = New-Object byte[] ([int]$stream.Length)
@@ -559,6 +564,7 @@ try {
     }
     $offset += $read
   }
+  Write-InterviewSupervisorStage "PS_READ_OK"
 }
 finally {
   $stream.Dispose()
