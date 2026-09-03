@@ -623,6 +623,63 @@ describe("live Oxford formal reasoning analysis", () => {
     }
   });
 
+  it("rejects direct admission when a new voice transcript finalizes ahead of the queued verification", async () => {
+    const store = new SqliteEventStore(":memory:");
+    try {
+      const registry = new SessionRuntimeRegistry(store);
+      const sessionId = newSessionId();
+      const writer = registry.get(sessionId);
+      const turns = new TurnCoordinator(writer);
+      const selectedProblem = problem("oxford-euclid-primes");
+      await turns.startSession(selectedProblem);
+      const committed = await turns.commitInput("For each listed prime the Euclid number has remainder one.");
+
+      const profile = resolveOxfordFormalAnalysisProfile(selectedProblem);
+      if (profile === undefined) throw new Error("Missing Oxford formal profile");
+      const request = createCommittedTurnFormalInterpretationRequest(writer, {
+        inputEpisodeId: committed.inputEpisodeId,
+        turnId: committed.turnId,
+        target: profile.target,
+        allowedProtocols: profile.allowedProtocols
+      });
+      const verifier = profile.scopes[0]?.verifier;
+      if (verifier === undefined) throw new Error("Missing verifier scope");
+      const envelope = createCommandEnvelope({
+        sessionId,
+        producer: "interpretation-coordinator",
+        inputEpisodeId: committed.inputEpisodeId,
+        turnId: committed.turnId,
+        contextEpoch: request.basis.contextEpoch,
+        sourceRevision: request.source.sourceRevision
+      });
+
+      const utteranceId = await turns.beginUtterance();
+      const finalizing = turns.finalizeUtterance({
+        utteranceId,
+        text: "This is newer speech that has finalized but has not committed a turn."
+      });
+      const verification = new VerificationCoordinator(writer, profile.scopes).requestVerification({
+        inputEpisodeId: committed.inputEpisodeId,
+        turnId: committed.turnId,
+        verifier,
+        candidateFormalInterpretation: statementFor(request, "CORRECT"),
+        interpretationConfidence: 1,
+        evidenceKey: profile.target,
+        expectedProblemVersion: selectedProblem.version,
+        envelope
+      });
+
+      await finalizing;
+      await expect(verification).rejects.toThrow("Verification source basis changed before durable admission");
+      expect(writer.getState().lastCommittedInputSequence).toBe(request.source.sourceRevision);
+      expect(writer.getState().transcriptRevision).toBeGreaterThan(request.basis.transcriptRevision);
+      expect(Object.values(writer.getState().verificationRequests)).toHaveLength(0);
+      expect(Object.values(writer.getState().studentEvidence)).toHaveLength(0);
+    } finally {
+      store.close();
+    }
+  });
+
   it("keeps direct text analysis idempotent across board-only changes and process-local coordinator restart", async () => {
     const store = new SqliteEventStore(":memory:");
     try {
