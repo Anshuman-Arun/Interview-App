@@ -131,6 +131,8 @@ describe("Windows desktop packaging contract", () => {
     expect(workflow).toContain("EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}");
     expect(workflow).toContain("pull-requests: read");
     expect(workflow).toContain('CSC_IDENTITY_AUTO_DISCOVERY: "false"');
+    expect(workflow).toContain("Validate PowerShell release scripts");
+    expect(workflow).toContain("Language.Parser]::ParseFile");
     expect(workflow).toContain("Get-AuthenticodeSignature");
     expect(workflow).toContain('"NotSigned"');
     expect(workflow).not.toContain("INTERVIEW_CI_PROVIDER_MODE");
