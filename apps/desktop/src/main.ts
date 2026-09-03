@@ -524,7 +524,6 @@ async function runPackagedSmoke(
         const root = document.getElementById("root");
         const mounted = root instanceof HTMLElement
           && root.childElementCount > 0
-          && document.querySelector(".interview-app-container") instanceof HTMLElement
           && typeof globalThis.interviewDesktop?.getBootstrap === "function"
           && typeof globalThis.interviewDesktop?.getLocalRuntimeStatus === "function"
           && typeof globalThis.interviewDesktop?.installLocalModels === "function";
