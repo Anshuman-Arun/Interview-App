@@ -1558,8 +1558,8 @@ describe("local worker lifecycle manager", () => {
     const runtime = manager();
     let restarted: ReturnType<LocalRuntimeManager["start"]> | undefined;
     runtime.register(definition("reentrant", "ready-counter", {
-      shutdownTimeoutMs: 300,
-      terminationTimeoutMs: 300,
+      shutdownTimeoutMs: process.platform === "win32" ? 1_000 : 300,
+      terminationTimeoutMs: process.platform === "win32" ? 1_000 : 300,
       gracefulShutdown: (control) => {
         if (restarted === undefined) restarted = runtime.start("reentrant");
         control.endStdin();
@@ -1574,6 +1574,7 @@ describe("local worker lifecycle manager", () => {
     const second = await restarted;
     expect(second.state).toBe("READY");
     expect(readFileSync(counter, "utf8")).toBe("2");
+    await expect(runtime.stop("reentrant")).resolves.toMatchObject({ disposition: "GRACEFUL" });
   });
 
   it("prevents new managed work from entering while stopAll is in progress", async () => {
