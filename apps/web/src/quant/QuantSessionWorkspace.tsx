@@ -48,9 +48,29 @@ export const QuantSessionWorkspace: React.FC<QuantSessionWorkspaceProps> = ({
   onSubmitResearch
 }) => {
   const actionPendingRef = useRef(quantActionPending);
+  const deferredRefreshRef = useRef(false);
+
   useEffect(() => {
     actionPendingRef.current = quantActionPending;
-  }, [quantActionPending]);
+    if (
+      quantActionPending
+      || !deferredRefreshRef.current
+      || productHidden
+      || paused
+      || sessionStatus !== "ACTIVE"
+    ) {
+      return;
+    }
+
+    deferredRefreshRef.current = false;
+    void onRefresh().catch(() => undefined);
+  }, [
+    onRefresh,
+    paused,
+    productHidden,
+    quantActionPending,
+    sessionStatus
+  ]);
 
   useEffect(() => {
     if (
@@ -60,7 +80,11 @@ export const QuantSessionWorkspace: React.FC<QuantSessionWorkspaceProps> = ({
     ) return;
 
     const refresh = (): void => {
-      if (actionPendingRef.current) return;
+      if (actionPendingRef.current) {
+        deferredRefreshRef.current = true;
+        return;
+      }
+      deferredRefreshRef.current = false;
       void onRefresh().catch(() => undefined);
     };
     refresh();
