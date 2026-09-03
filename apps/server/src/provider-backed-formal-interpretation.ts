@@ -14,6 +14,7 @@ import {
   ANTIGRAVITY_CLI_MODEL_ID,
   ANTIGRAVITY_CLI_PROVIDER_ID,
   openProviderExecutionSession,
+  parseStrictJson,
   type SupervisedCliExecutionRequest,
   type SupervisedCliExecutor
 } from "../../../packages/providers/src/index.js";
@@ -524,7 +525,7 @@ function parseFormalInterpretationStream(
       }
       let responsePayload: unknown;
       try {
-        responsePayload = JSON.parse(terminal.response.trim()) as unknown;
+        responsePayload = parseStrictJson(terminal.response.trim());
       } catch {
         throw new Error("Formal interpretation response contains non-JSON text");
       }
@@ -551,7 +552,7 @@ function parseFormalInterpretationStream(
 function parseJsonObject(raw: string): Record<string, unknown> {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(raw) as unknown;
+    parsed = parseStrictJson(raw);
   } catch {
     throw new Error("Formal interpretation stream contains invalid JSON");
   }
