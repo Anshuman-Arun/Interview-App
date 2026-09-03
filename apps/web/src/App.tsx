@@ -468,7 +468,7 @@ export const App: React.FC = () => {
             navigate({
               page: "review",
               sessionId: session.sessionId,
-              view: "evaluation"
+              view: "replay"
             });
           }}
           onRefresh={session.refreshQuantState}
