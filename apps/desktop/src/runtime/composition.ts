@@ -95,6 +95,7 @@ export interface DesktopLocalRuntimeCompositionOptions {
 export class DesktopLocalRuntimeComposition {
   private readonly runtimeManager = new LocalRuntimeManager();
   private readonly assetManager: ModelAssetManager;
+  private readonly visionAssetManager: ModelAssetManager;
   private readonly runtimeViewsRoot: string;
   private readonly workerScriptPath: string;
   private readonly visionRuntimeModulePath: string;
@@ -127,6 +128,18 @@ export class DesktopLocalRuntimeComposition {
       downloadTimeoutMs: 120_000,
       maxRedirects: 3,
       allowCrossOriginRedirects: false,
+      maxListEntries: 256
+    });
+    // GitHub release downloads use an HTTPS cross-origin object redirect.
+    // Isolate that policy exception to vision only; fixed manifest size/SHA-256
+    // remains the content authority and voice keeps its stricter redirect policy.
+    this.visionAssetManager = new ModelAssetManager({
+      rootDir: path.join(options.appDataRoot, "model-assets"),
+      maxArtifactBytes: MAX_ASSET_BYTES,
+      maxCacheBytes: MAX_CACHE_BYTES,
+      downloadTimeoutMs: 120_000,
+      maxRedirects: 3,
+      allowCrossOriginRedirects: true,
       maxListEntries: 256
     });
     this.workerScriptPath = options.workerScriptPath ?? (
@@ -216,10 +229,10 @@ export class DesktopLocalRuntimeComposition {
     }
     this.pythonExecutable = pythonExecutable;
 
-    await this.assetManager.cleanupTemporary(signal);
+    await this.visionAssetManager.cleanupTemporary(signal);
     for (const asset of VISION_ASSETS) {
       if (abortRequested(signal)) throw abortError();
-      await this.assetManager.install(asset.manifest, signal);
+      await this.visionAssetManager.install(asset.manifest, signal);
     }
   }
 
@@ -654,7 +667,11 @@ export class DesktopLocalRuntimeComposition {
   }
 
   private async startVision(signal?: AbortSignal): Promise<void> {
-    const readiness = await this.inspectAssets(VISION_ASSETS, signal);
+    const readiness = await this.inspectAssets(
+      VISION_ASSETS,
+      signal,
+      this.visionAssetManager
+    );
     if (readiness !== "READY") {
       this.visionStatus = readiness === "MISSING_ASSET"
         ? missingAsset("VISION_ASSET_MISSING")
@@ -669,7 +686,7 @@ export class DesktopLocalRuntimeComposition {
 
     try {
       this.visionView = await materializeRuntimeAssetView({
-        manager: this.assetManager,
+        manager: this.visionAssetManager,
         assets: VISION_ASSETS,
         baseRoot: this.runtimeViewsRoot,
         ...(signal === undefined ? {} : { signal })
@@ -799,12 +816,13 @@ export class DesktopLocalRuntimeComposition {
 
   private async inspectAssets(
     assets: readonly DesktopRuntimeAsset[],
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    manager: ModelAssetManager = this.assetManager
   ): Promise<"READY" | "MISSING_ASSET" | "FAILED"> {
     let missing = false;
     for (const asset of assets) {
       if (abortRequested(signal)) throw abortError();
-      const inspection = await this.assetManager.inspect(asset.manifest, signal);
+      const inspection = await manager.inspect(asset.manifest, signal);
       if (inspection.status === "NOT_PRESENT") {
         missing = true;
         continue;
