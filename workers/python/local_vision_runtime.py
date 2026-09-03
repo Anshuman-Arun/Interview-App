@@ -192,10 +192,11 @@ class VisionRuntime:
         if len(decoder_inputs) != 3:
             raise RuntimeError("vision decoder input contract changed")
 
-        # Upstream samples top-k logits at temperature 1e-5. With a unique
-        # maximum this converges to greedy argmax; using argmax here removes
-        # stochasticity from a production observation backend while preserving
-        # the effective upstream decode for non-tied logits.
+        # Upstream v0.0.0 samples from filtered logits at temperature 0.2.
+        # Production deliberately uses greedy argmax instead: this removes
+        # stochasticity from a fallible observation backend. Canonical upstream
+        # fixtures below are the regression guard for this deterministic
+        # divergence; do not describe it as byte-equivalent upstream sampling.
         for _ in range(MAX_TOKEN_COUNT):
             window = token_ids[-MAX_TOKEN_COUNT:]
             x = np.asarray(window, dtype=np.int64)[None, :]
