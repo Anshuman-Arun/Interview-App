@@ -176,6 +176,10 @@ describe("Windows desktop packaging contract", () => {
     expect(installer).toContain("INTERVIEW_PACKAGED_SMOKE_EXPECT_REPORT");
     expect(installer).toContain("Prior packaged smoke did not emit the upgrade proof");
     expect(installer).toContain("Uninstall*.exe");
+    expect(installer).toContain("FinalReleaseComObject($desktopLink)");
+    expect(installer).toContain("FinalReleaseComObject($startMenuLink)");
+    expect(installer).toContain("Wait-ForUninstallCleanup");
+    expect(installer).toContain("Uninstall cleanup timed out; remaining:");
     const workflow = await source(".github/workflows/windows-installer.yml");
     expect(workflow).toContain("Build synthetic prior-version installer");
     expect(workflow).toContain("InterviewApp-Prior.exe");
