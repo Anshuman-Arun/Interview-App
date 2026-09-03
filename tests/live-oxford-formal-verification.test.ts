@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   evidenceKeyToString,
+  newRequestId,
   newSessionId,
   type FormalInterpretationRequest
 } from "../packages/domain/src/index.js";
@@ -436,7 +437,7 @@ describe("live Oxford formal reasoning analysis", () => {
         turnId: committed.turnId,
         target: profile.target,
         allowedProtocols: profile.allowedProtocols,
-        requestId: "formal_analysis_recovery_fixture"
+        requestId: newRequestId()
       });
       const verifier = profile.scopes[0]?.verifier;
       if (verifier === undefined) throw new Error("Missing verifier scope");
