@@ -80,6 +80,7 @@ const VerificationDiscardReasonSchema = z.enum([
   "UNKNOWN_REQUEST",
   "SESSION_NOT_ACTIVE",
   "REQUEST_NOT_PENDING",
+  "CALLER_CANCELLED",
   "CALLBACK_BASIS_MISMATCH",
   "COMPATIBILITY_INCOMPATIBLE",
   "COMPATIBILITY_UNKNOWN",
@@ -463,6 +464,7 @@ export class VerificationCoordinator {
     readonly envelope: CommandEnvelope;
     readonly result: unknown;
     readonly verifier: DeterministicVerifier;
+    readonly cancellationRequested?: () => boolean;
   }) {
     const envelope = CommandEnvelopeSchema.parse(input.envelope);
     const supplied = VerificationResultSchema.parse(input.result);
@@ -495,6 +497,15 @@ export class VerificationCoordinator {
       });
 
       if (state.status !== "ACTIVE") return discard("SESSION_NOT_ACTIVE");
+      if (input.cancellationRequested !== undefined) {
+        let cancelled: boolean;
+        try {
+          cancelled = input.cancellationRequested();
+        } catch {
+          cancelled = true;
+        }
+        if (cancelled) return discard("CALLER_CANCELLED");
+      }
 
       if (
         envelope.inputEpisodeId !== request.basis.inputEpisodeId
