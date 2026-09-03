@@ -691,6 +691,7 @@ export class InterpretationCoordinator {
           candidateFormalInterpretation: candidate.canonicalStatement,
           interpretationConfidence: candidate.confidence,
           evidenceKey: request.target,
+          expectedProblemVersion: request.problem.version,
           envelope: createCommandEnvelope({
             sessionId: request.sessionId,
             producer: "interpretation-coordinator",
