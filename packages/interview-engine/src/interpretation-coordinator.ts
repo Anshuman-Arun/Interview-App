@@ -360,6 +360,11 @@ export class InterpretationCoordinator {
     return this.diagnostics.map((diagnostic) => ({ ...diagnostic }));
   }
 
+  public hasActiveWork(): boolean {
+    if (this.activeProviderInvocations > 0) return true;
+    return [...this.records.values()].some((record) => !record.settled);
+  }
+
   public cancel(requestIdInput: unknown): boolean {
     const parsed = RequestIdSchema.safeParse(requestIdInput);
     if (!parsed.success) return false;
