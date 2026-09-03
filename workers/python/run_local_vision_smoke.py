@@ -13,7 +13,6 @@ import platform
 import statistics
 import sys
 import time
-import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -48,10 +47,6 @@ FIXTURE_SPECS = {
     "5.png": (171_763, "bdf4ad6a6fe5d75188ef8075c7fe5b5c53dc9e5e"),
     "6.png": (91_882, "961d2a545f3e95b9d654cfbfe79fa62af2e5e437"),
 }
-FIXTURE_ROOT_URL = (
-    "https://raw.githubusercontent.com/RapidAI/RapidLaTeXOCR/"
-    f"{UPSTREAM_REVISION}/tests/test_files"
-)
 MAX_FIXTURE_BYTES = 256 * 1024
 PREFIXES = (
     "Visible math transcription: ",
@@ -111,25 +106,12 @@ def git_blob_sha1(payload: bytes) -> str:
     return hashlib.sha1(header + payload).hexdigest()
 
 
-def read_verified_fixture(root: Path | None, name: str) -> bytes:
+def read_verified_fixture(root: Path, name: str) -> bytes:
     expected_size, expected_blob = FIXTURE_SPECS[name]
-    if root is not None:
-        candidate = root / name
-        if candidate.is_file():
-            payload = candidate.read_bytes()
-        else:
-            payload = b""
-    else:
-        payload = b""
-
-    if not payload:
-        request = urllib.request.Request(
-            f"{FIXTURE_ROOT_URL}/{name}",
-            headers={"User-Agent": "interview-app-vision-smoke/1"},
-        )
-        with urllib.request.urlopen(request, timeout=30) as response:
-            payload = response.read(MAX_FIXTURE_BYTES + 1)
-
+    candidate = root / name
+    if not candidate.is_file():
+        raise RuntimeError(f"Pinned canonical fixture is missing: {name}")
+    payload = candidate.read_bytes()
     if len(payload) != expected_size or len(payload) > MAX_FIXTURE_BYTES:
         raise RuntimeError(
             f"Canonical fixture size mismatch for {name}: "
@@ -218,18 +200,14 @@ def main() -> int:
     parser.add_argument("--model-root", required=True)
     parser.add_argument(
         "--fixtures",
-        required=False,
-        help="Optional local directory containing the pinned upstream fixtures",
+        required=True,
+        help="Local directory containing the pinned upstream fixtures",
     )
     parser.add_argument("--report", required=True)
     args = parser.parse_args()
 
     model_root = Path(args.model_root).resolve(strict=True)
-    fixture_root = (
-        Path(args.fixtures).resolve(strict=True)
-        if args.fixtures is not None and Path(args.fixtures).exists()
-        else None
-    )
+    fixture_root = Path(args.fixtures).resolve(strict=True)
     report_path = Path(args.report).resolve(strict=False)
 
     asset_bytes = sum((model_root / name).stat().st_size for name in vision.MODEL_SPECS)
