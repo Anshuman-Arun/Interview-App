@@ -110,7 +110,30 @@ function parseCapability(value: unknown): DesktopRuntimeStatus["speech"] | undef
   };
 }
 
+function modelSetupBlocked(status: DesktopRuntimeStatus | undefined): boolean {
+  if (status === undefined) return false;
+  return [
+    status.speech.reasonCode,
+    status.tts.reasonCode
+  ].some((reason) =>
+    reason === "WORKER_EXECUTABLE_UNAVAILABLE"
+    || reason === "UNSUPPORTED_RUNTIME_PLATFORM"
+  );
+}
+
 function describeVoiceRuntime(status: DesktopRuntimeStatus): string {
+  if (
+    status.speech.reasonCode === "WORKER_EXECUTABLE_UNAVAILABLE"
+    || status.tts.reasonCode === "WORKER_EXECUTABLE_UNAVAILABLE"
+  ) {
+    return "Voice worker files are missing or failed integrity checks. Reinstall Interview App.";
+  }
+  if (
+    status.speech.reasonCode === "UNSUPPORTED_RUNTIME_PLATFORM"
+    || status.tts.reasonCode === "UNSUPPORTED_RUNTIME_PLATFORM"
+  ) {
+    return "Local voice is unavailable on this Windows architecture.";
+  }
   if (status.speech.state === "READY" && status.tts.state === "READY") {
     return "Voice runtime ready.";
   }
@@ -460,6 +483,7 @@ export function SettingsPage({
                 installingModels
                 || runtimeStatus?.modelSetup.state === "INSTALLING"
                 || runtimeStatus?.modelSetup.restartRequired === true
+                || modelSetupBlocked(runtimeStatus)
                 || (
                   runtimeStatus?.speech.state === "READY"
                   && runtimeStatus.tts.state === "READY"
@@ -491,9 +515,11 @@ export function SettingsPage({
                 ? "Installing verified models…"
                 : runtimeStatus?.modelSetup.restartRequired
                   ? "Restart to activate voice"
-                  : runtimeStatus?.speech.state === "READY" && runtimeStatus.tts.state === "READY"
-                    ? "Voice ready"
-                    : "Install / verify voice models"}
+                  : modelSetupBlocked(runtimeStatus)
+                    ? "Reinstall app to repair voice"
+                    : runtimeStatus?.speech.state === "READY" && runtimeStatus.tts.state === "READY"
+                      ? "Voice ready"
+                      : "Install / verify voice models"}
             </button>
           </div>
         </section>
