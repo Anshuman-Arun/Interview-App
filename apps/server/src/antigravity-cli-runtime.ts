@@ -228,10 +228,10 @@ export function isSupportedAntigravityCliVersionOutput(
 
   const [minimumMajor, minimumMinor, minimumPatch] =
     ANTIGRAVITY_MINIMUM_SAFE_CLI_VERSION;
-  // A new major may change headless, profile, auth, or protocol semantics.
-  // Fail closed until that major has been explicitly audited.
-  if (major !== minimumMajor) return false;
-  if (minor !== minimumMinor) return minor > minimumMinor;
+  // A new major or minor may change headless, profile, auth, or protocol
+  // semantics. This adapter is audited only against the 1.1.x stream-json
+  // contract, so fail closed until another line has been explicitly reviewed.
+  if (major !== minimumMajor || minor !== minimumMinor) return false;
   return patch >= minimumPatch;
 }
 
