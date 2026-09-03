@@ -122,6 +122,8 @@ describe("Windows desktop packaging contract", () => {
     expect(checker).toContain("local_model_worker.py");
     expect(checker).toContain("@electron/asar@4.3.0");
     expect(checker).toContain("prohibited app.asar entries");
+    expect(checker).toContain("renderer resource tree differs from the reviewed Vite build");
+    expect(checker).toContain("renderer files matched byte-for-byte");
     expect(smoke).toContain("--packaged-smoke-test");
     expect(smoke).toContain("--packaged-single-instance-smoke-host");
     expect(installer).toContain("preserve-across-upgrade-and-uninstall");
