@@ -148,12 +148,16 @@ describe("Real tldraw mounted browser integration", () => {
     });
 
     const bridge = requireRealTldrawBridge(handle);
-    const shape = adapter.createStudentShape({
-      type: "geo",
-      x: 80,
-      y: 90,
-      props: { geo: "rectangle", w: 120, h: 70, text: "persist me" }
+    let shape: ReturnType<typeof adapter.createStudentShape> | undefined;
+    await act(async () => {
+      shape = adapter.createStudentShape({
+        type: "geo",
+        x: 80,
+        y: 90,
+        props: { geo: "rectangle", w: 120, h: 70, text: "persist me" }
+      });
     });
+    if (shape === undefined) throw new Error("Student shape was not created");
     const revisionBeforePause = adapter.getBoardRevision();
 
     // Paused Home hides the live workspace instead of conditionally removing
