@@ -950,6 +950,7 @@ function collectVerificationSignals(
         && (!boundedString(sourceGenerationId, MAX_POLICY_ID_CHARACTERS))
       )
       || (boardRevisionIndependent !== undefined && boardRevisionIndependent !== true)
+      || (boardRevisionIndependent === true && sourceGenerationId !== undefined)
       || interpretationConfidence !== result.data.interpretationConfidence
       || verifier !== result.data.verifier
       || !Array.isArray(evidenceEventIds)
