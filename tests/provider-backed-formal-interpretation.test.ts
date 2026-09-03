@@ -20,6 +20,7 @@ import {
   ANTIGRAVITY_CLI_MODEL_ID,
   ANTIGRAVITY_CLI_PROVIDER_ID,
   type SupervisedCliExecutionRequest,
+  type SupervisedCliExecutionResult,
   type SupervisedCliExecutor
 } from "../packages/providers/src/index.js";
 import { getProblemById } from "../packages/problems/src/index.js";
@@ -482,7 +483,7 @@ describe("provider-backed Oxford formal interpretation", () => {
       const executor: SupervisedCliExecutor = Object.freeze({
         execute(input: SupervisedCliExecutionRequest) {
           markStarted();
-          return new Promise((resolve) => {
+          return new Promise<SupervisedCliExecutionResult>((resolve) => {
             if (input.signal.aborted) {
               sawAbort = true;
               resolve({
