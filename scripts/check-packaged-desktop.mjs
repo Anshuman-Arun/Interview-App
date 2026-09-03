@@ -51,6 +51,35 @@ async function walk(directory, relative = "") {
   return output;
 }
 
+async function verifyRendererTree() {
+  const sourceRoot = path.join(ROOT, "dist", "apps", "web");
+  const packagedRoot = path.join(RESOURCES, "web");
+  const sourceFiles = (await walk(sourceRoot))
+    .filter((entry) => !entry.endsWith(".map"))
+    .sort();
+  const packagedFiles = (await walk(packagedRoot)).sort();
+
+  if (JSON.stringify(sourceFiles) !== JSON.stringify(packagedFiles)) {
+    const missing = sourceFiles.filter((entry) => !packagedFiles.includes(entry));
+    const unexpected = packagedFiles.filter((entry) => !sourceFiles.includes(entry));
+    throw new Error(
+      "renderer resource tree differs from the reviewed Vite build"
+        + ` (missing: ${missing.slice(0, 20).join(", ") || "<none>"};`
+        + ` unexpected: ${unexpected.slice(0, 20).join(", ") || "<none>"})`
+    );
+  }
+
+  for (const relative of sourceFiles) {
+    const sourcePath = path.join(sourceRoot, ...relative.split("/"));
+    const packagedPath = path.join(packagedRoot, ...relative.split("/"));
+    if (await sha256(sourcePath) !== await sha256(packagedPath)) {
+      throw new Error(`renderer resource differs from the reviewed Vite build: ${relative}`);
+    }
+  }
+
+  return sourceFiles.length;
+}
+
 async function inspectAsar() {
   const asarPath = path.join(RESOURCES, "app.asar");
   await requireRegularFile(asarPath, "app.asar");
@@ -157,9 +186,10 @@ async function main() {
   const webAssets = resourceFiles.filter((entry) => entry.startsWith("web/assets/"));
   if (webAssets.length === 0) throw new Error("renderer asset bundle is empty");
 
+  const rendererFileCount = await verifyRendererTree();
   await inspectAsar();
   process.stdout.write(
-    `Packaged desktop verification passed (${String(resourceFiles.length)} external resource files inspected).\n`
+    `Packaged desktop verification passed (${String(resourceFiles.length)} external resource files inspected; ${String(rendererFileCount)} renderer files matched byte-for-byte).\n`
   );
 }
 
