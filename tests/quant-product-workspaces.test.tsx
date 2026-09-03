@@ -592,6 +592,110 @@ describe("Quant workspace lifecycle refresh", () => {
   });
 });
 
+describe("Quant Research client admission boundaries", () => {
+  function setInputValue(input: HTMLInputElement, value: string): void {
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value"
+    )?.set;
+    if (setter === undefined) throw new Error("HTML input value setter is unavailable");
+    setter.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  it("blocks runtime-rejected allocation budget overflow but submits scoreable infeasible optimization points", async () => {
+    const allocationState = researchState(
+      "EXPERIMENTAL_ALLOCATION",
+      "INITIAL_ALLOCATION",
+      0,
+      [
+        { key: "totalBudget", label: "Total sample budget", value: 10 },
+        { key: "costA", label: "Current cost per A sample", value: 6 },
+        { key: "costB", label: "Current cost per B sample", value: 6 }
+      ]
+    );
+    const optimizationState = researchState(
+      "CONSTRAINED_OPTIMIZATION",
+      "BASE_OPTIMIZATION",
+      0,
+      [
+        { key: "objective", label: "Current objective", value: "4*x + 5*y" },
+        { key: "budget", label: "Current budget in 2*x + 3*y <= budget", value: 5 },
+        { key: "maxX", label: "Maximum x", value: 1 },
+        { key: "maxY", label: "Maximum y", value: 1 }
+      ]
+    );
+
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+
+    const allocationSubmit = vi.fn(async () => allocationState);
+    await act(async () => {
+      root.render(
+        <QuantResearchWorkspace
+          state={allocationState}
+          loading={false}
+          actionPending={false}
+          disabled={false}
+          onRefresh={async () => undefined}
+          onSubmit={allocationSubmit}
+          onReview={() => undefined}
+        />
+      );
+    });
+    let inputs = [...container.querySelectorAll("input")];
+    if (inputs.length !== 2) throw new Error("Expected paired allocation inputs");
+    await act(async () => {
+      setInputValue(inputs[0] as HTMLInputElement, "1");
+      setInputValue(inputs[1] as HTMLInputElement, "1");
+    });
+    const allocationForm = container.querySelector("form");
+    if (allocationForm === null) throw new Error("Expected allocation form");
+    await act(async () => {
+      allocationForm.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    expect(allocationSubmit).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("public budget of 10");
+
+    const optimizationSubmit = vi.fn(async () => optimizationState);
+    await act(async () => {
+      root.render(
+        <QuantResearchWorkspace
+          state={optimizationState}
+          loading={false}
+          actionPending={false}
+          disabled={false}
+          onRefresh={async () => undefined}
+          onSubmit={optimizationSubmit}
+          onReview={() => undefined}
+        />
+      );
+    });
+    inputs = [...container.querySelectorAll("input")];
+    if (inputs.length !== 2) throw new Error("Expected paired optimization inputs");
+    await act(async () => {
+      setInputValue(inputs[0] as HTMLInputElement, "10");
+      setInputValue(inputs[1] as HTMLInputElement, "10");
+    });
+    const optimizationForm = container.querySelector("form");
+    if (optimizationForm === null) throw new Error("Expected optimization form");
+    await act(async () => {
+      optimizationForm.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await Promise.resolve();
+    });
+
+    expect(optimizationSubmit).toHaveBeenCalledTimes(1);
+    expect(optimizationSubmit.mock.calls[0]?.[0]).toMatchObject({
+      kind: "SUBMIT_PARAMETERS",
+      values: [10, 10]
+    });
+
+    await act(async () => root.unmount());
+    container.remove();
+  });
+});
+
 describe("Quant workspace public rendering", () => {
   it("renders rapid-entry Trading controls from public state without hidden engine fields", () => {
     const markup = renderToStaticMarkup(
