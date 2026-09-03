@@ -56,7 +56,7 @@ function renderHook(fetchImpl: typeof fetch): {
 }
 
 describe("configured interview hook launch", () => {
-  const originalAct = Reflect.get(globalThis, "IS_REACT_ACT_ENVIRONMENT");
+  const originalAct: unknown = Reflect.get(globalThis, "IS_REACT_ACT_ENVIRONMENT");
 
   beforeEach(() => {
     Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
