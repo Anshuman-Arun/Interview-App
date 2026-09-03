@@ -27,6 +27,7 @@ const ANTIGRAVITY_SAFE_SETTINGS = Object.freeze({
   useG1Credits: false,
   enableTelemetry: false,
   notifications: false,
+  showTips: false,
   showFeedbackSurvey: false,
   permissions: {
     allow: [],

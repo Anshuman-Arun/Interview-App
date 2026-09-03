@@ -17,6 +17,7 @@ describe("supervised Antigravity runtime profile", () => {
       readonly toolPermission?: unknown;
       readonly useG1Credits?: unknown;
       readonly enableTelemetry?: unknown;
+      readonly showTips?: unknown;
       readonly enableTerminalSandbox?: unknown;
       readonly allowNonWorkspaceAccess?: unknown;
       readonly permissions?: {
@@ -30,6 +31,7 @@ describe("supervised Antigravity runtime profile", () => {
     expect(settings.toolPermission).toBe("strict");
     expect(settings.useG1Credits).toBe(false);
     expect(settings.enableTelemetry).toBe(false);
+    expect(settings.showTips).toBe(false);
     expect(settings.enableTerminalSandbox).toBeUndefined();
     expect(settings.allowNonWorkspaceAccess).toBe(false);
     expect(settings.modelProvider).toBeUndefined();
