@@ -151,7 +151,7 @@ class VisionRuntime:
             and primary_text == secondary_text
             and _structurally_plausible(primary_text)
         )
-        confidence = 0.72 if stable else 0.55
+        # Repeatability is not calibrated semantic confidence. Keep even the\n        # strongest OCR heuristic below the evidence bridge's 0.7 admission floor.\n        confidence = 0.69 if stable else 0.55
         kind = _classify(primary_text)
         if requested_kind != "ANY" and kind != requested_kind:
             return {
@@ -192,7 +192,7 @@ class VisionRuntime:
         if len(decoder_inputs) != 3:
             raise RuntimeError("vision decoder input contract changed")
 
-        # Upstream v0.0.0 samples from filtered logits at temperature 0.2.
+        # Upstream v0.0.0 samples from filtered logits at temperature 0.00001.
         # Production deliberately uses greedy argmax instead: this removes
         # stochasticity from a fallible observation backend. Canonical upstream
         # fixtures below are the regression guard for this deterministic
