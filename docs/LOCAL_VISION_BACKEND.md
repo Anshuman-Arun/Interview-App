@@ -157,8 +157,9 @@ The existing observation classes remain unchanged:
 
 The math recognizer performs a second deterministic threshold perturbation.
 Only an exactly matching transcription with clean EOS termination and basic
-structural sanity receives a score of `0.72`. Unstable recognition stays at
-`0.55` or below; blank/illegible content is lower still.
+structural sanity receives a score of `0.69`. Unstable recognition stays at
+`0.55` or below; blank/illegible content is lower still. Both OCR scores are
+intentionally below the evidence bridge's `0.7` minimum.
 
 These values are conservative stability/admission scores. They are **not**
 claimed calibrated probabilities. The existing evidence bridge continues to
