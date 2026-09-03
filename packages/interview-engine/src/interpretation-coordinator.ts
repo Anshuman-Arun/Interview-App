@@ -14,6 +14,7 @@ import {
   type FormalInterpretationCandidate,
   type FormalInterpretationRequest,
   type FormalProtocolRef,
+  type GenerationBasis,
   type InterpretationProviderResult,
   type RequestId,
   type VerificationResult,
@@ -31,6 +32,7 @@ import {
 import type { SessionWriter } from "./session-writer.js";
 import {
   VerificationCoordinator,
+  VerificationWorkItemSchema,
   type FormalInterpretationDiscardReason,
   type VerificationWorkItem
 } from "./verification-coordinator.js";
@@ -221,6 +223,20 @@ function protocolKey(protocol: FormalProtocolRef): string {
 function sameStringArray(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
+
+function sameDirectVerificationBasis(
+  requestBasis: GenerationBasis,
+  persistedBasis: GenerationBasis
+): boolean {
+  return requestBasis.contextEpoch === persistedBasis.contextEpoch
+    && requestBasis.committedInputSequence === persistedBasis.committedInputSequence
+    && requestBasis.transcriptRevision === persistedBasis.transcriptRevision
+    && requestBasis.problemStateRevision === persistedBasis.problemStateRevision
+    && requestBasis.policyRevision === persistedBasis.policyRevision
+    && requestBasis.inputEpisodeId === persistedBasis.inputEpisodeId
+    && requestBasis.turnId === persistedBasis.turnId;
+}
+
 
 function sameCandidateSource(candidate: FormalInterpretationCandidate, request: FormalInterpretationRequest): boolean {
   return candidate.source.requestId === request.requestId
@@ -471,6 +487,9 @@ export class InterpretationCoordinator {
       const route = this.router.resolve(protocol, request.target);
       if (!route.ok) return this.finishFailure(mapRouteFailure(route.reason, request.requestId, 0, true));
     }
+
+    const recovered = await this.resumePersistedDirectVerification(request, record);
+    if (recovered !== undefined) return recovered;
 
     if (this.isCancelled(record)) {
       return this.finishFailure(failed("STALE", "CANCELLED", 0, request.requestId));
@@ -848,6 +867,190 @@ export class InterpretationCoordinator {
       duplicateVerificationRequest
     };
     this.finishAccepted(outcome, candidateCount);
+    return outcome;
+  }
+
+  private async resumePersistedDirectVerification(
+    request: FormalInterpretationRequest,
+    record: RequestRecord
+  ): Promise<InterpretationExecutionOutcome | undefined> {
+    if (request.generationId !== undefined) return undefined;
+
+    const persisted = this.writer.getState().verificationRequests[request.requestId];
+    if (persisted === undefined) return undefined;
+
+    if (
+      persisted.sourceGenerationId !== undefined
+      || !evidenceKeysEqual(persisted.evidenceKey, request.target)
+      || !sameDirectVerificationBasis(request.basis, persisted.basis)
+      || persisted.basis.inputEpisodeId !== request.source.inputEpisodeId
+      || persisted.basis.turnId !== request.source.turnId
+      || persisted.basis.committedInputSequence !== request.source.sourceRevision
+      || persisted.interpretationConfidence < MINIMUM_DETERMINISTIC_INTERPRETATION_CONFIDENCE
+    ) {
+      return this.finishFailure(failed(
+        "INVALID_REQUEST",
+        "REQUEST_ID_CONFLICT",
+        0,
+        request.requestId
+      ));
+    }
+
+    const matchingRoutes = request.allowedProtocols
+      .map((protocol) => this.router.resolve(protocol, request.target))
+      .filter((route): route is Extract<FormalProtocolRouteResolution, { readonly ok: true }> =>
+        route.ok && route.definition.verifier === persisted.verifier
+      );
+    if (matchingRoutes.length !== 1 || matchingRoutes[0] === undefined) {
+      await this.verification.discardPendingVerification({
+        verificationRequestId: request.requestId,
+        reason: "FORMAL_INTERPRETATION_RECOVERY_ROUTE_UNAVAILABLE"
+      }).catch(() => undefined);
+      return this.finishFailure(failed(
+        "VERIFIER_UNAVAILABLE",
+        "VERIFIER_MISSING",
+        0,
+        request.requestId
+      ));
+    }
+    const route = matchingRoutes[0];
+    const statement = this.router.validateStatement(route, persisted.candidateFormalInterpretation);
+    if (!statement.ok || statement.canonicalStatement !== persisted.candidateFormalInterpretation) {
+      await this.verification.discardPendingVerification({
+        verificationRequestId: request.requestId,
+        reason: "FORMAL_INTERPRETATION_RECOVERY_STATEMENT_INVALID"
+      }).catch(() => undefined);
+      return this.finishFailure(failed(
+        "INVALID_PROPOSAL",
+        statement.ok ? "MALFORMED_INTERPRETATION" : mapStatementFailure(
+          statement.reason,
+          request.requestId,
+          0
+        ).reason,
+        0,
+        request.requestId
+      ));
+    }
+
+    const verifier = this.router.createVerifier(route);
+    if (verifier === undefined) {
+      await this.verification.discardPendingVerification({
+        verificationRequestId: request.requestId,
+        reason: "FORMAL_INTERPRETATION_RECOVERY_VERIFIER_UNAVAILABLE"
+      }).catch(() => undefined);
+      return this.finishFailure(failed(
+        "VERIFIER_UNAVAILABLE",
+        "VERIFIER_MISSING",
+        0,
+        request.requestId
+      ));
+    }
+
+    const workItem = VerificationWorkItemSchema.parse({
+      protocolVersion: 1,
+      verificationRequestId: request.requestId,
+      verifier: persisted.verifier,
+      basis: persisted.basis,
+      candidateFormalInterpretation: persisted.candidateFormalInterpretation,
+      interpretationConfidence: persisted.interpretationConfidence,
+      evidenceKey: persisted.evidenceKey,
+      evidenceEventIds: persisted.evidenceEventIds
+    });
+    record.dispatchStarted = true;
+    record.verificationRequestId = workItem.verificationRequestId;
+    this.addDiagnostic({
+      requestId: request.requestId,
+      state: "VERIFICATION_PENDING",
+      candidateCount: 0,
+      protocol: route.protocol.protocol,
+      verifier: route.definition.verifier
+    });
+
+    if (persisted.status === "ACCEPTED" && persisted.result !== undefined) {
+      const outcome: AcceptedInterpretationOutcome = {
+        status: "ACCEPTED",
+        requestId: request.requestId,
+        candidateId: "persisted-direct-verification",
+        protocol: route.protocol,
+        verifier: route.definition.verifier,
+        verificationRequestId: request.requestId,
+        verificationStatus: persisted.result.status,
+        evidenceCommitted: persisted.result.status === "VERIFIED",
+        duplicateVerificationRequest: true
+      };
+      this.finishAccepted(outcome, 0);
+      return outcome;
+    }
+    if (persisted.status === "DISCARDED") {
+      return this.finishFailure(failed(
+        "VERIFICATION_REJECTED",
+        "VERIFICATION_ALREADY_DISCARDED",
+        0,
+        request.requestId
+      ));
+    }
+
+    const supplied = await this.executeVerifier(verifier, workItem);
+    if (this.isCancelled(record)) {
+      await this.discardPendingVerification(record, "FORMAL_INTERPRETATION_CANCELLED");
+      return this.finishFailure(failed("STALE", "CANCELLED", 0, request.requestId));
+    }
+    const currentFailure = this.checkCurrentRequest(request, 0);
+    if (currentFailure !== undefined) {
+      await this.discardPendingVerification(record, "FORMAL_INTERPRETATION_STALE");
+      return this.finishFailure(currentFailure);
+    }
+
+    let verificationResult;
+    try {
+      verificationResult = await this.verification.processResult({
+        envelope: createCommandEnvelope({
+          sessionId: request.sessionId,
+          producer: "interpretation-coordinator-recovery",
+          correlationId: workItem.verificationRequestId,
+          inputEpisodeId: request.source.inputEpisodeId,
+          turnId: request.source.turnId,
+          contextEpoch: workItem.basis.contextEpoch,
+          sourceRevision: workItem.basis.committedInputSequence
+        }),
+        result: supplied,
+        verifier,
+        cancellationRequested: () => this.isCancelled(record)
+      });
+    } catch {
+      await this.discardPendingVerification(record, "FORMAL_INTERPRETATION_RECOVERY_RESULT_FAILED");
+      return this.finishFailure(failed(
+        "VERIFICATION_REJECTED",
+        "VERIFICATION_RESULT_REJECTED",
+        0,
+        request.requestId
+      ));
+    }
+
+    if (!verificationResult.value.accepted) {
+      if (this.isCancelled(record)) {
+        return this.finishFailure(failed("STALE", "CANCELLED", 0, request.requestId));
+      }
+      return this.finishFailure(failed(
+        "VERIFICATION_REJECTED",
+        "VERIFICATION_RESULT_REJECTED",
+        0,
+        request.requestId
+      ));
+    }
+
+    const outcome: AcceptedInterpretationOutcome = {
+      status: "ACCEPTED",
+      requestId: request.requestId,
+      candidateId: "persisted-direct-verification",
+      protocol: route.protocol,
+      verifier: route.definition.verifier,
+      verificationRequestId: request.requestId,
+      verificationStatus: verificationResult.value.status,
+      evidenceCommitted: verificationResult.value.evidenceCommitted,
+      duplicateVerificationRequest: true
+    };
+    this.finishAccepted(outcome, 0);
     return outcome;
   }
 
