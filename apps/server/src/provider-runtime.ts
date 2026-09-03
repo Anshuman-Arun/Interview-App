@@ -487,8 +487,8 @@ function createApplicationProviderRuntimePolicySource(): ProviderRuntimePolicySo
   const antigravityPolicy: ProviderPolicy = Object.freeze({
     allowMeteredUsage: allowMeteredRemoteReasoning,
     // Selecting the Antigravity provider explicitly authorizes its declared
-    // remote data-use class. Metered spend remains a separate gate and is
-    // denied by default unless the trusted runtime supplies current proof.
+    // remote data-use class. Metered-unknown execution remains a separate gate:
+    // it is denied by default and enabled only by the trusted host opt-in above.
     maximumDataUse: "REMOTE_MAY_BE_USED_FOR_IMPROVEMENT",
     billingVerificationMaxAgeMs: 60_000
   });
