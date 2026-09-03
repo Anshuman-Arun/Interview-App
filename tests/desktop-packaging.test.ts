@@ -139,6 +139,8 @@ describe("Windows desktop packaging contract", () => {
     expect(checker).toContain("@electron/asar@4.3.0");
     expect(checker).toContain('shell: process.platform === "win32"');
     expect(checker).toContain("prohibited app.asar entries");
+    expect(checker).toContain('new Set(["pngjs", "zod"])');
+    expect(checker).toContain("unexpected production runtime packages");
     expect(checker).toContain("renderer resource tree differs from the reviewed Vite build");
     expect(checker).toContain("renderer files matched byte-for-byte");
     expect(smoke).toContain("--packaged-smoke-test");
