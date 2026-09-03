@@ -149,7 +149,10 @@ implements FormalInterpretationProvider {
         throw error;
       }
     } finally {
-      await admittedSession.close().catch(() => undefined);
+      // Closing the policy-admission session is cleanup only. Never allow a
+      // fallible provider's close hook to hold the formal-analysis slot open
+      // after the bounded inference path has otherwise settled.
+      void admittedSession.close().catch(() => undefined);
     }
   }
 }
