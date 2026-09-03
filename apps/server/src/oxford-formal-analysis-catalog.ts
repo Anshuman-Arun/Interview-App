@@ -93,9 +93,14 @@ const PROFILES = new Map<string, OxfordFormalAnalysisProfile>(
 );
 
 export function resolveOxfordFormalAnalysisProfile(
-  problem: Pick<InterviewProblem, "id" | "version">
+  problem: InterviewProblem
 ): OxfordFormalAnalysisProfile | undefined {
-  return PROFILES.get(problem.id + "\u0000" + problem.version);
+  const profile = PROFILES.get(problem.id + "\u0000" + problem.version);
+  if (profile === undefined) return undefined;
+  if (profile.target.subject.kind !== "MILESTONE") return undefined;
+  const milestoneId = profile.target.subject.milestoneId;
+  const milestone = problem.interviewer.reasoningGraph.milestones.find((item) => item.id === milestoneId);
+  return milestone === undefined ? undefined : profile;
 }
 
 export function listOxfordFormalAnalysisProfiles(): readonly OxfordFormalAnalysisProfile[] {
