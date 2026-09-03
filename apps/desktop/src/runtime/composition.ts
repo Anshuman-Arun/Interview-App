@@ -20,7 +20,6 @@ import {
   ModelAssetError,
   ModelAssetManager
 } from "../../../../packages/model-assets/src/index.js";
-import type { VisionInferenceBackend } from "../../../../packages/interview-engine/src/index.js";
 import type { VoiceRuntimeConfiguration } from "../../../server/src/voice-runtime.js";
 import { ManagedModelWorkerClient } from "./managed-worker-client.js";
 import {
