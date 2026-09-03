@@ -23,7 +23,7 @@ function displayNumber(value: number): string {
 function isOnTick(value: number, tickSize: number): boolean {
   if (!Number.isFinite(value) || !Number.isFinite(tickSize) || tickSize <= 0) return false;
   const units = value / tickSize;
-  return Math.abs(units - Math.round(units)) <= 1e-8 * Math.max(1, Math.abs(units));
+  return Number.isFinite(units) && Math.abs(units - Math.round(units)) <= 1e-9;
 }
 
 function parseFinite(raw: string): number | null {
@@ -86,6 +86,18 @@ export const QuantTradingWorkspace: React.FC<QuantTradingWorkspaceProps> = ({
         action: null,
         error: `Each size must be at most ${String(state.quoteRequest.maxQuoteSize)}.`
       } as const;
+    }
+    if (state.quoteRequest.hardPositionLimit) {
+      const position = state.portfolio.position;
+      if (
+        position + parsedBidSize > state.quoteRequest.maxPosition
+        || position - parsedAskSize < -state.quoteRequest.maxPosition
+      ) {
+        return {
+          action: null,
+          error: `Quote could breach the public hard position limit of ±${String(state.quoteRequest.maxPosition)}.`
+        } as const;
+      }
     }
     const action: QuantTradingCandidateAction = {
       type: "QUOTE",
