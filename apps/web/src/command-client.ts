@@ -26,6 +26,7 @@ import {
   type NormalizedBoardMutation,
   type InterviewCatalogEntry,
   type InterviewSessionConfiguration,
+  type ProviderLaunchAvailabilityReason,
   type ProviderLaunchOption,
   type ProtocolErrorResponse,
   type ProtocolSuccessResponse,
@@ -101,39 +102,49 @@ export class BrowserCommandResponseError extends Error {
   }
 }
 
-const SAFE_PROVIDER_PROTOCOL_MESSAGES: ReadonlySet<string> = new Set([
-  "Selected provider requires configured authentication",
-  "Selected provider is disabled",
-  "Selected provider runtime configuration is unavailable",
-  "Selected provider runtime dependency is unavailable",
-  "Selected provider policy could not be verified",
-  "Selected provider is denied by the current safety policy",
-  "Selected provider does not satisfy required capabilities",
-  "Selected provider is unavailable",
-  "Selected provider readiness could not be verified"
-]);
-
-function safeProtocolMessage(
-  code: ProtocolErrorResponse["error"]["code"],
-  message: string
-): string | undefined {
-  return code === "CONFLICT" && SAFE_PROVIDER_PROTOCOL_MESSAGES.has(message)
-    ? message
-    : undefined;
+function providerLaunchFailurePublicMessage(
+  reason: ProviderLaunchAvailabilityReason
+): string {
+  switch (reason) {
+    case "CREDENTIALS_REQUIRED":
+      return "Selected provider requires configured authentication";
+    case "DISABLED":
+      return "Selected provider is disabled";
+    case "RUNTIME_CONFIGURATION_UNAVAILABLE":
+      return "Selected provider runtime configuration is unavailable";
+    case "RUNTIME_DEPENDENCY_UNAVAILABLE":
+      return "Selected provider runtime dependency is unavailable";
+    case "POLICY_UNAVAILABLE":
+      return "Selected provider policy could not be verified";
+    case "POLICY_DENIED":
+      return "Selected provider is denied by the current safety policy";
+    case "CAPABILITY_UNAVAILABLE":
+      return "Selected provider does not satisfy required capabilities";
+    case "PROVIDER_UNAVAILABLE":
+      return "Selected provider is unavailable";
+    case "UNKNOWN":
+      return "Selected provider readiness could not be verified";
+  }
 }
 
 export class BrowserCommandProtocolError extends Error {
   public readonly code: ProtocolErrorResponse["error"]["code"];
+  public readonly publicMessage: string | undefined;
 
   public constructor(
     public readonly status: number,
     code: ProtocolErrorResponse["error"]["code"],
     public readonly requestId: RequestId,
-    public readonly publicMessage?: string
+    public readonly providerLaunchReason?: ProviderLaunchAvailabilityReason
   ) {
+    const publicMessage =
+      code === "CONFLICT" && providerLaunchReason !== undefined
+        ? providerLaunchFailurePublicMessage(providerLaunchReason)
+        : undefined;
     super(publicMessage ?? `Command rejected with protocol error ${code}`);
     this.name = "BrowserCommandProtocolError";
     this.code = code;
+    this.publicMessage = publicMessage;
   }
 }
 
@@ -737,7 +748,7 @@ export class BrowserCommandClient {
         response.status,
         protocolError.error.code,
         command.requestId,
-        safeProtocolMessage(protocolError.error.code, protocolError.error.message)
+        protocolError.error.providerLaunchReason
       );
     }
 
