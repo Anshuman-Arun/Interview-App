@@ -2,6 +2,7 @@ import type { LocalTransportSecurity } from "../../../packages/domain/src/index.
 import type {
   SessionRuntimeRegistry,
   VisionEvidenceInterpreter,
+  FormalInterpretationProvider,
   VisionInferenceBackend
 } from "../../../packages/interview-engine/src/index.js";
 import type { SqliteEventStore } from "../../../packages/persistence/src/index.js";
@@ -42,6 +43,7 @@ export interface LocalInterviewTransportRuntimeOptions {
   readonly maxRendererMessageBytes?: number;
   readonly orchestrator?: ServerTurnOrchestrator;
   readonly providerRuntimeResolver?: ProviderRuntimeResolver;
+  readonly formalInterpretationProvider?: FormalInterpretationProvider;
   readonly readService?: SessionReadService;
   readonly visionBackend?: VisionInferenceBackend;
   readonly visionEvidenceInterpreter?: VisionEvidenceInterpreter;
@@ -75,12 +77,14 @@ export class LocalInterviewTransportRuntime {
   private voiceWorkersTerminated = false;
 
   public constructor(options: LocalInterviewTransportRuntimeOptions) {
-    if (
-      options.orchestrator !== undefined
-      && options.providerRuntimeResolver !== undefined
-    ) {
+    if (options.orchestrator !== undefined && options.providerRuntimeResolver !== undefined) {
       throw new Error(
         "Local interview transport cannot accept both an orchestrator and a provider runtime resolver"
+      );
+    }
+    if (options.orchestrator !== undefined && options.formalInterpretationProvider !== undefined) {
+      throw new Error(
+        "Local interview transport cannot accept both an orchestrator and a formal interpretation provider"
       );
     }
     const voiceRuntime = options.voiceRuntime;
@@ -103,7 +107,8 @@ export class LocalInterviewTransportRuntime {
         this.sessions,
         () => this.rendererStreamServer,
         undefined,
-        options.providerRuntimeResolver
+        options.providerRuntimeResolver,
+        options.formalInterpretationProvider
       );
     this.sessions.setTurnRecoveryDelegate(this.orchestrator);
     this.readService = options.readService ?? new SessionReadService({
@@ -334,6 +339,7 @@ export class LocalInterviewTransportRuntime {
   private handleSessionTerminal(
     sessionId: Parameters<VoiceSynthesisCoordinator["cancelSession"]>[0]
   ): void {
+    this.orchestrator.requestCancellationForSupersededWork(sessionId);
     const writer = this.sessions.getWriter(sessionId);
     this.rendererStreamServer.closeSession(sessionId);
     this.audioAssets.pruneUnauthorizedSessionAssets(sessionId, writer.getState());

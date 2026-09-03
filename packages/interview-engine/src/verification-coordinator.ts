@@ -18,12 +18,14 @@ import {
   type EvidenceKey,
   type GenerationBasis,
   type InputEpisodeId,
+  type RequestId,
   type VerificationResult,
   type TurnId
 } from "../../domain/src/index.js";
 import type { EventDraft } from "../../events/src/index.js";
 import { createCommandEnvelope } from "./envelopes.js";
 import { isGenerationBasisStillCompatible } from "./compatibility.js";
+import { isVerificationBasisStillCompatible } from "./verification-compatibility.js";
 import { invalidateUndeliveredPolicyOutput } from "./policy-output-invalidation.js";
 import type { SessionWriter } from "./session-writer.js";
 
@@ -44,9 +46,18 @@ export const VerificationWorkItemSchema = z.object({
   interpretationConfidence: z.number().min(0).max(1),
   evidenceKey: EvidenceKeySchema,
   evidenceEventIds: z.array(EventIdSchema).min(1),
+  boardRevisionIndependent: z.literal(true).optional(),
   sourceGenerationId: GenerationIdSchema.optional(),
   sourceProposalRequestId: RequestIdSchema.optional()
-}).strict();
+}).strict().superRefine((value, context) => {
+  if (value.boardRevisionIndependent === true && value.sourceGenerationId !== undefined) {
+    context.addIssue({
+      code: "custom",
+      path: ["boardRevisionIndependent"],
+      message: "Generation-bound verification cannot ignore board revision"
+    });
+  }
+});
 export type VerificationWorkItem = z.infer<typeof VerificationWorkItemSchema>;
 
 const FormalInterpretationDiscardReasonSchema = z.enum([
@@ -78,6 +89,7 @@ const VerificationDiscardReasonSchema = z.enum([
   "UNKNOWN_REQUEST",
   "SESSION_NOT_ACTIVE",
   "REQUEST_NOT_PENDING",
+  "CALLER_CANCELLED",
   "CALLBACK_BASIS_MISMATCH",
   "COMPATIBILITY_INCOMPATIBLE",
   "COMPATIBILITY_UNKNOWN",
@@ -103,6 +115,12 @@ export const VerificationAdmissionResultSchema = z.discriminatedUnion("accepted"
   }).strict()
 ]);
 export type VerificationAdmissionResult = z.infer<typeof VerificationAdmissionResultSchema>;
+
+export const PendingVerificationDiscardResultSchema = z.object({
+  verificationRequestId: RequestIdSchema,
+  discarded: z.boolean()
+}).strict();
+export type PendingVerificationDiscardResult = z.infer<typeof PendingVerificationDiscardResultSchema>;
 
 type Recomputed =
   | { readonly ok: true; readonly result: VerificationResult }
@@ -280,21 +298,31 @@ export class VerificationCoordinator {
     readonly candidateFormalInterpretation: string;
     readonly interpretationConfidence: number;
     readonly evidenceKey: EvidenceKey;
+    readonly expectedProblemVersion?: string;
+    readonly boardRevisionIndependent?: true;
     readonly envelope?: CommandEnvelope;
   }) {
     const verifier = VerifierIdSchema.parse(input.verifier);
     const evidenceKey = EvidenceKeySchema.parse(input.evidenceKey);
+    const expectedProblemVersion = input.expectedProblemVersion === undefined
+      ? undefined
+      : z.string().min(1).max(128).parse(input.expectedProblemVersion);
     const interpretation = FormalInterpretationProposalSchema.parse({
       candidateFormalInterpretation: input.candidateFormalInterpretation,
       interpretationConfidence: input.interpretationConfidence
     });
     const verificationRequestId = newRequestId();
+    const snapshot = this.writer.getState();
     const envelope = CommandEnvelopeSchema.parse(input.envelope ?? createCommandEnvelope({
       sessionId: this.writer.sessionId,
       producer: "verification-coordinator",
       correlationId: verificationRequestId,
       inputEpisodeId: input.inputEpisodeId,
-      turnId: input.turnId
+      turnId: input.turnId,
+      contextEpoch: snapshot.contextEpoch,
+      ...(snapshot.lastCommittedInputSequence === undefined
+        ? {}
+        : { sourceRevision: snapshot.lastCommittedInputSequence })
     }));
     const effectiveRequestId = envelope.correlationId;
 
@@ -306,7 +334,9 @@ export class VerificationCoordinator {
         verifier,
         candidateFormalInterpretation: interpretation.candidateFormalInterpretation,
         interpretationConfidence: interpretation.interpretationConfidence,
-        evidenceKey
+        evidenceKey,
+        ...(expectedProblemVersion === undefined ? {} : { expectedProblemVersion }),
+        ...(input.boardRevisionIndependent === true ? { boardRevisionIndependent: true as const } : {})
       }
     }, VerificationWorkItemSchema, (state) => {
       if (state.status !== "ACTIVE") throw new Error("Verification requires an active session");
@@ -326,7 +356,25 @@ export class VerificationCoordinator {
         state.lastCommittedInputSequence === undefined
         || turn.committedSequence !== state.lastCommittedInputSequence
       ) throw new Error("Verification requires the latest committed Turn");
-      if (state.problem?.id !== evidenceKey.problemId) throw new Error("Verification evidence is scoped to a different problem");
+      if (
+        envelope.inputEpisodeId !== input.inputEpisodeId
+        || envelope.turnId !== input.turnId
+        || envelope.contextEpoch !== state.contextEpoch
+        || envelope.sourceRevision !== state.lastCommittedInputSequence
+        || snapshot.contextEpoch !== state.contextEpoch
+        || snapshot.lastCommittedInputSequence !== state.lastCommittedInputSequence
+        || snapshot.transcriptRevision !== state.transcriptRevision
+        || snapshot.problemStateRevision !== state.problemStateRevision
+        || snapshot.policyRevision !== state.policyRevision
+      ) {
+        throw new Error("Verification source basis changed before durable admission");
+      }
+      if (
+        state.problem?.id !== evidenceKey.problemId
+        || (expectedProblemVersion !== undefined && state.problem.version !== expectedProblemVersion)
+      ) {
+        throw new Error("Verification evidence is scoped to a different problem");
+      }
       if (evidenceKey.subject.kind !== "CLAIM" || evidenceKey.dimension !== "CORRECTNESS") {
         throw new Error("Phase 0 deterministic verification may commit only claim correctness evidence");
       }
@@ -354,7 +402,8 @@ export class VerificationCoordinator {
         candidateFormalInterpretation: interpretation.candidateFormalInterpretation,
         interpretationConfidence: interpretation.interpretationConfidence,
         evidenceKey,
-        evidenceEventIds: [evidenceEventId]
+        evidenceEventIds: [evidenceEventId],
+        ...(input.boardRevisionIndependent === true ? { boardRevisionIndependent: true as const } : {})
       });
       return {
         drafts: [{
@@ -367,10 +416,59 @@ export class VerificationCoordinator {
             candidateFormalInterpretation: workItem.candidateFormalInterpretation,
             interpretationConfidence: workItem.interpretationConfidence,
             evidenceKey: workItem.evidenceKey,
-            evidenceEventIds: workItem.evidenceEventIds
+            evidenceEventIds: workItem.evidenceEventIds,
+            ...(workItem.boardRevisionIndependent === true
+              ? { boardRevisionIndependent: true as const }
+              : {})
           }
         }],
         result: workItem
+      };
+    });
+  }
+
+  public discardPendingVerification(input: {
+    readonly verificationRequestId: RequestId;
+    readonly reason: string;
+  }) {
+    const verificationRequestId = RequestIdSchema.parse(input.verificationRequestId);
+    const reason = z.string().trim().min(1).max(240).parse(input.reason);
+    const snapshot = this.writer.getState().verificationRequests[verificationRequestId];
+    const envelope = createCommandEnvelope({
+      sessionId: this.writer.sessionId,
+      producer: "verification-coordinator",
+      correlationId: verificationRequestId,
+      ...(snapshot?.basis.inputEpisodeId === undefined
+        ? {}
+        : { inputEpisodeId: snapshot.basis.inputEpisodeId }),
+      ...(snapshot?.basis.turnId === undefined ? {} : { turnId: snapshot.basis.turnId }),
+      ...(snapshot === undefined ? {} : {
+        contextEpoch: snapshot.basis.contextEpoch,
+        sourceRevision: snapshot.basis.committedInputSequence
+      })
+    });
+
+    return this.writer.execute(envelope, {
+      operation: "DISCARD_PENDING_VERIFICATION",
+      payload: { verificationRequestId, reason }
+    }, PendingVerificationDiscardResultSchema, (state) => {
+      const request = state.verificationRequests[verificationRequestId];
+      if (
+        request === undefined
+        || request.status !== "PENDING"
+      ) {
+        return {
+          drafts: [],
+          result: { verificationRequestId, discarded: false }
+        };
+      }
+      return {
+        drafts: [{
+          source: "APPLICATION" as const,
+          type: "VERIFICATION_RESULT_DISCARDED" as const,
+          payload: { verificationRequestId, reason }
+        }],
+        result: { verificationRequestId, discarded: true }
       };
     });
   }
@@ -379,6 +477,7 @@ export class VerificationCoordinator {
     readonly envelope: CommandEnvelope;
     readonly result: unknown;
     readonly verifier: DeterministicVerifier;
+    readonly cancellationRequested?: () => boolean;
   }) {
     const envelope = CommandEnvelopeSchema.parse(input.envelope);
     const supplied = VerificationResultSchema.parse(input.result);
@@ -411,6 +510,15 @@ export class VerificationCoordinator {
       });
 
       if (state.status !== "ACTIVE") return discard("SESSION_NOT_ACTIVE");
+      if (input.cancellationRequested !== undefined) {
+        let cancelled: boolean;
+        try {
+          cancelled = input.cancellationRequested();
+        } catch {
+          cancelled = true;
+        }
+        if (cancelled) return discard("CALLER_CANCELLED");
+      }
 
       if (
         envelope.inputEpisodeId !== request.basis.inputEpisodeId
@@ -419,7 +527,11 @@ export class VerificationCoordinator {
         || envelope.sourceRevision !== request.basis.committedInputSequence
       ) return discard("CALLBACK_BASIS_MISMATCH");
 
-      const compatibility = isGenerationBasisStillCompatible(request.basis, state);
+      const compatibility = isVerificationBasisStillCompatible(
+        request.basis,
+        state,
+        request.boardRevisionIndependent === true
+      );
       if (compatibility === "INCOMPATIBLE") return discard("COMPATIBILITY_INCOMPATIBLE");
       if (compatibility === "UNKNOWN") return discard("COMPATIBILITY_UNKNOWN");
       if (!this.isScopeAuthorized(request.verifier, request.evidenceKey)) {
