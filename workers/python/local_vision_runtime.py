@@ -38,7 +38,7 @@ EOS_TOKEN = 2
 FIRST_CONTENT_TOKEN = 4
 REPETITION_CUTOFF = 8
 MAX_REPEATED_CYCLE_PERIOD = 16
-MIN_REPEATED_CYCLE_COUNT = 4
+MIN_REPEATED_CYCLE_COUNT = 6
 MAX_DECODE_SECONDS = 5.0
 MAX_HEURISTIC_CONFIDENCE = 0.69
 UNSTABLE_HEURISTIC_CONFIDENCE = 0.55
@@ -380,7 +380,7 @@ def _has_repeated_token_cycle(token_ids: list[int]) -> bool:
     """Detect short repeating suffix cycles before autoregressive degeneration grows."""
     length = len(token_ids)
     for period in range(
-        1,
+        2,
         min(MAX_REPEATED_CYCLE_PERIOD, length // MIN_REPEATED_CYCLE_COUNT) + 1,
     ):
         span = period * MIN_REPEATED_CYCLE_COUNT
