@@ -118,7 +118,7 @@ VISION_ASSET_SPECS = {
     ),
     "rapidlatex/tokenizer.json": (
         24_174,
-        "0000000000000000000000000000000000000000000000000000000000000000",
+        "1dc27b18d6a518d0d5ff3f4bb7bd98521fe80ad39e5b2a246d4109f1bb9d5019",
     ),
 }
 
