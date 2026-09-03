@@ -28,6 +28,7 @@ import { SqliteEventStore } from "../packages/persistence/src/index.js";
 import { BrowserCommandClient } from "../apps/web/src/command-client.js";
 import {
   LoopbackCommandServer,
+  ProviderRuntimeResolver,
   ServerTurnOrchestrator,
   SessionRecoveryCoordinator,
   listInterviewCatalogEntries,
@@ -293,6 +294,81 @@ describe("generic interview session configuration", () => {
     expect(context.configurationSource).toBe("LEGACY_COMPATIBILITY");
     expect(context.problem?.id).toBe(sixPeopleProblem.id);
     expect(store.eventCount(sessionId)).toBe(eventCount);
+  });
+
+  it("keeps exact configured retries idempotent even if provider readiness later changes", async () => {
+    let readinessCalls = 0;
+    const retryStore = new SqliteEventStore(":memory:");
+    const retryRegistry = new SessionRuntimeRegistry(retryStore);
+    const retrySessions = recoveryCoordinator(retryRegistry);
+    const providerRuntimeResolver = new ProviderRuntimeResolver({
+      configurationSource: {
+        resolveConfiguration: () => {
+          readinessCalls += 1;
+          return { enabled: readinessCalls === 1 };
+        }
+      }
+    });
+    const retryServer = new LoopbackCommandServer({
+      security: {
+        host: "127.0.0.1",
+        allowedOrigins: new Set([CLIENT_ORIGIN]),
+        clientToken: CLIENT_TOKEN
+      },
+      sessions: retrySessions,
+      providerRuntimeResolver
+    });
+    const retryAddress = await retryServer.start();
+
+    try {
+      const sessionId = newSessionId();
+      const requestId = newRequestId();
+      const configuration = InterviewSessionConfigurationSchema.parse({
+        ...oxfordConfiguration(
+          sixPeopleProblem.id,
+          sixPeopleProblem.version,
+          sixPeopleProblem.interviewer.difficulty
+        ),
+        providerSelection: {
+          providerId: "mock-model",
+          modelId: "mock-default"
+        }
+      });
+      const postRetry = (body: unknown): Promise<Response> => fetch(
+        `${retryAddress.url}/v1/commands`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-interview-client-token": CLIENT_TOKEN,
+            origin: CLIENT_ORIGIN
+          },
+          body: JSON.stringify(body)
+        }
+      );
+      const command = {
+        protocolVersion: 1 as const,
+        type: "START_CONFIGURED_SESSION" as const,
+        requestId,
+        sessionId,
+        configuration
+      };
+
+      const first = await postRetry(command);
+      expect(first.status).toBe(200);
+      expect(readinessCalls).toBe(1);
+      const eventCount = retryStore.eventCount(sessionId);
+
+      const retried = await postRetry(command);
+      expect(retried.status).toBe(200);
+      expect(readinessCalls).toBe(1);
+      expect(retryStore.eventCount(sessionId)).toBe(eventCount);
+      expect(retryRegistry.get(sessionId).getState().configuration).toEqual(configuration);
+    } finally {
+      await retryServer.stop();
+      await retryRegistry.closeAll();
+      retryStore.close();
+    }
   });
 
   it("serializes concurrent starts so only one authoritative configuration can win", async () => {
