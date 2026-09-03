@@ -598,6 +598,66 @@ describe("production provider runtime resolution", () => {
     }
   });
 
+  it("keeps the default no-metered Antigravity path closed without trusted account-quota proof", async () => {
+    const originalMeteredOverride = process.env["INTERVIEW_ALLOW_METERED_REMOTE_REASONING"];
+    process.env["INTERVIEW_ALLOW_METERED_REMOTE_REASONING"] = "0";
+    const harness = createHarness();
+    try {
+      const committed = await startConfiguredTurn(harness, ANTIGRAVITY_SELECTION);
+      let executeCalls = 0;
+      const resolver = new ProviderRuntimeResolver({
+        adapterRuntimeSource: {
+          resolveRuntime(selection) {
+            if (
+              selection.providerId !== ANTIGRAVITY_SELECTION.providerId
+              || selection.modelId !== ANTIGRAVITY_SELECTION.modelId
+            ) {
+              return undefined;
+            }
+            return {
+              executor: {
+                async execute() {
+                  executeCalls += 1;
+                  throw new Error("unverified no-metered runtime must not execute");
+                }
+              }
+            };
+          }
+        }
+      });
+      const orchestrator = new ServerTurnOrchestrator(
+        harness.sessions,
+        () => undefined,
+        undefined,
+        resolver
+      );
+
+      await orchestrator.orchestrateTurn({
+        sessionId: harness.sessionId,
+        turnId: committed.turnId,
+        inputEpisodeId: committed.inputEpisodeId,
+        studentText: STUDENT_TEXT
+      });
+
+      expect(executeCalls).toBe(0);
+      expect(Object.values(harness.writer.getState().generations)).toEqual([
+        expect.objectContaining({
+          provider: ANTIGRAVITY_CLI_PROVIDER_ID,
+          status: "SUPERSEDED"
+        })
+      ]);
+      expect(Object.keys(harness.writer.getState().deliveries)).toHaveLength(0);
+    } finally {
+      if (originalMeteredOverride === undefined) {
+        delete process.env["INTERVIEW_ALLOW_METERED_REMOTE_REASONING"];
+      } else {
+        process.env["INTERVIEW_ALLOW_METERED_REMOTE_REASONING"] =
+          originalMeteredOverride;
+      }
+      await harness.close();
+    }
+  });
+
   it("performs zero Antigravity execution under denied provider policy and never falls back to mock", async () => {
     const harness = createHarness();
     try {
