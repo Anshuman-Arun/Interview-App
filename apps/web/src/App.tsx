@@ -36,7 +36,7 @@ const QUANT_REATTACH_SESSION_KEY = "interview.quant.active-session";
 function readQuantReattachSessionId(): SessionId | null {
   try {
     const value = globalThis.sessionStorage.getItem(QUANT_REATTACH_SESSION_KEY);
-    if (value === null || value === undefined) return null;
+    if (value === null) return null;
     const parsed = SessionIdSchema.safeParse(value);
     return parsed.success ? parsed.data : null;
   } catch {
