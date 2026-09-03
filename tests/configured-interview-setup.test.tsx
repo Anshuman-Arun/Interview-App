@@ -96,7 +96,7 @@ function setInput(testId: string, value: string): void {
 
 describe("configured interview setup product flow", () => {
   let root: Root | undefined;
-  const originalAct = Reflect.get(globalThis, "IS_REACT_ACT_ENVIRONMENT");
+  const originalAct: unknown = Reflect.get(globalThis, "IS_REACT_ACT_ENVIRONMENT");
 
   beforeEach(() => {
     Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
@@ -208,7 +208,7 @@ describe("configured interview setup product flow", () => {
       startPending: false,
       onRefreshCatalog: async () => CATALOG,
       onRefreshProviderOptions: async () => PROVIDERS,
-      onStart: async (_configuration: InterviewSessionConfiguration) => undefined,
+      onStart: async () => undefined,
       onResumeActive: null
     } as const;
 
@@ -255,7 +255,7 @@ describe("configured interview setup product flow", () => {
   });
 
   it("fails closed when launch metadata is unavailable or an active session exists", async () => {
-    const onStart = vi.fn(async (_configuration: InterviewSessionConfiguration) => undefined);
+    const onStart = vi.fn(async () => undefined);
     const host = document.createElement("div");
     document.body.append(host);
     root = createRoot(host);
