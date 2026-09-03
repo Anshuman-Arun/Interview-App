@@ -53,6 +53,15 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Install pinned local model runtime wheels
+        run: "python -m pip install --disable-pip-version-check --only-binary=:all: -r workers/python/requirements-local-model-runtime.txt"
+
+      - name: Validate local model runtime API surface
+        run: python -I workers/python/validate_local_model_runtime.py
+
+      - name: Test production Python worker without model weights
+        run: python -I workers/python/test_local_model_worker.py
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -102,3 +111,34 @@ jobs:
 
       - name: Run synthetic interview demo
         run: pnpm demo
+
+
+  python-runtime-compat:
+    name: python runtime compat (${{ matrix.os }}, 3.12)
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install exact local model runtime lock
+        run: "python -m pip install --disable-pip-version-check --only-binary=:all: -r workers/python/requirements-local-model-runtime.txt"
+
+      - name: Validate pinned runtime and worker source
+        run: |
+          python -I workers/python/validate_local_model_runtime.py
+          python -I -m py_compile workers/python/local_model_worker.py
+          python -I workers/python/test_local_model_worker.py
