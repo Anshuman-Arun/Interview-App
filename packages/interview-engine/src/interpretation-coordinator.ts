@@ -40,6 +40,7 @@ export const DEFAULT_MAX_CACHED_INTERPRETATION_REQUESTS = 256 as const;
 export const MAX_INTERPRETATION_DIAGNOSTICS = 256 as const;
 export const MINIMUM_DETERMINISTIC_INTERPRETATION_CONFIDENCE = 1 as const;
 export const MAX_FORMAL_INTERPRETATION_PROVIDER_STATEMENT_CHARACTERS = 200_000 as const;
+export const MAX_FORMAL_INTERPRETATION_PROVIDER_OUTPUT_BYTES = 512_000 as const;
 
 const InterpretationCoordinatorOptionsSchema = z.object({
   maxInFlight: z.number().int().min(1).max(64).default(DEFAULT_MAX_IN_FLIGHT_INTERPRETATION_REQUESTS),
@@ -267,7 +268,7 @@ function providerResultExceedsStructuralBounds(input: unknown): boolean {
   if (result === undefined || !Array.isArray(result.candidates)) return false;
   if (result.candidates.length > MAX_FORMAL_INTERPRETATION_CANDIDATES) return true;
   let totalStatementCharacters = 0;
-  return result.candidates.some((candidate) => {
+  const exceedsCandidateBounds = result.candidates.some((candidate) => {
     const candidateRecord = objectRecord(candidate);
     if (candidateRecord !== undefined && typeof candidateRecord.formalStatement === "string") {
       totalStatementCharacters += candidateRecord.formalStatement.length;
@@ -279,6 +280,12 @@ function providerResultExceedsStructuralBounds(input: unknown): boolean {
     return source !== undefined
       && exceedsArrayBound(source.eventIds, MAX_FORMAL_INTERPRETATION_SOURCE_EVENTS);
   });
+  if (exceedsCandidateBounds) return true;
+
+  const serialized = JSON.stringify(input);
+  if (serialized === undefined) return false;
+  return new TextEncoder().encode(serialized).byteLength
+    > MAX_FORMAL_INTERPRETATION_PROVIDER_OUTPUT_BYTES;
 }
 
 function mapRouteFailure(
