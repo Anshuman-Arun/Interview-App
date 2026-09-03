@@ -51,7 +51,7 @@ import {
 
 const OPTIONAL_LOCAL_RUNTIME_STARTUP_BUDGET_MS = 60_000;
 const PACKAGED_SMOKE_PROOF_MAX_BYTES = 64 * 1024;
-const PACKAGED_SMOKE_INPUT = PACKAGED_SMOKE_INPUT;
+const PACKAGED_SMOKE_INPUT = "Packaged Windows desktop smoke input.";
 
 let localRuntime: DesktopLocalRuntimeComposition | undefined;
 const startupAbort = new AbortController();
@@ -468,12 +468,13 @@ async function verifyPriorPackagedSmokeSession(
     throw new Error("Packaged upgrade smoke proof contains an invalid session ID");
   }
   const sessionId = sessionIdResult.data;
-  let state: ReturnType<ReturnType<typeof server.registry.get>["getState"]>;
+  let priorSession: ReturnType<typeof server.registry.get>;
   try {
-    state = server.registry.get(sessionId).getState();
+    priorSession = server.registry.get(sessionId);
   } catch {
     throw new Error("Upgraded package could not reload the prior persisted session");
   }
+  const state = priorSession.getState();
   if (
     state.sessionId !== sessionId
     || !state.started
