@@ -168,6 +168,32 @@ describe("expressive product integration invariants", () => {
     expect(recovery).not.toContain("acceptedActionCount");
   });
 
+  it("defaults terminal Quant review to replay and upgrades only authoritative Oxford context", () => {
+    const app = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+    const hook = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/hooks/useInterviewSession.ts"),
+      "utf8"
+    );
+
+    const start = app.indexOf("const openDefaultReview");
+    const end = app.indexOf("const recoverySessionParse", start);
+    const reviewRouting = app.slice(start, end);
+
+    expect(start).toBeGreaterThan(-1);
+    expect(reviewRouting).toContain('view: "replay"');
+    expect(reviewRouting).toContain("session.readSessionConfiguration(targetSessionId)");
+    expect(reviewRouting).toContain('configuration.mode !== "OXFORD_MATHEMATICS"');
+    expect(reviewRouting).toContain('currentRoute.page !== "review"');
+    expect(reviewRouting).toContain("currentRoute.sessionId !== targetSessionId");
+    expect(reviewRouting).toContain('currentRoute.view !== "replay"');
+    expect(reviewRouting).toContain('view: "evaluation"');
+    expect(hook).toContain("readSessionConfiguration");
+    expect(hook).toContain("getInterviewSessionContext(targetSessionId)");
+  });
+
   it("keeps the native tldraw toolbar local and starts on Pencil", () => {
     const whiteboard = fs.readFileSync(
       path.resolve(process.cwd(), "apps/web/src/components/WhiteboardCanvas.tsx"),
