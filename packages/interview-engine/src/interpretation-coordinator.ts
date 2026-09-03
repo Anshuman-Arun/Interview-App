@@ -185,6 +185,7 @@ interface RequestRecord {
   readonly fingerprint: string;
   cancelled: boolean;
   dispatchStarted: boolean;
+  verificationRequestId?: RequestId;
   settled: boolean;
   readonly cancelSignal: Promise<void>;
   readonly resolveCancel: () => void;
@@ -380,6 +381,12 @@ export class InterpretationCoordinator {
     if (record === undefined || record.settled) return false;
     record.cancelled = true;
     record.resolveCancel();
+    if (record.verificationRequestId !== undefined) {
+      void this.verification.discardPendingVerification({
+        verificationRequestId: record.verificationRequestId,
+        reason: "FORMAL_INTERPRETATION_ABANDONED"
+      }).catch(() => undefined);
+    }
     return true;
   }
 
@@ -744,6 +751,12 @@ export class InterpretationCoordinator {
       ));
     }
 
+    record.verificationRequestId = workItem.verificationRequestId;
+    if (this.isCancelled(record)) {
+      await this.discardPendingVerification(record, "FORMAL_INTERPRETATION_CANCELLED");
+      return this.finishFailure(failed("STALE", "CANCELLED", candidateCount, request.requestId));
+    }
+
     const persisted = this.writer.getState().verificationRequests[workItem.verificationRequestId];
     if (duplicateVerificationRequest && persisted?.status === "ACCEPTED" && persisted.result !== undefined) {
       const outcome: AcceptedInterpretationOutcome = {
@@ -771,10 +784,14 @@ export class InterpretationCoordinator {
 
     const supplied = await this.executeVerifier(verifier, workItem);
     if (this.isCancelled(record)) {
+      await this.discardPendingVerification(record, "FORMAL_INTERPRETATION_CANCELLED");
       return this.finishFailure(failed("STALE", "CANCELLED", candidateCount, request.requestId));
     }
     const afterVerifierFailure = this.checkCurrentRequest(request, candidateCount);
-    if (afterVerifierFailure !== undefined) return this.finishFailure(afterVerifierFailure);
+    if (afterVerifierFailure !== undefined) {
+      await this.discardPendingVerification(record, "FORMAL_INTERPRETATION_STALE");
+      return this.finishFailure(afterVerifierFailure);
+    }
     let verificationResult;
     try {
       verificationResult = await this.verification.processResult({
@@ -791,6 +808,7 @@ export class InterpretationCoordinator {
         verifier
       });
     } catch {
+      await this.discardPendingVerification(record, "FORMAL_INTERPRETATION_RESULT_FAILED");
       return this.finishFailure(failed(
         "VERIFICATION_REJECTED",
         "VERIFICATION_RESULT_REJECTED",
@@ -821,6 +839,22 @@ export class InterpretationCoordinator {
     };
     this.finishAccepted(outcome, candidateCount);
     return outcome;
+  }
+
+  private async discardPendingVerification(
+    record: RequestRecord,
+    reason: string
+  ): Promise<void> {
+    if (record.verificationRequestId === undefined || this.writer.isClosed()) return;
+    try {
+      await this.verification.discardPendingVerification({
+        verificationRequestId: record.verificationRequestId,
+        reason
+      });
+    } catch {
+      // Cancellation cleanup is best-effort when the session is concurrently
+      // closing; terminal replay remains fail-closed and cannot admit evidence.
+    }
   }
 
   private async executeVerifier(
