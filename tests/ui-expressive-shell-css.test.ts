@@ -11,8 +11,11 @@ describe("expressive live shell CSS compatibility", () => {
     expect(css).toContain('background-image: url("/brand-mark.svg")');
     expect(css).toContain('content: "Interview"');
     expect(css).toContain(".problem-card-container");
-    expect(css).toContain("width: 44% !important");
-    expect(css).toContain("width: 56% !important");
+    expect(css).toContain("width: 40% !important");
+    expect(css).toContain("width: 60% !important");
+    expect(css).toContain(".interview-app-container--backgrounded");
+    expect(css).toContain("position: fixed !important");
+    expect(css).toContain("visibility: hidden");
   });
 
   it("keeps live problem metadata structurally spoiler-light", () => {
