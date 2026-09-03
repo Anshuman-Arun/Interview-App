@@ -324,7 +324,18 @@ export class LoopbackCommandServer {
             ? createLegacyDefaultSessionConfiguration(command.problemId)
             : command.configuration
         );
-      } catch {
+      } catch (error) {
+        if (
+          command.type === "START_CONFIGURED_SESSION"
+          && error instanceof Error
+          && /provider selection identity/iu.test(error.message)
+        ) {
+          throw new ProtocolHttpError(
+            409,
+            "CONFLICT",
+            "Selected provider or model is not registered"
+          );
+        }
         throw new ProtocolHttpError(
           404,
           "NOT_FOUND",
