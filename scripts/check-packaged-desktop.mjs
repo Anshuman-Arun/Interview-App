@@ -122,6 +122,25 @@ async function inspectAsar() {
     );
   }
 
+  const allowedRuntimePackageRoots = new Set(["pngjs", "zod"]);
+  const unexpectedRuntimePackages = entries.filter((entry) => {
+    if (!entry.startsWith("node_modules/")) return false;
+    const remainder = entry.slice("node_modules/".length);
+    const first = remainder.split("/", 1)[0];
+    if (first === undefined || first.length === 0) return true;
+    if (first.startsWith("@")) {
+      const parts = remainder.split("/");
+      const scoped = parts.length >= 2 ? `${parts[0]}/${parts[1]}` : first;
+      return !allowedRuntimePackageRoots.has(scoped);
+    }
+    return !allowedRuntimePackageRoots.has(first);
+  });
+  if (unexpectedRuntimePackages.length > 0) {
+    throw new Error(
+      `unexpected production runtime packages: ${unexpectedRuntimePackages.slice(0, 20).join(", ")}`
+    );
+  }
+
   const prohibited = entries.filter((entry) =>
     entry === "tests"
     || entry.startsWith("tests/")
