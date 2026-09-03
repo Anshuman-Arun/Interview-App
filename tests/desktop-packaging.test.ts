@@ -26,6 +26,8 @@ describe("Windows desktop packaging contract", () => {
     expect(packageJson.scripts?.["package:win"]).toContain("npx --yes electron-builder@26.15.3");
     expect(packageJson.scripts?.["dist:win"]).toContain("node scripts/clean-windows-package.mjs");
     expect(packageJson.scripts?.["dist:win"]).toContain("npx --yes electron-builder@26.15.3 --win nsis --x64");
+    expect(packageJson.scripts?.["package:win"]).toContain("--publish never");
+    expect(packageJson.scripts?.["dist:win"]).toContain("--publish never");
     expect(config).toContain("appId: com.anshuman.interviewapp");
     expect(config).toContain("artifactName: InterviewApp-Setup-${version}.${ext}");
     expect(config).toContain("asar: true");
