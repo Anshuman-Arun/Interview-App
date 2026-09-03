@@ -15,7 +15,7 @@ import {
 } from "./renderer-stream-server.js";
 import { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 import { SessionReadService } from "./session-read-service.js";
-import type { ProviderRuntimeResolver } from "./provider-runtime.js";
+import { ProviderRuntimeResolver } from "./provider-runtime.js";
 import { ServerTurnOrchestrator } from "./turn-orchestrator.js";
 import { WhiteboardVisionCoordinator } from "./whiteboard-vision-coordinator.js";
 import {
@@ -86,6 +86,9 @@ export class LocalInterviewTransportRuntime {
     const voiceRuntime = options.voiceRuntime;
     const speechWorker = voiceRuntime?.speechWorker;
     const ttsRuntime = voiceRuntime?.tts;
+    const providerRuntimeResolver = options.orchestrator === undefined
+      ? options.providerRuntimeResolver ?? new ProviderRuntimeResolver()
+      : undefined;
 
     this.registry = options.registry;
     this.sessions = new SessionRecoveryCoordinator(options.registry, options.store);
@@ -103,7 +106,7 @@ export class LocalInterviewTransportRuntime {
         this.sessions,
         () => this.rendererStreamServer,
         undefined,
-        options.providerRuntimeResolver
+        providerRuntimeResolver
       );
     this.sessions.setTurnRecoveryDelegate(this.orchestrator);
     this.readService = options.readService ?? new SessionReadService({
@@ -134,6 +137,7 @@ export class LocalInterviewTransportRuntime {
       sessions: this.sessions,
       reads: this.readService,
       orchestrator: this.orchestrator,
+      ...(providerRuntimeResolver === undefined ? {} : { providerRuntimeResolver }),
       whiteboardVision: this.whiteboardVision,
       onSessionTerminal: (sessionId) => this.handleSessionTerminal(sessionId),
       ...(options.commandPort === undefined ? {} : { port: options.commandPort })
