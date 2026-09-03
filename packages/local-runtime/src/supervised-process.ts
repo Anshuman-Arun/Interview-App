@@ -283,9 +283,16 @@ export class SupervisedProcessRunner {
     }
 
     const controller = new AbortController();
+    let interruptionError: SupervisedProcessError | undefined;
+    const interrupt = (error: SupervisedProcessError): void => {
+      if (abortSignalAborted(controller.signal)) return;
+      interruptionError = error;
+      controller.abort(error);
+    };
+
     const externalSignal = request.signal;
     const forwardAbort = (): void => {
-      controller.abort(new SupervisedProcessError("EXECUTION_CANCELLED"));
+      interrupt(new SupervisedProcessError("EXECUTION_CANCELLED"));
     };
     let removeExternalAbortListener = (): void => undefined;
     if (externalSignal !== undefined) {
@@ -307,39 +314,47 @@ export class SupervisedProcessRunner {
     const operation = this.executeSnapshot(trackedRequest);
     this.activeOperations.add(operation);
 
-    let interruptionError =
-      new SupervisedProcessError("EXECUTION_CANCELLED");
     const deadlineTimer = setTimeout(() => {
-      interruptionError = new SupervisedProcessError("EXECUTION_TIMEOUT");
-      controller.abort(interruptionError);
+      interrupt(new SupervisedProcessError("EXECUTION_TIMEOUT"));
     }, request.timeoutMs);
-    let removeInterruptListener = (): void => undefined;
-    const interrupted = new Promise<never>((_resolve, reject) => {
-      const onInterrupt = (): void => {
-        reject(
-          this.containmentCompromised
-            || this.quarantinedExecutableIds.has(request.executableId)
-            ? new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED")
-            : interruptionError
-        );
-      };
-      removeInterruptListener = () => {
-        removeAbortSignalListener(controller.signal, onInterrupt);
-      };
-      if (abortSignalAborted(controller.signal)) onInterrupt();
-      else addAbortSignalListener(controller.signal, onInterrupt);
-    });
-    const publicOperation = Promise.race([operation, interrupted]);
 
-    const cleanup = (): void => {
+    const publicOperation = operation.then(
+      (result) => {
+        if (!abortSignalAborted(controller.signal)) return result;
+        if (
+          this.containmentCompromised
+          || this.quarantinedExecutableIds.has(request.executableId)
+        ) {
+          throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
+        }
+        throw interruptionError
+          ?? new SupervisedProcessError("EXECUTION_CANCELLED");
+      },
+      (error: unknown) => {
+        if (
+          this.containmentCompromised
+          || this.quarantinedExecutableIds.has(request.executableId)
+        ) {
+          throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
+        }
+        if (
+          error instanceof SupervisedProcessError
+          && error.code === "EXECUTION_CANCELLED"
+          && abortSignalAborted(controller.signal)
+        ) {
+          throw interruptionError
+            ?? new SupervisedProcessError("EXECUTION_CANCELLED");
+        }
+        throw error;
+      }
+    );
+
+    return publicOperation.finally(() => {
       clearTimeout(deadlineTimer);
-      removeInterruptListener();
       removeExternalAbortListener();
       this.activeControllers.delete(controller);
       this.activeOperations.delete(operation);
-    };
-    void operation.then(cleanup, cleanup);
-    return publicOperation;
+    });
   }
 
   public drain(): Promise<void> {

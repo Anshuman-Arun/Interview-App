@@ -538,6 +538,41 @@ describe("supervised one-shot process execution", () => {
     await expect(execution).rejects.toMatchObject({ code: "EXECUTION_CANCELLED" });
   });
 
+  it("does not report cancellation complete before cleanup releases execution capacity", async () => {
+    const runtime = runner();
+    const controllers = Array.from({ length: 4 }, () => new AbortController());
+    const startedResolvers: Array<(() => void) | undefined> = [];
+    const started = controllers.map((_controller, index) => new Promise<void>((resolve) => {
+      startedResolvers[index] = resolve;
+    }));
+    const executions = controllers.map((controller, index) =>
+      runtime.execute(request([FIXTURE, "hang"], {
+        signal: controller.signal,
+        onProcessStart: () => {
+          startedResolvers[index]?.();
+        }
+      }))
+    );
+    await Promise.all(started);
+
+    controllers[0]?.abort();
+    await expect(executions[0]).rejects.toMatchObject({
+      code: "EXECUTION_CANCELLED"
+    });
+
+    await expect(runtime.execute(request([FIXTURE, "echo"], {
+      stdin: "capacity-after-cancel-cleanup"
+    }))).resolves.toMatchObject({
+      exitCode: 0,
+      stdout: "capacity-after-cancel-cleanup"
+    });
+
+    for (let index = 1; index < controllers.length; index += 1) {
+      controllers[index]?.abort();
+    }
+    await Promise.allSettled(executions.slice(1));
+  });
+
   it("drains active executions, blocks launches during drain, and permits reuse after cleanup", async () => {
     const runtime = runner();
     let markStarted: (() => void) | undefined;

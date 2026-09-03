@@ -438,6 +438,13 @@ describe("Antigravity CLI one-turn protocol", () => {
     expect(request?.args).not.toContain("--conversation");
     expect(request?.args).not.toContain("--dangerously-skip-permissions");
 
+    const conservativeWindowsCommandLineCharacters =
+      260 * 2 + 2 + (request?.args ?? []).reduce(
+        (total, argument) => total + argument.length * 2 + 3,
+        0
+      );
+    expect(conservativeWindowsCommandLineCharacters).toBeLessThan(24_000);
+
     const stdinMessage = JSON.parse((request?.stdin ?? "").trim()) as {
       readonly event?: unknown;
       readonly message?: { readonly content?: unknown };

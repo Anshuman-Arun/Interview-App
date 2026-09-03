@@ -16,7 +16,10 @@ const ANTIGRAVITY_EXECUTABLE_ID = "antigravity-cli";
 const ANTIGRAVITY_SAFE_CLI_LINE = Object.freeze([1, 1] as const);
 const ANTIGRAVITY_MINIMUM_SAFE_CLI_PATCH = 15;
 const ANTIGRAVITY_MAXIMUM_SAFE_CLI_PATCH = 16;
-const ANTIGRAVITY_VERSION_CHECK_TIMEOUT_MS = 10_000;
+// First use also pays cold executable hashing and trusted Windows supervisor
+// compilation. Those stages are each independently bounded at 30s, so this
+// one-time local preflight must leave room for both plus `agy --version`.
+const ANTIGRAVITY_VERSION_CHECK_TIMEOUT_MS = 75_000;
 const ANTIGRAVITY_VERSION_STDOUT_BYTES = 256;
 const ANTIGRAVITY_VERSION_STDERR_BYTES = 4 * 1024;
 const ANTIGRAVITY_SAFE_SETTINGS = Object.freeze({
@@ -103,41 +106,39 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
     return created;
   };
 
-  const ensureSupportedVersion = async (): Promise<void> => {
-    const existing = versionVerification;
-    if (existing !== undefined) {
-      await existing;
-      return;
-    }
-
-    const check = (async () => {
-      const result = await getRunner().execute({
-        executableId: ANTIGRAVITY_EXECUTABLE_ID,
-        args: ["--version"],
-        stdin: "",
-        timeoutMs: ANTIGRAVITY_VERSION_CHECK_TIMEOUT_MS,
-        maxStdoutBytes: ANTIGRAVITY_VERSION_STDOUT_BYTES,
-        maxStderrBytes: ANTIGRAVITY_VERSION_STDERR_BYTES
+  const ensureSupportedVersion = async (
+    signal: AbortSignal | undefined
+  ): Promise<void> => {
+    let check = versionVerification;
+    if (check === undefined) {
+      check = (async () => {
+        const result = await getRunner().execute({
+          executableId: ANTIGRAVITY_EXECUTABLE_ID,
+          args: ["--version"],
+          stdin: "",
+          timeoutMs: ANTIGRAVITY_VERSION_CHECK_TIMEOUT_MS,
+          maxStdoutBytes: ANTIGRAVITY_VERSION_STDOUT_BYTES,
+          maxStderrBytes: ANTIGRAVITY_VERSION_STDERR_BYTES
+        });
+        if (
+          result.exitCode !== 0
+          || !isSupportedAntigravityCliVersionOutput(result.stdout)
+        ) {
+          throw new Error("Installed Antigravity CLI version is unsupported");
+        }
+      })();
+      versionVerification = check;
+      const captured = check;
+      void captured.catch(() => {
+        if (versionVerification === captured) versionVerification = undefined;
       });
-      if (
-        result.exitCode !== 0
-        || !isSupportedAntigravityCliVersionOutput(result.stdout)
-      ) {
-        throw new Error("Installed Antigravity CLI version is unsupported");
-      }
-    })();
-    versionVerification = check;
-    try {
-      await check;
-    } catch (error) {
-      if (versionVerification === check) versionVerification = undefined;
-      throw error;
     }
+    await waitForVersionVerificationOrAbort(check, signal);
   };
 
   const executor: SupervisedCliExecutor = Object.freeze({
     execute: async (request: SupervisedCliExecutionRequest) => {
-      await ensureSupportedVersion();
+      await ensureSupportedVersion(request.signal);
       return await getRunner().execute({
         executableId: ANTIGRAVITY_EXECUTABLE_ID,
         args: request.args,
@@ -173,6 +174,28 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
       if (runner !== undefined) await runner.drain();
     }
   });
+}
+
+async function waitForVersionVerificationOrAbort(
+  verification: Promise<void>,
+  signal: AbortSignal | undefined
+): Promise<void> {
+  if (signal === undefined) {
+    await verification;
+    return;
+  }
+  if (signal.aborted) throw new Error("Antigravity version wait cancelled");
+
+  let onAbort = (): void => undefined;
+  const cancelled = new Promise<never>((_resolve, reject) => {
+    onAbort = () => reject(new Error("Antigravity version wait cancelled"));
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    await Promise.race([verification, cancelled]);
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+  }
 }
 
 function antigravityEnvironment(): {
