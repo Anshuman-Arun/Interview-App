@@ -1,3 +1,4 @@
+import process from "node:process";
 import { describe, expect, it } from "vitest";
 import {
   InterviewSessionConfigurationSchema,
@@ -503,7 +504,9 @@ describe("production provider runtime resolution", () => {
     }
   });
 
-  it("executes configured Antigravity through the normal provider coordinator without mock fallback", async () => {
+  it("executes configured Antigravity through the default no-metered provider policy without mock fallback", async () => {
+    const originalMeteredOverride = process.env["INTERVIEW_ALLOW_METERED_REMOTE_REASONING"];
+    process.env["INTERVIEW_ALLOW_METERED_REMOTE_REASONING"] = "0";
     const harness = createHarness();
     try {
       const committed = await startConfiguredTurn(harness, ANTIGRAVITY_SELECTION);
@@ -540,23 +543,15 @@ describe("production provider runtime resolution", () => {
                     stderrBytes: 0
                   };
                 }
-              }
+              },
+              billingVerificationFactory: (now: Date) => ({
+                billingClass: "ACCOUNT_QUOTA" as const,
+                enforcementMechanism: "test-only pinned no-overage Antigravity profile",
+                verifiedAt: now.toISOString(),
+                adapterVersion: ANTIGRAVITY_CLI_ADAPTER_VERSION,
+                spendImpossible: true
+              })
             };
-          }
-        },
-        policySource: {
-          resolvePolicy(selection) {
-            return selection.providerId === ANTIGRAVITY_SELECTION.providerId
-              ? {
-                  allowMeteredUsage: true,
-                  maximumDataUse: "REMOTE_MAY_BE_USED_FOR_IMPROVEMENT" as const,
-                  billingVerificationMaxAgeMs: 60_000
-                }
-              : {
-                  allowMeteredUsage: false,
-                  maximumDataUse: "LOCAL_ONLY" as const,
-                  billingVerificationMaxAgeMs: 60_000
-                };
           }
         }
       });
@@ -593,6 +588,12 @@ describe("production provider runtime resolution", () => {
       expect(harness.writer.getState().configuration?.providerSelection)
         .toEqual(ANTIGRAVITY_SELECTION);
     } finally {
+      if (originalMeteredOverride === undefined) {
+        delete process.env["INTERVIEW_ALLOW_METERED_REMOTE_REASONING"];
+      } else {
+        process.env["INTERVIEW_ALLOW_METERED_REMOTE_REASONING"] =
+          originalMeteredOverride;
+      }
       await harness.close();
     }
   });
