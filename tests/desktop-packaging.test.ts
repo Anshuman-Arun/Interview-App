@@ -32,6 +32,7 @@ describe("Windows desktop packaging contract", () => {
     expect(config).toContain("artifactName: InterviewApp-Setup-${version}.${ext}");
     expect(config).toContain("asar: true");
     expect(config).toContain('"!**/*.map"');
+    expect(config).toContain('"!node_modules/@types/**"');
     expect(config).toContain("deleteAppDataOnUninstall: false");
     expect(config).toContain("runAfterFinish: false");
   });
