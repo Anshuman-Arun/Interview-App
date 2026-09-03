@@ -100,10 +100,7 @@ try {
   }
 
   $currentProductVersion = (Get-Item $installedExe).VersionInfo.ProductVersion
-  if (
-    $priorInstallerPath -ne $installerPath
-    -and $currentProductVersion -eq $priorProductVersion
-  ) {
+  if ($priorInstallerPath -ne $installerPath -and $currentProductVersion -eq $priorProductVersion) {
     throw "Versioned upgrade did not replace the installed application binary"
   }
 
