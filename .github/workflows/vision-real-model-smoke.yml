@@ -1,5 +1,7 @@
 name: Real local vision model smoke
 
+# PR 114 validation trigger: execute the real pinned model on the stabilized head.
+
 on:
   pull_request:
     paths:
