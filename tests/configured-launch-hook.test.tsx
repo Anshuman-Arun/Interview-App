@@ -307,4 +307,98 @@ describe("configured interview hook launch", () => {
     rendered.container.remove();
   });
 
+
+  it("recovers an ACTIVE Quant session without appending a generic resume event", async () => {
+    const sessionId: SessionId = newSessionId();
+    const configuration = InterviewSessionConfigurationSchema.parse({
+      configurationVersion: 1,
+      mode: "QUANT_RESEARCH",
+      scenario: {
+        id: "MODEL_COMPARISON",
+        version: "1.0.0"
+      },
+      interventionPolicy: "BALANCED",
+      providerSelection: {
+        providerId: "mock-model",
+        modelId: "mock-default"
+      }
+    });
+    const commandTypes: string[] = [];
+    let rendererRequests = 0;
+
+    const fetchImpl: typeof fetch = async (input, init = {}) => {
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+      if (url === RENDERER_URL) {
+        rendererRequests += 1;
+        throw new Error("Quant recovery must not attach the Oxford renderer");
+      }
+      if (url !== `${BASE_URL}/v1/commands` || typeof init.body !== "string") {
+        throw new Error("Unexpected transport request");
+      }
+      const command = JSON.parse(init.body) as {
+        readonly type?: string;
+        readonly requestId?: string;
+      };
+      if (typeof command.type !== "string" || typeof command.requestId !== "string") {
+        throw new Error("Malformed command");
+      }
+      commandTypes.push(command.type);
+      if (command.type === "GET_SESSION_SUMMARY") {
+        return jsonResponse({
+          protocolVersion: 1,
+          requestId: command.requestId,
+          ok: true,
+          type: "SESSION_SUMMARY",
+          sessionId,
+          sequence: 4,
+          started: true,
+          status: "ACTIVE",
+          contextEpoch: 0,
+          deliveryStatuses: {},
+          history: []
+        });
+      }
+      if (command.type === "GET_INTERVIEW_SESSION_CONTEXT") {
+        return jsonResponse({
+          protocolVersion: 1,
+          requestId: command.requestId,
+          ok: true,
+          type: "INTERVIEW_SESSION_CONTEXT",
+          sessionId,
+          configuration,
+          configurationSource: "CONFIGURED"
+        });
+      }
+      if (command.type === "RESUME_SESSION") {
+        throw new Error("Quant recovery must not append SESSION_RESUMED");
+      }
+      throw new Error(`Unexpected command type: ${command.type}`);
+    };
+
+    const rendered = renderHook(fetchImpl);
+    let status: Awaited<ReturnType<UseInterviewSessionResult["recoverSession"]>>;
+    await act(async () => {
+      status = await rendered.current().recoverSession(sessionId);
+    });
+
+    expect(status!).toBe("ACTIVE");
+    expect(rendered.current().sessionId).toBe(sessionId);
+    expect(rendered.current().configuration).toEqual(configuration);
+    expect(rendered.current().configurationSource).toBe("CONFIGURED");
+    expect(rendered.current().whiteboardSync.status).toBe("UNINITIALIZED");
+    expect(commandTypes).toEqual([
+      "GET_SESSION_SUMMARY",
+      "GET_INTERVIEW_SESSION_CONTEXT"
+    ]);
+    expect(rendererRequests).toBe(0);
+
+    act(() => rendered.current().disconnect());
+    await act(async () => rendered.root.unmount());
+    rendered.container.remove();
+  });
+
 });
