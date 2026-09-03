@@ -22,12 +22,16 @@
     "demo": "tsx apps/server/src/run-synthetic.ts",
     "check": "node scripts/check-architecture-boundaries.mjs && pnpm security:public && pnpm typecheck && pnpm lint && pnpm build:web && pnpm build:desktop && pnpm test:desktop && pnpm test:ci && pnpm test:replay && pnpm test:property && pnpm test:e2e && pnpm test:e2e:voice && pnpm demo",
     "build:desktop": "tsc -p apps/desktop/tsconfig.json",
-    "test:desktop": "vitest run tests/desktop-electron-bootstrap.test.ts tests/desktop-electron-adversarial.test.ts tests/desktop-hook-bootstrap.test.tsx tests/desktop-local-runtime.test.ts",
+    "test:desktop": "vitest run tests/desktop-electron-bootstrap.test.ts tests/desktop-electron-adversarial.test.ts tests/desktop-local-runtime.test.ts tests/desktop-hook-bootstrap.test.tsx tests/desktop-packaging.test.ts",
     "dev:desktop": "pnpm build:desktop && electron dist/desktop-runtime/apps/desktop/src/main.js",
     "start:desktop": "pnpm build:web && pnpm build:desktop && electron dist/desktop-runtime/apps/desktop/src/main.js --desktop-production",
     "setup:desktop-models": "pnpm build:desktop && electron dist/desktop-runtime/apps/desktop/src/main.js --desktop-production --install-local-models",
     "security:public": "node scripts/check-public-release.mjs",
-    "test:e2e:voice": "vitest run tests/e2e-voice-interview.test.ts"
+    "test:e2e:voice": "vitest run tests/e2e-voice-interview.test.ts",
+    "test:package:win": "vitest run tests/desktop-packaging.test.ts",
+    "verify:package:win": "node scripts/check-packaged-desktop.mjs",
+    "package:win": "pnpm build:web && pnpm build:desktop && pnpm security:public && pnpm dlx electron-builder@26.15.3 --win --x64 --dir && pnpm verify:package:win",
+    "dist:win": "pnpm build:web && pnpm build:desktop && pnpm security:public && pnpm dlx electron-builder@26.15.3 --win nsis --x64 && pnpm verify:package:win"
   },
   "dependencies": {
     "katex": "^0.18.4",
@@ -54,5 +58,8 @@
     "typescript-eslint": "^8.68.0",
     "vite": "^8.2.2",
     "vitest": "^4.1.11"
-  }
+  },
+  "version": "0.1.0",
+  "productName": "Interview App",
+  "main": "dist/desktop-runtime/apps/desktop/src/main.js"
 }
