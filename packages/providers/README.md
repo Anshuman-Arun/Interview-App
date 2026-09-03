@@ -81,13 +81,17 @@ The CLI self-updater is disabled for the supervised child.
 
 Antigravity remains a remote inference path even though the client process is local. Its model
 capabilities therefore declare both local process execution and remote execution, conservative
-remote data use, and unknown metered-execution status. The isolated profile explicitly disables
-the CLI's AI-credit fallback, but the adapter still reports `spendImpossible: false`: this PR
-does not claim that a local client setting alone proves all account-side incremental billing is
-technically impossible. The server default policy consequently fails closed. Personal use
-requires the application-owned host opt-in
-`INTERVIEW_ALLOW_METERED_REMOTE_REASONING=1`, which permits the remote path without weakening
-the provider policy machinery or storing that choice in session configuration.
+remote data use, and unknown metered-execution status. The standalone adapter remains fail-closed
+under no-metered policy unless a trusted runtime supplies current billing evidence.
+
+The concrete Windows application runtime supplies `ACCOUNT_QUOTA` evidence only after validating
+the exact supervised profile used for execution: AI-credit overage fallback is forced off,
+`modelProvider` is absent, and API-key/custom-endpoint environment variables are not inherited.
+The CLI then authenticates through its OS-native account keyring. The default Antigravity policy
+allows the provider's declared remote data-use class while continuing to deny metered spend, so
+normal subscription/baseline-quota use needs no API key and no metered-usage opt-in.
+`INTERVIEW_ALLOW_METERED_REMOTE_REASONING=1` remains an explicit host override for metered
+policy admission; it is not required for the supervised account-quota path.
 
 No automatic routing, fallback, escalation, provider settings UI, or secret-bearing session
 configuration is implemented here.
