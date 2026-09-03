@@ -976,7 +976,16 @@ function collectVerificationSignals(
     ) {
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
     }
-    if (key.data.subject.kind !== "CLAIM" || key.data.dimension !== "CORRECTNESS") {
+    if (
+      (key.data.subject.kind !== "CLAIM" && key.data.subject.kind !== "MILESTONE")
+      || key.data.dimension !== "CORRECTNESS"
+    ) {
+      return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
+    }
+    if (
+      key.data.subject.kind === "MILESTONE"
+      && !graph.milestoneIds.has(key.data.subject.milestoneId)
+    ) {
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
     }
     if (result.data.status === "VERIFIED") {
