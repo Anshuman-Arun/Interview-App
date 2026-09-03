@@ -89,7 +89,8 @@ export interface TldrawEditor {
   getShape: (id: string) => TLShapeRecord | undefined;
   getCurrentPageShapes: () => readonly TLShapeRecord[];
   createShapes: (shapes: readonly TLShapePartialRecord[]) => void;
-  restoreShapes?: (shapes: readonly TLShapePartialRecord[]) => void;
+  captureEditorSnapshot?: () => unknown;
+  restoreEditorSnapshot?: (snapshot: unknown) => void;
   deleteShapes: (ids: readonly string[]) => void;
   updateShapes: (shapes: readonly TLShapePartialRecord[]) => void;
   setReadOnly?: (readOnly: boolean) => void;
@@ -237,7 +238,10 @@ export class InMemoryTldrawEditor implements TldrawEditor {
 export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPresenter {
   private editor: TldrawEditor | null;
   private localBoardRevision = 0;
-  private detachedPageShapes: readonly TLShapeRecord[] | null = null;
+  private detachedEditorState:
+    | { readonly kind: "SNAPSHOT"; readonly snapshot: unknown }
+    | { readonly kind: "SHAPES"; readonly shapes: readonly TLShapeRecord[] }
+    | null = null;
 
   public constructor(editor?: TldrawEditor | null) {
     this.editor = editor ?? null;
@@ -246,7 +250,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
   public attachEditor(editor: TldrawEditor): void {
     if (this.editor === editor) return;
 
-    const detached = this.detachedPageShapes;
+    const detached = this.detachedEditorState;
     if (detached !== null && editor.getCurrentPageShapes().length > 0) {
       throw new Error(
         "Cannot restore a detached whiteboard into a non-empty editor"
@@ -257,15 +261,17 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     if (detached === null) return;
 
     try {
-      if (detached.length > 0) {
-        const restored = detached.map((shape) => globalThis.structuredClone(shape));
-        if (editor.restoreShapes !== undefined) {
-          editor.restoreShapes(restored);
-        } else {
-          editor.createShapes(restored);
+      if (detached.kind === "SNAPSHOT") {
+        if (editor.restoreEditorSnapshot === undefined) {
+          throw new Error("Mounted whiteboard cannot restore a detached document snapshot");
         }
+        editor.restoreEditorSnapshot(globalThis.structuredClone(detached.snapshot));
+      } else if (detached.shapes.length > 0) {
+        editor.createShapes(
+          detached.shapes.map((shape) => globalThis.structuredClone(shape))
+        );
       }
-      this.detachedPageShapes = null;
+      this.detachedEditorState = null;
     } catch (error) {
       this.editor = null;
       throw error;
@@ -275,10 +281,20 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
   public detachEditor(): void {
     const editor = this.editor;
     if (editor !== null) {
-      this.detachedPageShapes = editor
-        .getCurrentPageShapes()
-        .filter((shape) => !isTransientIncompleteStudentStroke(shape))
-        .map((shape) => globalThis.structuredClone(shape));
+      if (editor.captureEditorSnapshot !== undefined) {
+        this.detachedEditorState = {
+          kind: "SNAPSHOT",
+          snapshot: globalThis.structuredClone(editor.captureEditorSnapshot())
+        };
+      } else {
+        this.detachedEditorState = {
+          kind: "SHAPES",
+          shapes: editor
+            .getCurrentPageShapes()
+            .filter((shape) => !isTransientIncompleteStudentStroke(shape))
+            .map((shape) => globalThis.structuredClone(shape))
+        };
+      }
     }
     this.editor = null;
   }
@@ -292,7 +308,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
   }
 
   public resetForNewSession(): void {
-    this.detachedPageShapes = null;
+    this.detachedEditorState = null;
     const editor = this.editor;
     if (editor !== null) {
       const ids = editor.getCurrentPageShapes().map((shape) => shape.id);
