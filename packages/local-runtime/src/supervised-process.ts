@@ -928,6 +928,13 @@ export class SupervisedProcessRunner {
     supervisorEnvironment.INTERVIEW_SUPERVISED_BOOTSTRAP =
       WINDOWS_JOB_SUPERVISOR_SCRIPT;
     if (
+      process.env["INTERVIEW_SUPERVISOR_STAGE_DEBUG"] === "1"
+      && typeof process.env["INTERVIEW_SUPERVISOR_STAGE_DEBUG_FILE"] === "string"
+    ) {
+      supervisorEnvironment.INTERVIEW_SUPERVISOR_STAGE_DEBUG_FILE =
+        process.env["INTERVIEW_SUPERVISOR_STAGE_DEBUG_FILE"];
+    }
+    if (
       windowsEnvironmentBlockCharacters(supervisorEnvironment)
       > MAX_WINDOWS_SUPERVISOR_ENVIRONMENT_CHARACTERS
     ) {
