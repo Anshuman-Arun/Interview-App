@@ -30,7 +30,7 @@ describe("Windows desktop packaging contract", () => {
     expect(config).toContain("runAfterFinish: false");
   });
 
-  it("copies only reviewed production worker resources to Ivy's exact packaged boundary", async () => {
+  it("copies only reviewed production worker resources to the exact packaged worker boundary", async () => {
     const config = await source("electron-builder.yml");
     expect(config).toContain("to: workers/python/local_model_worker.py");
     expect(config).toContain("to: workers/python/requirements-local-model-runtime.txt");
