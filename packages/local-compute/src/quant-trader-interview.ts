@@ -783,8 +783,10 @@ export class QuantTraderInterviewEngine {
     const nextTotalSpread = this.totalSpread + spread;
     const bidNotional = quote.bidPrice * quote.bidSize;
     const askNotional = quote.askPrice * quote.askSize;
-    const bidMarkPnL = (quote.bidPrice - this.fairValueValue) * quote.bidSize;
-    const askMarkPnL = (this.fairValueValue - quote.askPrice) * quote.askSize;
+    const bidMarkPnL = (this.fairValueValue - quote.bidPrice) * quote.bidSize;
+    const askMarkPnL = (quote.askPrice - this.fairValueValue) * quote.askSize;
+    const nextBidAdverseSelectionPnL = this.adverseSelectionPnL + bidMarkPnL;
+    const nextAskAdverseSelectionPnL = this.adverseSelectionPnL + askMarkPnL;
     if (
       !Number.isFinite(spread)
       || !Number.isFinite(nextTotalSpread)
@@ -792,10 +794,38 @@ export class QuantTraderInterviewEngine {
       || !Number.isFinite(askNotional)
       || !Number.isFinite(bidMarkPnL)
       || !Number.isFinite(askMarkPnL)
+      || !Number.isFinite(nextBidAdverseSelectionPnL)
+      || !Number.isFinite(nextAskAdverseSelectionPnL)
     ) {
       throw new QuantTraderActionError(
         "INVALID_QUOTE",
         "Quote exceeds bounded Quant Trading arithmetic"
+      );
+    }
+
+    try {
+      this.portfolio.assertPotentialFillArithmetic({
+        fillId: "quote-preview-bid",
+        orderId: "quote-preview-bid",
+        side: "BUY",
+        price: quote.bidPrice,
+        size: quote.bidSize,
+        counterparty: "QUOTE_ADMISSION_PREVIEW",
+        timestamp: 0
+      }, this.fairValueValue);
+      this.portfolio.assertPotentialFillArithmetic({
+        fillId: "quote-preview-ask",
+        orderId: "quote-preview-ask",
+        side: "SELL",
+        price: quote.askPrice,
+        size: quote.askSize,
+        counterparty: "QUOTE_ADMISSION_PREVIEW",
+        timestamp: 0
+      }, this.fairValueValue);
+    } catch {
+      throw new QuantTraderActionError(
+        "INVALID_QUOTE",
+        "Quote could overflow bounded portfolio accounting"
       );
     }
 
