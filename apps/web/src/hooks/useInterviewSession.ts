@@ -1156,9 +1156,6 @@ export function useInterviewSession(
     if (
       !whiteboardBound
       || sessionTransitionEpochRef.current !== transitionEpoch
-      || sessionId !== targetSessionId
-      || sessionStatus !== "ACTIVE"
-      || isPaused
       || terminalTransitionInFlightRef.current
     ) {
       return;
