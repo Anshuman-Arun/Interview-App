@@ -313,7 +313,7 @@ describe("provider-backed Oxford formal interpretation", () => {
 
       const outcome = await coordinator.interpretAndVerify(test.request);
 
-      expect(outcome.status).toBe("ABSTAINED");
+      expect(outcome).toMatchObject({\n        status: "NO_SUPPORTED_INTERPRETATION",\n        reason: "NO_INTERPRETATION"\n      });
       expect(Object.keys(test.writer.getState().studentEvidence)).toHaveLength(0);
     } finally {
       test.store.close();
@@ -345,7 +345,7 @@ describe("provider-backed Oxford formal interpretation", () => {
 
       const outcome = await coordinator.interpretAndVerify(test.request);
 
-      expect(outcome.status).toBe("REJECTED");
+      expect(outcome).toMatchObject({\n        status: "UNSUPPORTED_PROTOCOL",\n        reason: "PROTOCOL_NOT_ALLOWED"\n      });
       expect(Object.keys(test.writer.getState().studentEvidence)).toHaveLength(0);
     } finally {
       test.store.close();
@@ -414,7 +414,7 @@ describe("provider-backed Oxford formal interpretation", () => {
 
       const outcome = await coordinator.interpretAndVerify(test.request);
 
-      expect(outcome.status).toBe("ABSTAINED");
+      expect(outcome).toMatchObject({\n        status: "NO_SUPPORTED_INTERPRETATION",\n        reason: "NO_INTERPRETATION"\n      });
       expect(Object.keys(test.writer.getState().studentEvidence)).toHaveLength(0);
     } finally {
       test.store.close();
@@ -450,7 +450,7 @@ describe("provider-backed Oxford formal interpretation", () => {
 
       const outcome = await coordinator.interpretAndVerify(test.request);
 
-      expect(outcome.status).toBe("ABSTAINED");
+      expect(outcome).toMatchObject({\n        status: "NO_SUPPORTED_INTERPRETATION",\n        reason: "NO_INTERPRETATION"\n      });
       expect(executed).toBe(false);
       expect(Object.keys(test.writer.getState().studentEvidence)).toHaveLength(0);
     } finally {
@@ -518,7 +518,7 @@ describe("provider-backed Oxford formal interpretation", () => {
 
       const outcome = await coordinator.interpretAndVerify(test.request);
 
-      expect(outcome.status).toBe("ABSTAINED");
+      expect(outcome).toMatchObject({\n        status: "NO_SUPPORTED_INTERPRETATION",\n        reason: "NO_INTERPRETATION"\n      });
       expect(executed).toBe(false);
     } finally {
       test.store.close();
