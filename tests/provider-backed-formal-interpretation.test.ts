@@ -148,7 +148,8 @@ function resultFor(
 function executorReturning(
   request: FormalInterpretationRequest,
   outputFactory: () => unknown,
-  inspect?: (input: SupervisedCliExecutionRequest) => void
+  inspect?: (input: SupervisedCliExecutionRequest) => void,
+  responseSuffix = ""
 ): SupervisedCliExecutor {
   return Object.freeze({
     async execute(input: SupervisedCliExecutionRequest) {
@@ -180,7 +181,7 @@ function executorReturning(
           result: {
             conversation_id: "formal-test-conversation",
             status: "SUCCESS",
-            response: JSON.stringify(output),
+            response: JSON.stringify(output) + responseSuffix,
             num_turns: 1,
             structured_output: output,
             json_schema: schema
@@ -200,7 +201,11 @@ function executorReturning(
 function providerFor(
   sessions: SessionRecoveryCoordinator,
   executor: SupervisedCliExecutor,
-  options: { readonly rejectPolicy?: boolean } = {}
+  options: {
+    readonly rejectPolicy?: boolean;
+    readonly provider?: ReasoningProvider;
+    readonly policy?: ProviderPolicy;
+  } = {}
 ): ProviderBackedFormalInterpretationProvider {
   const resolver = {
     async resolve() {
@@ -208,8 +213,8 @@ function providerFor(
       return {
         providerId: ANTIGRAVITY_CLI_PROVIDER_ID,
         modelId: ANTIGRAVITY_CLI_MODEL_ID,
-        provider: ADMITTED_PROVIDER,
-        policy: POLICY
+        provider: options.provider ?? ADMITTED_PROVIDER,
+        policy: options.policy ?? POLICY
       };
     }
   } as unknown as ProviderRuntimeResolver;
@@ -341,6 +346,155 @@ describe("provider-backed Oxford formal interpretation", () => {
       const outcome = await coordinator.interpretAndVerify(test.request);
 
       expect(outcome.status).toBe("REJECTED");
+      expect(Object.keys(test.writer.getState().studentEvidence)).toHaveLength(0);
+    } finally {
+      test.store.close();
+    }
+  });
+
+  it("rejects a provider result whose echoed source span does not exactly match the committed turn", async () => {
+    const test = await fixture("2 divides 4.");
+    try {
+      const base = resultFor(test.request, "2");
+      const first = base.candidates[0];
+      if (first === undefined) throw new Error("Missing test candidate");
+      const wrongText = first.source.span.text.replace(/./gu, "x");
+      const hostile = {
+        ...base,
+        candidates: [{
+          ...first,
+          source: {
+            ...first.source,
+            span: {
+              ...first.source.span,
+              text: wrongText
+            }
+          }
+        }]
+      };
+      const provider = providerFor(
+        test.sessions,
+        executorReturning(test.request, () => hostile)
+      );
+      const coordinator = new InterpretationCoordinator(
+        test.writer,
+        provider,
+        test.profile.scopes
+      );
+
+      const outcome = await coordinator.interpretAndVerify(test.request);
+
+      expect(outcome).toMatchObject({
+        status: "SOURCE_MISMATCH",
+        reason: "CANDIDATE_SOURCE_MISMATCH"
+      });
+      expect(Object.keys(test.writer.getState().studentEvidence)).toHaveLength(0);
+    } finally {
+      test.store.close();
+    }
+  });
+
+  it("treats trailing prose around otherwise valid JSON as safe abstention", async () => {
+    const test = await fixture("2 divides 4.");
+    try {
+      const provider = providerFor(
+        test.sessions,
+        executorReturning(
+          test.request,
+          () => resultFor(test.request, "2"),
+          undefined,
+          "\nVERIFIED"
+        )
+      );
+      const coordinator = new InterpretationCoordinator(
+        test.writer,
+        provider,
+        test.profile.scopes
+      );
+
+      const outcome = await coordinator.interpretAndVerify(test.request);
+
+      expect(outcome.status).toBe("ABSTAINED");
+      expect(Object.keys(test.writer.getState().studentEvidence)).toHaveLength(0);
+    } finally {
+      test.store.close();
+    }
+  });
+
+  it("enforces no-metered billing admission before starting formal inference", async () => {
+    const test = await fixture("2 divides 4.");
+    try {
+      let executed = false;
+      const executor = executorReturning(test.request, () => {
+        executed = true;
+        return resultFor(test.request, "2");
+      });
+      const billingDeniedProvider: ReasoningProvider = Object.freeze({
+        ...ADMITTED_PROVIDER,
+        async verifyBillingSafety() {
+          throw new Error("billing proof unavailable");
+        }
+      });
+      const provider = providerFor(test.sessions, executor, {
+        provider: billingDeniedProvider,
+        policy: Object.freeze({
+          ...POLICY,
+          allowMeteredUsage: false
+        })
+      });
+      const coordinator = new InterpretationCoordinator(
+        test.writer,
+        provider,
+        test.profile.scopes
+      );
+
+      const outcome = await coordinator.interpretAndVerify(test.request);
+
+      expect(outcome.status).toBe("ABSTAINED");
+      expect(executed).toBe(false);
+      expect(Object.keys(test.writer.getState().studentEvidence)).toHaveLength(0);
+    } finally {
+      test.store.close();
+    }
+  });
+
+  it("physically aborts the supervised formal subprocess when the interpretation request is cancelled", async () => {
+    const test = await fixture("2 divides 4.");
+    try {
+      let started: (() => void) | undefined;
+      const didStart = new Promise<void>((resolve) => {
+        started = resolve;
+      });
+      let sawAbort = false;
+      const executor: SupervisedCliExecutor = Object.freeze({
+        execute(input: SupervisedCliExecutionRequest) {
+          started?.();
+          return new Promise((resolve, reject) => {
+            if (input.signal.aborted) {
+              sawAbort = true;
+              reject(new Error("aborted"));
+              return;
+            }
+            input.signal.addEventListener("abort", () => {
+              sawAbort = true;
+              reject(new Error("aborted"));
+            }, { once: true });
+          });
+        }
+      });
+      const provider = providerFor(test.sessions, executor);
+      const pending = provider.interpret(test.request);
+
+      await didStart;
+      await provider.cancel(test.request.requestId);
+      const outcome = await pending;
+
+      expect(sawAbort).toBe(true);
+      expect(outcome).toEqual({
+        protocolVersion: 1,
+        requestId: test.request.requestId,
+        candidates: []
+      });
       expect(Object.keys(test.writer.getState().studentEvidence)).toHaveLength(0);
     } finally {
       test.store.close();
