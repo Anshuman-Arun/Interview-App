@@ -246,6 +246,8 @@ def require_runtime_environment() -> None:
         raise RuntimeError("desktop local model runtime requires CPython")
     if not (MIN_PYTHON <= interpreter < MAX_PYTHON_EXCLUSIVE):
         raise RuntimeError("desktop local model runtime requires CPython 3.12 or 3.13")
+    if sys.maxsize <= 2**32:
+        raise RuntimeError("desktop local model runtime requires 64-bit CPython")
     for distribution, expected in EXPECTED_DISTRIBUTIONS.items():
         if version(distribution) != expected:
             raise RuntimeError(f"{distribution} package version mismatch")
@@ -754,7 +756,8 @@ class Handler(BaseHTTPRequestHandler):
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--component", choices=("speech", "tts"), required=True)
+    parser.add_argument("--component", choices=("speech", "tts"))
+    parser.add_argument("--check-runtime", action="store_true")
     parser.add_argument("--port", type=int, default=0)
     parser.add_argument("--silero-model")
     parser.add_argument("--moonshine-model-root")
@@ -762,6 +765,16 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.port != 0:
         raise RuntimeError("production worker requires dynamic loopback port allocation")
+    if args.check_runtime:
+        if (
+            args.component is not None
+            or args.silero_model is not None
+            or args.moonshine_model_root is not None
+            or args.tts_asset_root is not None
+        ):
+            raise RuntimeError("runtime check does not accept worker/model arguments")
+    elif args.component is None:
+        raise RuntimeError("production worker component is required")
     return args
 
 
@@ -787,6 +800,11 @@ def monitor_parent_stdin(
 
 def main() -> int:
     args = parse_args()
+    if args.check_runtime:
+        require_runtime_environment()
+        print('{"runtimeCompatible":true}', flush=True)
+        return 0
+
     server_holder: dict[str, Any] = {}
     monitor = threading.Thread(
         target=monitor_parent_stdin,
