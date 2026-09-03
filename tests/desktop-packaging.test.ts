@@ -139,6 +139,7 @@ describe("Windows desktop packaging contract", () => {
 
   it("provides artifact, process-lifecycle, installer and release-hygiene gates", async () => {
     const checker = await source("scripts/check-packaged-desktop.mjs");
+    const main = await source("apps/desktop/src/main.ts");
     const smoke = await source("scripts/run-packaged-desktop-smoke.ps1");
     const installer = await source("scripts/test-windows-installer.ps1");
 
@@ -150,6 +151,8 @@ describe("Windows desktop packaging contract", () => {
     expect(checker).toContain("unexpected production runtime packages");
     expect(checker).toContain("renderer resource tree differs from the reviewed Vite build");
     expect(checker).toContain("renderer files matched byte-for-byte");
+    expect(main).toContain('type: "COMMIT_TYPED_INPUT"');
+    expect(main).toContain("Packaged Windows desktop smoke input.");
     expect(smoke).toContain("--packaged-smoke-test");
     expect(smoke).toContain("--packaged-single-instance-smoke-host");
     expect(installer).toContain("preserve-across-upgrade-and-uninstall");
