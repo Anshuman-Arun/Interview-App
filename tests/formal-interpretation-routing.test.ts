@@ -960,7 +960,7 @@ describe("interpretation cancellation linearization", () => {
     } finally {
       harness.store.close();
     }
-  })
+  });
 
   it("abandons a persisted pending verification during the first deterministic verifier pass", async () => {
     const harness = await createCoreHarness();
@@ -1097,7 +1097,6 @@ describe("interpretation cancellation linearization", () => {
       harness.store.close();
     }
   });
-;
 });
 
 
