@@ -1,7 +1,12 @@
-import type {
-  FormalInterpretationCandidate,
-  FormalInterpretationRequest
+import {
+  InterpretationProviderResultSchema,
+  type FormalInterpretationCandidate,
+  type FormalInterpretationRequest,
+  type InterpretationProviderResult
 } from "../../../packages/domain/src/index.js";
+import type {
+  FormalInterpretationProvider
+} from "../../../packages/interview-engine/src/index.js";
 import { parseStrictJson } from "../../../packages/providers/src/index.js";
 import {
   ModularArithmeticInterpretationSchema,
@@ -10,13 +15,6 @@ import {
   type RationalExpression
 } from "../../../packages/verification/src/index.js";
 import type { OxfordFormalAnalysisProfile } from "./oxford-formal-analysis-catalog.js";
-
-export interface OxfordFormalPublicProblemContext {
-  readonly id: string;
-  readonly version: string;
-  readonly prompt: string;
-  readonly givenInformation: readonly string[];
-}
 
 const DOMINO_STRONG_NUMBERS = new Set(["30", "31", "32", "62", "64"]);
 const TRIANGLE_RATIO_NUMBERS = new Set(["1", "2", "3"]);
@@ -136,10 +134,9 @@ export function isOxfordFormalAnalysisSourceRelevant(
 export function isOxfordFormalCandidateTargetAdmissible(input: {
   readonly profile: OxfordFormalAnalysisProfile;
   readonly request: FormalInterpretationRequest;
-  readonly publicProblem: OxfordFormalPublicProblemContext;
   readonly candidate: FormalInterpretationCandidate;
 }): boolean {
-  const { profile, request, publicProblem, candidate } = input;
+  const { profile, request, candidate } = input;
   if (
     request.problem.id !== profile.problemId
     || request.problem.version !== profile.problemVersion
@@ -148,8 +145,6 @@ export function isOxfordFormalCandidateTargetAdmissible(input: {
     || candidate.target.problemId !== profile.target.problemId
     || candidate.target.subject.claimId !== profile.target.subject.claimId
     || candidate.target.dimension !== "CORRECTNESS"
-    || publicProblem.id !== request.problem.id
-    || publicProblem.version !== request.problem.version
     || !isOxfordFormalAnalysisSourceRelevant(profile, request.source.span.text)
   ) {
     return false;
@@ -232,6 +227,59 @@ export function isOxfordFormalCandidateTargetAdmissible(input: {
   }
 
   return false;
+}
+
+export function createOxfordFormalAdmissionProvider(
+  profile: OxfordFormalAnalysisProfile,
+  provider: FormalInterpretationProvider
+): FormalInterpretationProvider {
+  return Object.freeze({
+    async interpret(
+      request: FormalInterpretationRequest,
+      runtime?: { readonly signal: AbortSignal }
+    ): Promise<unknown> {
+      if (
+        request.problem.id !== profile.problemId
+        || request.problem.version !== profile.problemVersion
+        || request.target.problemId !== profile.target.problemId
+        || request.target.subject.claimId !== profile.target.subject.claimId
+        || !isOxfordFormalAnalysisSourceRelevant(profile, request.source.span.text)
+      ) {
+        return abstention(request);
+      }
+
+      const raw = await provider.interpret(request, runtime);
+      const parsed = InterpretationProviderResultSchema.safeParse(raw);
+      if (!parsed.success || parsed.data.requestId !== request.requestId) {
+        // Preserve malformed/mismatched provider output for the generic
+        // coordinator to diagnose and reject rather than laundering it into an
+        // ordinary abstention.
+        return raw;
+      }
+      if (
+        parsed.data.candidates.some((candidate) =>
+          !isOxfordFormalCandidateTargetAdmissible({
+            profile,
+            request,
+            candidate
+          })
+        )
+      ) {
+        return abstention(request);
+      }
+      return parsed.data;
+    }
+  });
+}
+
+function abstention(
+  request: FormalInterpretationRequest
+): InterpretationProviderResult {
+  return InterpretationProviderResultSchema.parse({
+    protocolVersion: 1,
+    requestId: request.requestId,
+    candidates: []
+  });
 }
 
 function containsAny(text: string, needles: readonly string[]): boolean {
