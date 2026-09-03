@@ -295,6 +295,16 @@ export class LoopbackCommandServer {
       };
     }
 
+    if (command.type === "LIST_PROVIDER_OPTIONS") {
+      return {
+        protocolVersion: 1,
+        ok: true,
+        type: "PROVIDER_OPTIONS",
+        requestId: command.requestId,
+        options: [...await this.providerRuntimeResolver.listLaunchOptions()]
+      };
+    }
+
     if (command.type === "LIST_SESSIONS") {
       const sessions = this.options.sessions.listSessions();
       return {
@@ -319,6 +329,23 @@ export class LoopbackCommandServer {
           404,
           "NOT_FOUND",
           "Configured interview target is not available"
+        );
+      }
+    }
+
+    if (command.type === "START_CONFIGURED_SESSION") {
+      const composition = startComposition;
+      if (composition === undefined) {
+        throw new Error("Validated configured session composition is missing");
+      }
+      const provider = await this.providerRuntimeResolver.evaluateLaunchOption(
+        composition.configuration.providerSelection
+      );
+      if (provider.availability !== "AVAILABLE") {
+        throw new ProtocolHttpError(
+          409,
+          "CONFLICT",
+          providerLaunchFailureMessage(provider.reason)
         );
       }
     }
@@ -560,6 +587,10 @@ export class LoopbackCommandServer {
           requestId: command.requestId,
           sessionId: command.sessionId,
           configuration: composition.configuration,
+          configurationSource:
+            writer.getState().configuration === undefined
+              ? "LEGACY_COMPATIBILITY"
+              : "CONFIGURED",
           ...(problem === undefined ? {} : { problem })
         };
       }
@@ -797,6 +828,32 @@ function parseCommand(body: string): ClientCommand {
   const command = ClientCommandSchema.safeParse(parsed);
   if (!command.success) throw new ProtocolHttpError(400, "INVALID_COMMAND", "Command does not match protocol version 1");
   return command.data;
+}
+
+function providerLaunchFailureMessage(
+  reason: import("../../../packages/domain/src/index.js").ProviderLaunchAvailabilityReason | undefined
+): string {
+  switch (reason) {
+    case "CREDENTIALS_REQUIRED":
+      return "Selected provider requires configured authentication";
+    case "DISABLED":
+      return "Selected provider is disabled";
+    case "RUNTIME_CONFIGURATION_UNAVAILABLE":
+      return "Selected provider runtime configuration is unavailable";
+    case "RUNTIME_DEPENDENCY_UNAVAILABLE":
+      return "Selected provider runtime dependency is unavailable";
+    case "POLICY_UNAVAILABLE":
+      return "Selected provider policy could not be verified";
+    case "POLICY_DENIED":
+      return "Selected provider is denied by the current safety policy";
+    case "CAPABILITY_UNAVAILABLE":
+      return "Selected provider does not satisfy required capabilities";
+    case "PROVIDER_UNAVAILABLE":
+      return "Selected provider is unavailable";
+    case "UNKNOWN":
+    default:
+      return "Selected provider readiness could not be verified";
+  }
 }
 
 function classifyError(error: unknown): ProtocolHttpError {
