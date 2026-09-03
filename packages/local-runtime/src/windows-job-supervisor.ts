@@ -485,6 +485,7 @@ public static class InterviewJobSupervisor
 
 export const WINDOWS_JOB_SUPERVISOR_SCRIPT = String.raw`
 $ErrorActionPreference = 'Stop'
+[Console]::Error.WriteLine("INTERVIEW_SUPERVISOR_STAGE:PS_ENTER")
 
 $configJson = $env:INTERVIEW_SUPERVISED_CONFIG_JSON
 $assemblyPath = $env:INTERVIEW_SUPERVISED_ASSEMBLY_PATH
@@ -500,6 +501,7 @@ Remove-Item Env:INTERVIEW_SUPERVISED_CONFIG_JSON -ErrorAction SilentlyContinue
 Remove-Item Env:INTERVIEW_SUPERVISED_ASSEMBLY_PATH -ErrorAction SilentlyContinue
 Remove-Item Env:INTERVIEW_SUPERVISED_ASSEMBLY_SHA256 -ErrorAction SilentlyContinue
 Remove-Item Env:INTERVIEW_SUPERVISED_BOOTSTRAP -ErrorAction SilentlyContinue
+[Console]::Error.WriteLine("INTERVIEW_SUPERVISOR_STAGE:PS_CONFIG_OK")
 
 $config = $configJson | ConvertFrom-Json
 $configJson = $null
@@ -545,6 +547,7 @@ try {
 finally {
   $stream.Dispose()
 }
+[Console]::Error.WriteLine("INTERVIEW_SUPERVISOR_STAGE:PS_BYTES_OK")
 
 try {
   $assembly = [System.Reflection.Assembly]::Load($bytes)
@@ -560,6 +563,7 @@ try {
 catch {
   exit 190
 }
+[Console]::Error.WriteLine("INTERVIEW_SUPERVISOR_STAGE:PS_METHOD_OK")
 
 $allowed = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 foreach ($name in $config.environmentKeys) {
@@ -576,6 +580,7 @@ foreach ($argument in $config.arguments) {
   $arguments += [string]$argument
 }
 $currentDirectory = if ($null -eq $config.cwd) { $null } else { [string]$config.cwd }
+[Console]::Error.WriteLine("INTERVIEW_SUPERVISOR_STAGE:PS_ENV_OK")
 
 try {
   $invokeArguments = New-Object object[] 7
@@ -586,7 +591,9 @@ try {
   $invokeArguments[4] = [string]$config.stdinPath
   $invokeArguments[5] = [long]$config.stdinBytes
   $invokeArguments[6] = [string]$config.stdinSha256
+  [Console]::Error.WriteLine("INTERVIEW_SUPERVISOR_STAGE:PS_INVOKE")
   $exitCode = [int]$runMethod.Invoke($null, $invokeArguments)
+  [Console]::Error.WriteLine("INTERVIEW_SUPERVISOR_STAGE:PS_RETURN")
   exit $exitCode
 }
 catch {
