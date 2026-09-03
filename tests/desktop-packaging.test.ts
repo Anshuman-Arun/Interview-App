@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -56,6 +57,21 @@ describe("Windows desktop packaging contract", () => {
     );
     expect(runtime).toContain('path.join(options.appDataRoot, "model-assets")');
     expect(runtime).toContain('path.join(options.appDataRoot, "runtime-models")');
+  });
+
+
+  it("pins packaged Python resource hashes to the reviewed source bytes", async () => {
+    const integrity = await source("apps/desktop/src/runtime/packaged-resource-integrity.ts");
+    const worker = await readFile(path.join(root, "workers/python/local_model_worker.py"));
+    const requirements = await readFile(
+      path.join(root, "workers/python/requirements-local-model-runtime.txt")
+    );
+    const workerHash = createHash("sha256").update(worker).digest("hex");
+    const requirementsHash = createHash("sha256").update(requirements).digest("hex");
+
+    expect(integrity).toContain(workerHash);
+    expect(integrity).toContain(requirementsHash);
+    expect(await source(".gitattributes")).toContain("workers/python/*.py text eol=lf");
   });
 
   it("keeps model setup behind narrow authenticated preload IPC", async () => {
