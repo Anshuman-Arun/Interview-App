@@ -51,7 +51,7 @@ export class ManagedSileroVadRuntime implements SileroVadRuntime {
     }
     let result: unknown;
     try {
-      result = await runWithWorkerRecycleOnTimeout(this.client, () =>
+      result = await runWithWorkerRecycleOnTimeout(this.client, "vad", () =>
         this.client.postJson("/v1/vad", {
           pcmF32Base64: Buffer.from(input.pcmBytes).toString("base64"),
           sampleRate: input.sampleRate,
@@ -68,7 +68,7 @@ export class ManagedSileroVadRuntime implements SileroVadRuntime {
         && input.signal.reason === SPEECH_VAD_TIMEOUT_ABORT_REASON;
       if (!timedOutInSpeechCore) throw error;
       try {
-        await this.client.recycleAfterUncertainRequest(workerInstance);
+        await this.client.recycleAfterUncertainRequest(workerInstance, "vad");
       } catch (recycleError) {
         throw new AggregateError(
           [error, recycleError],
@@ -141,7 +141,7 @@ export class ManagedMoonshineRuntime implements MoonshineRuntime {
       const onAbort = (): void => {
         if (signal?.reason !== SPEECH_RECOGNIZER_TIMEOUT_ABORT_REASON) return;
         timeoutRecovery.promise ??=
-          this.client.recycleAfterUncertainRequest(workerInstance);
+          this.client.recycleAfterUncertainRequest(workerInstance, "stt");
       };
 
       signal?.addEventListener("abort", onAbort, { once: true });
@@ -159,7 +159,7 @@ export class ManagedMoonshineRuntime implements MoonshineRuntime {
         try {
           outcome = {
             ok: true,
-            value: await runWithWorkerRecycleOnTimeout(this.client, () =>
+            value: await runWithWorkerRecycleOnTimeout(this.client, "stt", () =>
               this.client.postJson("/v1/stt", {
                 requestId: input.requestId,
                 utteranceId: input.utteranceId,
@@ -254,7 +254,7 @@ export class ManagedKokoroRuntime implements KokoroRuntime {
         // observes started=true must use the worker's request tombstone/native
         // cancellation path; one that observes false never reaches the worker.
         state.started = true;
-        const result = await runWithWorkerRecycleOnTimeout(this.client, () =>
+        const result = await runWithWorkerRecycleOnTimeout(this.client, "tts", () =>
           this.client.postJson("/v1/tts", {
             requestId: input.requestId,
             text: input.text,
@@ -298,7 +298,7 @@ export class ManagedKokoroRuntime implements KokoroRuntime {
           state.cancelled = true;
           return;
         }
-        const result = await runWithWorkerRecycleOnTimeout(this.client, () =>
+        const result = await runWithWorkerRecycleOnTimeout(this.client, "tts", () =>
           this.client.postJson("/v1/tts/cancel", {
             requestId
           }, {
@@ -366,6 +366,7 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
 
 async function runWithWorkerRecycleOnTimeout<T>(
   client: ManagedModelWorkerClient,
+  scope: "vad" | "stt" | "tts",
   operation: () => Promise<T>
 ): Promise<T> {
   const workerInstance = client.workerInstanceIdentity();
@@ -378,7 +379,7 @@ async function runWithWorkerRecycleOnTimeout<T>(
       || (error instanceof ManagedWorkerResponseError && error.statusCode >= 500);
     if (!uncertainNativeState) throw error;
     try {
-      await client.recycleAfterUncertainRequest(workerInstance);
+      await client.recycleAfterUncertainRequest(workerInstance, scope);
     } catch (recycleError) {
       throw new AggregateError(
         [error, recycleError],
