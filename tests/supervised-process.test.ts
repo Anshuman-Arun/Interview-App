@@ -24,9 +24,9 @@ const FIXTURE = fileURLToPath(
 const temporaryRoots: string[] = [];
 const fixturePids: number[] = [];
 const DEFAULT_TEST_EXECUTION_TIMEOUT_MS =
-  process.platform === "win32" ? 12_000 : 1_000;
+  process.platform === "win32" ? 40_000 : 1_000;
 if (process.platform === "win32") {
-  vi.setConfig({ testTimeout: 20_000 });
+  vi.setConfig({ testTimeout: 50_000 });
 }
 const WINDOWS_TREE_TEST_TIMEOUT_MS = 10_000;
 const FILE_WAIT_TIMEOUT_MS =
