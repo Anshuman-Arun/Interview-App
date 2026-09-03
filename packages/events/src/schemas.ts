@@ -22,6 +22,7 @@ import {
   ProblemStateRevisionSchema,
   RealizationRequestSchema,
   RequestIdSchema,
+  SessionConfigurationSourceSchema,
   SessionIdSchema,
   TranscriptRevisionSchema,
   TurnIdSchema,
@@ -527,7 +528,8 @@ const event = <TType extends string, TPayload extends z.ZodType>(type: TType, pa
 export const SessionEventSchema = z.discriminatedUnion("type", [
   event("SESSION_STARTED", z.object({
     startedAt: z.iso.datetime(),
-    configuration: InterviewSessionConfigurationSchema.optional()
+    configuration: InterviewSessionConfigurationSchema.optional(),
+    configurationSource: SessionConfigurationSourceSchema.optional()
   }).strict()),
   event("PROBLEM_PRESENTED", z.object({
     problemId: z.string().min(1),
@@ -699,9 +701,18 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
     interpretationConfidence: z.number().min(0).max(1),
     evidenceKey: EvidenceKeySchema,
     evidenceEventIds: z.array(EventIdSchema).min(1),
+    boardRevisionIndependent: z.literal(true).optional(),
     sourceGenerationId: GenerationIdSchema.optional(),
     sourceProposalRequestId: RequestIdSchema.optional()
-  }).strict()),
+  }).strict().superRefine((value, context) => {
+    if (value.boardRevisionIndependent === true && value.sourceGenerationId !== undefined) {
+      context.addIssue({
+        code: "custom",
+        path: ["boardRevisionIndependent"],
+        message: "Generation-bound verification cannot ignore board revision"
+      });
+    }
+  })),
   event("VERIFICATION_RESULT_ACCEPTED", z.object({
     verificationRequestId: RequestIdSchema,
     result: VerificationResultSchema

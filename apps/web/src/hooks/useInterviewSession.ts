@@ -3,9 +3,13 @@ import {
   RequestIdSchema,
   SessionIdSchema,
   type DeliveryId,
+  type InterviewCatalogEntry,
   type InterviewProblemPublicView,
+  type InterviewSessionConfiguration,
+  type ProviderLaunchOption,
   type RequestId,
   type SessionHistoryEntry,
+  type SessionConfigurationSource,
   type SessionId,
   type SessionStatus,
   type StoredSessionSummary
@@ -92,8 +96,16 @@ export interface UseInterviewSessionResult {
   readonly isStreaming: boolean;
   readonly sessionStatus: SessionStatus;
   readonly availableSessions: readonly StoredSessionSummary[];
+  readonly interviewCatalog: readonly InterviewCatalogEntry[];
+  readonly interviewCatalogLoading: boolean;
+  readonly interviewCatalogError: string | null;
+  readonly providerOptions: readonly ProviderLaunchOption[];
+  readonly providerOptionsLoading: boolean;
+  readonly providerOptionsError: string | null;
   readonly transcript: readonly TranscriptItem[];
   readonly problem: InterviewProblemPublicView | null;
+  readonly configuration: InterviewSessionConfiguration | null;
+  readonly configurationSource: SessionConfigurationSource | null;
   readonly sequence: number;
   readonly contextEpoch: number;
   readonly error: string | null;
@@ -104,6 +116,8 @@ export interface UseInterviewSessionResult {
   readonly setBaseUrl: (url: string) => void;
   readonly fetchAvailableSessions: () => Promise<readonly StoredSessionSummary[]>;
   readonly fetchAvailableSessionsStrict: () => Promise<readonly StoredSessionSummary[]>;
+  readonly refreshInterviewCatalog: () => Promise<readonly InterviewCatalogEntry[]>;
+  readonly refreshProviderOptions: () => Promise<readonly ProviderLaunchOption[]>;
   readonly readSessionEvaluation: (
     sessionId: SessionId,
     signal?: AbortSignal
@@ -116,6 +130,10 @@ export interface UseInterviewSessionResult {
     signal?: AbortSignal
   ) => Promise<SessionHistoryReadResponse>;
   readonly startSession: (customSessionId?: SessionId) => Promise<void>;
+  readonly startConfiguredSession: (
+    configuration: InterviewSessionConfiguration,
+    customSessionId?: SessionId
+  ) => Promise<void>;
   readonly recoverSession: (sessionId: SessionId) => Promise<SessionStatus | null>;
   readonly pauseSession: () => void;
   readonly resumePausedSession: () => Promise<void>;
@@ -331,9 +349,17 @@ export function useInterviewSession(
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>("CREATED");
   const [availableSessions, setAvailableSessions] = useState<readonly StoredSessionSummary[]>([]);
+  const [interviewCatalog, setInterviewCatalog] = useState<readonly InterviewCatalogEntry[]>([]);
+  const [interviewCatalogLoading, setInterviewCatalogLoading] = useState(false);
+  const [interviewCatalogError, setInterviewCatalogError] = useState<string | null>(null);
+  const [providerOptions, setProviderOptions] = useState<readonly ProviderLaunchOption[]>([]);
+  const [providerOptionsLoading, setProviderOptionsLoading] = useState(false);
+  const [providerOptionsError, setProviderOptionsError] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
   const [transcript, setTranscript] = useState<readonly TranscriptItem[]>([]);
   const [problem, setProblem] = useState<InterviewProblemPublicView | null>(null);
+  const [configuration, setConfiguration] = useState<InterviewSessionConfiguration | null>(null);
+  const [configurationSource, setConfigurationSource] = useState<SessionConfigurationSource | null>(null);
   const [sequence, setSequence] = useState<number>(0);
   const [contextEpoch, setContextEpoch] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
@@ -351,6 +377,8 @@ export function useInterviewSession(
   const sessionMutationAdmissionRef = useRef(false);
   const transportEpochRef = useRef(0);
   const sessionListRequestEpochRef = useRef(0);
+  const catalogRequestEpochRef = useRef(0);
+  const providerOptionsRequestEpochRef = useRef(0);
   const rendererRestartRef = useRef<((targetSessionId: SessionId) => void) | null>(null);
   const rendererClientRef = useRef<RendererClient | null>(null);
   const boardSyncRef = useRef<AuthoritativeBoardSyncCoordinator | null>(null);
@@ -466,16 +494,26 @@ export function useInterviewSession(
     // transition/list read before clearing state from the previous server.
     transportEpochRef.current += 1;
     sessionListRequestEpochRef.current += 1;
+    catalogRequestEpochRef.current += 1;
+    providerOptionsRequestEpochRef.current += 1;
     sessionTransitionEpochRef.current += 1;
     sessionMutationAdmissionRef.current = false;
     pendingSubmissionsRef.current.clear();
     resetBoardSync();
     setAvailableSessions([]);
+    setInterviewCatalog([]);
+    setInterviewCatalogLoading(false);
+    setInterviewCatalogError(null);
+    setProviderOptions([]);
+    setProviderOptionsLoading(false);
+    setProviderOptionsError(null);
     setSessionId(null);
     setIsSessionStarted(false);
     setIsPaused(false);
     setSessionStatus("CREATED");
     setProblem(null);
+    setConfiguration(null);
+    setConfigurationSource(null);
     setTranscript([]);
     setSequence(0);
     setContextEpoch(0);
@@ -647,6 +685,80 @@ export function useInterviewSession(
       throw err;
     }
   }, [listAvailableSessions]);
+
+  const refreshInterviewCatalog = useCallback(async (): Promise<readonly InterviewCatalogEntry[]> => {
+    const transportEpoch = transportEpochRef.current;
+    const requestEpoch = catalogRequestEpochRef.current + 1;
+    catalogRequestEpochRef.current = requestEpoch;
+    setInterviewCatalogLoading(true);
+    setInterviewCatalogError(null);
+    try {
+      const entries = await getCommandClient().listInterviewCatalog();
+      if (
+        transportEpochRef.current !== transportEpoch
+        || catalogRequestEpochRef.current !== requestEpoch
+      ) {
+        throw new Error("Interview catalog read was superseded");
+      }
+      setInterviewCatalog(entries);
+      return entries;
+    } catch (err) {
+      if (
+        transportEpochRef.current === transportEpoch
+        && catalogRequestEpochRef.current === requestEpoch
+      ) {
+        setInterviewCatalog([]);
+        setInterviewCatalogError(
+          err instanceof Error ? err.message : "Interview catalog could not be loaded"
+        );
+      }
+      throw err;
+    } finally {
+      if (
+        transportEpochRef.current === transportEpoch
+        && catalogRequestEpochRef.current === requestEpoch
+      ) {
+        setInterviewCatalogLoading(false);
+      }
+    }
+  }, [getCommandClient]);
+
+  const refreshProviderOptions = useCallback(async (): Promise<readonly ProviderLaunchOption[]> => {
+    const transportEpoch = transportEpochRef.current;
+    const requestEpoch = providerOptionsRequestEpochRef.current + 1;
+    providerOptionsRequestEpochRef.current = requestEpoch;
+    setProviderOptionsLoading(true);
+    setProviderOptionsError(null);
+    try {
+      const options = await getCommandClient().listProviderOptions();
+      if (
+        transportEpochRef.current !== transportEpoch
+        || providerOptionsRequestEpochRef.current !== requestEpoch
+      ) {
+        throw new Error("Provider option read was superseded");
+      }
+      setProviderOptions(options);
+      return options;
+    } catch (err) {
+      if (
+        transportEpochRef.current === transportEpoch
+        && providerOptionsRequestEpochRef.current === requestEpoch
+      ) {
+        setProviderOptions([]);
+        setProviderOptionsError(
+          err instanceof Error ? err.message : "Provider options could not be loaded"
+        );
+      }
+      throw err;
+    } finally {
+      if (
+        transportEpochRef.current === transportEpoch
+        && providerOptionsRequestEpochRef.current === requestEpoch
+      ) {
+        setProviderOptionsLoading(false);
+      }
+    }
+  }, [getCommandClient]);
 
   const attachRendererStream = useCallback(
     async (targetSessionId: SessionId): Promise<void> => {
@@ -848,8 +960,18 @@ export function useInterviewSession(
     return transitionEpoch;
   }, [resetBoardSync, stopRendererTransport, voiceIntegration.voiceControls]);
 
-  const startSession = useCallback(
-    async (customSessionId?: SessionId): Promise<void> => {
+  const startSessionWith = useCallback(
+    async (
+      startOperation: (
+        client: BrowserCommandClient,
+        targetSessionId: SessionId
+      ) => Promise<{
+        readonly configuration: InterviewSessionConfiguration | null;
+        readonly configurationSource: SessionConfigurationSource | null;
+        readonly problem: InterviewProblemPublicView | null;
+      }>,
+      customSessionId?: SessionId
+    ): Promise<void> => {
       if (sessionId !== null && sessionStatus === "ACTIVE") {
         throw new Error(
           "Cannot start a new session while an active session is attached or awaiting recovery"
@@ -868,25 +990,33 @@ export function useInterviewSession(
           resetBoardSync();
         }
         const client = getCommandClient();
-        await client.startSession(targetSessionId);
+        const started = await startOperation(client, targetSessionId);
         if (sessionTransitionEpochRef.current !== transitionEpoch) return;
-        let problemView: InterviewProblemPublicView | null = null;
+
+        let resolvedConfiguration = started.configuration;
+        let resolvedConfigurationSource = started.configurationSource;
+        let problemView = started.problem;
         try {
           const context = await client.getInterviewSessionContext(targetSessionId);
           if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+          resolvedConfiguration = context.configuration;
+          resolvedConfigurationSource = context.configurationSource;
           problemView = context.problem ?? null;
         } catch {
           if (sessionTransitionEpochRef.current !== transitionEpoch) return;
-          // The authoritative start already succeeded. A read-model/context
-          // failure must not make the caller retry session creation.
-          setError("Session started, but session context could not be loaded");
+          // The authoritative start already succeeded. Never retry creation
+          // because a post-start public-context read failed.
+          setError("Session started, but authoritative session context could not be reloaded");
         }
         if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+
+        const usesOxfordWorkspace =
+          resolvedConfiguration === null
+          || resolvedConfiguration.mode === "OXFORD_MATHEMATICS";
         if (sessionId !== targetSessionId) {
-          const mayBootstrapFreshCanvas = sessionId === null;
           pendingSubmissionsRef.current.clear();
           resetBoardSync();
-          if (mayBootstrapFreshCanvas) {
+          if (usesOxfordWorkspace && sessionId === null) {
             boardBootstrapSessionRef.current = targetSessionId;
           }
         }
@@ -895,7 +1025,15 @@ export function useInterviewSession(
         setIsPaused(false);
         setSessionStatus("ACTIVE");
         setProblem(problemView);
+        setConfiguration(resolvedConfiguration);
+        setConfigurationSource(resolvedConfigurationSource);
         setTranscript([]);
+
+        if (!usesOxfordWorkspace) {
+          sessionMutationAdmissionRef.current = false;
+          setWhiteboardSync({ status: "UNINITIALIZED", pendingMutationCount: 0 });
+          return;
+        }
 
         try {
           await synchronizeWhiteboardFor(targetSessionId);
@@ -914,7 +1052,7 @@ export function useInterviewSession(
         if (sessionTransitionEpochRef.current !== transitionEpoch) return;
         let msg = "Failed to start interview session";
         if (err instanceof BrowserCommandProtocolError) {
-          msg = `Command error [${err.code}]: HTTP ${String(err.status)}`;
+          msg = err.message;
         } else if (err instanceof Error) {
           msg = err.message;
         }
@@ -926,11 +1064,43 @@ export function useInterviewSession(
       beginSessionTransition,
       getCommandClient,
       launchRendererStream,
+      options.whiteboardAdapter,
       resetBoardSync,
       sessionId,
       sessionStatus,
       synchronizeWhiteboardFor
     ]
+  );
+
+  const startSession = useCallback(
+    async (customSessionId?: SessionId): Promise<void> => {
+      await startSessionWith(async (client, targetSessionId) => {
+        await client.startSession(targetSessionId);
+        return {
+          configuration: null,
+          configurationSource: null,
+          problem: null
+        };
+      }, customSessionId);
+    },
+    [startSessionWith]
+  );
+
+  const startConfiguredSession = useCallback(
+    async (
+      configured: InterviewSessionConfiguration,
+      customSessionId?: SessionId
+    ): Promise<void> => {
+      await startSessionWith(async (client, targetSessionId) => {
+        const started = await client.startConfiguredSession(targetSessionId, configured);
+        return {
+          configuration: started.configuration,
+          configurationSource: "CONFIGURED",
+          problem: started.problem ?? null
+        };
+      }, customSessionId);
+    },
+    [startSessionWith]
   );
 
   const recoverSession = useCallback(
@@ -966,6 +1136,8 @@ export function useInterviewSession(
           setSequence(summary.sequence);
           setContextEpoch(summary.contextEpoch);
           setProblem(null);
+          setConfiguration(null);
+          setConfigurationSource(null);
           setTranscript(summary.history.map(historyEntryToTranscriptItem));
           stopRendererTransport();
           return summary.status;
@@ -977,7 +1149,12 @@ export function useInterviewSession(
 
         const context = await client.getInterviewSessionContext(targetSessionId);
         if (sessionTransitionEpochRef.current !== transitionEpoch) return null;
-        const response = await client.resumeSession(targetSessionId);
+        const response = context.configuration.mode === "OXFORD_MATHEMATICS"
+          ? await client.resumeSession(targetSessionId)
+          : {
+              ...summary,
+              status: "ACTIVE" as const
+            };
         if (sessionTransitionEpochRef.current !== transitionEpoch) return null;
         if (sessionId !== targetSessionId) {
           pendingSubmissionsRef.current.clear();
@@ -990,8 +1167,17 @@ export function useInterviewSession(
         setSequence(response.sequence);
         setContextEpoch(response.contextEpoch);
         setProblem(context.problem ?? null);
+        setConfiguration(context.configuration);
+        setConfigurationSource(context.configurationSource);
 
         setTranscript(response.history.map(historyEntryToTranscriptItem));
+
+        const usesOxfordWorkspace = context.configuration.mode === "OXFORD_MATHEMATICS";
+        if (!usesOxfordWorkspace) {
+          sessionMutationAdmissionRef.current = false;
+          setWhiteboardSync({ status: "UNINITIALIZED", pendingMutationCount: 0 });
+          return response.status;
+        }
 
         try {
           await synchronizeWhiteboardFor(targetSessionId);
@@ -1016,7 +1202,7 @@ export function useInterviewSession(
         if (sessionTransitionEpochRef.current !== transitionEpoch) return null;
         let msg = "Failed to recover session";
         if (err instanceof BrowserCommandProtocolError) {
-          msg = `Recovery error [${err.code}]: HTTP ${String(err.status)}`;
+          msg = err.message;
         } else if (err instanceof Error) {
           msg = err.message;
         }
@@ -1080,6 +1266,11 @@ export function useInterviewSession(
     sessionTransitionEpochRef.current = transitionEpoch;
     setError(null);
     try {
+      if (configuration !== null && configuration.mode !== "OXFORD_MATHEMATICS") {
+        sessionMutationAdmissionRef.current = false;
+        setIsPaused(false);
+        return;
+      }
       await synchronizeWhiteboardFor(targetSessionId);
       if (sessionTransitionEpochRef.current !== transitionEpoch) return;
       const coordinator = boardSyncRef.current;
@@ -1106,6 +1297,7 @@ export function useInterviewSession(
     }
   }, [
     isPaused,
+    configuration,
     isSessionStarted,
     launchRendererStream,
     options.whiteboardAdapter,
@@ -1531,9 +1723,17 @@ export function useInterviewSession(
     isPaused,
     sessionStatus,
     availableSessions,
+    interviewCatalog,
+    interviewCatalogLoading,
+    interviewCatalogError,
+    providerOptions,
+    providerOptionsLoading,
+    providerOptionsError,
     isStreaming,
     transcript,
     problem,
+    configuration,
+    configurationSource,
     sequence,
     contextEpoch,
     error,
@@ -1544,10 +1744,13 @@ export function useInterviewSession(
     setBaseUrl,
     fetchAvailableSessions,
     fetchAvailableSessionsStrict,
+    refreshInterviewCatalog,
+    refreshProviderOptions,
     readSessionEvaluation,
     readSessionReplay,
     readSessionHistory,
     startSession,
+    startConfiguredSession,
     recoverSession,
     pauseSession,
     resumePausedSession,

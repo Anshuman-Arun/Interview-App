@@ -2,6 +2,7 @@ import type { LocalTransportSecurity } from "../../../packages/domain/src/index.
 import type {
   SessionRuntimeRegistry,
   VisionEvidenceInterpreter,
+  FormalInterpretationProvider,
   VisionInferenceBackend
 } from "../../../packages/interview-engine/src/index.js";
 import type { SqliteEventStore } from "../../../packages/persistence/src/index.js";
@@ -15,7 +16,7 @@ import {
 } from "./renderer-stream-server.js";
 import { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 import { SessionReadService } from "./session-read-service.js";
-import type { ProviderRuntimeResolver } from "./provider-runtime.js";
+import { ProviderRuntimeResolver } from "./provider-runtime.js";
 import { ServerTurnOrchestrator } from "./turn-orchestrator.js";
 import { WhiteboardVisionCoordinator } from "./whiteboard-vision-coordinator.js";
 import {
@@ -42,6 +43,7 @@ export interface LocalInterviewTransportRuntimeOptions {
   readonly maxRendererMessageBytes?: number;
   readonly orchestrator?: ServerTurnOrchestrator;
   readonly providerRuntimeResolver?: ProviderRuntimeResolver;
+  readonly formalInterpretationProvider?: FormalInterpretationProvider;
   readonly readService?: SessionReadService;
   readonly visionBackend?: VisionInferenceBackend;
   readonly visionEvidenceInterpreter?: VisionEvidenceInterpreter;
@@ -75,17 +77,25 @@ export class LocalInterviewTransportRuntime {
   private voiceWorkersTerminated = false;
 
   public constructor(options: LocalInterviewTransportRuntimeOptions) {
-    if (
-      options.orchestrator !== undefined
-      && options.providerRuntimeResolver !== undefined
-    ) {
+    if (options.orchestrator !== undefined && options.providerRuntimeResolver !== undefined) {
       throw new Error(
         "Local interview transport cannot accept both an orchestrator and a provider runtime resolver"
+      );
+    }
+    const orchestratorProviderRuntime =
+      options.orchestrator?.getProviderRuntimeResolver();
+    if (options.orchestrator !== undefined && options.formalInterpretationProvider !== undefined) {
+      throw new Error(
+        "Local interview transport cannot accept both an orchestrator and a formal interpretation provider"
       );
     }
     const voiceRuntime = options.voiceRuntime;
     const speechWorker = voiceRuntime?.speechWorker;
     const ttsRuntime = voiceRuntime?.tts;
+    const providerRuntimeResolver =
+      orchestratorProviderRuntime
+      ?? options.providerRuntimeResolver
+      ?? new ProviderRuntimeResolver();
 
     this.registry = options.registry;
     this.sessions = new SessionRecoveryCoordinator(options.registry, options.store);
@@ -103,7 +113,8 @@ export class LocalInterviewTransportRuntime {
         this.sessions,
         () => this.rendererStreamServer,
         undefined,
-        options.providerRuntimeResolver
+        providerRuntimeResolver,
+        options.formalInterpretationProvider
       );
     this.sessions.setTurnRecoveryDelegate(this.orchestrator);
     this.readService = options.readService ?? new SessionReadService({
@@ -134,6 +145,7 @@ export class LocalInterviewTransportRuntime {
       sessions: this.sessions,
       reads: this.readService,
       orchestrator: this.orchestrator,
+      providerRuntimeResolver,
       whiteboardVision: this.whiteboardVision,
       onSessionTerminal: (sessionId) => this.handleSessionTerminal(sessionId),
       ...(options.commandPort === undefined ? {} : { port: options.commandPort })
@@ -334,6 +346,7 @@ export class LocalInterviewTransportRuntime {
   private handleSessionTerminal(
     sessionId: Parameters<VoiceSynthesisCoordinator["cancelSession"]>[0]
   ): void {
+    this.orchestrator.requestCancellationForSupersededWork(sessionId);
     const writer = this.sessions.getWriter(sessionId);
     this.rendererStreamServer.closeSession(sessionId);
     this.audioAssets.pruneUnauthorizedSessionAssets(sessionId, writer.getState());

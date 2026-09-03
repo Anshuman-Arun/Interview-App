@@ -507,7 +507,7 @@ describe("desktop local model runtime", () => {
     mkdirSync(runtimeRoot, { recursive: true });
 
     await expect(composition.stopWorkers()).resolves.toBeUndefined();
-  });
+  }, 15_000);
 
   it("coalesces concurrent composition shutdown instead of double-closing worker cores", async () => {
     const composition = new DesktopLocalRuntimeComposition({

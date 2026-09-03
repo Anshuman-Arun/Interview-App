@@ -297,7 +297,8 @@ export class QuantTradingSessionCoordinator {
           type: "SESSION_STARTED",
           payload: {
             startedAt: new Date().toISOString(),
-            configuration: parsed
+            configuration: parsed,
+            configurationSource: "CONFIGURED"
           }
         },
         {

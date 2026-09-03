@@ -46,7 +46,7 @@ describe("expressive product integration invariants", () => {
     expect(app).toContain("const storedSessions = await session.fetchAvailableSessionsStrict()");
     expect(app).toContain('storedSession.status === "ACTIVE"');
     expect(app).toContain("await session.recoverSession(existingActive.sessionId)");
-    expect(app).toContain("await session.startSession()");
+    expect(app).toContain("await session.startConfiguredSession(configuration)");
   });
 
   it("fails closed if the pre-Start stored-session authority check cannot be read", () => {

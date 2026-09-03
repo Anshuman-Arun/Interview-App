@@ -11,6 +11,7 @@ import {
   SessionIdSchema,
   type ClientCommand,
   type LocalTransportSecurity,
+  type ProviderLaunchAvailabilityReason,
   type SessionId,
   type ProtocolErrorResponse,
   type ProtocolSuccessResponse
@@ -43,6 +44,7 @@ import {
 } from "./interview-session-composition.js";
 import { createLegacyDefaultSessionConfiguration } from "./legacy-session-compatibility.js";
 import { ProductionSessionRuntime } from "./production-session-runtime.js";
+import { ProviderRuntimeResolver } from "./provider-runtime.js";
 
 const MAX_COMMAND_BYTES = 64 * 1024;
 const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(["127.0.0.1", "::1"]);
@@ -66,6 +68,7 @@ export interface LoopbackCommandServerOptions {
   readonly reads?: SessionReadService;
   readonly orchestrator?: ServerTurnOrchestrator;
   readonly productionRuntime?: ProductionSessionRuntime;
+  readonly providerRuntimeResolver?: ProviderRuntimeResolver;
   readonly whiteboardVision?: WhiteboardVisionCoordinator;
   readonly onSessionTerminal?: (sessionId: SessionId) => void | Promise<void>;
   readonly port?: number;
@@ -81,7 +84,8 @@ class ProtocolHttpError extends Error {
   public constructor(
     public readonly status: number,
     public readonly code: ProtocolErrorResponse["error"]["code"],
-    message: string
+    message: string,
+    public readonly providerLaunchReason?: ProviderLaunchAvailabilityReason
   ) {
     super(message);
   }
@@ -90,6 +94,7 @@ class ProtocolHttpError extends Error {
 export class LoopbackCommandServer {
   private readonly server: Server;
   private readonly productionRuntime: ProductionSessionRuntime;
+  private readonly providerRuntimeResolver: ProviderRuntimeResolver;
   private boundAddress: BoundLoopbackAddress | undefined;
 
   public constructor(private readonly options: LoopbackCommandServerOptions) {
@@ -109,6 +114,20 @@ export class LoopbackCommandServer {
       if (parsed.origin !== origin) throw new Error("Allowed origins must be exact URL origins without paths");
     }
     this.productionRuntime = options.productionRuntime ?? new ProductionSessionRuntime();
+    const orchestratorProviderRuntime = options.orchestrator?.getProviderRuntimeResolver();
+    if (
+      options.providerRuntimeResolver !== undefined
+      && orchestratorProviderRuntime !== undefined
+      && options.providerRuntimeResolver !== orchestratorProviderRuntime
+    ) {
+      throw new Error(
+        "Command server orchestrator and launch metadata must share the same provider runtime resolver"
+      );
+    }
+    this.providerRuntimeResolver =
+      options.providerRuntimeResolver
+      ?? orchestratorProviderRuntime
+      ?? new ProviderRuntimeResolver();
     this.server = createServer((request, response) => {
       void this.handle(request, response);
     });
@@ -227,7 +246,13 @@ export class LoopbackCommandServer {
       sendJson(response, protocolError.status, ProtocolErrorResponseSchema.parse({
         protocolVersion: 1,
         ok: false,
-        error: { code: protocolError.code, message: protocolError.message }
+        error: {
+          code: protocolError.code,
+          message: protocolError.message,
+          ...(protocolError.providerLaunchReason === undefined
+            ? {}
+            : { providerLaunchReason: protocolError.providerLaunchReason })
+        }
       }), this.allowedOrigin(origin) ? origin : undefined);
     }
   }
@@ -291,6 +316,16 @@ export class LoopbackCommandServer {
       };
     }
 
+    if (command.type === "LIST_PROVIDER_OPTIONS") {
+      return {
+        protocolVersion: 1,
+        ok: true,
+        type: "PROVIDER_OPTIONS",
+        requestId: command.requestId,
+        options: [...await this.providerRuntimeResolver.listLaunchOptions()]
+      };
+    }
+
     if (command.type === "LIST_SESSIONS") {
       const sessions = this.options.sessions.listSessions();
       return {
@@ -315,6 +350,27 @@ export class LoopbackCommandServer {
           404,
           "NOT_FOUND",
           "Configured interview target is not available"
+        );
+      }
+    }
+
+    if (
+      command.type === "START_CONFIGURED_SESSION"
+      && !this.options.sessions.hasSession(command.sessionId)
+    ) {
+      const composition = startComposition;
+      if (composition === undefined) {
+        throw new Error("Validated configured session composition is missing");
+      }
+      const provider = await this.providerRuntimeResolver.evaluateLaunchOption(
+        composition.configuration.providerSelection
+      );
+      if (provider.availability !== "AVAILABLE") {
+        throw new ProtocolHttpError(
+          409,
+          "CONFLICT",
+          providerLaunchFailureMessage(provider.reason),
+          provider.reason
         );
       }
     }
@@ -556,6 +612,7 @@ export class LoopbackCommandServer {
           requestId: command.requestId,
           sessionId: command.sessionId,
           configuration: composition.configuration,
+          configurationSource: this.options.sessions.getConfigurationSource(command.sessionId),
           ...(problem === undefined ? {} : { problem })
         };
       }
@@ -793,6 +850,32 @@ function parseCommand(body: string): ClientCommand {
   const command = ClientCommandSchema.safeParse(parsed);
   if (!command.success) throw new ProtocolHttpError(400, "INVALID_COMMAND", "Command does not match protocol version 1");
   return command.data;
+}
+
+function providerLaunchFailureMessage(
+  reason: ProviderLaunchAvailabilityReason | undefined
+): string {
+  switch (reason) {
+    case "CREDENTIALS_REQUIRED":
+      return "Selected provider requires configured authentication";
+    case "DISABLED":
+      return "Selected provider is disabled";
+    case "RUNTIME_CONFIGURATION_UNAVAILABLE":
+      return "Selected provider runtime configuration is unavailable";
+    case "RUNTIME_DEPENDENCY_UNAVAILABLE":
+      return "Selected provider runtime dependency is unavailable";
+    case "POLICY_UNAVAILABLE":
+      return "Selected provider policy could not be verified";
+    case "POLICY_DENIED":
+      return "Selected provider is denied by the current safety policy";
+    case "CAPABILITY_UNAVAILABLE":
+      return "Selected provider does not satisfy required capabilities";
+    case "PROVIDER_UNAVAILABLE":
+      return "Selected provider is unavailable";
+    case "UNKNOWN":
+    default:
+      return "Selected provider readiness could not be verified";
+  }
 }
 
 function classifyError(error: unknown): ProtocolHttpError {

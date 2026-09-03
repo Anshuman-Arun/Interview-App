@@ -14,13 +14,14 @@ import {
   type FormalInterpretationCandidate,
   type FormalInterpretationRequest,
   type FormalProtocolRef,
+  type GenerationBasis,
   type InterpretationProviderResult,
   type RequestId,
   type VerificationResult,
   type VerificationStatus
 } from "../../domain/src/index.js";
 import { RequestIdConflictError } from "../../persistence/src/index.js";
-import { isGenerationBasisStillCompatible } from "./compatibility.js";
+import { isVerificationBasisStillCompatible } from "./verification-compatibility.js";
 import { createCommandEnvelope } from "./envelopes.js";
 import { fingerprintFormalInterpretationRequest } from "./formal-interpretation.js";
 import {
@@ -31,6 +32,7 @@ import {
 import type { SessionWriter } from "./session-writer.js";
 import {
   VerificationCoordinator,
+  VerificationWorkItemSchema,
   type FormalInterpretationDiscardReason,
   type VerificationWorkItem
 } from "./verification-coordinator.js";
@@ -39,6 +41,8 @@ export const DEFAULT_MAX_IN_FLIGHT_INTERPRETATION_REQUESTS = 16 as const;
 export const DEFAULT_MAX_CACHED_INTERPRETATION_REQUESTS = 256 as const;
 export const MAX_INTERPRETATION_DIAGNOSTICS = 256 as const;
 export const MINIMUM_DETERMINISTIC_INTERPRETATION_CONFIDENCE = 1 as const;
+export const MAX_FORMAL_INTERPRETATION_PROVIDER_STATEMENT_CHARACTERS = 200_000 as const;
+export const MAX_FORMAL_INTERPRETATION_PROVIDER_OUTPUT_BYTES = 512_000 as const;
 
 const InterpretationCoordinatorOptionsSchema = z.object({
   maxInFlight: z.number().int().min(1).max(64).default(DEFAULT_MAX_IN_FLIGHT_INTERPRETATION_REQUESTS),
@@ -183,6 +187,7 @@ interface RequestRecord {
   readonly fingerprint: string;
   cancelled: boolean;
   dispatchStarted: boolean;
+  verificationRequestId?: RequestId;
   settled: boolean;
   readonly cancelSignal: Promise<void>;
   readonly resolveCancel: () => void;
@@ -219,6 +224,20 @@ function sameStringArray(left: readonly string[], right: readonly string[]): boo
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
+function sameDirectVerificationBasis(
+  requestBasis: GenerationBasis,
+  persistedBasis: GenerationBasis
+): boolean {
+  return requestBasis.contextEpoch === persistedBasis.contextEpoch
+    && requestBasis.committedInputSequence === persistedBasis.committedInputSequence
+    && requestBasis.transcriptRevision === persistedBasis.transcriptRevision
+    && requestBasis.problemStateRevision === persistedBasis.problemStateRevision
+    && requestBasis.policyRevision === persistedBasis.policyRevision
+    && requestBasis.inputEpisodeId === persistedBasis.inputEpisodeId
+    && requestBasis.turnId === persistedBasis.turnId;
+}
+
+
 function sameCandidateSource(candidate: FormalInterpretationCandidate, request: FormalInterpretationRequest): boolean {
   return candidate.source.requestId === request.requestId
     && candidate.source.generationId === request.generationId
@@ -227,6 +246,9 @@ function sameCandidateSource(candidate: FormalInterpretationCandidate, request: 
     && candidate.source.inputEpisodeId === request.source.inputEpisodeId
     && candidate.source.turnId === request.source.turnId
     && sameStringArray(candidate.source.eventIds, request.source.eventIds)
+    && candidate.source.span.start === request.source.span.start
+    && candidate.source.span.end === request.source.span.end
+    && candidate.source.span.text === request.source.span.text
     && candidate.source.problem.id === request.problem.id
     && candidate.source.problem.version === request.problem.version;
 }
@@ -262,12 +284,28 @@ function providerResultExceedsStructuralBounds(input: unknown): boolean {
   const result = objectRecord(input);
   if (result === undefined || !Array.isArray(result.candidates)) return false;
   if (result.candidates.length > MAX_FORMAL_INTERPRETATION_CANDIDATES) return true;
-  return result.candidates.some((candidate) => {
+  let totalStatementCharacters = 0;
+  const exceedsCandidateBounds = result.candidates.some((candidate) => {
     const candidateRecord = objectRecord(candidate);
+    if (candidateRecord !== undefined && typeof candidateRecord.formalStatement === "string") {
+      totalStatementCharacters += candidateRecord.formalStatement.length;
+      if (totalStatementCharacters > MAX_FORMAL_INTERPRETATION_PROVIDER_STATEMENT_CHARACTERS) {
+        return true;
+      }
+    }
     const source = candidateRecord === undefined ? undefined : objectRecord(candidateRecord.source);
     return source !== undefined
       && exceedsArrayBound(source.eventIds, MAX_FORMAL_INTERPRETATION_SOURCE_EVENTS);
   });
+  return exceedsCandidateBounds;
+}
+
+function validatedProviderResultExceedsByteBound(
+  result: InterpretationProviderResult
+): boolean {
+  const serialized = JSON.stringify(result);
+  return new TextEncoder().encode(serialized).byteLength
+    > MAX_FORMAL_INTERPRETATION_PROVIDER_OUTPUT_BYTES;
 }
 
 function mapRouteFailure(
@@ -342,6 +380,11 @@ export class InterpretationCoordinator {
     return this.diagnostics.map((diagnostic) => ({ ...diagnostic }));
   }
 
+  public hasActiveWork(): boolean {
+    if (this.activeProviderInvocations > 0) return true;
+    return [...this.records.values()].some((record) => !record.settled);
+  }
+
   public cancel(requestIdInput: unknown): boolean {
     const parsed = RequestIdSchema.safeParse(requestIdInput);
     if (!parsed.success) return false;
@@ -349,6 +392,26 @@ export class InterpretationCoordinator {
     if (record === undefined || record.settled || record.dispatchStarted) return false;
     record.cancelled = true;
     record.resolveCancel();
+    return true;
+  }
+
+  /**
+   * Supersede analysis even after deterministic dispatch has started. The
+   * verifier may finish locally, but its result will not be admitted.
+   */
+  public abandon(requestIdInput: unknown): boolean {
+    const parsed = RequestIdSchema.safeParse(requestIdInput);
+    if (!parsed.success) return false;
+    const record = this.records.get(parsed.data);
+    if (record === undefined || record.settled) return false;
+    record.cancelled = true;
+    record.resolveCancel();
+    if (record.verificationRequestId !== undefined) {
+      void this.verification.discardPendingVerification({
+        verificationRequestId: record.verificationRequestId,
+        reason: "FORMAL_INTERPRETATION_ABANDONED"
+      }).catch(() => undefined);
+    }
     return true;
   }
 
@@ -421,8 +484,11 @@ export class InterpretationCoordinator {
     request: FormalInterpretationRequest,
     record: RequestRecord
   ): Promise<InterpretationExecutionOutcome> {
-    const currentFailure = this.checkCurrentRequest(request);
+    const currentFailure = this.checkCurrentRequest(request, 0, true);
     if (currentFailure !== undefined) return this.finishFailure(currentFailure);
+
+    const recovered = await this.resumePersistedDirectVerification(request, record);
+    if (recovered !== undefined) return recovered;
 
     for (const protocol of request.allowedProtocols) {
       const route = this.router.resolve(protocol, request.target);
@@ -504,6 +570,14 @@ export class InterpretationCoordinator {
         "INVALID_PROVIDER_OUTPUT",
         "MALFORMED_PROVIDER_RESULT",
         0,
+        request.requestId
+      ));
+    }
+    if (validatedProviderResultExceedsByteBound(providerResult.data)) {
+      return this.finishFailure(failed(
+        "RESOURCE_LIMIT",
+        "RESOURCE_LIMIT",
+        providerResult.data.candidates.length,
         request.requestId
       ));
     }
@@ -637,29 +711,64 @@ export class InterpretationCoordinator {
       verifier: candidate.route.definition.verifier
     });
 
-    let admittedVerification;
+    let workItem: VerificationWorkItem;
+    let duplicateVerificationRequest: boolean;
     try {
-      admittedVerification = await this.verification.requestVerificationFromProposal({
-        envelope: createCommandEnvelope({
-          sessionId: request.sessionId,
-          producer: "interpretation-coordinator",
-          requestId: request.requestId,
-          correlationId: request.requestId,
-          generationId: request.generationId,
+      if (request.generationId === undefined) {
+        const admitted = await this.verification.requestVerification({
           inputEpisodeId: request.source.inputEpisodeId,
           turnId: request.source.turnId,
-          contextEpoch: request.basis.contextEpoch,
-          sourceRevision: request.source.sourceRevision
-        }),
-        proposal: {
+          verifier: candidate.route.definition.verifier,
           candidateFormalInterpretation: candidate.canonicalStatement,
-          interpretationConfidence: candidate.confidence
-        },
-        verifier: candidate.route.definition.verifier,
-        evidenceKey: request.target,
-        expectedProblemVersion: request.problem.version,
-        sourceRequestFingerprint: record.fingerprint
-      });
+          interpretationConfidence: candidate.confidence,
+          evidenceKey: request.target,
+          expectedProblemVersion: request.problem.version,
+          boardRevisionIndependent: true,
+          envelope: createCommandEnvelope({
+            sessionId: request.sessionId,
+            producer: "interpretation-coordinator",
+            requestId: request.requestId,
+            correlationId: request.requestId,
+            inputEpisodeId: request.source.inputEpisodeId,
+            turnId: request.source.turnId,
+            contextEpoch: request.basis.contextEpoch,
+            sourceRevision: request.source.sourceRevision
+          })
+        });
+        workItem = admitted.value;
+        duplicateVerificationRequest = admitted.duplicate;
+      } else {
+        const admitted = await this.verification.requestVerificationFromProposal({
+          envelope: createCommandEnvelope({
+            sessionId: request.sessionId,
+            producer: "interpretation-coordinator",
+            requestId: request.requestId,
+            correlationId: request.requestId,
+            generationId: request.generationId,
+            inputEpisodeId: request.source.inputEpisodeId,
+            turnId: request.source.turnId,
+            contextEpoch: request.basis.contextEpoch,
+            sourceRevision: request.source.sourceRevision
+          }),
+          proposal: {
+            candidateFormalInterpretation: candidate.canonicalStatement,
+            interpretationConfidence: candidate.confidence
+          },
+          verifier: candidate.route.definition.verifier,
+          evidenceKey: request.target,
+          expectedProblemVersion: request.problem.version,
+          sourceRequestFingerprint: record.fingerprint
+        });
+        if (!admitted.value.accepted) {
+          return this.finishFailure(this.mapVerificationAdmissionFailure(
+            admitted.value.reason,
+            request.requestId,
+            candidateCount
+          ));
+        }
+        workItem = admitted.value.workItem;
+        duplicateVerificationRequest = admitted.duplicate;
+      }
     } catch (error) {
       if (error instanceof RequestIdConflictError) {
         return this.finishFailure(failed(
@@ -680,17 +789,14 @@ export class InterpretationCoordinator {
       ));
     }
 
-    if (!admittedVerification.value.accepted) {
-      return this.finishFailure(this.mapVerificationAdmissionFailure(
-        admittedVerification.value.reason,
-        request.requestId,
-        candidateCount
-      ));
+    record.verificationRequestId = workItem.verificationRequestId;
+    if (this.isCancelled(record)) {
+      await this.discardPendingVerification(record, "FORMAL_INTERPRETATION_CANCELLED");
+      return this.finishFailure(failed("STALE", "CANCELLED", candidateCount, request.requestId));
     }
 
-    const workItem = admittedVerification.value.workItem;
     const persisted = this.writer.getState().verificationRequests[workItem.verificationRequestId];
-    if (admittedVerification.duplicate && persisted?.status === "ACCEPTED" && persisted.result !== undefined) {
+    if (duplicateVerificationRequest && persisted?.status === "ACCEPTED" && persisted.result !== undefined) {
       const outcome: AcceptedInterpretationOutcome = {
         status: "ACCEPTED",
         requestId: request.requestId,
@@ -705,7 +811,7 @@ export class InterpretationCoordinator {
       this.finishAccepted(outcome, candidateCount);
       return outcome;
     }
-    if (admittedVerification.duplicate && persisted?.status === "DISCARDED") {
+    if (duplicateVerificationRequest && persisted?.status === "DISCARDED") {
       return this.finishFailure(failed(
         "VERIFICATION_REJECTED",
         "VERIFICATION_ALREADY_DISCARDED",
@@ -715,6 +821,15 @@ export class InterpretationCoordinator {
     }
 
     const supplied = await this.executeVerifier(verifier, workItem);
+    if (this.isCancelled(record)) {
+      await this.discardPendingVerification(record, "FORMAL_INTERPRETATION_CANCELLED");
+      return this.finishFailure(failed("STALE", "CANCELLED", candidateCount, request.requestId));
+    }
+    const afterVerifierFailure = this.checkCurrentRequest(request, candidateCount);
+    if (afterVerifierFailure !== undefined) {
+      await this.discardPendingVerification(record, "FORMAL_INTERPRETATION_STALE");
+      return this.finishFailure(afterVerifierFailure);
+    }
     let verificationResult;
     try {
       verificationResult = await this.verification.processResult({
@@ -728,9 +843,11 @@ export class InterpretationCoordinator {
           sourceRevision: workItem.basis.committedInputSequence
         }),
         result: supplied,
-        verifier
+        verifier,
+        cancellationRequested: () => this.isCancelled(record)
       });
     } catch {
+      await this.discardPendingVerification(record, "FORMAL_INTERPRETATION_RESULT_FAILED");
       return this.finishFailure(failed(
         "VERIFICATION_REJECTED",
         "VERIFICATION_RESULT_REJECTED",
@@ -740,6 +857,9 @@ export class InterpretationCoordinator {
     }
 
     if (!verificationResult.value.accepted) {
+      if (this.isCancelled(record)) {
+        return this.finishFailure(failed("STALE", "CANCELLED", candidateCount, request.requestId));
+      }
       return this.finishFailure(failed(
         "VERIFICATION_REJECTED",
         "VERIFICATION_RESULT_REJECTED",
@@ -757,10 +877,202 @@ export class InterpretationCoordinator {
       verificationRequestId: workItem.verificationRequestId,
       verificationStatus: verificationResult.value.status,
       evidenceCommitted: verificationResult.value.evidenceCommitted,
-      duplicateVerificationRequest: admittedVerification.duplicate
+      duplicateVerificationRequest
     };
     this.finishAccepted(outcome, candidateCount);
     return outcome;
+  }
+
+  private async resumePersistedDirectVerification(
+    request: FormalInterpretationRequest,
+    record: RequestRecord
+  ): Promise<InterpretationExecutionOutcome | undefined> {
+    if (request.generationId !== undefined) return undefined;
+
+    const persisted = this.writer.getState().verificationRequests[request.requestId];
+    if (persisted === undefined) return undefined;
+
+    if (
+      persisted.sourceGenerationId !== undefined
+      || persisted.boardRevisionIndependent !== true
+      || !evidenceKeysEqual(persisted.evidenceKey, request.target)
+      || !sameDirectVerificationBasis(request.basis, persisted.basis)
+      || persisted.basis.inputEpisodeId !== request.source.inputEpisodeId
+      || persisted.basis.turnId !== request.source.turnId
+      || persisted.basis.committedInputSequence !== request.source.sourceRevision
+      || persisted.interpretationConfidence < MINIMUM_DETERMINISTIC_INTERPRETATION_CONFIDENCE
+    ) {
+      return this.finishFailure(failed(
+        "INVALID_REQUEST",
+        "REQUEST_ID_CONFLICT",
+        0,
+        request.requestId
+      ));
+    }
+
+    const matchingRoutes = request.allowedProtocols
+      .map((protocol) => this.router.resolve(protocol, request.target))
+      .filter((route): route is Extract<FormalProtocolRouteResolution, { readonly ok: true }> =>
+        route.ok && route.definition.verifier === persisted.verifier
+      );
+    if (matchingRoutes.length !== 1 || matchingRoutes[0] === undefined) {
+      await this.verification.discardPendingVerification({
+        verificationRequestId: request.requestId,
+        reason: "FORMAL_INTERPRETATION_RECOVERY_ROUTE_UNAVAILABLE"
+      }).catch(() => undefined);
+      return this.finishFailure(failed(
+        "VERIFIER_UNAVAILABLE",
+        "VERIFIER_MISSING",
+        0,
+        request.requestId
+      ));
+    }
+    const route = matchingRoutes[0];
+    const statement = this.router.validateStatement(route, persisted.candidateFormalInterpretation);
+    if (!statement.ok) {
+      await this.verification.discardPendingVerification({
+        verificationRequestId: request.requestId,
+        reason: "FORMAL_INTERPRETATION_RECOVERY_STATEMENT_INVALID"
+      }).catch(() => undefined);
+      return this.finishFailure(mapStatementFailure(statement.reason, request.requestId, 0));
+    }
+    const verifier = this.router.createVerifier(route);
+    if (verifier === undefined) {
+      await this.verification.discardPendingVerification({
+        verificationRequestId: request.requestId,
+        reason: "FORMAL_INTERPRETATION_RECOVERY_VERIFIER_UNAVAILABLE"
+      }).catch(() => undefined);
+      return this.finishFailure(failed(
+        "VERIFIER_UNAVAILABLE",
+        "VERIFIER_MISSING",
+        0,
+        request.requestId
+      ));
+    }
+
+    const workItem = VerificationWorkItemSchema.parse({
+      protocolVersion: 1,
+      verificationRequestId: request.requestId,
+      verifier: persisted.verifier,
+      basis: persisted.basis,
+      candidateFormalInterpretation: persisted.candidateFormalInterpretation,
+      interpretationConfidence: persisted.interpretationConfidence,
+      evidenceKey: persisted.evidenceKey,
+      evidenceEventIds: persisted.evidenceEventIds,
+      boardRevisionIndependent: true
+    });
+    record.dispatchStarted = true;
+    record.verificationRequestId = workItem.verificationRequestId;
+    this.addDiagnostic({
+      requestId: request.requestId,
+      state: "VERIFICATION_PENDING",
+      candidateCount: 0,
+      protocol: route.protocol.protocol,
+      verifier: route.definition.verifier
+    });
+
+    if (persisted.status === "ACCEPTED" && persisted.result !== undefined) {
+      const outcome: AcceptedInterpretationOutcome = {
+        status: "ACCEPTED",
+        requestId: request.requestId,
+        candidateId: "persisted-direct-verification",
+        protocol: route.protocol,
+        verifier: route.definition.verifier,
+        verificationRequestId: request.requestId,
+        verificationStatus: persisted.result.status,
+        evidenceCommitted: persisted.result.status === "VERIFIED",
+        duplicateVerificationRequest: true
+      };
+      this.finishAccepted(outcome, 0);
+      return outcome;
+    }
+    if (persisted.status === "DISCARDED") {
+      return this.finishFailure(failed(
+        "VERIFICATION_REJECTED",
+        "VERIFICATION_ALREADY_DISCARDED",
+        0,
+        request.requestId
+      ));
+    }
+
+    const supplied = await this.executeVerifier(verifier, workItem);
+    if (this.isCancelled(record)) {
+      await this.discardPendingVerification(record, "FORMAL_INTERPRETATION_CANCELLED");
+      return this.finishFailure(failed("STALE", "CANCELLED", 0, request.requestId));
+    }
+    const currentFailure = this.checkCurrentRequest(request, 0);
+    if (currentFailure !== undefined) {
+      await this.discardPendingVerification(record, "FORMAL_INTERPRETATION_STALE");
+      return this.finishFailure(currentFailure);
+    }
+
+    let verificationResult;
+    try {
+      verificationResult = await this.verification.processResult({
+        envelope: createCommandEnvelope({
+          sessionId: request.sessionId,
+          producer: "interpretation-coordinator-recovery",
+          correlationId: workItem.verificationRequestId,
+          inputEpisodeId: request.source.inputEpisodeId,
+          turnId: request.source.turnId,
+          contextEpoch: workItem.basis.contextEpoch,
+          sourceRevision: workItem.basis.committedInputSequence
+        }),
+        result: supplied,
+        verifier,
+        cancellationRequested: () => this.isCancelled(record)
+      });
+    } catch {
+      await this.discardPendingVerification(record, "FORMAL_INTERPRETATION_RECOVERY_RESULT_FAILED");
+      return this.finishFailure(failed(
+        "VERIFICATION_REJECTED",
+        "VERIFICATION_RESULT_REJECTED",
+        0,
+        request.requestId
+      ));
+    }
+
+    if (!verificationResult.value.accepted) {
+      if (this.isCancelled(record)) {
+        return this.finishFailure(failed("STALE", "CANCELLED", 0, request.requestId));
+      }
+      return this.finishFailure(failed(
+        "VERIFICATION_REJECTED",
+        "VERIFICATION_RESULT_REJECTED",
+        0,
+        request.requestId
+      ));
+    }
+
+    const outcome: AcceptedInterpretationOutcome = {
+      status: "ACCEPTED",
+      requestId: request.requestId,
+      candidateId: "persisted-direct-verification",
+      protocol: route.protocol,
+      verifier: route.definition.verifier,
+      verificationRequestId: request.requestId,
+      verificationStatus: verificationResult.value.status,
+      evidenceCommitted: verificationResult.value.evidenceCommitted,
+      duplicateVerificationRequest: true
+    };
+    this.finishAccepted(outcome, 0);
+    return outcome;
+  }
+
+  private async discardPendingVerification(
+    record: RequestRecord,
+    reason: string
+  ): Promise<void> {
+    if (record.verificationRequestId === undefined || this.writer.isClosed()) return;
+    try {
+      await this.verification.discardPendingVerification({
+        verificationRequestId: record.verificationRequestId,
+        reason
+      });
+    } catch {
+      // Cancellation cleanup is best-effort when the session is concurrently
+      // closing; terminal replay remains fail-closed and cannot admit evidence.
+    }
   }
 
   private async executeVerifier(
@@ -788,7 +1100,8 @@ export class InterpretationCoordinator {
 
   private checkCurrentRequest(
     request: FormalInterpretationRequest,
-    candidateCount = 0
+    candidateCount = 0,
+    requireExactInitialBasis = false
   ): RejectedInterpretationOutcome | undefined {
     if (this.writer.isClosed()) {
       return failed("STALE", "WRITER_CLOSED", candidateCount, request.requestId);
@@ -810,30 +1123,48 @@ export class InterpretationCoordinator {
       return failed("SOURCE_MISMATCH", "PROBLEM_CHANGED", candidateCount, request.requestId);
     }
 
-    const generation = state.generations[request.generationId];
-    if (generation === undefined) {
-      return failed("STALE", "UNKNOWN_GENERATION", candidateCount, request.requestId);
-    }
-    if (!generationBasesEqual(generation.basis, request.basis)) {
-      return failed("SOURCE_MISMATCH", "BASIS_MISMATCH", candidateCount, request.requestId);
+    if (request.generationId === undefined && requireExactInitialBasis) {
+      if (
+        request.basis.contextEpoch !== state.contextEpoch
+        || request.basis.committedInputSequence !== state.lastCommittedInputSequence
+        || request.basis.transcriptRevision !== state.transcriptRevision
+        || request.basis.boardRevision !== state.boardRevision
+        || request.basis.problemStateRevision !== state.problemStateRevision
+        || request.basis.policyRevision !== state.policyRevision
+      ) {
+        return failed("SOURCE_MISMATCH", "BASIS_MISMATCH", candidateCount, request.requestId);
+      }
     }
 
-    const compatibility = isGenerationBasisStillCompatible(request.basis, state);
+    if (request.generationId !== undefined) {
+      const generation = state.generations[request.generationId];
+      if (generation === undefined) {
+        return failed("STALE", "UNKNOWN_GENERATION", candidateCount, request.requestId);
+      }
+      if (!generationBasesEqual(generation.basis, request.basis)) {
+        return failed("SOURCE_MISMATCH", "BASIS_MISMATCH", candidateCount, request.requestId);
+      }
+      if (generation.status !== "ACTIVE") {
+        const sameRequestAlreadyOpened = Object.values(state.verificationRequests).some((verificationRequest) =>
+          verificationRequest.sourceGenerationId === request.generationId
+          && verificationRequest.sourceProposalRequestId === request.requestId
+        );
+        if (!sameRequestAlreadyOpened) {
+          return failed("STALE", "GENERATION_NOT_ACTIVE", candidateCount, request.requestId);
+        }
+      }
+    }
+
+    const compatibility = isVerificationBasisStillCompatible(
+      request.basis,
+      state,
+      request.generationId === undefined
+    );
     if (compatibility === "INCOMPATIBLE") {
       return failed("STALE", "BASIS_INCOMPATIBLE", candidateCount, request.requestId);
     }
     if (compatibility === "UNKNOWN") {
       return failed("STALE", "BASIS_UNKNOWN", candidateCount, request.requestId);
-    }
-
-    if (generation.status !== "ACTIVE") {
-      const sameRequestAlreadyOpened = Object.values(state.verificationRequests).some((verificationRequest) =>
-        verificationRequest.sourceGenerationId === request.generationId
-        && verificationRequest.sourceProposalRequestId === request.requestId
-      );
-      if (!sameRequestAlreadyOpened) {
-        return failed("STALE", "GENERATION_NOT_ACTIVE", candidateCount, request.requestId);
-      }
     }
 
     const turn = state.turns[request.source.turnId];
@@ -936,12 +1267,13 @@ export function echoInterpretationCandidateSource(
 ): InterpretationProviderResult["candidates"][number]["source"] {
   return {
     requestId: request.requestId,
-    generationId: request.generationId,
+    ...(request.generationId === undefined ? {} : { generationId: request.generationId }),
     basis: request.basis,
     sourceRevision: request.source.sourceRevision,
     inputEpisodeId: request.source.inputEpisodeId,
     turnId: request.source.turnId,
     eventIds: request.source.eventIds,
+    span: request.source.span,
     problem: request.problem
   };
 }

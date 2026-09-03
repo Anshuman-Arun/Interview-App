@@ -18,6 +18,7 @@ export * from "./vision-freshness.js";
 export * from "./vision-inference.js";
 export * from "./vision-request-manager.js";
 export * from "./verification-coordinator.js";
+export * from "./verification-compatibility.js";
 export * from "./evaluation-model-seam.js";
 export * from "./session-evaluator.js";
 

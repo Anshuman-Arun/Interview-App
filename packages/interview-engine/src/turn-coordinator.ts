@@ -263,6 +263,19 @@ export function terminalInvalidationDrafts(
     }
   }
 
+  for (const verification of Object.values(state.verificationRequests)) {
+    if (verification.status === "PENDING") {
+      drafts.push({
+        source: "APPLICATION",
+        type: "VERIFICATION_RESULT_DISCARDED",
+        payload: {
+          verificationRequestId: verification.verificationRequestId,
+          reason
+        }
+      });
+    }
+  }
+
   for (const atom of Object.values(state.deliveries)) {
     if (atom.status === "QUEUED") {
       drafts.push({
@@ -324,7 +337,8 @@ export class TurnCoordinator {
             type: "SESSION_STARTED",
             payload: {
               startedAt: new Date().toISOString(),
-              configuration
+              configuration,
+              configurationSource: "LEGACY_COMPATIBILITY"
             }
           },
           {
@@ -401,7 +415,8 @@ export class TurnCoordinator {
             type: "SESSION_STARTED",
             payload: {
               startedAt: new Date().toISOString(),
-              configuration
+              configuration,
+              configurationSource: "CONFIGURED"
             }
           },
           {
