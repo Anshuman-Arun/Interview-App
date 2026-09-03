@@ -351,52 +351,40 @@ export class TurnCoordinator {
     commandEnvelope?: CommandEnvelope
   ): Promise<void> {
     const configuration = InterviewSessionConfigurationSchema.parse(input.configuration);
+    if (configuration.mode !== "OXFORD_MATHEMATICS") {
+      throw new Error(
+        "Deterministic Quant sessions must start through ProductionSessionRuntime"
+      );
+    }
+    const problem = input.problem;
+    if (problem === undefined) {
+      throw new Error("Oxford session configuration requires a resolved problem");
+    }
+    if (
+      problem.id !== configuration.problem.id
+      || problem.version !== configuration.problem.version
+    ) {
+      throw new Error("Resolved problem does not match session configuration");
+    }
+    if (
+      configuration.difficulty !== undefined
+      && configuration.difficulty !== problem.interviewer.difficulty
+    ) {
+      throw new Error("Configured difficulty does not match the resolved problem");
+    }
+    const providerContextSpecSha256 = createProviderContextSpecFingerprintSync(problem);
+    const problemIdentity = commandIdentityValue({
+      problemId: problem.id,
+      problemVersion: problem.version,
+      prompt: problem.public.prompt,
+      providerContextSpecSha256
+    });
     const envelope = CommandEnvelopeSchema.parse(
       commandEnvelope ?? createCommandEnvelope({
         sessionId: this.writer.sessionId,
         producer: "application"
       })
     );
-
-    let problemDraft: EventDraft | undefined;
-    let problemIdentity: CommandIdentityValue = null;
-    if (configuration.mode === "OXFORD_MATHEMATICS") {
-      const problem = input.problem;
-      if (problem === undefined) {
-        throw new Error("Oxford session configuration requires a resolved problem");
-      }
-      if (
-        problem.id !== configuration.problem.id
-        || problem.version !== configuration.problem.version
-      ) {
-        throw new Error("Resolved problem does not match session configuration");
-      }
-      if (
-        configuration.difficulty !== undefined
-        && configuration.difficulty !== problem.interviewer.difficulty
-      ) {
-        throw new Error("Configured difficulty does not match the resolved problem");
-      }
-      const providerContextSpecSha256 = createProviderContextSpecFingerprintSync(problem);
-      problemIdentity = commandIdentityValue({
-        problemId: problem.id,
-        problemVersion: problem.version,
-        prompt: problem.public.prompt,
-        providerContextSpecSha256
-      });
-      problemDraft = {
-        source: "APPLICATION",
-        type: "PROBLEM_PRESENTED",
-        payload: {
-          problemId: problem.id,
-          problemVersion: problem.version,
-          prompt: problem.public.prompt,
-          providerContextSpecSha256
-        }
-      };
-    } else if (input.problem !== undefined) {
-      throw new Error("Quant session configuration cannot bind an Oxford InterviewProblem");
-    }
 
     await this.writer.execute(envelope, {
       operation: "START_SESSION",
@@ -416,7 +404,16 @@ export class TurnCoordinator {
               configuration
             }
           },
-          ...(problemDraft === undefined ? [] : [problemDraft])
+          {
+            source: "APPLICATION",
+            type: "PROBLEM_PRESENTED",
+            payload: {
+              problemId: problem.id,
+              problemVersion: problem.version,
+              prompt: problem.public.prompt,
+              providerContextSpecSha256
+            }
+          }
         ],
         result: { started: true }
       };
