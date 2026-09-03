@@ -282,23 +282,10 @@ const ResearchActionEditor: React.FC<ActionEditorProps> = ({ state, disabled, pe
             setLocalError("x and y must be nonnegative whole numbers.");
             return;
           }
-          const budget = publicNumber(state, "budget");
-          const maxX = publicNumber(state, "maxX");
-          const maxY = publicNumber(state, "maxY");
-          if (maxX !== null && x > maxX) {
-            setLocalError(`x must be at most the public maximum of ${String(maxX)}.`);
-            return;
-          }
-          if (maxY !== null && y > maxY) {
-            setLocalError(`y must be at most the public maximum of ${String(maxY)}.`);
-            return;
-          }
-          if (budget !== null && 2 * x + 3 * y > budget) {
-            setLocalError(
-              `Parameters must satisfy the public budget constraint 2x + 3y ≤ ${String(budget)}.`
-            );
-            return;
-          }
+          // Feasibility against maxX/maxY/budget is intentionally not blocked
+          // here. The deterministic runtime admits infeasible candidate points
+          // and scores constraint discipline, so the browser must preserve
+          // that authoritative action space.
           void submit({ kind: "SUBMIT_PARAMETERS", values: [x, y] });
         }}
       >
