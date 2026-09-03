@@ -143,6 +143,31 @@ describe("expressive product integration invariants", () => {
     expect(app).not.toContain("session.problem.difficulty");
   });
 
+  it("reattaches Quant reloads by session identity without reconstructing authority", () => {
+    const app = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+
+    expect(app).toContain('const QUANT_REATTACH_SESSION_KEY = "interview.quant.active-session"');
+    expect(app).toContain("writeQuantReattachSessionId(session.sessionId)");
+    expect(app).toContain("SessionIdSchema.safeParse(value)");
+
+    const start = app.indexOf("reloadQuantRecoveryAttemptedRef.current = true");
+    const end = app.indexOf("const handleWhiteboardEditorMount", start);
+    const recovery = app.slice(start, end);
+
+    expect(recovery).toContain("session.recoverSession(reloadQuantSessionId)");
+    expect(recovery).toContain('status === "ACTIVE"');
+    expect(recovery).toContain('status === "COMPLETED" || status === "ARCHIVED"');
+    expect(recovery).toContain('view: "replay"');
+    expect(recovery).not.toContain("startConfiguredSession");
+    expect(recovery).not.toContain("submitQuantTradingAction");
+    expect(recovery).not.toContain("submitQuantResearchAction");
+    expect(recovery).not.toContain("currentRound");
+    expect(recovery).not.toContain("acceptedActionCount");
+  });
+
   it("keeps the native tldraw toolbar local and starts on Pencil", () => {
     const whiteboard = fs.readFileSync(
       path.resolve(process.cwd(), "apps/web/src/components/WhiteboardCanvas.tsx"),
