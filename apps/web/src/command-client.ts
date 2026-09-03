@@ -101,15 +101,37 @@ export class BrowserCommandResponseError extends Error {
   }
 }
 
+const SAFE_PROVIDER_PROTOCOL_MESSAGES: ReadonlySet<string> = new Set([
+  "Selected provider requires configured authentication",
+  "Selected provider is disabled",
+  "Selected provider runtime configuration is unavailable",
+  "Selected provider runtime dependency is unavailable",
+  "Selected provider policy could not be verified",
+  "Selected provider is denied by the current safety policy",
+  "Selected provider does not satisfy required capabilities",
+  "Selected provider is unavailable",
+  "Selected provider readiness could not be verified"
+]);
+
+function safeProtocolMessage(
+  code: ProtocolErrorResponse["error"]["code"],
+  message: string
+): string | undefined {
+  return code === "CONFLICT" && SAFE_PROVIDER_PROTOCOL_MESSAGES.has(message)
+    ? message
+    : undefined;
+}
+
 export class BrowserCommandProtocolError extends Error {
   public readonly code: ProtocolErrorResponse["error"]["code"];
 
   public constructor(
     public readonly status: number,
     code: ProtocolErrorResponse["error"]["code"],
-    public readonly requestId: RequestId
+    public readonly requestId: RequestId,
+    public readonly publicMessage?: string
   ) {
-    super(`Command rejected with protocol error ${code}`);
+    super(publicMessage ?? `Command rejected with protocol error ${code}`);
     this.name = "BrowserCommandProtocolError";
     this.code = code;
   }
@@ -714,7 +736,8 @@ export class BrowserCommandClient {
       throw new BrowserCommandProtocolError(
         response.status,
         protocolError.error.code,
-        command.requestId
+        command.requestId,
+        safeProtocolMessage(protocolError.error.code, protocolError.error.message)
       );
     }
 
