@@ -96,6 +96,18 @@ class LocalVisionRuntimeUnitTests(unittest.TestCase):
         self.assertLess(vision.MAX_HEURISTIC_CONFIDENCE, 0.7)
         self.assertLess(vision.UNSTABLE_HEURISTIC_CONFIDENCE, 0.7)
 
+    def test_autoregressive_decode_has_strict_local_bounds(self) -> None:
+        self.assertLessEqual(vision.MAX_DECODE_SECONDS, 5.0)
+        self.assertLessEqual(vision.MAX_TOKEN_COUNT, 512)
+        repeated_cycle = [11, 12, 13] * vision.MIN_REPEATED_CYCLE_COUNT
+        self.assertTrue(vision._has_repeated_token_cycle(repeated_cycle))
+        self.assertFalse(vision._has_repeated_token_cycle([9] * 7))
+        self.assertFalse(
+            vision._has_repeated_token_cycle(
+                list(range(1, vision.MIN_REPEATED_CYCLE_COUNT * 3 + 1))
+            )
+        )
+
     def test_uncertainty_requires_stable_structural_output(self) -> None:
         self.assertTrue(vision._structurally_plausible(r"x^2+y^2=1"))
         self.assertFalse(vision._structurally_plausible(r"\\frac{x}{y"))
