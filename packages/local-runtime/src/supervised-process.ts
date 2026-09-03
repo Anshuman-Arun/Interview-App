@@ -2001,13 +2001,19 @@ function trustedWindowsTemporaryRoot(): string {
   }
 
   try {
+    if (windowsParentPathContainsReparsePointSync(configured)) {
+      throw new SupervisedProcessError("INVALID_DEFINITION");
+    }
     const info = lstatSync(configured, { bigint: true });
     const canonical = realpathSync(configured);
+    const canonicalInfo = lstatSync(canonical, { bigint: true });
     if (
       !info.isDirectory()
       || info.isSymbolicLink()
-      || normalizeWindowsIdentityPath(configured)
-        !== normalizeWindowsIdentityPath(canonical)
+      || !canonicalInfo.isDirectory()
+      || canonicalInfo.isSymbolicLink()
+      || canonicalInfo.dev !== info.dev
+      || canonicalInfo.ino !== info.ino
     ) {
       throw new SupervisedProcessError("INVALID_DEFINITION");
     }
