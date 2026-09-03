@@ -175,7 +175,7 @@ describe("Antigravity CLI provider registration and policy truthfulness", () => 
     )).toThrow(expect.objectContaining({ code: "UNKNOWN_MODEL" }));
   });
 
-  it("does not claim that subscription CLI invocation makes incremental spend impossible", async () => {
+  it("does not claim incremental spend is impossible without trusted runtime proof", async () => {
     const provider = createAntigravityCliReasoningProvider(
       fakeExecutor(async () => executionResult(antigravityStream()))
     );
@@ -207,6 +207,39 @@ describe("Antigravity CLI provider registration and policy truthfulness", () => 
         billingVerificationMaxAgeMs: 60_000
       },
       capabilities: provider.capabilities,
+      adapterVersion: provider.adapterVersion,
+      now
+    })).not.toThrow();
+  });
+
+  it("admits no-metered account quota only when the trusted runtime supplies proof", async () => {
+    const now = new Date("2026-09-01T12:00:00.000Z");
+    const provider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async () => executionResult(antigravityStream())),
+      ANTIGRAVITY_CLI_MODEL_ID,
+      (verifiedAt) => ({
+        billingClass: "ACCOUNT_QUOTA" as const,
+        enforcementMechanism: "test-only isolated no-overage account profile",
+        verifiedAt: verifiedAt.toISOString(),
+        adapterVersion: ANTIGRAVITY_CLI_ADAPTER_VERSION,
+        spendImpossible: true
+      })
+    );
+    const verification = await provider.verifyBillingSafety({ now });
+
+    expect(verification).toMatchObject({
+      billingClass: "ACCOUNT_QUOTA",
+      adapterVersion: ANTIGRAVITY_CLI_ADAPTER_VERSION,
+      spendImpossible: true
+    });
+    expect(() => assertProviderPermitted({
+      policy: {
+        allowMeteredUsage: false,
+        maximumDataUse: "REMOTE_MAY_BE_USED_FOR_IMPROVEMENT",
+        billingVerificationMaxAgeMs: 60_000
+      },
+      capabilities: provider.capabilities,
+      billingVerification: verification,
       adapterVersion: provider.adapterVersion,
       now
     })).not.toThrow();
