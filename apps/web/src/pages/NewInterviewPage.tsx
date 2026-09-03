@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type SyntheticEvent } from "react";
 import {
   InterviewSessionConfigurationSchema,
   type InterviewCatalogEntry,
@@ -136,7 +136,7 @@ export function NewInterviewPage({
   const selectedProvider =
     providerOptions.find((option) => providerKey(option) === selectedProviderKey) ?? null;
 
-  const submit = async (event: FormEvent): Promise<void> => {
+  const submit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     setFormError(null);
     if (activeSessionId !== null) {
