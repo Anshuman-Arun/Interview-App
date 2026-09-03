@@ -4,7 +4,6 @@ import {
   FormalInterpretationRequestSchema,
   InterpretationProviderResultSchema,
   MAX_FORMAL_INTERPRETATION_CANDIDATES,
-  MAX_FORMAL_INTERPRETATION_SOURCE_CHARACTERS,
   MAX_FORMAL_INTERPRETATION_STATEMENT_CHARACTERS,
   type FormalInterpretationRequest,
   type InterpretationProviderResult
@@ -563,14 +562,10 @@ function formalSourceJsonSchema(
       type: "integer",
       enum: [request.basis.transcriptRevision]
     },
-    ...(request.basis.boardRevision === undefined
-      ? {}
-      : {
-          boardRevision: {
-            type: "integer",
-            enum: [request.basis.boardRevision]
-          }
-        }),
+    boardRevision: {
+      type: "integer",
+      enum: [request.basis.boardRevision]
+    },
     problemStateRevision: {
       type: "integer",
       enum: [request.basis.problemStateRevision]
