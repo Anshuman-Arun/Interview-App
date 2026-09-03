@@ -154,6 +154,7 @@ describe("Windows desktop packaging contract", () => {
     expect(main).toContain('type: "COMMIT_TYPED_INPUT"');
     expect(main).toContain("Packaged Windows desktop smoke input.");
     expect(main).toContain("INTERVIEW_PACKAGED_SMOKE_EXPECT_REPORT");
+    expect(main).toContain("ensureRecovered(sessionId)");
     expect(main).toContain("Upgraded package did not preserve the prior authoritative session");
     expect(smoke).toContain("--packaged-smoke-test");
     expect(smoke).toContain("--packaged-single-instance-smoke-host");
