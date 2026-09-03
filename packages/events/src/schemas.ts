@@ -22,6 +22,7 @@ import {
   ProblemStateRevisionSchema,
   RealizationRequestSchema,
   RequestIdSchema,
+  SessionConfigurationSourceSchema,
   SessionIdSchema,
   TranscriptRevisionSchema,
   TurnIdSchema,
@@ -527,7 +528,8 @@ const event = <TType extends string, TPayload extends z.ZodType>(type: TType, pa
 export const SessionEventSchema = z.discriminatedUnion("type", [
   event("SESSION_STARTED", z.object({
     startedAt: z.iso.datetime(),
-    configuration: InterviewSessionConfigurationSchema.optional()
+    configuration: InterviewSessionConfigurationSchema.optional(),
+    configurationSource: SessionConfigurationSourceSchema.optional()
   }).strict()),
   event("PROBLEM_PRESENTED", z.object({
     problemId: z.string().min(1),
