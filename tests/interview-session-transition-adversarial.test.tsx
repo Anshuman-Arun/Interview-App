@@ -445,6 +445,86 @@ describe("interview session transition authority", () => {
     rendered.container.remove();
   });
 
+  it("allows terminal lifecycle transition while whiteboard mutation admission is withheld", async () => {
+    const sessionId = newSessionId();
+    let completeCalls = 0;
+
+    const fetchImpl: typeof fetch = async (input, init = {}) => {
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+      if (url === RENDERER_URL) {
+        throw new Error("Renderer must not attach before an unmounted board is bound");
+      }
+      if (url !== `${BASE_URL}/v1/commands`) {
+        throw new Error(`Unexpected transport URL: ${url}`);
+      }
+      if (typeof init.body !== "string") throw new Error("Command body must be JSON text");
+      const command = JSON.parse(init.body) as {
+        readonly type?: string;
+        readonly requestId?: string;
+      };
+      if (typeof command.requestId !== "string") throw new Error("Command requestId is missing");
+
+      if (command.type === "START_SESSION") {
+        return jsonResponse({
+          protocolVersion: 1,
+          requestId: command.requestId,
+          ok: true,
+          type: "SESSION_STARTED",
+          sessionId
+        });
+      }
+      if (command.type === "GET_INTERVIEW_SESSION_CONTEXT") {
+        return jsonResponse({
+          protocolVersion: 1,
+          ok: false,
+          error: {
+            code: "INTERNAL_ERROR",
+            message: "Context intentionally unavailable"
+          }
+        }, 500);
+      }
+      if (command.type === "COMPLETE_SESSION") {
+        completeCalls += 1;
+        return jsonResponse({
+          protocolVersion: 1,
+          requestId: command.requestId,
+          ok: true,
+          type: "SESSION_COMPLETED",
+          sessionId,
+          completedAt: "2026-09-03T00:00:00.000Z"
+        });
+      }
+      throw new Error(`Unexpected command type: ${String(command.type)}`);
+    };
+
+    const rendered = renderHook(fetchImpl, new TldrawWhiteboardAdapter());
+    await act(async () => {
+      await rendered.current().startSession(sessionId);
+    });
+
+    expect(rendered.current().sessionStatus).toBe("ACTIVE");
+    expect(rendered.current().whiteboardSync.status).toBe("UNINITIALIZED");
+    await expect(rendered.current().submitTypedInput("still blocked"))
+      .rejects.toThrow("Cannot submit input without an active session");
+
+    await act(async () => {
+      await rendered.current().completeSession();
+    });
+
+    expect(completeCalls).toBe(1);
+    expect(rendered.current().sessionStatus).toBe("COMPLETED");
+    expect(rendered.current().isStreaming).toBe(false);
+
+    await act(async () => {
+      rendered.root.unmount();
+    });
+    rendered.container.remove();
+  });
+
   it("disconnect invalidates an in-flight start before it can reattach transport", async () => {
     const sessionId = newSessionId();
     const harness = makeFetchHarness([sessionId]);
