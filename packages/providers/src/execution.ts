@@ -497,7 +497,7 @@ function rejectedProviderTurn(
   });
 }
 
-function snapshotUntrustedModelCapabilities(
+export function snapshotUntrustedModelCapabilities(
   value: unknown
 ): unknown {
   if (
