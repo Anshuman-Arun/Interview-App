@@ -14,7 +14,9 @@ import {
   ANTIGRAVITY_CLI_PROPOSAL_SCHEMA_ARGUMENT,
   ANTIGRAVITY_CLI_PROVIDER_DEFINITION,
   ANTIGRAVITY_CLI_PROVIDER_ID,
+  ANTIGRAVITY_CLI_ZERO_TURN_PREFLIGHT_INPUT,
   AntigravityCliAdapterError,
+  assertAntigravityCliZeroTurnPreflightResult,
   SupervisedCliReasoningProvider,
   assertProviderPermitted,
   createAntigravityCliReasoningProvider,
@@ -90,6 +92,55 @@ function antigravityStream(
   ].join("\n") + "\n";
 }
 
+interface ZeroTurnPreflightOverrides {
+  readonly tools?: readonly string[];
+  readonly permissionMode?: string;
+  readonly model?: string;
+  readonly agent?: string;
+  readonly schema?: unknown;
+  readonly resultStatus?: string;
+  readonly numTurns?: number;
+  readonly totalTokens?: number;
+}
+
+function zeroTurnPreflightStream(
+  overrides: ZeroTurnPreflightOverrides = {}
+): string {
+  const totalTokens = overrides.totalTokens ?? 0;
+  return [
+    JSON.stringify({
+      event: "init",
+      conversation_id: "preflight-conversation",
+      init: {
+        cwd: "/isolated",
+        tools: [...(overrides.tools ?? [])],
+        permission_mode: overrides.permissionMode ?? "strict",
+        model: overrides.model ?? ANTIGRAVITY_CLI_MODEL_ID,
+        agent: overrides.agent ?? ANTIGRAVITY_CLI_AGENT_ID,
+        json_schema: overrides.schema ?? ANTIGRAVITY_CLI_PROPOSAL_SCHEMA
+      }
+    }),
+    JSON.stringify({
+      event: "result",
+      result: {
+        conversation_id: "preflight-conversation",
+        status: overrides.resultStatus ?? "ERROR",
+        response: "",
+        error: "unsupported stream input message",
+        duration_seconds: 0,
+        num_turns: overrides.numTurns ?? 0,
+        usage: {
+          input_tokens: 0,
+          output_tokens: 0,
+          thinking_tokens: 0,
+          cache_read_tokens: 0,
+          total_tokens
+        }
+      }
+    })
+  ].join("\n") + "\n";
+}
+
 function fakeExecutor(
   implementation: (
     request: SupervisedCliExecutionRequest
@@ -112,6 +163,44 @@ async function collectProposals(
   for await (const proposal of input) proposals.push(proposal);
   return proposals;
 }
+
+describe("Antigravity zero-turn runtime preflight", () => {
+  it("accepts only the exact zero-turn no-tool profile", () => {
+    expect(ANTIGRAVITY_CLI_ZERO_TURN_PREFLIGHT_INPUT)
+      .toBe('{"event":"control_request"}\n');
+    expect(() => assertAntigravityCliZeroTurnPreflightResult(
+      executionResult(zeroTurnPreflightStream(), { exitCode: 2 })
+    )).not.toThrow();
+  });
+
+  const invalidProfiles: readonly (
+    readonly [string, ZeroTurnPreflightOverrides]
+  )[] = [
+    ["tool exposure", { tools: ["run_command"] }],
+    ["permission drift", { permissionMode: "request-review" }],
+    ["model drift", { model: "unexpected-model" }],
+    ["agent drift", { agent: "unexpected-agent" }],
+    ["schema drift", { schema: { type: "string" } }],
+    ["successful result", { resultStatus: "SUCCESS" }],
+    ["turn execution", { numTurns: 1 }],
+    ["token use", { totalTokens: 1 }]
+  ];
+
+  it.each(invalidProfiles)(
+    "rejects %s before any interview turn",
+    (_label, overrides) => {
+      expect(() => assertAntigravityCliZeroTurnPreflightResult(
+        executionResult(zeroTurnPreflightStream(overrides), { exitCode: 2 })
+      )).toThrowError(AntigravityCliAdapterError);
+    }
+  );
+
+  it("requires the documented control-message exit code", () => {
+    expect(() => assertAntigravityCliZeroTurnPreflightResult(
+      executionResult(zeroTurnPreflightStream(), { exitCode: 1 })
+    )).toThrowError(AntigravityCliAdapterError);
+  });
+});
 
 describe("Antigravity structured-output contract alignment", () => {
   it("keeps provider action enums exactly aligned with authoritative domain schemas", () => {

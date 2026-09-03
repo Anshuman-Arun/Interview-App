@@ -7,6 +7,7 @@ import {
 } from "../../domain/src/index.js";
 import {
   SupervisedCliReasoningProvider,
+  type SupervisedCliExecutionResult,
   type SupervisedCliExecutor
 } from "./supervised-cli-provider.js";
 
@@ -162,6 +163,8 @@ export const ANTIGRAVITY_CLI_TURN_ARGUMENTS = Object.freeze([
   "--print-timeout",
   "2m"
 ] as const);
+export const ANTIGRAVITY_CLI_ZERO_TURN_PREFLIGHT_INPUT =
+  '{"event":"control_request"}\n';
 const INTERVIEWER_PROPOSAL_SCHEMA_CANONICAL = serializeBoundedPlainJson(
   INTERVIEWER_PROPOSAL_JSON_SCHEMA,
   MAX_SCHEMA_BYTES
@@ -203,6 +206,25 @@ const ResultEventSchema = z.looseObject({
     num_turns: z.number().int().nonnegative(),
     structured_output: z.unknown().optional(),
     json_schema: z.unknown()
+  })
+});
+
+const ZeroTurnUsageSchema = z.strictObject({
+  input_tokens: z.literal(0),
+  output_tokens: z.literal(0),
+  thinking_tokens: z.literal(0),
+  cache_read_tokens: z.literal(0),
+  total_tokens: z.literal(0)
+});
+
+const ZeroTurnPreflightResultEventSchema = z.looseObject({
+  event: z.literal("result"),
+  result: z.looseObject({
+    conversation_id: z.string().min(1).max(256),
+    status: z.literal("ERROR"),
+    response: z.literal(""),
+    num_turns: z.literal(0),
+    usage: ZeroTurnUsageSchema
   })
 });
 
@@ -385,6 +407,70 @@ function snapshotExecutionResult(value: unknown): {
     stdoutBytes,
     stderrBytes
   });
+}
+
+export function assertAntigravityCliZeroTurnPreflightResult(
+  value: SupervisedCliExecutionResult
+): void {
+  const result = snapshotExecutionResult(value);
+  if (result.exitCode !== 2) {
+    throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
+  }
+
+  const lines = result.stdout.split(/\r?\n/u);
+  let sawInit = false;
+  let sawResult = false;
+  let conversationId: string | undefined;
+  let eventCount = 0;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const raw = lines[index];
+    if (raw === undefined || raw.trim().length === 0) continue;
+    eventCount += 1;
+    if (eventCount > 16 || sawResult) {
+      throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
+    }
+
+    let event: unknown;
+    try {
+      event = parseStrictJson(raw);
+    } catch {
+      throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
+    }
+
+    const init = InitEventSchema.safeParse(event);
+    if (init.success) {
+      if (
+        sawInit
+        || index !== firstNonBlankLineIndex(lines)
+        || init.data.init.model !== ANTIGRAVITY_CLI_MODEL_ID
+        || init.data.init.agent !== ANTIGRAVITY_CLI_AGENT_ID
+        || init.data.init.tools.length !== 0
+        || init.data.init.permission_mode !== "strict"
+        || !schemaMatchesProposalContract(init.data.init.json_schema)
+      ) {
+        throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
+      }
+      conversationId = init.data.conversation_id;
+      sawInit = true;
+      continue;
+    }
+
+    const terminal = ZeroTurnPreflightResultEventSchema.safeParse(event);
+    if (
+      !terminal.success
+      || !sawInit
+      || conversationId === undefined
+      || terminal.data.result.conversation_id !== conversationId
+    ) {
+      throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
+    }
+    sawResult = true;
+  }
+
+  if (!sawInit || !sawResult || eventCount !== 2) {
+    throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
+  }
 }
 
 function captureExecutor(

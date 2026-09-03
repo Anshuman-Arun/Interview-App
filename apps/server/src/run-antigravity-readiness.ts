@@ -1,14 +1,11 @@
 import process from "node:process";
-import { isDeepStrictEqual } from "node:util";
 import {
   createApplicationProviderAdapterRuntimeSource
 } from "./antigravity-cli-runtime.js";
 import {
   ANTIGRAVITY_CLI_AGENT_ID,
   ANTIGRAVITY_CLI_MODEL_ID,
-  ANTIGRAVITY_CLI_PROPOSAL_SCHEMA_ARGUMENT,
   ANTIGRAVITY_CLI_PROVIDER_ID,
-  ANTIGRAVITY_CLI_TURN_ARGUMENTS,
   type SupervisedCliExecutor
 } from "../../../packages/providers/src/index.js";
 
@@ -29,9 +26,6 @@ async function main(): Promise<void> {
     });
     const executor = readExecutor(runtime);
 
-    const protocol = await executeReadinessProtocolPreflight(executor);
-    assertZeroTurnProtocolPreflight(protocol);
-
     const usage = await executeReadinessJsonCommand(executor, [
       "-p",
       "/usage",
@@ -50,112 +44,6 @@ async function main(): Promise<void> {
   process.stdout.write(
     "Antigravity readiness smoke passed: supervised launch, zero-turn stream protocol, empty resolved tool surface, isolated custom agent, pinned model, cached authentication, and quota lookup are usable without a model turn.\n"
   );
-}
-
-async function executeReadinessProtocolPreflight(
-  executor: SupervisedCliExecutor
-): Promise<string> {
-  const controller = new AbortController();
-  const result = await executor.execute({
-    args: ANTIGRAVITY_CLI_TURN_ARGUMENTS,
-    stdin: '{"event":"control_request"}\n',
-    timeoutMs: READINESS_TIMEOUT_MS,
-    maxStdoutBytes: READINESS_STDOUT_BYTES,
-    maxStderrBytes: READINESS_STDERR_BYTES,
-    signal: controller.signal,
-    onProcessStart: () => undefined
-  });
-  if (
-    result.exitCode === 0
-    || result.stdoutBytes <= 0
-    || result.stdout.trim().length === 0
-  ) {
-    throw new Error("Antigravity zero-turn protocol preflight did not fail as expected");
-  }
-  return result.stdout;
-}
-
-function assertZeroTurnProtocolPreflight(stdout: string): void {
-  const lines = stdout
-    .split(/\r?\n/u)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-  if (lines.length < 2 || lines.length > 16) {
-    throw new Error("Antigravity zero-turn protocol preflight returned an invalid event count");
-  }
-
-  const expectedSchema = JSON.parse(
-    ANTIGRAVITY_CLI_PROPOSAL_SCHEMA_ARGUMENT
-  ) as unknown;
-  let conversationId: string | undefined;
-  let sawInit = false;
-  let sawResult = false;
-
-  for (let index = 0; index < lines.length; index += 1) {
-    let value: unknown;
-    try {
-      value = JSON.parse(lines[index] ?? "") as unknown;
-    } catch {
-      throw new Error("Antigravity zero-turn protocol preflight returned malformed JSON");
-    }
-    if (typeof value !== "object" || value === null || Array.isArray(value)) {
-      throw new Error("Antigravity zero-turn protocol preflight returned an invalid event");
-    }
-    const event = value as Record<string, unknown>;
-    if (event.event === "init") {
-      if (sawInit || index !== 0) {
-        throw new Error("Antigravity zero-turn protocol preflight returned an invalid init");
-      }
-      const init = event.init;
-      if (typeof init !== "object" || init === null || Array.isArray(init)) {
-        throw new Error("Antigravity zero-turn protocol preflight returned an invalid init");
-      }
-      const initRecord = init as Record<string, unknown>;
-      const tools = initRecord.tools;
-      const rawConversationId = event.conversation_id;
-      if (
-        typeof rawConversationId !== "string"
-        || rawConversationId.length === 0
-        || !Array.isArray(tools)
-        || tools.length !== 0
-        || initRecord.permission_mode !== "strict"
-        || initRecord.model !== ANTIGRAVITY_CLI_MODEL_ID
-        || initRecord.agent !== ANTIGRAVITY_CLI_AGENT_ID
-        || !isDeepStrictEqual(initRecord.json_schema, expectedSchema)
-      ) {
-        throw new Error("Antigravity zero-turn protocol preflight violated the pinned runtime profile");
-      }
-      conversationId = rawConversationId;
-      sawInit = true;
-      continue;
-    }
-
-    if (event.event === "result") {
-      if (!sawInit || sawResult) {
-        throw new Error("Antigravity zero-turn protocol preflight returned an invalid result order");
-      }
-      const result = event.result;
-      if (typeof result !== "object" || result === null || Array.isArray(result)) {
-        throw new Error("Antigravity zero-turn protocol preflight returned an invalid result");
-      }
-      const resultRecord = result as Record<string, unknown>;
-      if (
-        resultRecord.conversation_id !== conversationId
-        || resultRecord.status !== "ERROR"
-        || resultRecord.num_turns !== 0
-      ) {
-        throw new Error("Antigravity zero-turn protocol preflight unexpectedly executed a turn");
-      }
-      sawResult = true;
-      continue;
-    }
-
-    throw new Error("Antigravity zero-turn protocol preflight returned an unexpected event");
-  }
-
-  if (!sawInit || !sawResult) {
-    throw new Error("Antigravity zero-turn protocol preflight was incomplete");
-  }
 }
 
 async function executeReadinessJsonCommand(

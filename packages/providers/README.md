@@ -81,13 +81,14 @@ Credential Manager session without starting a model turn:
 corepack pnpm smoke:antigravity-readiness
 ```
 
-The smoke first launches the exact production stream-json argument set and sends a deliberately
-unsupported control message. Antigravity must emit the pinned `init` envelope (empty tool list,
-strict permission mode, exact agent/model/schema) and terminate with a zero-turn `ERROR` result,
-so the resolved tool surface is verified without model inference. It then runs the read-only
-`/usage` command with the same agent/model selections to verify cached authentication and quota
-lookup. The smoke checks piped-process shutdown as well and deliberately does not print any
-account/quota payload. Each supervised turn receives a fresh temporary CLI profile rather
+The production executor itself performs a cached zero-turn preflight before it can launch any
+interview turn: it starts the exact stream-json argument set, sends a deliberately unsupported
+control message, and requires the pinned `init` envelope (empty tool list, strict permission
+mode, exact agent/model/schema) followed by the documented exit-code-2, zero-turn, zero-token
+`ERROR` result. This verifies the resolved tool surface before model inference. The manual smoke
+then runs the read-only `/usage` command with the same agent/model selections to verify cached
+authentication and quota lookup through that already-preflighted production executor. It checks
+piped-process shutdown as well and deliberately does not print any account/quota payload. Each supervised turn receives a fresh temporary CLI profile rather
 than the user's normal `~/.gemini` profile. That profile pins strict tool review,
 non-workspace access off, AI-credit fallback off, telemetry off, an empty custom-agent tool list,
 and deny-all fine-grained permission rules. The concrete Windows path does not depend on

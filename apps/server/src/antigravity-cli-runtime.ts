@@ -8,6 +8,9 @@ import {
 import {
   ANTIGRAVITY_CLI_MODEL_ID,
   ANTIGRAVITY_CLI_PROVIDER_ID,
+  ANTIGRAVITY_CLI_TURN_ARGUMENTS,
+  ANTIGRAVITY_CLI_ZERO_TURN_PREFLIGHT_INPUT,
+  assertAntigravityCliZeroTurnPreflightResult,
   type SupervisedCliExecutionRequest,
   type SupervisedCliExecutor
 } from "../../../packages/providers/src/index.js";
@@ -20,6 +23,9 @@ const ANTIGRAVITY_SAFE_CLI_VERSION = Object.freeze([1, 1, 25] as const);
 const ANTIGRAVITY_VERSION_CHECK_TIMEOUT_MS = 75_000;
 const ANTIGRAVITY_VERSION_STDOUT_BYTES = 256;
 const ANTIGRAVITY_VERSION_STDERR_BYTES = 4 * 1024;
+const ANTIGRAVITY_PROFILE_PREFLIGHT_TIMEOUT_MS = 75_000;
+const ANTIGRAVITY_PROFILE_PREFLIGHT_STDOUT_BYTES = 64 * 1024;
+const ANTIGRAVITY_PROFILE_PREFLIGHT_STDERR_BYTES = 16 * 1024;
 const ANTIGRAVITY_SAFE_SETTINGS = Object.freeze({
   toolPermission: "strict",
   artifactReviewPolicy: "asks-for-review",
@@ -84,6 +90,7 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
 
   let runner: SupervisedProcessRunner | undefined;
   let versionVerification: Promise<void> | undefined;
+  let profileVerification: Promise<void> | undefined;
 
   const getRunner = (): SupervisedProcessRunner => {
     if (runner !== undefined) return runner;
@@ -109,7 +116,7 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
     signal: AbortSignal | undefined
   ): Promise<void> => {
     if (signal?.aborted === true) {
-      throw new Error("Antigravity version wait cancelled");
+      throw new Error("Antigravity runtime verification wait cancelled");
     }
     let check = versionVerification;
     if (check === undefined) {
@@ -135,12 +142,41 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
         if (versionVerification === captured) versionVerification = undefined;
       });
     }
-    await waitForVersionVerificationOrAbort(check, signal);
+    await waitForSharedVerificationOrAbort(check, signal);
+  };
+
+  const ensureSupportedProfile = async (
+    signal: AbortSignal | undefined
+  ): Promise<void> => {
+    if (signal?.aborted === true) {
+      throw new Error("Antigravity runtime verification wait cancelled");
+    }
+    let check = profileVerification;
+    if (check === undefined) {
+      check = (async () => {
+        const result = await getRunner().execute({
+          executableId: ANTIGRAVITY_EXECUTABLE_ID,
+          args: ANTIGRAVITY_CLI_TURN_ARGUMENTS,
+          stdin: ANTIGRAVITY_CLI_ZERO_TURN_PREFLIGHT_INPUT,
+          timeoutMs: ANTIGRAVITY_PROFILE_PREFLIGHT_TIMEOUT_MS,
+          maxStdoutBytes: ANTIGRAVITY_PROFILE_PREFLIGHT_STDOUT_BYTES,
+          maxStderrBytes: ANTIGRAVITY_PROFILE_PREFLIGHT_STDERR_BYTES
+        });
+        assertAntigravityCliZeroTurnPreflightResult(result);
+      })();
+      profileVerification = check;
+      const captured = check;
+      void captured.catch(() => {
+        if (profileVerification === captured) profileVerification = undefined;
+      });
+    }
+    await waitForSharedVerificationOrAbort(check, signal);
   };
 
   const executor: SupervisedCliExecutor = Object.freeze({
     execute: async (request: SupervisedCliExecutionRequest) => {
       await ensureSupportedVersion(request.signal);
+      await ensureSupportedProfile(request.signal);
       return await getRunner().execute({
         executableId: ANTIGRAVITY_EXECUTABLE_ID,
         args: request.args,
@@ -178,7 +214,7 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
   });
 }
 
-async function waitForVersionVerificationOrAbort(
+async function waitForSharedVerificationOrAbort(
   verification: Promise<void>,
   signal: AbortSignal | undefined
 ): Promise<void> {
@@ -186,11 +222,11 @@ async function waitForVersionVerificationOrAbort(
     await verification;
     return;
   }
-  if (signal.aborted) throw new Error("Antigravity version wait cancelled");
+  if (signal.aborted) throw new Error("Antigravity runtime verification wait cancelled");
 
   let onAbort = (): void => undefined;
   const cancelled = new Promise<never>((_resolve, reject) => {
-    onAbort = () => reject(new Error("Antigravity version wait cancelled"));
+    onAbort = () => reject(new Error("Antigravity runtime verification wait cancelled"));
     signal.addEventListener("abort", onAbort, { once: true });
   });
   try {
