@@ -309,6 +309,41 @@ describe("configured session product-read integration", () => {
     }
   });
 
+  it("keeps healthy session inventory available beside schema-corrupt Quant history", async () => {
+    let server: StartedServer | undefined;
+    try {
+      server = await startServer(":memory:");
+      const command = commandClient(server);
+      const configuration = InterviewSessionConfigurationSchema.parse({
+        configurationVersion: 1,
+        mode: "QUANT_TRADING",
+        scenario: {
+          id: "BASIC_MARKET_MAKING",
+          version: QUANT_TRADER_SCENARIO_VERSION
+        },
+        interventionPolicy: "STRICT"
+      });
+      const corruptSessionId = newSessionId();
+      const healthySessionId = newSessionId();
+      await command.startConfiguredSession(corruptSessionId, configuration);
+      await command.startConfiguredSession(healthySessionId, configuration);
+
+      const db = (server.store as unknown as StoreWithDatabase).database;
+      db.prepare(
+        "UPDATE session_events SET event_json = ? WHERE session_id = ? AND sequence = ?"
+      ).run("{", corruptSessionId, 2);
+
+      const listed = await command.listSessions();
+      expect(listed.some((item) => item.sessionId === corruptSessionId)).toBe(false);
+      expect(listed.find((item) => item.sessionId === healthySessionId)).toMatchObject({
+        sessionId: healthySessionId,
+        status: "ACTIVE"
+      });
+    } finally {
+      if (server !== undefined) await server.stop();
+    }
+  });
+
   it("keeps configured Quant Trading replayable without fabricating an Oxford evaluation", async () => {
     let server: StartedServer | undefined;
     try {
