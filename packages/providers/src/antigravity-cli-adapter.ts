@@ -110,16 +110,19 @@ const INTERVIEWER_PROPOSAL_JSON_SCHEMA = Object.freeze({
           targetShapeId: {
             type: "string",
             minLength: 1,
-            maxLength: MAX_BOARD_TARGET_ID_CHARACTERS
+            maxLength: MAX_BOARD_TARGET_ID_CHARACTERS,
+            pattern: "\\S"
           },
           expectedShapeRevision: {
             type: "integer",
-            minimum: 1
+            minimum: 1,
+            maximum: Number.MAX_SAFE_INTEGER
           },
           annotationPurpose: {
             type: "string",
             minLength: 1,
-            maxLength: MAX_ANNOTATION_PURPOSE_CHARACTERS
+            maxLength: MAX_ANNOTATION_PURPOSE_CHARACTERS,
+            pattern: "\\S"
           }
         },
         required: ["operation", "layer", "annotationPurpose"]
