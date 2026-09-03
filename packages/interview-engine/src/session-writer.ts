@@ -195,7 +195,7 @@ export class SessionWriter {
 }
 
 function isLegacyUninitializedQuantState(state: Readonly<SessionState>): boolean {
-  if (!state.started || state.problem !== undefined) return false;
+  if (!state.started) return false;
   if (state.quantTrading !== undefined || state.quantResearch !== undefined) return false;
   return state.configuration?.mode === "QUANT_TRADING"
     || state.configuration?.mode === "QUANT_RESEARCH";
