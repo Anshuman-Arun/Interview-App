@@ -62,6 +62,14 @@ export class SessionRecoveryCoordinator {
     for (const summary of summaries) {
       const events = this.store?.load(summary.sessionId) ?? this.registry.loadEvents(summary.sessionId);
       const eventFamilyIsQuant = eventsIdentifyQuantSession(events);
+      if (eventsAreLegacyUninitializedQuantSession(events)) {
+        // Historical pre-runtime Quant sessions may contain lifecycle events that
+        // modern deterministic reducers intentionally reject. Keep them
+        // discoverable for migration, but expose no synthetic problem identity
+        // and never open a modern writer for them.
+        trusted.push(sanitizedQuantInventorySummary(summary));
+        continue;
+      }
 
       let state: ReturnType<typeof replaySession>;
       try {
@@ -213,6 +221,11 @@ export class SessionRecoveryCoordinator {
     if (existing !== undefined) return existing;
 
     const recovery = (async () => {
+      const persistedEvents = this.registry.loadEvents(sessionId);
+      if (eventsAreLegacyUninitializedQuantSession(persistedEvents)) {
+        throw new LegacyUninitializedQuantSessionError();
+      }
+
       const writer = await this.getWriterAsync(sessionId);
       // Resolve exact application-owned identity and specialized deterministic
       // state before recovery may append anything. Quant streams additionally
@@ -228,7 +241,7 @@ export class SessionRecoveryCoordinator {
       try {
         composition = resolveSessionStateComposition(state);
         if (composition.mode !== "OXFORD_MATHEMATICS") {
-          assertReplayPrefixValidForRecovery(sessionId, this.registry.loadEvents(sessionId));
+          assertReplayPrefixValidForRecovery(sessionId, persistedEvents);
         }
       } catch (error) {
         if (isQuantSessionState(state)) {
@@ -265,6 +278,20 @@ export class SessionRecoveryCoordinator {
     });
     return recovery;
   }
+}
+
+function eventsAreLegacyUninitializedQuantSession(
+  events: readonly SessionEvent[]
+): boolean {
+  const start = events.find((event) => event.type === "SESSION_STARTED");
+  const mode = start?.type === "SESSION_STARTED"
+    ? start.payload.configuration?.mode
+    : undefined;
+  if (mode !== "QUANT_TRADING" && mode !== "QUANT_RESEARCH") return false;
+  return !events.some((event) =>
+    event.type.startsWith("QUANT_TRADING_")
+    || event.type.startsWith("QUANT_RESEARCH_")
+  );
 }
 
 function eventsIdentifyQuantSession(events: readonly SessionEvent[]): boolean {
