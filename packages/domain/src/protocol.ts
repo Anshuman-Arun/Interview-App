@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { DeliveryCommandSchema, DeliveryStatusSchema } from "./delivery.js";
-import { InterviewCatalogEntrySchema, InterviewProblemPublicViewSchema, InterviewSessionConfigurationSchema } from "./session-configuration.js";
+import {
+  InterviewCatalogEntrySchema,
+  InterviewProblemPublicViewSchema,
+  InterviewSessionConfigurationSchema,
+  ProviderLaunchOptionSchema,
+  SessionConfigurationSourceSchema
+} from "./session-configuration.js";
 import {
   DeliveryIdSchema,
   InputEpisodeIdSchema,
