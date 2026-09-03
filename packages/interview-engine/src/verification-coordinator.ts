@@ -49,7 +49,15 @@ export const VerificationWorkItemSchema = z.object({
   boardRevisionIndependent: z.literal(true).optional(),
   sourceGenerationId: GenerationIdSchema.optional(),
   sourceProposalRequestId: RequestIdSchema.optional()
-}).strict();
+}).strict().superRefine((value, context) => {
+  if (value.boardRevisionIndependent === true && value.sourceGenerationId !== undefined) {
+    context.addIssue({
+      code: "custom",
+      path: ["boardRevisionIndependent"],
+      message: "Generation-bound verification cannot ignore board revision"
+    });
+  }
+});
 export type VerificationWorkItem = z.infer<typeof VerificationWorkItemSchema>;
 
 const FormalInterpretationDiscardReasonSchema = z.enum([
