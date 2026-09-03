@@ -131,14 +131,16 @@ Windows packaging CI validates:
 6. launch from a copied path containing spaces and Unicode;
 7. real packaged preload and renderer load;
 8. loopback backend startup;
-9. a typed session/input round trip;
+9. authoritative typed-session creation through the packaged command boundary;
 10. SQLite persistence across a backend restart;
 11. missing-Python graceful degradation;
 12. OS single-instance lock behavior;
 13. clean shutdown with no newly-owned `local_model_worker.py` process;
 14. silent install/reinstall/uninstall with history/cache preservation.
 
-No fake production inference is enabled by these checks.
+The packaged smoke does not switch production inference to a fixture/mock provider.
+Full typed-input behavior remains covered by the repository end-to-end suite and
+the manual clean-machine checklist below.
 
 ## Manual release-machine checklist
 
