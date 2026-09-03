@@ -424,6 +424,8 @@ export const App: React.FC = () => {
       <div
         key="live-workspace"
         hidden={showingPausedHome}
+        aria-hidden={showingPausedHome}
+        style={showingPausedHome ? { display: "none" } : undefined}
         className="interview-app-container flex flex-col h-screen w-screen bg-slate-100 font-sans text-slate-900 overflow-hidden"
       >
       {/* Focused live interview header */}
