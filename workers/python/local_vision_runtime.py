@@ -298,90 +298,64 @@ def _verify_regular_file(path: Path, expected_size: int, expected_sha256: str) -
         raise RuntimeError(f"vision asset {path.name} failed digest verification")
 
 
-def _load_tokenizer(path: Path) -> dict[int, str]:
-    raw = path.read_text(encoding="utf-8")
-    if len(raw) > 128 * 1024:
+def _load_tokenizer(path: Path) -> Tokenizer:
+    raw_size = path.stat().st_size
+    if raw_size <= 0 or raw_size > 128 * 1024:
         raise RuntimeError("vision tokenizer is unexpectedly large")
-    parsed = json.loads(raw)
-    if not isinstance(parsed, dict):
-        raise RuntimeError("vision tokenizer root is invalid")
-    model = parsed.get("model")
-    if not isinstance(model, dict):
-        raise RuntimeError("vision tokenizer model is invalid")
-    vocab = model.get("vocab")
-    if not isinstance(vocab, dict) or not (4 <= len(vocab) <= 8192):
-        raise RuntimeError("vision tokenizer vocabulary is invalid")
-    inverse: dict[int, str] = {}
-    for token, token_id in vocab.items():
-        if (
-            not isinstance(token, str)
-            or not isinstance(token_id, int)
-            or isinstance(token_id, bool)
-            or token_id < 0
-            or token_id > 65535
-            or token_id in inverse
-        ):
-            raise RuntimeError("vision tokenizer vocabulary contains invalid entries")
-        inverse[token_id] = token
-    return inverse
-
-
-def _byte_decoder() -> dict[str, int]:
-    values = list(range(ord("!"), ord("~") + 1))
-    values += list(range(ord("¡"), ord("¬") + 1))
-    values += list(range(ord("®"), ord("ÿ") + 1))
-    chars = values[:]
-    extra = 0
-    for value in range(256):
-        if value not in values:
-            values.append(value)
-            chars.append(256 + extra)
-            extra += 1
-    return {chr(char): value for value, char in zip(values, chars)}
-
-
-BYTE_DECODER = _byte_decoder()
-
-
-def _decode_tokens(token_ids: list[int], vocab: dict[int, str]) -> str:
-    pieces: list[str] = []
-    for token_id in token_ids:
-        token = vocab.get(token_id)
-        if token is None:
-            return ""
-        if token in {"[PAD]", "[BOS]", "[EOS]", "<pad>", "<s>", "</s>", "<unk>"}:
-            continue
-        pieces.append(token)
-    joined = "".join(pieces)
-    byte_values = bytearray()
     try:
-        for char in joined:
-            byte_values.append(BYTE_DECODER[char])
-        decoded = byte_values.decode("utf-8", errors="strict")
-    except (KeyError, UnicodeDecodeError):
-        decoded = joined.replace("Ġ", " ")
-    return decoded
+        tokenizer = Tokenizer.from_file(str(path))
+    except Exception as exc:
+        raise RuntimeError("vision tokenizer could not be loaded") from exc
+    vocab_size = tokenizer.get_vocab_size(with_added_tokens=True)
+    if vocab_size < 4 or vocab_size > 8192:
+        raise RuntimeError("vision tokenizer vocabulary is outside expected bounds")
+    return tokenizer
+
+
+def _decode_tokens(token_ids: list[int], tokenizer: Tokenizer) -> str:
+    try:
+        decoded = tokenizer.decode(token_ids)
+    except Exception:
+        return ""
+    # Match RapidLaTeXOCR TokenizerCls.token2str exactly: remove tokenizer
+    # separator spaces first, then restore byte-level leading-space markers.
+    return (
+        "".join(decoded.split(" "))
+        .replace("Ġ", " ")
+        .replace("[EOS]", "")
+        .replace("[BOS]", "")
+        .replace("[PAD]", "")
+        .strip()
+    )
 
 
 def _post_process(value: str) -> str:
-    value = value.replace("[EOS]", "").replace("[BOS]", "").replace("[PAD]", "")
-    protected = "\uE000"
-    value = value.replace("\\ ", protected)
-    value = re.sub(
-        r"(\\(?:operatorname|mathrm|text|mathbf)\s?\*?\s?\{.*?\})",
-        lambda match: match.group(0).replace(" ", ""),
-        value,
-    )
+    text_reg = r"(\\(operatorname|mathrm|text|mathbf)\s?\*? {.*?})"
+    letter = "[a-zA-Z]"
     noletter = r"[\W_^\d]"
-    letter = r"[A-Za-z]"
+    names = [match[0].replace(" ", "") for match in re.findall(text_reg, value)]
+    value = re.sub(text_reg, lambda _match: str(names.pop(0)), value)
+    updated = value
     while True:
-        prior = value
-        value = re.sub(f"({noletter})\\s+({noletter})", r"\1\2", value)
-        value = re.sub(f"({noletter})\\s+({letter})", r"\1\2", value)
-        value = re.sub(f"({letter})\\s+({noletter})", r"\1\2", value)
-        if value == prior:
+        value = updated
+        updated = re.sub(
+            r"(?!\\ )(%s)\s+?(%s)" % (noletter, noletter),
+            r"\1\2",
+            value,
+        )
+        updated = re.sub(
+            r"(?!\\ )(%s)\s+?(%s)" % (noletter, letter),
+            r"\1\2",
+            updated,
+        )
+        updated = re.sub(
+            r"(%s)\s+?(%s)" % (letter, noletter),
+            r"\1\2",
+            updated,
+        )
+        if updated == value:
             break
-    value = value.replace(protected, "\\ ").strip()
+    value = value.strip()
     if any(ord(char) < 0x20 and char not in "\t" for char in value):
         return ""
     return value[:MAX_INTERPRETATION_CHARS]
@@ -420,67 +394,128 @@ def _uncertain_observation(message: str) -> dict[str, Any]:
     }
 
 
-def _prepare_gray(rgb: np.ndarray) -> np.ndarray | None:
-    gray = (
-        rgb[..., 0].astype(np.float32) * 0.299
-        + rgb[..., 1].astype(np.float32) * 0.587
-        + rgb[..., 2].astype(np.float32) * 0.114
-    )
-    minimum = float(np.min(gray))
-    maximum = float(np.max(gray))
+def _has_visible_ink(rgb: np.ndarray) -> bool:
+    gray = np.asarray(Image.fromarray(rgb, mode="RGB").convert("L"), dtype=np.float32)
+    if gray.size == 0 or not np.isfinite(gray).all():
+        return False
+    return float(np.max(gray) - np.min(gray)) >= 4.0
+
+
+def _stability_perturbation(rgb: np.ndarray) -> np.ndarray:
+    gray = np.asarray(Image.fromarray(rgb, mode="RGB").convert("L"), dtype=np.uint8)
+    # Fixed, deterministic thresholding avoids the old median=background bug
+    # where a mostly white crop could collapse to an all-black second image.
+    binary = np.where(gray < 192, 0, 255).astype(np.uint8)
+    return np.repeat(binary[..., None], 3, axis=2)
+
+
+def _pad_expression(image: Image.Image) -> Image.Image | None:
+    # Equivalent to RapidLaTeXOCR PreProcess.pad for an already-composited
+    # image. Snapshot alpha has been safely composited by _decode_png first.
+    data = np.asarray(image.convert("L"), dtype=np.float32)
+    minimum = float(np.min(data))
+    maximum = float(np.max(data))
     if not math.isfinite(minimum) or not math.isfinite(maximum) or maximum <= minimum:
         return None
-    normalized = (gray - minimum) * (255.0 / (maximum - minimum))
-    if float(np.mean(normalized)) <= 128.0:
-        normalized = 255.0 - normalized
 
-    ink = normalized < 250.0
-    ys, xs = np.nonzero(ink)
+    data = (data - minimum) / (maximum - minimum) * 255.0
+    if float(np.mean(data)) > 128.0:
+        ink_mask = data < 128.0
+    else:
+        ink_mask = data > 128.0
+        data = 255.0 - data
+
+    ys, xs = np.nonzero(ink_mask)
     if xs.size == 0:
         return None
-    x0 = max(0, int(xs.min()) - INK_BORDER)
-    y0 = max(0, int(ys.min()) - INK_BORDER)
-    x1 = min(normalized.shape[1], int(xs.max()) + 1 + INK_BORDER)
-    y1 = min(normalized.shape[0], int(ys.max()) + 1 + INK_BORDER)
-    cropped = normalized[y0:y1, x0:x1].astype(np.float32, copy=True)
-    if cropped.size == 0:
+    x0 = int(xs.min())
+    x1 = int(xs.max()) + 1
+    y0 = int(ys.min())
+    y1 = int(ys.max()) + 1
+    rect = np.clip(data[y0:y1, x0:x1], 0.0, 255.0).astype(np.uint8)
+    if rect.size == 0:
         return None
-    return cropped
+
+    height, width = rect.shape
+    padded_width = _pad_up(width, PAD_DIVISOR)
+    padded_height = _pad_up(height, PAD_DIVISOR)
+    padded = Image.new("L", (padded_width, padded_height), 255)
+    padded.paste(Image.fromarray(rect, mode="L"), (0, 0))
+    return padded
+
+
+def _minmax_size(image: Image.Image) -> Image.Image:
+    width, height = image.size
+    ratios = [
+        width / MAX_MODEL_WIDTH,
+        height / MAX_MODEL_HEIGHT,
+    ]
+    maximum_ratio = max(ratios)
+    if maximum_ratio > 1.0:
+        width = max(1, int(width // maximum_ratio))
+        height = max(1, int(height // maximum_ratio))
+        image = image.resize((width, height), Image.Resampling.BILINEAR)
+
+    target_width = max(image.size[0], MIN_MODEL_WIDTH)
+    target_height = max(image.size[1], MIN_MODEL_HEIGHT)
+    if (target_width, target_height) != image.size:
+        padded = Image.new("L", (target_width, target_height), 255)
+        padded.paste(image, (0, 0))
+        image = padded
+    return image
+
+
+def _initial_expression_image(rgb: np.ndarray) -> Image.Image | None:
+    padded = _pad_expression(Image.fromarray(rgb, mode="RGB"))
+    if padded is None:
+        return None
+    return _minmax_size(padded).convert("RGB")
+
+
+def _preprocess_iteration(
+    input_image: Image.Image,
+    ratio: float,
+    width: int,
+    height: int,
+) -> tuple[np.ndarray, int]:
+    if (
+        not math.isfinite(ratio)
+        or ratio <= 0
+        or width < 1
+        or height < 1
+        or width > MAX_MODEL_WIDTH * 4
+        or height > MAX_MODEL_HEIGHT * 4
+    ):
+        raise RuntimeError("vision resize request is outside bounded dimensions")
+
+    resampling = (
+        Image.Resampling.BILINEAR
+        if ratio > 1.0
+        else Image.Resampling.LANCZOS
+    )
+    resized = input_image.resize((width, height), resampling)
+    bounded = _minmax_size(resized)
+    padded = _pad_expression(bounded)
+    if padded is None:
+        raise RuntimeError("vision preprocessing lost all expression ink")
+    padded = _minmax_size(padded)
+
+    if (
+        padded.size[0] > MAX_MODEL_WIDTH
+        or padded.size[1] > MAX_MODEL_HEIGHT
+        or padded.size[0] % PAD_DIVISOR != 0
+        or padded.size[1] % PAD_DIVISOR != 0
+    ):
+        raise RuntimeError("vision preprocessing exceeded model bounds")
+
+    gray = np.asarray(padded.convert("L"), dtype=np.float32)
+    normalized = (gray / 255.0 - NORM_MEAN) / NORM_STD
+    tensor = normalized[None, None, :, :].astype(np.float32, copy=False)
+    return tensor, padded.size[0]
 
 
 def _pad_up(value: int, divisor: int) -> int:
     return ((value + divisor - 1) // divisor) * divisor
-
-
-def _render_tensor(gray: np.ndarray, width: int, height: int) -> np.ndarray:
-    width = min(MAX_MODEL_WIDTH, max(1, width))
-    height = min(MAX_MODEL_HEIGHT, max(1, height))
-    resized = _resize_bilinear(gray, height, width)
-    padded_width = _pad_up(max(width, MIN_MODEL_WIDTH), PAD_DIVISOR)
-    padded_height = _pad_up(max(height, MIN_MODEL_HEIGHT), PAD_DIVISOR)
-    if padded_width > MAX_MODEL_WIDTH or padded_height > MAX_MODEL_HEIGHT:
-        raise RuntimeError("vision preprocessing exceeded model bounds")
-    white = (1.0 - NORM_MEAN) / NORM_STD
-    tensor = np.full((1, 1, padded_height, padded_width), white, dtype=np.float32)
-    tensor[0, 0, :height, :width] = (resized / 255.0 - NORM_MEAN) / NORM_STD
-    return tensor
-
-
-def _resize_bilinear(image: np.ndarray, target_h: int, target_w: int) -> np.ndarray:
-    source_h, source_w = image.shape
-    if source_h == target_h and source_w == target_w:
-        return image.astype(np.float32, copy=True)
-    ys = np.linspace(0.0, max(0, source_h - 1), target_h, dtype=np.float32)
-    xs = np.linspace(0.0, max(0, source_w - 1), target_w, dtype=np.float32)
-    y0 = np.floor(ys).astype(np.int32)
-    x0 = np.floor(xs).astype(np.int32)
-    y1 = np.minimum(y0 + 1, source_h - 1)
-    x1 = np.minimum(x0 + 1, source_w - 1)
-    wy = (ys - y0).reshape(-1, 1)
-    wx = (xs - x0).reshape(1, -1)
-    top = image[y0][:, x0] * (1.0 - wx) + image[y0][:, x1] * wx
-    bottom = image[y1][:, x0] * (1.0 - wx) + image[y1][:, x1] * wx
-    return (top * (1.0 - wy) + bottom * wy).astype(np.float32)
 
 
 def _decode_png(data: bytes) -> np.ndarray:
