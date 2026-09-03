@@ -43,6 +43,14 @@ body, html {
   overflow: hidden;
 }
 
+.interview-app-container--backgrounded {
+  position: fixed !important;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
+  overflow: hidden;
+}
+
 .app-header {
   background-color: #ffffff;
   border-bottom: 1px solid var(--color-slate-200);
@@ -466,15 +474,15 @@ body {
 }
 
 .left-panel {
-  width: 44% !important;
-  min-width: 420px;
+  width: 40% !important;
+  min-width: 400px;
   border-right: 1px solid var(--border-subtle) !important;
   background: var(--surface-panel) !important;
 }
 
 .right-panel {
-  width: 56% !important;
-  min-width: 520px;
+  width: 60% !important;
+  min-width: 560px;
   background: var(--surface-app) !important;
 }
 
@@ -511,8 +519,8 @@ body {
 .problem-card-container .problem-header h2 {
   margin-top: 0 !important;
   color: var(--text-primary) !important;
-  font: 650 20px/1.08 var(--font-display) !important;
-  letter-spacing: -0.035em;
+  font: 660 23px/1.08 var(--font-display) !important;
+  letter-spacing: -0.04em;
 }
 
 .problem-card-container .problem-statement {
@@ -522,8 +530,8 @@ body {
   border-radius: 0 !important;
   background: transparent !important;
   color: var(--text-primary) !important;
-  font-size: 12px !important;
-  line-height: 1.65 !important;
+  font-size: 13px !important;
+  line-height: 1.68 !important;
 }
 
 .problem-card-container .given-information {
@@ -547,6 +555,52 @@ body {
   color: var(--text-secondary) !important;
   font-size: 9.5px !important;
   line-height: 1.5;
+}
+
+.interview-notice {
+  display: flex;
+  min-height: 32px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  font: 540 8.5px/1.35 var(--font-ui);
+}
+
+.interview-notice__dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  background: var(--danger);
+}
+
+.interview-notice__message {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.interview-notice__dismiss {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: 500 13px/1 var(--font-ui);
+}
+
+.interview-notice__dismiss:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
 }
 
 /* Main left stack: less card padding, transcript gets the visual center. */
@@ -602,22 +656,86 @@ body {
   box-shadow: none !important;
 }
 
-.whiteboard-toolbar {
-  min-height: 32px;
-  padding: 0 9px !important;
-  border-bottom: 1px solid var(--border-subtle) !important;
-  background: var(--surface-raised) !important;
-  color: var(--text-muted) !important;
-  font-size: 8px !important;
+.whiteboard-wrapper {
+  position: relative;
+  isolation: isolate;
 }
 
-.whiteboard-toolbar button {
-  min-height: 24px;
-  padding: 0 7px !important;
-  border: 1px solid var(--border-subtle) !important;
+.whiteboard-toolbar {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 30;
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 5px;
+  padding: 4px !important;
+  border: 1px solid var(--border-default) !important;
+  border-radius: 10px;
   background: var(--surface-panel) !important;
+  box-shadow: 0 6px 18px color-mix(in srgb, #000 12%, transparent);
   color: var(--text-secondary) !important;
-  font-size: 7.5px !important;
+}
+
+.whiteboard-toolbar__status {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border-radius: 7px;
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  font: 580 8px/1 var(--font-ui);
+  white-space: nowrap;
+}
+
+.whiteboard-toolbar__status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.whiteboard-toolbar__status[data-sync="SYNCED"] {
+  color: var(--success);
+}
+
+.whiteboard-toolbar__status[data-sync="SYNCED"] .whiteboard-toolbar__status-dot {
+  background: var(--success);
+}
+
+.whiteboard-toolbar__status[data-sync="PENDING"] {
+  color: var(--info);
+}
+
+.whiteboard-toolbar__status[data-sync="PENDING"] .whiteboard-toolbar__status-dot {
+  background: var(--info);
+}
+
+.whiteboard-toolbar__status[data-sync="UNSYNCHRONIZED"] {
+  color: var(--danger);
+}
+
+.whiteboard-toolbar__status[data-sync="UNSYNCHRONIZED"] .whiteboard-toolbar__status-dot {
+  background: var(--danger);
+}
+
+.whiteboard-toolbar__action {
+  min-height: 24px;
+  padding: 0 8px !important;
+  border: 0 !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+  color: var(--text-muted) !important;
+  cursor: pointer;
+  font: 560 7.5px/1 var(--font-ui) !important;
+}
+
+.whiteboard-toolbar__action:hover {
+  background: var(--surface-hover) !important;
+  color: var(--text-secondary) !important;
 }
 
 /* Existing formulation context gets the same surface language until #86 lands. */
@@ -665,11 +783,11 @@ summary:focus-visible {
 
 @media (max-width: 1040px) {
   .left-panel {
-    min-width: 390px;
+    min-width: 380px;
   }
 
   .right-panel {
-    min-width: 470px;
+    min-width: 520px;
   }
 
   .app-header > div:first-child p {
