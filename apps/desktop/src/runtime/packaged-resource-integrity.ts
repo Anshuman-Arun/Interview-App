@@ -1,5 +1,5 @@
 export const PACKAGED_LOCAL_MODEL_WORKER_SHA256 =
-  "ef1f414dfcbdcc60e72efd1b2be7cedfca3956f10e707254f439afde465e9bde";
+  "b9393beeb57b7eb38ee5ff46f5d018d5608bffbe2a13af25b036bb6f69a2a167";
 
 export const PACKAGED_LOCAL_VISION_RUNTIME_SHA256 =
   "d141f88e4831bfe962da9ac518aa241fdc65cc1c7b415882c00eecae5fd06be0";
