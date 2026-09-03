@@ -191,14 +191,14 @@ describe("Antigravity zero-turn runtime preflight", () => {
     (_label, overrides) => {
       expect(() => assertAntigravityCliZeroTurnPreflightResult(
         executionResult(zeroTurnPreflightStream(overrides), { exitCode: 2 })
-      )).toThrowError(AntigravityCliAdapterError);
+      )).toThrow(AntigravityCliAdapterError);
     }
   );
 
   it("requires the documented control-message exit code", () => {
     expect(() => assertAntigravityCliZeroTurnPreflightResult(
       executionResult(zeroTurnPreflightStream(), { exitCode: 1 })
-    )).toThrowError(AntigravityCliAdapterError);
+    )).toThrow(AntigravityCliAdapterError);
   });
 });
 
