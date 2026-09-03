@@ -32,6 +32,7 @@ const MAX_PROVIDER_FORMAL_STATEMENT_CHARACTERS = Math.min(
   16_384
 );
 const MAX_STREAM_EVENTS = 32;
+const MAX_PRODUCTION_FORMAL_INTERPRETATION_CANDIDATES = 1;
 const INIT_TOOLS_FIELD = "tools" as const;
 
 export interface FormalInterpretationPublicProblemContext {
@@ -337,7 +338,7 @@ function createFormalInterpretationInput(
       "Return only the requested JSON object and no surrounding prose.",
       "Every candidate must represent only an exact span of the current source text.",
       "Do not cite prior turns or invent premises.",
-      "Prefer atomic independently verifiable claims; never manufacture a claim just to avoid abstaining.",
+      "Return at most one atomic independently verifiable claim; if more than one distinct interpretation is needed, abstain.",
       "confidence is confidence in interpretation fidelity, never confidence in mathematical truth.",
       "Use confidence 1 only when the formal object exactly represents the candidate's intended claim; otherwise abstain.",
       "formalStatement must itself be a JSON string matching the selected verifier protocol grammar.",
@@ -465,7 +466,7 @@ function createInterpretationResultJsonSchema(
       },
       candidates: {
         type: "array",
-        maxItems: MAX_FORMAL_INTERPRETATION_CANDIDATES,
+        maxItems: MAX_PRODUCTION_FORMAL_INTERPRETATION_CANDIDATES,
         items: {
           type: "object",
           additionalProperties: false,
@@ -795,7 +796,7 @@ function sameJson(left: unknown, right: unknown): boolean {
 function providerResultWithinBounds(
   result: InterpretationProviderResult
 ): boolean {
-  if (result.candidates.length > MAX_FORMAL_INTERPRETATION_CANDIDATES) return false;
+  if (result.candidates.length > MAX_PRODUCTION_FORMAL_INTERPRETATION_CANDIDATES) return false;
   let totalStatementCharacters = 0;
   for (const candidate of result.candidates) {
     totalStatementCharacters += candidate.formalStatement.length;
