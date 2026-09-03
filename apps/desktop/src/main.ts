@@ -917,3 +917,16 @@ function shutdownDesktop(): Promise<void> {
     if (currentFrontendServer !== undefined) {
       try {
         await currentFrontendServer.stop();
+        if (frontendServer === currentFrontendServer) frontendServer = undefined;
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+
+    frontendUrl = undefined;
+    if (failures.length > 0) {
+      throw new AggregateError(failures, "Desktop shutdown failed");
+    }
+  })();
+  return shutdownPromise;
+}
