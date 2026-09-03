@@ -146,7 +146,6 @@ jobs:
     timeout-minutes: 25
     env:
       CI: true
-      INTERVIEW_CI_PROVIDER_MODE: mock-only
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
     steps:
       - name: Checkout
