@@ -6,6 +6,7 @@ import { isSessionIdAddressableForRead } from "../session-read-client.js";
 
 export type ProductRoute =
   | { readonly page: "home" }
+  | { readonly page: "new" }
   | { readonly page: "interview" }
   | { readonly page: "sessions" }
   | { readonly page: "settings" }
@@ -89,6 +90,8 @@ export function productRouteToHash(route: ProductRoute): string {
   switch (route.page) {
     case "home":
       return "#/";
+    case "new":
+      return "#/new";
     case "interview":
       return "#/interview";
     case "sessions":
@@ -121,7 +124,9 @@ export function routeForActiveInterview(
 ): ProductRoute {
   if (!hasActiveInterview) return route;
   if (isPaused) {
-    return route.page === "home" ? route : { page: "home" };
+    return route.page === "home" || route.page === "new"
+      ? route
+      : { page: "home" };
   }
   return route.page === "interview" ? route : { page: "interview" };
 }
