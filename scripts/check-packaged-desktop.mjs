@@ -54,10 +54,10 @@ async function walk(directory, relative = "") {
 async function inspectAsar() {
   const asarPath = path.join(RESOURCES, "app.asar");
   await requireRegularFile(asarPath, "app.asar");
-  const command = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+  const command = process.platform === "win32" ? "npx.cmd" : "npx";
   const result = spawnSync(
     command,
-    ["dlx", "@electron/asar@4.3.0", "list", asarPath],
+    ["--yes", "@electron/asar@4.3.0", "list", asarPath],
     {
       cwd: ROOT,
       encoding: "utf8",
@@ -79,6 +79,17 @@ async function inspectAsar() {
     throw new Error("compiled Electron main entry is absent from app.asar");
   }
 
+  const allowedTopLevels = new Set(["package.json", "dist", "node_modules"]);
+  const unexpectedTopLevels = entries.filter((entry) => {
+    const top = entry.split("/", 1)[0];
+    return top !== undefined && !allowedTopLevels.has(top);
+  });
+  if (unexpectedTopLevels.length > 0) {
+    throw new Error(
+      `unexpected app.asar top-level entries: ${unexpectedTopLevels.slice(0, 20).join(", ")}`
+    );
+  }
+
   const prohibited = entries.filter((entry) =>
     entry === "tests"
     || entry.startsWith("tests/")
@@ -89,6 +100,12 @@ async function inspectAsar() {
     || entry.endsWith(".db")
     || entry.endsWith(".log")
     || /(^|\/)\.env(?:\.|$)/iu.test(entry)
+    || entry.startsWith("node_modules/electron/")
+    || entry.startsWith("node_modules/vitest/")
+    || entry.startsWith("node_modules/typescript/")
+    || entry.startsWith("node_modules/eslint/")
+    || entry.startsWith("node_modules/tsx/")
+    || entry.startsWith("node_modules/@types/")
     || (
       entry.startsWith("dist/desktop-runtime/")
       && (entry.endsWith(".ts") || entry.endsWith(".map"))
@@ -128,6 +145,8 @@ async function main() {
     || /(^|\/)test_fixture_worker\.py$/iu.test(entry)
     || /(^|\/)\.env(?:\.|$)/iu.test(entry)
     || /\.(?:sqlite3?|db|log)$/iu.test(entry)
+    || entry.endsWith(".map")
+    || entry.endsWith(".ts")
   );
   if (prohibitedExternal.length > 0) {
     throw new Error(
