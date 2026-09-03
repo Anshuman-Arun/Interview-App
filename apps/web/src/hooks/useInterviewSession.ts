@@ -1151,7 +1151,10 @@ export function useInterviewSession(
         if (sessionTransitionEpochRef.current !== transitionEpoch) return null;
         const response = context.configuration.mode === "OXFORD_MATHEMATICS"
           ? await client.resumeSession(targetSessionId)
-          : summary;
+          : {
+              ...summary,
+              status: "ACTIVE" as const
+            };
         if (sessionTransitionEpochRef.current !== transitionEpoch) return null;
         if (sessionId !== targetSessionId) {
           pendingSubmissionsRef.current.clear();
