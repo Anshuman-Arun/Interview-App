@@ -9,6 +9,7 @@ files:
   - package.json
   - dist/desktop-runtime/**/*
   - "!dist/desktop-runtime/**/*.map"
+  - "!node_modules/@types/**"
 
 extraResources:
   - from: dist/apps/web
