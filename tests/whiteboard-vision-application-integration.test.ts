@@ -29,6 +29,10 @@ import {
 import {
   WhiteboardVisionCoordinator
 } from "../apps/server/src/whiteboard-vision-coordinator.js";
+import {
+  ManagedLocalVisionBackend,
+  type LocalVisionWorkerClient
+} from "../apps/desktop/src/runtime/vision-backend.js";
 
 function graphShape(revision = 1, x = 0): AuthoritativeStudentShape {
   return {
@@ -1381,6 +1385,114 @@ describe("application whiteboard vision integration", () => {
       harness.store.close();
     }
   });
+
+  it("runs the production local backend adapter through observation admission and allowed evidence", async () => {
+    const harness = await startedBoardSession();
+    const backend = new ManagedLocalVisionBackend(localVisionClient(async () => ({
+      observationKind: "DIAGRAM_RELATION",
+      interpretation: "Visible bounded diagram relation.",
+      confidenceClass: "HIGH"
+    })));
+    const interpreter = new RuleBasedVisionEvidenceInterpreter([{
+      observationKind: "DIAGRAM_RELATION",
+      subject: { kind: "MILESTONE", milestoneId: "model-relations" },
+      dimension: "PROGRESS",
+      proposedValue: "PROGRESSING",
+      minConfidence: 0.7
+    }]);
+    const coordinator = new WhiteboardVisionCoordinator({
+      sessions: harness.sessions,
+      backend,
+      evidenceInterpreter: interpreter
+    });
+
+    try {
+      const request = upload(harness.sessionId);
+      const result = await coordinator.process(request);
+      expect(result).toEqual({
+        protocolVersion: 1,
+        requestId: request.requestId,
+        sessionId: harness.sessionId,
+        status: "ACCEPTED",
+        observationCount: 1,
+        evidenceCommittedCount: 1
+      });
+
+      const state = harness.writer.getState();
+      const persisted = state.visionRequests[request.requestId];
+      expect(persisted?.status).toBe("ACCEPTED");
+      expect(persisted?.acceptedObservation).toMatchObject({
+        sessionId: harness.sessionId,
+        sourceBoardRevision: BoardRevisionSchema.parse(1),
+        observationKind: "DIAGRAM_RELATION",
+        backend: {
+          backendId: "desktop-local-vision",
+          providerId: "local-offline",
+          modelId: "rapid-latex-ocr-hybrid"
+        }
+      });
+      const key = evidenceKeyToString({
+        problemId: sixPeopleProblem.id,
+        subject: { kind: "MILESTONE", milestoneId: "model-relations" },
+        dimension: "PROGRESS"
+      });
+      expect(state.studentEvidence[key]).toMatchObject({
+        value: "PROGRESSING",
+        inferenceConfidence: 0.75
+      });
+    } finally {
+      coordinator.shutdown();
+      harness.store.close();
+    }
+  });
+
+  it("rejects a late production-adapter result after the bound shape changes", async () => {
+    const harness = await startedBoardSession();
+    const started = deferred<undefined>();
+    const release = deferred<undefined>();
+    const backend = new ManagedLocalVisionBackend(localVisionClient(async () => {
+      started.resolve(undefined);
+      await release.promise;
+      return {
+        observationKind: "EQUATION",
+        interpretation: "Visible expression: x^2 + y^2 = 1",
+        confidenceClass: "HIGH"
+      };
+    }));
+    const coordinator = new WhiteboardVisionCoordinator({
+      sessions: harness.sessions,
+      backend
+    });
+
+    try {
+      const request = upload(harness.sessionId);
+      const pending = coordinator.process(request);
+      await started.promise;
+
+      await harness.turns.commitBoardMutation({
+        baseBoardRevision: BoardRevisionSchema.parse(1),
+        added: [],
+        updated: [{
+          beforeRevision: 1,
+          shape: graphShape(2, 30)
+        }],
+        deleted: []
+      });
+      expect(coordinator.supersedeStaleRequests(harness.sessionId)).toBe(1);
+
+      release.resolve(undefined);
+      const result = await pending;
+      expect(result.status).toBe("REJECTED");
+      expect(result.reason).toMatch(/STALE_|FRESHNESS_|REQUEST_CANCELLED/u);
+      expect(result.evidenceCommittedCount).toBe(0);
+      expect(harness.writer.getState().visionRequests[request.requestId])
+        .toMatchObject({ status: "DISCARDED" });
+      expect(Object.keys(harness.writer.getState().studentEvidence)).toHaveLength(0);
+    } finally {
+      coordinator.shutdown();
+      harness.store.close();
+    }
+  });
 });
 
 interface Deferred<T> {
@@ -1394,4 +1506,15 @@ function deferred<T>(): Deferred<T> {
     resolve = resolvePromise;
   });
   return { promise, resolve };
+}
+
+function localVisionClient(
+  postJson: (pathname: string, body: unknown, options: unknown) => Promise<unknown>
+): LocalVisionWorkerClient {
+  return {
+    postJson,
+    workerInstanceIdentity: () => "fixture:vision:ready",
+    markHealthy: () => undefined,
+    recycleAfterUncertainRequest: async () => undefined
+  } as unknown as LocalVisionWorkerClient;
 }
