@@ -438,7 +438,7 @@ function isQuantSessionState(state: Readonly<ReturnType<SessionWriter["getState"
 
 
 function inferUnmarkedConfigurationSource(
-  configuration: SessionEvent["payload"] extends never ? never : unknown
+  configuration: unknown
 ): SessionConfigurationSource {
   if (configuration === undefined || configuration === null || typeof configuration !== "object") {
     return "LEGACY_COMPATIBILITY";
