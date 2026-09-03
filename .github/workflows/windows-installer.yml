@@ -83,6 +83,28 @@ jobs:
         if: github.event_name != 'pull_request' || steps.current_head.outputs.current == 'true'
         run: pnpm test:package:win
 
+      - name: Validate PowerShell release scripts
+        if: github.event_name != 'pull_request' || steps.current_head.outputs.current == 'true'
+        shell: pwsh
+        run: |
+          $files = @(
+            "scripts/run-packaged-desktop-smoke.ps1",
+            "scripts/test-windows-installer.ps1"
+          )
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $file).Path,
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $messages = ($errors | ForEach-Object { $_.Message }) -join "; "
+              throw "PowerShell syntax validation failed for ${file}: ${messages}"
+            }
+          }
+
       - name: Build synthetic prior-version installer
         if: github.event_name != 'pull_request' || steps.current_head.outputs.current == 'true'
         shell: pwsh
