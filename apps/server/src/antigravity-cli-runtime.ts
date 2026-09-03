@@ -72,6 +72,9 @@ export interface ApplicationProviderAdapterRuntimeSource {
   readonly resolveRuntime: (
     selection: ProviderSelectionReference
   ) => unknown;
+  readonly verifyRuntimeReadiness?: (
+    selection: ProviderSelectionReference
+  ) => Promise<void>;
   readonly drain: () => Promise<void>;
 }
 
@@ -196,6 +199,18 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
   // trusted-host opt-in is required for this provider.
   const runtime = Object.freeze({ executor });
   return Object.freeze({
+    async verifyRuntimeReadiness(
+      selection: ProviderSelectionReference
+    ): Promise<void> {
+      if (
+        selection.providerId !== ANTIGRAVITY_CLI_PROVIDER_ID
+        || selection.modelId !== ANTIGRAVITY_CLI_MODEL_ID
+      ) {
+        return;
+      }
+      await ensureSupportedVersion(undefined);
+      await ensureSupportedProfile(undefined);
+    },
     resolveRuntime(selection: ProviderSelectionReference): unknown {
       if (
         selection.providerId === ANTIGRAVITY_CLI_PROVIDER_ID

@@ -51,6 +51,105 @@ const REMOTE_NO_METERED_POLICY = Object.freeze({
   billingVerificationMaxAgeMs: 60_000
 });
 
+describe("provider launch runtime readiness", () => {
+  it("fails launch availability closed when an admitted runtime readiness probe fails", async () => {
+    let readinessCalls = 0;
+    let runtimeCalls = 0;
+    const resolver = new ProviderRuntimeResolver({
+      configurationSource: {
+        resolveConfiguration: () => ({ enabled: true })
+      },
+      policySource: {
+        resolvePolicy: () => ({
+          allowMeteredUsage: true,
+          maximumDataUse: "REMOTE_MAY_BE_USED_FOR_IMPROVEMENT",
+          billingVerificationMaxAgeMs: 60_000
+        })
+      },
+      adapterRuntimeSource: {
+        resolveRuntime() {
+          runtimeCalls += 1;
+          return undefined;
+        },
+        verifyRuntimeReadiness() {
+          readinessCalls += 1;
+          throw new Error("runtime not ready");
+        }
+      }
+    });
+
+    await expect(resolver.evaluateLaunchOption(ANTIGRAVITY_SELECTION))
+      .resolves.toMatchObject({
+        availability: "UNAVAILABLE",
+        reason: "RUNTIME_DEPENDENCY_UNAVAILABLE"
+      });
+    expect(readinessCalls).toBe(1);
+    expect(runtimeCalls).toBe(0);
+  });
+
+  it("checks runtime readiness before advertising an admitted provider as available", async () => {
+    let readinessCalls = 0;
+    let runtimeCalls = 0;
+    const resolver = new ProviderRuntimeResolver({
+      configurationSource: {
+        resolveConfiguration: () => ({ enabled: true })
+      },
+      policySource: {
+        resolvePolicy: () => ({
+          allowMeteredUsage: true,
+          maximumDataUse: "REMOTE_MAY_BE_USED_FOR_IMPROVEMENT",
+          billingVerificationMaxAgeMs: 60_000
+        })
+      },
+      adapterRuntimeSource: {
+        verifyRuntimeReadiness() {
+          readinessCalls += 1;
+        },
+        resolveRuntime() {
+          runtimeCalls += 1;
+          return {
+            executor: {
+              async execute() {
+                throw new Error("launch metadata must not execute an interview turn");
+              }
+            }
+          };
+        }
+      }
+    });
+
+    await expect(resolver.evaluateLaunchOption(ANTIGRAVITY_SELECTION))
+      .resolves.toMatchObject({ availability: "AVAILABLE" });
+    expect(readinessCalls).toBe(1);
+    expect(runtimeCalls).toBe(1);
+  });
+
+  it("does not probe runtime readiness when static policy already denies the provider", async () => {
+    let readinessCalls = 0;
+    const resolver = new ProviderRuntimeResolver({
+      configurationSource: {
+        resolveConfiguration: () => ({ enabled: true })
+      },
+      adapterRuntimeSource: {
+        resolveRuntime() {
+          throw new Error("must not resolve denied runtime");
+        },
+        verifyRuntimeReadiness() {
+          readinessCalls += 1;
+          throw new Error("must not probe denied runtime");
+        }
+      }
+    });
+
+    await expect(resolver.evaluateLaunchOption(ANTIGRAVITY_SELECTION))
+      .resolves.toMatchObject({
+        availability: "UNAVAILABLE",
+        reason: "POLICY_DENIED"
+      });
+    expect(readinessCalls).toBe(0);
+  });
+});
+
 describe("production provider runtime resolution", () => {
   it("rejects ambiguous composition instead of accepting an orchestrator plus provider resolver", async () => {
     const store = new SqliteEventStore(":memory:");

@@ -58,6 +58,9 @@ export interface ProviderAdapterRuntimeSource {
   readonly resolveRuntime: (
     selection: ProviderSelectionReference
   ) => unknown;
+  readonly verifyRuntimeReadiness?: (
+    selection: ProviderSelectionReference
+  ) => unknown;
   readonly drain?: () => unknown;
 }
 
@@ -114,6 +117,7 @@ export class ProviderRuntimeResolver {
   private readonly registry: ProviderRegistry;
   private readonly configurationOperation: CapturedRuntimeSourceOperation | undefined;
   private readonly adapterRuntimeOperation: CapturedRuntimeSourceOperation | undefined;
+  private readonly adapterRuntimeReadinessOperation: CapturedRuntimeSourceOperation | undefined;
   private readonly adapterRuntimeDrainOperation: CapturedRuntimeDrainOperation | undefined;
   private readonly secretResolver: ProviderSecretResolver | undefined;
   private readonly policyOperation: CapturedRuntimeSourceOperation | undefined;
@@ -131,6 +135,10 @@ export class ProviderRuntimeResolver {
       adapterRuntimeSource,
       "resolveRuntime",
       "RUNTIME_DEPENDENCY_FAILED"
+    );
+    this.adapterRuntimeReadinessOperation = captureOptionalRuntimeSourceOperation(
+      adapterRuntimeSource,
+      "verifyRuntimeReadiness"
     );
     this.adapterRuntimeDrainOperation = captureOptionalRuntimeDrainOperation(
       adapterRuntimeSource
@@ -247,6 +255,21 @@ export class ProviderRuntimeResolver {
         availability: "UNAVAILABLE",
         reason: "POLICY_DENIED"
       });
+    }
+
+    if (this.adapterRuntimeReadinessOperation !== undefined) {
+      try {
+        await invokeRuntimeSource(
+          this.adapterRuntimeReadinessOperation,
+          selection
+        );
+      } catch {
+        return ProviderLaunchOptionSchema.parse({
+          ...base,
+          availability: "UNAVAILABLE",
+          reason: "RUNTIME_DEPENDENCY_UNAVAILABLE"
+        });
+      }
     }
 
     if (!(
@@ -542,6 +565,51 @@ function captureRuntimeSourceOperation(
   }
 
   throw new ProviderRuntimeResolutionError(errorCode);
+}
+
+function captureOptionalRuntimeSourceOperation(
+  source: object,
+  key: string
+): CapturedRuntimeSourceOperation | undefined {
+  if (utilTypes.isProxy(source)) {
+    throw new ProviderRuntimeResolutionError("RUNTIME_DEPENDENCY_FAILED");
+  }
+
+  let current: object | null = source;
+  for (let depth = 0; depth < 16 && current !== null; depth += 1) {
+    if (current === Object.prototype) break;
+    if (utilTypes.isProxy(current)) {
+      throw new ProviderRuntimeResolutionError("RUNTIME_DEPENDENCY_FAILED");
+    }
+    let descriptor: PropertyDescriptor | undefined;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(current, key);
+    } catch {
+      throw new ProviderRuntimeResolutionError("RUNTIME_DEPENDENCY_FAILED");
+    }
+    if (descriptor !== undefined) {
+      if (!("value" in descriptor) || typeof descriptor.value !== "function") {
+        throw new ProviderRuntimeResolutionError("RUNTIME_DEPENDENCY_FAILED");
+      }
+      return Object.freeze({
+        receiver: source,
+        operation: descriptor.value as RuntimeSourceOperation
+      });
+    }
+    try {
+      const prototypeCandidate: unknown = Object.getPrototypeOf(current);
+      if (prototypeCandidate !== null && typeof prototypeCandidate !== "object") {
+        throw new ProviderRuntimeResolutionError("RUNTIME_DEPENDENCY_FAILED");
+      }
+      current = prototypeCandidate;
+    } catch {
+      throw new ProviderRuntimeResolutionError("RUNTIME_DEPENDENCY_FAILED");
+    }
+  }
+  if (current !== null && current !== Object.prototype) {
+    throw new ProviderRuntimeResolutionError("RUNTIME_DEPENDENCY_FAILED");
+  }
+  return undefined;
 }
 
 function captureOptionalRuntimeDrainOperation(
