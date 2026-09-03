@@ -10,6 +10,7 @@ import {
   InterviewCatalogResponseSchema,
   InterviewSessionConfigurationSchema,
   InterviewSessionContextResponseSchema,
+  ProviderOptionsResponseSchema,
   ProtocolErrorResponseSchema,
   QuantResearchStateResponseSchema,
   QuantTradingStateResponseSchema,
@@ -25,6 +26,7 @@ import {
   type NormalizedBoardMutation,
   type InterviewCatalogEntry,
   type InterviewSessionConfiguration,
+  type ProviderLaunchOption,
   type ProtocolErrorResponse,
   type ProtocolSuccessResponse,
   type QuantResearchCandidateAction,
@@ -38,6 +40,7 @@ type SessionStartedResponse = z.infer<typeof SessionStartedResponseSchema>;
 type ConfiguredSessionStartedResponse = z.infer<typeof ConfiguredSessionStartedResponseSchema>;
 type InterviewSessionContextResponse = z.infer<typeof InterviewSessionContextResponseSchema>;
 type InterviewCatalogResponse = z.infer<typeof InterviewCatalogResponseSchema>;
+type ProviderOptionsResponse = z.infer<typeof ProviderOptionsResponseSchema>;
 type SessionResumedResponse = z.infer<typeof SessionResumedResponseSchema>;
 type SessionCompletedResponse = z.infer<typeof SessionCompletedResponseSchema>;
 type SessionArchivedResponse = z.infer<typeof SessionArchivedResponseSchema>;
@@ -104,9 +107,10 @@ export class BrowserCommandProtocolError extends Error {
   public constructor(
     public readonly status: number,
     code: ProtocolErrorResponse["error"]["code"],
-    public readonly requestId: RequestId
+    public readonly requestId: RequestId,
+    public readonly serverMessage?: string
   ) {
-    super(`Command rejected with protocol error ${code}`);
+    super(serverMessage ?? `Command rejected with protocol error ${code}`);
     this.name = "BrowserCommandProtocolError";
     this.code = code;
   }
@@ -333,6 +337,23 @@ export class BrowserCommandClient {
       options.signal
     );
     return result.entries;
+  }
+
+  public async listProviderOptions(
+    options: BrowserCommandRequestOptions = {}
+  ): Promise<readonly ProviderLaunchOption[]> {
+    const requestId = this.resolveRequestId(options);
+    const command = ClientCommandSchema.parse({
+      protocolVersion: 1,
+      type: "LIST_PROVIDER_OPTIONS",
+      requestId
+    });
+    const result: ProviderOptionsResponse = await this.send(
+      command,
+      (value) => ProviderOptionsResponseSchema.parse(value),
+      options.signal
+    );
+    return result.options;
   }
 
   public async listSessions(
@@ -694,7 +715,8 @@ export class BrowserCommandClient {
       throw new BrowserCommandProtocolError(
         response.status,
         protocolError.error.code,
-        command.requestId
+        command.requestId,
+        protocolError.error.message
       );
     }
 
