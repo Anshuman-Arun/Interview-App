@@ -257,8 +257,7 @@ export function createAntigravityCliReasoningProvider(
             "--agent",
             ANTIGRAVITY_CLI_AGENT_ID,
             "--print-timeout",
-            "2m",
-            "--sandbox"
+            "2m"
           ],
           stdin,
           timeoutMs: EXECUTION_TIMEOUT_MS,
