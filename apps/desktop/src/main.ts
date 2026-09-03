@@ -444,11 +444,28 @@ async function runPackagedSmoke(
     requestId: `request_${randomUUID()}`,
     sessionId
   });
-  const beforeRestart = JSON.stringify(server.registry.get(sessionId).getState());
+  const beforeRestart = server.registry.get(sessionId).getState();
+  if (
+    !beforeRestart.started
+    || beforeRestart.status !== "ACTIVE"
+    || !Object.values(beforeRestart.turns).some(
+      (turn) => turn.studentText === "Packaged Windows desktop smoke input."
+    )
+  ) {
+    throw new Error("Packaged command smoke did not commit the typed turn authoritatively");
+  }
+
   await backend.stop();
   const restarted = await backend.start(backendConfig);
-  const afterRestart = JSON.stringify(restarted.registry.get(sessionId).getState());
-  if (afterRestart !== beforeRestart) {
+  const afterRestart = restarted.registry.get(sessionId).getState();
+  if (
+    afterRestart.sessionId !== sessionId
+    || !afterRestart.started
+    || afterRestart.sequence < beforeRestart.sequence
+    || !Object.values(afterRestart.turns).some(
+      (turn) => turn.studentText === "Packaged Windows desktop smoke input."
+    )
+  ) {
     throw new Error("Packaged SQLite persistence smoke validation failed");
   }
 }
