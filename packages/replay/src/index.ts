@@ -19,4 +19,5 @@ export {
 export * from "./types.js";
 
 export * from "./read-api.js";
+export { assertReplayPrefixValidForRecovery } from "./recovery-validation.js";
 

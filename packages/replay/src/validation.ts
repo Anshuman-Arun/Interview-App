@@ -103,6 +103,10 @@ type RequiredFollowUp =
 const ALLOWED_SOURCES = {
   SESSION_STARTED: ["APPLICATION"],
   PROBLEM_PRESENTED: ["APPLICATION"],
+  QUANT_TRADING_SCENARIO_INITIALIZED: ["APPLICATION"],
+  QUANT_TRADING_ACTION_ACCEPTED: ["USER"],
+  QUANT_TRADING_ROUND_RESOLVED: ["APPLICATION"],
+  QUANT_TRADING_SCENARIO_COMPLETED: ["APPLICATION"],
   QUANT_RESEARCH_SCENARIO_INITIALIZED: ["APPLICATION"],
   QUANT_RESEARCH_ACTION_ACCEPTED: ["USER"],
   QUANT_RESEARCH_SCENARIO_COMPLETED: ["APPLICATION"],
@@ -152,6 +156,10 @@ const ALLOWED_SOURCES = {
 } as const satisfies Readonly<Record<EventType, readonly EventSource[]>>;
 
 const ACTIVE_SESSION_REQUIRED_EVENT_TYPE_VALUES = [
+  "QUANT_TRADING_SCENARIO_INITIALIZED",
+  "QUANT_TRADING_ACTION_ACCEPTED",
+  "QUANT_TRADING_ROUND_RESOLVED",
+  "QUANT_TRADING_SCENARIO_COMPLETED",
   "QUANT_RESEARCH_SCENARIO_INITIALIZED",
   "QUANT_RESEARCH_ACTION_ACCEPTED",
   "QUANT_RESEARCH_SCENARIO_COMPLETED",
@@ -227,6 +235,10 @@ const ACTIVE_SESSION_REQUIRED_EVENT_TYPES = new Set<EventType>(
 );
 
 const SPECIALIZED_REPLAY_EVENT_TYPES = new Set<EventType>([
+  "QUANT_TRADING_SCENARIO_INITIALIZED",
+  "QUANT_TRADING_ACTION_ACCEPTED",
+  "QUANT_TRADING_ROUND_RESOLVED",
+  "QUANT_TRADING_SCENARIO_COMPLETED",
   "QUANT_RESEARCH_SCENARIO_INITIALIZED",
   "QUANT_RESEARCH_ACTION_ACCEPTED",
   "QUANT_RESEARCH_SCENARIO_COMPLETED"
@@ -637,6 +649,31 @@ export function validateKnownReplayPrefix(
           assertBoundedIdentifier(event.payload.problemVersion);
           if (problemPresented) fail();
           problemPresented = true;
+          break;
+
+        case "QUANT_TRADING_SCENARIO_INITIALIZED":
+          if (
+            state.sequence !== 1
+            || previousEvent?.type !== "SESSION_STARTED"
+            || !sameCommandIdentity(previousEvent, event)
+          ) fail();
+          break;
+
+        case "QUANT_TRADING_ACTION_ACCEPTED":
+          break;
+
+        case "QUANT_TRADING_ROUND_RESOLVED":
+          if (
+            previousEvent?.type !== "QUANT_TRADING_ACTION_ACCEPTED"
+            || !sameCommandIdentity(previousEvent, event)
+          ) fail();
+          break;
+
+        case "QUANT_TRADING_SCENARIO_COMPLETED":
+          if (
+            previousEvent?.type !== "QUANT_TRADING_ROUND_RESOLVED"
+            || !sameCommandIdentity(previousEvent, event)
+          ) fail();
           break;
 
         case "QUANT_RESEARCH_SCENARIO_INITIALIZED":
@@ -1230,6 +1267,13 @@ export function validateKnownReplayPrefix(
         case "SESSION_COMPLETED":
           if (state.status !== "ACTIVE" || !terminalStateIsSettled(state)) fail();
           if (
+            state.quantTrading?.result !== undefined
+            && (
+              previousEvent?.type !== "QUANT_TRADING_SCENARIO_COMPLETED"
+              || !sameCommandIdentity(previousEvent, event)
+            )
+          ) fail();
+          if (
             state.quantResearch?.result !== undefined
             && (
               previousEvent?.type !== "QUANT_RESEARCH_SCENARIO_COMPLETED"
@@ -1242,6 +1286,15 @@ export function validateKnownReplayPrefix(
           if (
             (state.status !== "ACTIVE" && state.status !== "COMPLETED")
             || !terminalStateIsSettled(state)
+            || (
+              (
+                state.configuration?.mode === "QUANT_TRADING"
+                || state.configuration?.mode === "QUANT_RESEARCH"
+                || state.quantTrading !== undefined
+                || state.quantResearch !== undefined
+              )
+              && state.status !== "COMPLETED"
+            )
           ) fail();
           break;
 
@@ -1264,6 +1317,14 @@ export function validateKnownReplayPrefix(
         state.started
         && state.problem === undefined
         && state.configuration?.mode !== "QUANT_TRADING"
+      )
+      || (
+        state.configuration?.mode === "QUANT_TRADING"
+        && state.quantTrading === undefined
+      )
+      || (
+        state.configuration?.mode === "QUANT_RESEARCH"
+        && state.quantResearch === undefined
       )
       || pendingNext !== undefined
       || requiredFollowUps.length > 0
@@ -1288,9 +1349,17 @@ export function validateKnownReplayPrefix(
       && !terminalStateIsSettled(state)
     ) fail();
     if (
-      state.quantResearch?.result !== undefined
-      && state.status !== "COMPLETED"
-      && state.status !== "ARCHIVED"
+      state.quantTrading?.pendingAction !== undefined
+      || (
+        state.quantTrading?.result !== undefined
+        && state.status !== "COMPLETED"
+        && state.status !== "ARCHIVED"
+      )
+      || (
+        state.quantResearch?.result !== undefined
+        && state.status !== "COMPLETED"
+        && state.status !== "ARCHIVED"
+      )
     ) fail();
   }
 

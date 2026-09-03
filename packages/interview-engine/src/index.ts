@@ -22,4 +22,5 @@ export * from "./evaluation-model-seam.js";
 export * from "./session-evaluator.js";
 
 export * from "./quant-research-coordinator.js";
+export * from "./quant-trading-coordinator.js";
 export * from "./vision-evidence-bridge.js";

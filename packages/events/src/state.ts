@@ -31,13 +31,17 @@ import type {
   VisionShapeRevisionBinding,
   VisionSnapshotBasis,
   VerificationResult,
-  EvidenceKey
+  EvidenceKey,
+  QuantTradingCandidateAction
 } from "../../domain/src/index.js";
 import type {
   QuantResearchActionEvent,
   QuantResearchAuthoritativeSnapshotEvent,
   QuantResearchResultEvent,
-  QuantResearchScenarioDefinitionEvent
+  QuantResearchScenarioDefinitionEvent,
+  QuantTradingResultEvent,
+  QuantTradingRoundEvidenceEvent,
+  QuantTradingScenarioDefinitionEvent
 } from "./schemas.js";
 import {
   zeroBoardRevision,
@@ -150,6 +154,14 @@ export interface EvidenceRecordState {
   readonly supersededByEventId?: EventId;
   readonly invalidationReason?: string;
 }
+export interface QuantTradingSessionState {
+  readonly definition: QuantTradingScenarioDefinitionEvent;
+  readonly pendingAction?: QuantTradingCandidateAction | undefined;
+  readonly actions: readonly QuantTradingCandidateAction[];
+  readonly rounds: readonly QuantTradingRoundEvidenceEvent[];
+  readonly result?: QuantTradingResultEvent | undefined;
+}
+
 export interface QuantResearchSessionState {
   readonly definition: QuantResearchScenarioDefinitionEvent;
   readonly authoritativeSnapshot: QuantResearchAuthoritativeSnapshotEvent;
@@ -196,6 +208,7 @@ export interface SessionState {
   readonly problemStateRevision: ProblemStateRevision;
   readonly policyRevision: PolicyRevision;
   readonly lastCommittedInputSequence?: number;
+  readonly quantTrading?: QuantTradingSessionState | undefined;
   readonly quantResearch?: QuantResearchSessionState | undefined;
   readonly eventIds: readonly EventId[];
   readonly utterances: Readonly<Record<string, UtteranceState>>;

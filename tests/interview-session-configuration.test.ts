@@ -13,14 +13,12 @@ import {
   type SessionId
 } from "../packages/domain/src/index.js";
 import {
-  QUANT_RESEARCH_GENERATOR_VERSION,
-  QUANT_RESEARCH_RNG_VERSION,
   QUANT_RESEARCH_VERSION,
-  QUANT_TRADER_SCENARIO_VERSION,
-  type QuantResearchScenarioDefinition
+  QUANT_TRADER_SCENARIO_VERSION
 } from "../packages/local-compute/src/index.js";
 import {
   QuantResearchCoordinator,
+  QuantTradingSessionCoordinator,
   SessionRuntimeRegistry,
   TurnCoordinator,
   createCommandEnvelope
@@ -123,7 +121,7 @@ describe("generic interview session configuration", () => {
       .toMatchObject({ mode: "OXFORD_MATHEMATICS", problem: { id: divisibility.id } });
   });
 
-  it("initializes Quant Research after generic session start and replays the same generated definition", async () => {
+  it("starts Quant Research with authoritative deterministic state and replays it after restart", async () => {
     const sessionId = newSessionId();
     const configuration = InterviewSessionConfigurationSchema.parse({
       configurationVersion: 1,
@@ -134,22 +132,15 @@ describe("generic interview session configuration", () => {
       },
       interventionPolicy: "BALANCED"
     });
-    const definition: QuantResearchScenarioDefinition = {
-      family: "MODEL_COMPARISON",
-      version: QUANT_RESEARCH_VERSION,
-      generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
-      rngVersion: QUANT_RESEARCH_RNG_VERSION,
-      seed: 2468,
-      config: { observationCount: 10, noiseRadius: 2, outlierShift: 30 }
-    };
 
     expect((await postStart(sessionId, configuration)).status).toBe(200);
     const writer = registry.get(sessionId);
-    const initialized = await new QuantResearchCoordinator(writer).initialize(definition);
-    expect(initialized.appendedEventCount).toBe(2);
     expect(writer.getState().configuration).toEqual(configuration);
-    expect(writer.getState().problem?.id).toBe(definition.family);
-    expect(writer.getState().problem?.version).toBe(definition.version);
+    expect(writer.getState().quantResearch?.definition.family).toBe("MODEL_COMPARISON");
+    expect(writer.getState().quantResearch?.definition.version).toBe(QUANT_RESEARCH_VERSION);
+    expect(writer.getState().quantResearch?.definition.seed).toEqual(expect.any(Number));
+    expect(writer.getState().problem?.id).toBe("MODEL_COMPARISON");
+    expect(writer.getState().problem?.version).toBe(QUANT_RESEARCH_VERSION);
 
     const initializedState = writer.getState();
     const persistedProblem = initializedState.problem;
@@ -206,7 +197,15 @@ describe("generic interview session configuration", () => {
         ? persistedConfiguration.scenario
         : undefined
     )).toBe(true);
-    expect(registry.get(sessionId).getState().problem).toBeUndefined();
+    const tradingWriter = registry.get(sessionId);
+    expect(tradingWriter.getState().problem).toBeUndefined();
+    expect(tradingWriter.getState().quantTrading?.definition.family).toBe("BASIC_MARKET_MAKING");
+    expect(tradingWriter.getState().quantTrading?.definition.version).toBe(QUANT_TRADER_SCENARIO_VERSION);
+    expect(tradingWriter.getState().quantTrading?.definition.seed).toEqual(expect.any(Number));
+    const beforeRestart = new QuantTradingSessionCoordinator(tradingWriter).getPublicState();
+    expect(JSON.stringify(beforeRestart)).not.toContain("seed");
+    expect(JSON.stringify(beforeRestart)).not.toContain("INFORMED");
+    expect(JSON.stringify(beforeRestart)).not.toContain("NOISE");
 
     await server.stop();
     await registry.closeAll();
@@ -217,8 +216,10 @@ describe("generic interview session configuration", () => {
     address = await server.start();
 
     await expect(sessions.ensureRecovered(sessionId)).resolves.toEqual([]);
-    expect(registry.get(sessionId).getState().configuration).toEqual(configuration);
-    expect(registry.get(sessionId).getState().problem).toBeUndefined();
+    const reopened = registry.get(sessionId);
+    expect(reopened.getState().configuration).toEqual(configuration);
+    expect(reopened.getState().problem).toBeUndefined();
+    expect(new QuantTradingSessionCoordinator(reopened).getPublicState()).toEqual(beforeRestart);
   });
 
   it("supports configured start and catalog discovery through the browser command client", async () => {

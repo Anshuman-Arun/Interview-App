@@ -11,6 +11,8 @@ import {
   InterviewSessionConfigurationSchema,
   InterviewSessionContextResponseSchema,
   ProtocolErrorResponseSchema,
+  QuantResearchStateResponseSchema,
+  QuantTradingStateResponseSchema,
   RequestIdSchema,
   SessionArchivedResponseSchema,
   SessionCompletedResponseSchema,
@@ -25,6 +27,8 @@ import {
   type InterviewSessionConfiguration,
   type ProtocolErrorResponse,
   type ProtocolSuccessResponse,
+  type QuantResearchCandidateAction,
+  type QuantTradingCandidateAction,
   type RequestId,
   type SessionId,
   type StoredSessionSummary
@@ -41,6 +45,9 @@ type InputCommittedResponse = z.infer<typeof InputCommittedResponseSchema>;
 type BoardMutationCommittedResponse = z.infer<typeof BoardMutationCommittedResponseSchema>;
 type BoardStateResponse = z.infer<typeof BoardStateResponseSchema>;
 type SessionSummaryResponse = z.infer<typeof SessionSummaryResponseSchema>;
+type QuantTradingStateResponse = z.infer<typeof QuantTradingStateResponseSchema>;
+type QuantResearchStateResponse = z.infer<typeof QuantResearchStateResponseSchema>;
+type QuantSessionStateResponse = QuantTradingStateResponse | QuantResearchStateResponse;
 type DeliveryReconnectResponse = z.infer<typeof DeliveryReconnectResponseSchema>;
 type DeliveryAcknowledgedResponse = z.infer<typeof DeliveryAcknowledgedResponseSchema>;
 
@@ -210,6 +217,95 @@ export class BrowserCommandClient {
     const result = await this.send(
       command,
       (value) => InterviewSessionContextResponseSchema.parse(value),
+      options.signal
+    );
+    if (result.sessionId !== sessionId) {
+      throw new BrowserCommandResponseError(
+        "CORRELATION_MISMATCH",
+        requestId,
+        200
+      );
+    }
+    return result;
+  }
+
+  public async getQuantSessionState(
+    sessionId: SessionId,
+    options: BrowserCommandRequestOptions = {}
+  ): Promise<QuantSessionStateResponse> {
+    const requestId = this.resolveRequestId(options);
+    const command = ClientCommandSchema.parse({
+      protocolVersion: 1,
+      type: "GET_QUANT_SESSION_STATE",
+      requestId,
+      sessionId
+    });
+    const result = await this.send(
+      command,
+      (value) => {
+        const trading = QuantTradingStateResponseSchema.safeParse(value);
+        return trading.success ? trading.data : QuantResearchStateResponseSchema.parse(value);
+      },
+      options.signal
+    );
+    if (result.sessionId !== sessionId) {
+      throw new BrowserCommandResponseError(
+        "CORRELATION_MISMATCH",
+        requestId,
+        200
+      );
+    }
+    return result;
+  }
+
+  public async submitQuantTradingAction(
+    sessionId: SessionId,
+    expectedRound: number,
+    action: QuantTradingCandidateAction,
+    options: BrowserCommandRequestOptions = {}
+  ): Promise<QuantTradingStateResponse> {
+    const requestId = this.resolveRequestId(options);
+    const command = ClientCommandSchema.parse({
+      protocolVersion: 1,
+      type: "SUBMIT_QUANT_TRADING_ACTION",
+      requestId,
+      sessionId,
+      expectedRound,
+      action
+    });
+    const result = await this.send(
+      command,
+      (value) => QuantTradingStateResponseSchema.parse(value),
+      options.signal
+    );
+    if (result.sessionId !== sessionId) {
+      throw new BrowserCommandResponseError(
+        "CORRELATION_MISMATCH",
+        requestId,
+        200
+      );
+    }
+    return result;
+  }
+
+  public async submitQuantResearchAction(
+    sessionId: SessionId,
+    expectedActionCount: number,
+    action: QuantResearchCandidateAction,
+    options: BrowserCommandRequestOptions = {}
+  ): Promise<QuantResearchStateResponse> {
+    const requestId = this.resolveRequestId(options);
+    const command = ClientCommandSchema.parse({
+      protocolVersion: 1,
+      type: "SUBMIT_QUANT_RESEARCH_ACTION",
+      requestId,
+      sessionId,
+      expectedActionCount,
+      action
+    });
+    const result = await this.send(
+      command,
+      (value) => QuantResearchStateResponseSchema.parse(value),
       options.signal
     );
     if (result.sessionId !== sessionId) {

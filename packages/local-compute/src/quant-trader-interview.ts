@@ -649,6 +649,8 @@ export class QuantTraderInterviewEngine {
         throw new RangeError("Quote-round count must remain a safe integer");
       }
       if (!Number.isFinite(nextTotalSpread)) {
+        // validateQuote admits candidate arithmetic before pending action state is
+        // created. Reaching this path means an internal engine invariant changed.
         throw new RangeError("Accumulated quote spread must remain finite");
       }
       this.quoteRounds = nextQuoteRounds;
@@ -776,6 +778,58 @@ export class QuantTraderInterviewEngine {
     if (quote.bidSize > this.config.maxQuoteSize || quote.askSize > this.config.maxQuoteSize) {
       throw new QuantTraderActionError("QUOTE_SIZE_LIMIT", "Quote size exceeds the scenario maximum");
     }
+
+    const spread = quote.askPrice - quote.bidPrice;
+    const nextTotalSpread = this.totalSpread + spread;
+    const bidNotional = quote.bidPrice * quote.bidSize;
+    const askNotional = quote.askPrice * quote.askSize;
+    const bidMarkPnL = (this.fairValueValue - quote.bidPrice) * quote.bidSize;
+    const askMarkPnL = (quote.askPrice - this.fairValueValue) * quote.askSize;
+    const nextBidAdverseSelectionPnL = this.adverseSelectionPnL + bidMarkPnL;
+    const nextAskAdverseSelectionPnL = this.adverseSelectionPnL + askMarkPnL;
+    if (
+      !Number.isFinite(spread)
+      || !Number.isFinite(nextTotalSpread)
+      || !Number.isFinite(bidNotional)
+      || !Number.isFinite(askNotional)
+      || !Number.isFinite(bidMarkPnL)
+      || !Number.isFinite(askMarkPnL)
+      || !Number.isFinite(nextBidAdverseSelectionPnL)
+      || !Number.isFinite(nextAskAdverseSelectionPnL)
+    ) {
+      throw new QuantTraderActionError(
+        "INVALID_QUOTE",
+        "Quote exceeds bounded Quant Trading arithmetic"
+      );
+    }
+
+    try {
+      this.portfolio.assertPotentialFillArithmetic({
+        fillId: "quote-preview-bid",
+        orderId: "quote-preview-bid",
+        side: "BUY",
+        price: quote.bidPrice,
+        size: quote.bidSize,
+        counterparty: "QUOTE_ADMISSION_PREVIEW",
+        timestamp: 0
+      }, this.fairValueValue);
+      this.portfolio.assertPotentialFillArithmetic({
+        fillId: "quote-preview-ask",
+        orderId: "quote-preview-ask",
+        side: "SELL",
+        price: quote.askPrice,
+        size: quote.askSize,
+        counterparty: "QUOTE_ADMISSION_PREVIEW",
+        timestamp: 0
+      }, this.fairValueValue);
+    } catch (error) {
+      if (!(error instanceof RangeError)) throw error;
+      throw new QuantTraderActionError(
+        "INVALID_QUOTE",
+        "Quote could overflow bounded portfolio accounting"
+      );
+    }
+
     if (this.config.hardPositionLimit) {
       const position = this.portfolio.position;
       if (
