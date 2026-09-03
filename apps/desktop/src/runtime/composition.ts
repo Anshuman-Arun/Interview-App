@@ -117,7 +117,7 @@ export class DesktopLocalRuntimeComposition {
   private stopped = false;
 
   public voiceRuntime: VoiceRuntimeConfiguration | undefined;
-  public visionBackend: VisionInferenceBackend | undefined;
+  public visionBackend: ManagedLocalVisionBackend | undefined;
 
   public constructor(options: DesktopLocalRuntimeCompositionOptions) {
     this.runtimeViewsRoot = path.join(options.appDataRoot, "runtime-models");
