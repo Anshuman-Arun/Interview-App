@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   InterviewSessionConfigurationSchema,
   OxfordInterviewSessionConfigurationSchema,
+  newRequestId,
   newSessionId
 } from "../packages/domain/src/index.js";
 import {
