@@ -1,10 +1,8 @@
 // @vitest-environment happy-dom
-import fs from "node:fs";
-import path from "node:path";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   InterviewSessionConfigurationSchema,
   QuantResearchPublicStateSchema,
@@ -19,6 +17,8 @@ import {
 } from "../apps/web/src/hooks/useInterviewSession.js";
 import { QuantResearchWorkspace } from "../apps/web/src/quant/QuantResearchWorkspace.js";
 import { QuantTradingWorkspace } from "../apps/web/src/quant/QuantTradingWorkspace.js";
+import { QuantSessionWorkspace } from "../apps/web/src/quant/QuantSessionWorkspace.js";
+import { AppearanceProvider } from "../apps/web/src/appearance/AppearanceProvider.js";
 
 const BASE_URL = "http://127.0.0.1:43123";
 const RENDERER_URL = "http://127.0.0.1:43124/v1/renderer-stream";
@@ -509,18 +509,88 @@ describe("Quant product hook authority", () => {
   });
 });
 
-describe("Quant workspace lifecycle source invariants", () => {
-  it("defers a skipped authoritative refresh until an in-flight action settles", () => {
-    const source = fs.readFileSync(
-      path.resolve(process.cwd(), "apps/web/src/quant/QuantSessionWorkspace.tsx"),
-      "utf8"
-    );
+describe("Quant workspace lifecycle refresh", () => {
+  it("performs exactly one deferred refresh after a pending action spans pause/resume", async () => {
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: (_query: string): MediaQueryList => ({
+        matches: false,
+        media: "",
+        onchange: null,
+        addListener: () => undefined,
+        removeListener: () => undefined,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+        dispatchEvent: () => false
+      })
+    });
 
-    expect(source).toContain("const deferredRefreshRef = useRef(false)");
-    expect(source).toContain("deferredRefreshRef.current = true");
-    expect(source).toContain("!deferredRefreshRef.current");
-    expect(source).toContain("quantActionPending");
-    expect(source).toContain("void onRefresh().catch(() => undefined)");
+    const configuration = InterviewSessionConfigurationSchema.parse({
+      configurationVersion: 1,
+      mode: "QUANT_TRADING",
+      scenario: { id: "BASIC_MARKET_MAKING", version: "1.0.0" },
+      interventionPolicy: "BALANCED"
+    });
+    if (configuration.mode !== "QUANT_TRADING") {
+      throw new Error("Expected Trading configuration");
+    }
+
+    const refresh = vi.fn(async () => null);
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+
+    const renderWorkspace = async (
+      quantActionPending: boolean,
+      paused: boolean
+    ): Promise<void> => {
+      await act(async () => {
+        root.render(
+          <AppearanceProvider>
+            <QuantSessionWorkspace
+              configuration={configuration}
+              quantState={{ mode: "QUANT_TRADING", state: activeTradingState(1) }}
+              quantStateLoading={false}
+              quantActionPending={quantActionPending}
+              sessionStatus="ACTIVE"
+              paused={paused}
+              productHidden={false}
+              notice={null}
+              onDismissNotice={() => undefined}
+              onHome={() => undefined}
+              onReview={() => undefined}
+              onRefresh={refresh}
+              onSubmitTrading={async () => activeTradingState(2)}
+              onSubmitResearch={async () => {
+                throw new Error("Research submit is unavailable in Trading");
+              }}
+            />
+          </AppearanceProvider>
+        );
+      });
+    };
+
+    await renderWorkspace(false, false);
+    expect(refresh).toHaveBeenCalledTimes(1);
+
+    // Ordinary action admission trusts the returned public action state and
+    // does not add a redundant GET when it settles.
+    await renderWorkspace(true, false);
+    await renderWorkspace(false, false);
+    expect(refresh).toHaveBeenCalledTimes(1);
+
+    // If presentation pauses while the action is pending, its late response
+    // is discarded by the hook. Resume must therefore converge with exactly
+    // one authoritative read after that pending request settles.
+    await renderWorkspace(true, false);
+    await renderWorkspace(true, true);
+    await renderWorkspace(false, true);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    await renderWorkspace(false, false);
+    expect(refresh).toHaveBeenCalledTimes(2);
+
+    await act(async () => root.unmount());
+    container.remove();
   });
 });
 
