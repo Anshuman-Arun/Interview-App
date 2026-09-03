@@ -178,7 +178,7 @@ export const DESKTOP_LOCAL_MODEL_ASSETS: readonly DesktopRuntimeAsset[] = Object
     type: "TOKENIZER",
     filename: "tokenizer.json",
     sizeBytes: 24_174,
-    sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+    sha256: "1dc27b18d6a518d0d5ff3f4bb7bd98521fe80ad39e5b2a246d4109f1bb9d5019",
     runtimeRelativePath: "vision/rapidlatex/tokenizer.json"
   }),
   moonshineAsset({
