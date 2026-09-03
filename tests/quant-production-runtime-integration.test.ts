@@ -472,6 +472,7 @@ describe("production quant runtime integration", () => {
       if (filledBidTwice) seed = candidate;
     }
     if (seed === undefined) throw new Error("Expected a bounded seed with two consecutive bid fills");
+    const selectedSeed = seed;
 
     await server.stop();
     await registry.closeAll();
@@ -479,7 +480,7 @@ describe("production quant runtime integration", () => {
     sessions = recoveryCoordinator(registry);
     server = commandServer(
       sessions,
-      new ProductionSessionRuntime({ seedSource: () => seed })
+      new ProductionSessionRuntime({ seedSource: () => selectedSeed })
     );
     address = await server.start();
 
