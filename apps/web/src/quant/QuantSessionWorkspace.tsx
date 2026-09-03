@@ -47,61 +47,67 @@ export const QuantSessionWorkspace: React.FC<QuantSessionWorkspaceProps> = ({
   onSubmitTrading,
   onSubmitResearch
 }) => {
+  const presentationActive =
+    !productHidden
+    && !paused
+    && sessionStatus === "ACTIVE";
   const actionPendingRef = useRef(quantActionPending);
+  const presentationActiveRef = useRef(presentationActive);
+  const lifecycleInitializedRef = useRef(false);
   const deferredRefreshRef = useRef(false);
 
   useEffect(() => {
+    const wasPending = actionPendingRef.current;
+    const wasPresentationActive = presentationActiveRef.current;
     actionPendingRef.current = quantActionPending;
-    if (
-      quantActionPending
-      || !deferredRefreshRef.current
-      || productHidden
-      || paused
-      || sessionStatus !== "ACTIVE"
-    ) {
+    presentationActiveRef.current = presentationActive;
+
+    if (!presentationActive) {
+      if (quantActionPending || wasPending) {
+        deferredRefreshRef.current = true;
+      }
       return;
     }
+
+    if (quantActionPending) {
+      if (!wasPresentationActive) {
+        deferredRefreshRef.current = true;
+      }
+      lifecycleInitializedRef.current = true;
+      return;
+    }
+
+    const shouldRefresh =
+      !lifecycleInitializedRef.current
+      || !wasPresentationActive
+      || (wasPending && deferredRefreshRef.current);
+    lifecycleInitializedRef.current = true;
+    if (!shouldRefresh) return;
 
     deferredRefreshRef.current = false;
     void onRefresh().catch(() => undefined);
   }, [
     onRefresh,
-    paused,
-    productHidden,
-    quantActionPending,
-    sessionStatus
+    presentationActive,
+    quantActionPending
   ]);
 
   useEffect(() => {
-    if (
-      productHidden
-      || paused
-      || sessionStatus !== "ACTIVE"
-    ) return;
+    if (!presentationActive) return;
 
-    const refresh = (): void => {
+    const handleVisibilityChange = (): void => {
+      if (document.visibilityState !== "visible") return;
       if (actionPendingRef.current) {
         deferredRefreshRef.current = true;
         return;
       }
-      deferredRefreshRef.current = false;
       void onRefresh().catch(() => undefined);
-    };
-    refresh();
-
-    const handleVisibilityChange = (): void => {
-      if (document.visibilityState === "visible") refresh();
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [
-    onRefresh,
-    paused,
-    productHidden,
-    sessionStatus
-  ]);
+  }, [onRefresh, presentationActive]);
 
   const modeLabel = configuration.mode === "QUANT_TRADING" ? "Quant Trading" : "Quant Research";
   const disabled = paused || sessionStatus !== "ACTIVE";
