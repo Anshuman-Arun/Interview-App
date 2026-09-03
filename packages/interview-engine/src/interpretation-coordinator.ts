@@ -487,13 +487,13 @@ export class InterpretationCoordinator {
     const currentFailure = this.checkCurrentRequest(request, 0, true);
     if (currentFailure !== undefined) return this.finishFailure(currentFailure);
 
+    const recovered = await this.resumePersistedDirectVerification(request, record);
+    if (recovered !== undefined) return recovered;
+
     for (const protocol of request.allowedProtocols) {
       const route = this.router.resolve(protocol, request.target);
       if (!route.ok) return this.finishFailure(mapRouteFailure(route.reason, request.requestId, 0, true));
     }
-
-    const recovered = await this.resumePersistedDirectVerification(request, record);
-    if (recovered !== undefined) return recovered;
 
     if (this.isCancelled(record)) {
       return this.finishFailure(failed("STALE", "CANCELLED", 0, request.requestId));
@@ -927,18 +927,21 @@ export class InterpretationCoordinator {
     }
     const route = matchingRoutes[0];
     const statement = this.router.validateStatement(route, persisted.candidateFormalInterpretation);
-    if (!statement.ok || statement.canonicalStatement !== persisted.candidateFormalInterpretation) {
+    if (!statement.ok) {
       await this.verification.discardPendingVerification({
         verificationRequestId: request.requestId,
         reason: "FORMAL_INTERPRETATION_RECOVERY_STATEMENT_INVALID"
       }).catch(() => undefined);
+      return this.finishFailure(mapStatementFailure(statement.reason, request.requestId, 0));
+    }
+    if (statement.canonicalStatement !== persisted.candidateFormalInterpretation) {
+      await this.verification.discardPendingVerification({
+        verificationRequestId: request.requestId,
+        reason: "FORMAL_INTERPRETATION_RECOVERY_STATEMENT_NOT_CANONICAL"
+      }).catch(() => undefined);
       return this.finishFailure(failed(
         "INVALID_PROPOSAL",
-        statement.ok ? "MALFORMED_INTERPRETATION" : mapStatementFailure(
-          statement.reason,
-          request.requestId,
-          0
-        ).reason,
+        "MALFORMED_INTERPRETATION",
         0,
         request.requestId
       ));
