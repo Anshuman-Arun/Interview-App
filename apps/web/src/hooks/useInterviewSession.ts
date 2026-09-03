@@ -665,6 +665,7 @@ export function useInterviewSession(
     quantActionEpochRef.current = actionEpoch;
     quantReadEpochRef.current += 1;
     quantActionInFlightRef.current = true;
+    setQuantStateLoading(false);
     setQuantActionPending(true);
     setError(null);
     try {
@@ -741,6 +742,7 @@ export function useInterviewSession(
     quantActionEpochRef.current = actionEpoch;
     quantReadEpochRef.current += 1;
     quantActionInFlightRef.current = true;
+    setQuantStateLoading(false);
     setQuantActionPending(true);
     setError(null);
     try {
