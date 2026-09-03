@@ -99,17 +99,39 @@ class LocalVisionRuntimeUnitTests(unittest.TestCase):
         self.assertEqual(uncertain["observationKind"], "GENERAL_BOARD_DESCRIPTION")
         self.assertLess(uncertain["confidence"], 0.7)
 
-    def test_preprocessing_preserves_sparse_math_ink_and_inverts_dark_boards(self) -> None:
+    def test_preprocessing_preserves_sparse_math_ink_and_dark_boards(self) -> None:
         light = np.full((40, 100, 3), 255, dtype=np.uint8)
         light[20, 20:80, :] = 0
-        self.assertIsNotNone(vision._prepare_gray(light))
+        light_image = vision._initial_expression_image(light)
+        self.assertIsNotNone(light_image)
+        assert light_image is not None
+        self.assertLessEqual(light_image.size[0], vision.MAX_MODEL_WIDTH)
+        self.assertLessEqual(light_image.size[1], vision.MAX_MODEL_HEIGHT)
 
         dark = np.full((40, 100, 3), 10, dtype=np.uint8)
         dark[20, 20:80, :] = 245
-        prepared = vision._prepare_gray(dark)
-        self.assertIsNotNone(prepared)
-        assert prepared is not None
-        self.assertGreater(float(np.mean(prepared)), 128.0)
+        dark_image = vision._initial_expression_image(dark)
+        self.assertIsNotNone(dark_image)
+        assert dark_image is not None
+        self.assertLessEqual(dark_image.size[0], vision.MAX_MODEL_WIDTH)
+        self.assertLessEqual(dark_image.size[1], vision.MAX_MODEL_HEIGHT)
+
+    def test_stability_perturbation_does_not_collapse_white_background(self) -> None:
+        image = np.full((40, 100, 3), 255, dtype=np.uint8)
+        image[20, 20:80, :] = 0
+        perturbed = vision._stability_perturbation(image)
+        self.assertTrue(np.any(perturbed == 0))
+        self.assertTrue(np.any(perturbed == 255))
+
+    def test_tokenizer_cleanup_matches_upstream_space_marker_order(self) -> None:
+        class FakeTokenizer:
+            def decode(self, _token_ids):
+                return "x Ġ+ Ġy"
+
+        self.assertEqual(
+            vision._decode_tokens([4, 5, 6], FakeTokenizer()),
+            "x + y",
+        )
 
 
 if __name__ == "__main__":
