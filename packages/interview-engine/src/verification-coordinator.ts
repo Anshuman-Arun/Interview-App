@@ -18,6 +18,7 @@ import {
   type EvidenceKey,
   type GenerationBasis,
   type InputEpisodeId,
+  type RequestId,
   type VerificationResult,
   type TurnId
 } from "../../domain/src/index.js";
