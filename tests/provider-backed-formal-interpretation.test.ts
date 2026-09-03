@@ -313,7 +313,10 @@ describe("provider-backed Oxford formal interpretation", () => {
 
       const outcome = await coordinator.interpretAndVerify(test.request);
 
-      expect(outcome).toMatchObject({\n        status: "NO_SUPPORTED_INTERPRETATION",\n        reason: "NO_INTERPRETATION"\n      });
+      expect(outcome).toMatchObject({
+        status: "NO_SUPPORTED_INTERPRETATION",
+        reason: "NO_INTERPRETATION"
+      });
       expect(Object.keys(test.writer.getState().studentEvidence)).toHaveLength(0);
     } finally {
       test.store.close();
@@ -345,7 +348,10 @@ describe("provider-backed Oxford formal interpretation", () => {
 
       const outcome = await coordinator.interpretAndVerify(test.request);
 
-      expect(outcome).toMatchObject({\n        status: "UNSUPPORTED_PROTOCOL",\n        reason: "PROTOCOL_NOT_ALLOWED"\n      });
+      expect(outcome).toMatchObject({
+        status: "UNSUPPORTED_PROTOCOL",
+        reason: "PROTOCOL_NOT_ALLOWED"
+      });
       expect(Object.keys(test.writer.getState().studentEvidence)).toHaveLength(0);
     } finally {
       test.store.close();
@@ -414,7 +420,10 @@ describe("provider-backed Oxford formal interpretation", () => {
 
       const outcome = await coordinator.interpretAndVerify(test.request);
 
-      expect(outcome).toMatchObject({\n        status: "NO_SUPPORTED_INTERPRETATION",\n        reason: "NO_INTERPRETATION"\n      });
+      expect(outcome).toMatchObject({
+        status: "NO_SUPPORTED_INTERPRETATION",
+        reason: "NO_INTERPRETATION"
+      });
       expect(Object.keys(test.writer.getState().studentEvidence)).toHaveLength(0);
     } finally {
       test.store.close();
@@ -450,7 +459,10 @@ describe("provider-backed Oxford formal interpretation", () => {
 
       const outcome = await coordinator.interpretAndVerify(test.request);
 
-      expect(outcome).toMatchObject({\n        status: "NO_SUPPORTED_INTERPRETATION",\n        reason: "NO_INTERPRETATION"\n      });
+      expect(outcome).toMatchObject({
+        status: "NO_SUPPORTED_INTERPRETATION",
+        reason: "NO_INTERPRETATION"
+      });
       expect(executed).toBe(false);
       expect(Object.keys(test.writer.getState().studentEvidence)).toHaveLength(0);
     } finally {
@@ -518,7 +530,10 @@ describe("provider-backed Oxford formal interpretation", () => {
 
       const outcome = await coordinator.interpretAndVerify(test.request);
 
-      expect(outcome).toMatchObject({\n        status: "NO_SUPPORTED_INTERPRETATION",\n        reason: "NO_INTERPRETATION"\n      });
+      expect(outcome).toMatchObject({
+        status: "NO_SUPPORTED_INTERPRETATION",
+        reason: "NO_INTERPRETATION"
+      });
       expect(executed).toBe(false);
     } finally {
       test.store.close();
