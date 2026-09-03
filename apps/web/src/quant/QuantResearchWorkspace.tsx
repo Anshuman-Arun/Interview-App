@@ -14,8 +14,15 @@ export interface QuantResearchWorkspaceProps {
   readonly onReview: () => void;
 }
 
+type ResearchActionWithoutId =
+  QuantResearchCandidateAction extends infer Action
+    ? Action extends { readonly actionId: string }
+      ? Omit<Action, "actionId">
+      : never
+    : never;
+
 function displayFamily(value: QuantResearchPublicState["family"]): string {
-  return value.split("_").map((word) => word[0] + word.slice(1).toLowerCase()).join(" ");
+  return value.split("_").map((word) => word.charAt(0) + word.slice(1).toLowerCase()).join(" ");
 }
 
 function displayValue(value: number | string | boolean | readonly number[] | readonly string[]): React.ReactNode {
@@ -68,7 +75,7 @@ const ResearchActionEditor: React.FC<ActionEditorProps> = ({ state, disabled, pe
     return typeof datum?.value === "number" ? datum.value : null;
   }, [state.visibleData]);
 
-  const submit = async (action: Omit<QuantResearchCandidateAction, "actionId">): Promise<void> => {
+  const submit = async (action: ResearchActionWithoutId): Promise<void> => {
     if (disabled || pending) return;
     setLocalError(null);
     try {
@@ -95,7 +102,7 @@ const ResearchActionEditor: React.FC<ActionEditorProps> = ({ state, disabled, pe
           setLocalError(`${label} must be a finite number from ${String(min)} to ${String(max)}.`);
           return;
         }
-        void submit({ kind, value } as Omit<QuantResearchCandidateAction, "actionId">);
+        void submit({ kind, value });
       }}
     >
       <label>
