@@ -743,13 +743,13 @@ function serializeBoundedPlainJson(
         if (
           descriptor.enumerable !== true
           || !("value" in descriptor)
-          || descriptor.value === undefined
           || key === "__proto__"
           || key === "prototype"
           || key === "constructor"
         ) {
           throw new Error("JSON objects must contain only own data properties");
         }
+        if (descriptor.value === undefined) continue;
         budget.textCharacters += key.length;
         if (budget.textCharacters > MAX_JSON_TEXT_CHARACTERS) {
           throw new Error("JSON text budget exceeded");
