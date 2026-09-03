@@ -21,6 +21,7 @@ import {
   resolveProviderConfiguration,
   type SupervisedCliExecutionRequest,
   type SupervisedCliExecutionResult,
+  type SupervisedCliProviderDefinition,
   type SupervisedCliExecutor
 } from "../packages/providers/src/index.js";
 
@@ -232,10 +233,37 @@ describe("Antigravity CLI provider registration and policy truthfulness", () => 
 });
 
 describe("supervised CLI provider definition boundary", () => {
+  const definition = (): SupervisedCliProviderDefinition => ({
+    providerId: "supervised-definition-test",
+    adapterVersion: "1.0.0",
+    capabilities: {
+      inputModalities: new Set(["text"]),
+      textStreaming: false,
+      structuredOutput: "FINAL_ONLY",
+      persistentSession: false,
+      resumableSession: false,
+      cancellation: "INTERRUPT_LOCAL_PROCESS",
+      sessionSurvivesClientAbort: false,
+      sessionSurvivesProviderCancel: false,
+      usageReporting: false,
+      dataUse: "REMOTE_MAY_BE_USED_FOR_IMPROVEMENT"
+    },
+    async verifyBillingSafety({ now }) {
+      return { checkedAt: now.toISOString() };
+    },
+    snapshotTurnInput(input) {
+      return input;
+    },
+    async executeTurn() {
+      return PROPOSAL;
+    }
+  });
+
   it("rejects nested accessor and Proxy capabilities without invoking user code", () => {
     let getterCalls = 0;
+    const accessorDefinition = definition();
     const accessorCapabilities = Object.defineProperty({
-      ...ANTIGRAVITY_CLI_PROVIDER_DEFINITION.capabilities
+      ...accessorDefinition.capabilities
     }, "textStreaming", {
       enumerable: true,
       get() {
@@ -245,23 +273,21 @@ describe("supervised CLI provider definition boundary", () => {
     });
 
     expect(() => new SupervisedCliReasoningProvider({
-      ...ANTIGRAVITY_CLI_PROVIDER_DEFINITION,
-      capabilities: accessorCapabilities as typeof ANTIGRAVITY_CLI_PROVIDER_DEFINITION.capabilities
+      ...accessorDefinition,
+      capabilities: accessorCapabilities as typeof accessorDefinition.capabilities
     })).toThrow("Supervised CLI provider definition is invalid");
     expect(getterCalls).toBe(0);
 
     let proxyTrapCalls = 0;
-    const proxyCapabilities = new Proxy(
-      ANTIGRAVITY_CLI_PROVIDER_DEFINITION.capabilities,
-      {
-        getOwnPropertyDescriptor() {
-          proxyTrapCalls += 1;
-          throw new Error("must-not-run");
-        }
+    const proxyDefinition = definition();
+    const proxyCapabilities = new Proxy(proxyDefinition.capabilities, {
+      getOwnPropertyDescriptor() {
+        proxyTrapCalls += 1;
+        throw new Error("must-not-run");
       }
-    );
+    });
     expect(() => new SupervisedCliReasoningProvider({
-      ...ANTIGRAVITY_CLI_PROVIDER_DEFINITION,
+      ...proxyDefinition,
       capabilities: proxyCapabilities
     })).toThrow("Supervised CLI provider definition is invalid");
     expect(proxyTrapCalls).toBe(0);
@@ -269,23 +295,18 @@ describe("supervised CLI provider definition boundary", () => {
 
   it("captures definition callbacks so later mutation cannot change execution", async () => {
     let originalBillingCalls = 0;
-    const mutableDefinition = {
-      ...ANTIGRAVITY_CLI_PROVIDER_DEFINITION,
-      verifyBillingSafety: async (input: { readonly now: Date }) => {
+    const mutableDefinition = definition();
+    Reflect.set(
+      mutableDefinition,
+      "verifyBillingSafety",
+      async ({ now }: { readonly now: Date }) => {
         originalBillingCalls += 1;
         return {
-          providerId: ANTIGRAVITY_CLI_PROVIDER_ID,
-          adapterVersion: ANTIGRAVITY_CLI_ADAPTER_VERSION,
-          billingClass: "UNKNOWN",
-          spendImpossible: false,
-          checkedAt: input.now.toISOString(),
-          accountFingerprint: "mutation-test",
-          verificationSource: "PROVIDER_ADAPTER",
-          dataUse: "REMOTE_MAY_BE_USED_FOR_IMPROVEMENT",
-          enforcementMechanism: "test"
+          checkedAt: now.toISOString(),
+          marker: "original"
         };
       }
-    };
+    );
     const provider = new SupervisedCliReasoningProvider(mutableDefinition);
     Reflect.set(mutableDefinition, "verifyBillingSafety", async () => {
       throw new Error("mutated callback must not run");
@@ -294,7 +315,7 @@ describe("supervised CLI provider definition boundary", () => {
     await expect(provider.verifyBillingSafety({
       now: new Date("2026-09-02T00:00:00.000Z")
     })).resolves.toMatchObject({
-      accountFingerprint: "mutation-test"
+      marker: "original"
     });
     expect(originalBillingCalls).toBe(1);
   });
