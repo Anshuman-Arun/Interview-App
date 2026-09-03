@@ -1156,7 +1156,6 @@ export function useInterviewSession(
     if (
       !whiteboardBound
       || sessionTransitionEpochRef.current !== transitionEpoch
-      || terminalTransitionInFlightRef.current
     ) {
       return;
     }
