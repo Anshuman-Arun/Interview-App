@@ -72,7 +72,18 @@ relies only on the CLI's documented OS-native keyring sign-in and does not inspe
 or return those credentials.
 Before using this provider, run `agy` interactively once outside Interview App and complete
 sign-in. A supervised/headless interview does not perform onboarding; if cached authentication is
-unavailable, the CLI exits and the turn fails closed. Each supervised turn receives a fresh temporary CLI profile rather
+unavailable, the CLI exits and the turn fails closed.
+
+On Windows, validate that the production isolation boundary can still recover that cached
+Credential Manager session without starting a model turn:
+
+```bash
+corepack pnpm smoke:antigravity-readiness
+```
+
+The smoke uses the production supervised runtime to run the read-only `/usage` command. It
+checks the pinned CLI version, isolated profile, cached authentication, account/quota lookup, and
+piped-process shutdown, but deliberately does not print the returned account/quota payload. Each supervised turn receives a fresh temporary CLI profile rather
 than the user's normal `~/.gemini` profile. That profile pins strict tool review,
 non-workspace access off, AI-credit fallback off, telemetry off, an empty custom-agent tool list,
 and deny-all fine-grained permission rules. The concrete Windows path does not depend on
