@@ -34,16 +34,12 @@
     "dist:win": "node scripts/clean-windows-package.mjs && pnpm build:web && pnpm build:desktop && pnpm security:public && npx --yes electron-builder@26.15.3 --win nsis --x64 --publish never && pnpm verify:package:win"
   },
   "dependencies": {
-    "katex": "^0.18.4",
     "pngjs": "^7.0.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "@tldraw/assets": "5.3.2",
-    "zod": "^4.4.3",
-    "tldraw": "^5.3.2"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@tldraw/assets": "5.3.2",
     "@types/katex": "^0.16.8",
     "@types/node": "^26.4.0",
     "@types/react": "^19.2.18",
@@ -53,6 +49,10 @@
     "eslint": "^10.9.1",
     "fast-check": "^4.9.0",
     "happy-dom": "^20.12.0",
+    "katex": "^0.18.4",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tldraw": "^5.3.2",
     "tsx": "^4.23.12",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.68.0",
