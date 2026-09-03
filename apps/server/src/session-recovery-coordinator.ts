@@ -473,7 +473,12 @@ function inferUnmarkedConfigurationSourceFromFingerprint(input: {
       event.type === "PROBLEM_PRESENTED"
       && event.causationId === input.startedEvent.causationId
   );
-  if (problemPresented === undefined) return undefined;
+  if (
+    problemPresented === undefined
+    || problemPresented.payload.providerContextSpecSha256 === undefined
+  ) {
+    return undefined;
+  }
 
   const problemIdentity = {
     problemId: problemPresented.payload.problemId,
