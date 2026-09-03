@@ -18,7 +18,6 @@ import {
   QuantTraderScenarioFamilySchema,
   getQuantResearchRegistry
 } from "../../../packages/local-compute/src/index.js";
-import { registerBuiltInProviders } from "../../../packages/providers/src/index.js";
 import {
   PROBLEM_METADATA,
   getProblemById,
@@ -41,26 +40,10 @@ export type InterviewSessionComposition =
       configuration: Extract<InterviewSessionConfiguration, { readonly mode: "QUANT_RESEARCH" }>;
     }>;
 
-const BUILT_IN_PROVIDER_REGISTRY = registerBuiltInProviders();
-
-function assertProviderSelectionAvailable(
-  configuration: InterviewSessionConfiguration
-): void {
-  const selection = configuration.providerSelection;
-  if (selection === undefined) return;
-  try {
-    BUILT_IN_PROVIDER_REGISTRY.getModel(selection.providerId, selection.modelId);
-  } catch {
-    throw new Error("Configured provider selection identity is not available");
-  }
-}
-
-
 export function resolveInterviewSessionConfiguration(
   input: unknown
 ): InterviewSessionComposition {
   const configuration = InterviewSessionConfigurationSchema.parse(input);
-  assertProviderSelectionAvailable(configuration);
 
   switch (configuration.mode) {
     case "OXFORD_MATHEMATICS": {
