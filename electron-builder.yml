@@ -15,6 +15,7 @@ extraResources:
     to: web
     filter:
       - "**/*"
+      - "!**/*.map"
   - from: apps/desktop/preload.cjs
     to: preload.cjs
   - from: workers/python/local_model_worker.py
