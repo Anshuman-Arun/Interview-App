@@ -37,3 +37,4 @@ nsis:
   createStartMenuShortcut: true
   shortcutName: Interview App
   deleteAppDataOnUninstall: false
+  runAfterFinish: false
