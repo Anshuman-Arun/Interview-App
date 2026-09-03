@@ -499,6 +499,27 @@ describe("generic interview session configuration", () => {
     expect(failure.error.code).toBe("NOT_FOUND");
   });
 
+  it("rejects an unknown provider with a bounded provider-specific conflict", async () => {
+    const configuration = InterviewSessionConfigurationSchema.parse({
+      ...oxfordConfiguration(
+        sixPeopleProblem.id,
+        sixPeopleProblem.version,
+        sixPeopleProblem.interviewer.difficulty
+      ),
+      providerSelection: {
+        providerId: "unknown-provider",
+        modelId: "unknown-model"
+      }
+    });
+    const response = await postStart(newSessionId(), configuration);
+    expect(response.status).toBe(409);
+    const failure = ProtocolErrorResponseSchema.parse(await json(response));
+    expect(failure.error).toEqual({
+      code: "CONFLICT",
+      message: "Selected provider or model is not registered"
+    });
+  });
+
   it("treats request-id reuse with a different configuration as a conflict", async () => {
     const sessionId = newSessionId();
     const requestId = newRequestId();
