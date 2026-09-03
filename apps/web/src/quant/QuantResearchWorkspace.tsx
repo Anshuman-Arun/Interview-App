@@ -54,6 +54,11 @@ function integer(raw: string): number | null {
   return value !== null && Number.isSafeInteger(value) ? value : null;
 }
 
+function publicNumber(state: QuantResearchPublicState, key: string): number | null {
+  const datum = state.visibleData.find((item) => item.key === key);
+  return typeof datum?.value === "number" ? datum.value : null;
+}
+
 interface ActionEditorProps {
   readonly state: QuantResearchPublicState;
   readonly disabled: boolean;
@@ -212,6 +217,20 @@ const ResearchActionEditor: React.FC<ActionEditorProps> = ({ state, disabled, pe
             setLocalError("A and B allocations must be whole numbers from 1 to 100.");
             return;
           }
+          const totalBudget = publicNumber(state, "totalBudget");
+          const costA = publicNumber(state, "costA");
+          const costB = publicNumber(state, "costB");
+          if (
+            totalBudget !== null
+            && costA !== null
+            && costB !== null
+            && a * costA + b * costB > totalBudget
+          ) {
+            setLocalError(
+              `Allocation cost must stay within the public budget of ${String(totalBudget)}.`
+            );
+            return;
+          }
           void submit({ kind: "ALLOCATE_SAMPLE", a, b });
         }}
       >
@@ -261,6 +280,23 @@ const ResearchActionEditor: React.FC<ActionEditorProps> = ({ state, disabled, pe
           const y = integer(secondary);
           if (x === null || y === null || x < 0 || y < 0) {
             setLocalError("x and y must be nonnegative whole numbers.");
+            return;
+          }
+          const budget = publicNumber(state, "budget");
+          const maxX = publicNumber(state, "maxX");
+          const maxY = publicNumber(state, "maxY");
+          if (maxX !== null && x > maxX) {
+            setLocalError(`x must be at most the public maximum of ${String(maxX)}.`);
+            return;
+          }
+          if (maxY !== null && y > maxY) {
+            setLocalError(`y must be at most the public maximum of ${String(maxY)}.`);
+            return;
+          }
+          if (budget !== null && 2 * x + 3 * y > budget) {
+            setLocalError(
+              `Parameters must satisfy the public budget constraint 2x + 3y ≤ ${String(budget)}.`
+            );
             return;
           }
           void submit({ kind: "SUBMIT_PARAMETERS", values: [x, y] });
