@@ -1025,6 +1025,23 @@ describe("Antigravity CLI one-turn protocol", () => {
     await session.close();
   });
 
+  it("rejects escape-heavy context when the actual stream-json stdin exceeds its wire budget", async () => {
+    let calls = 0;
+    const provider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async () => {
+        calls += 1;
+        return executionResult(antigravityStream());
+      })
+    );
+    const session = await provider.createSession();
+
+    await expect(collectProposals(session.sendTurn(turnInput({
+      escapeHeavy: "\"".repeat(16 * 1024)
+    })))).rejects.toMatchObject({ code: "INVALID_CONTEXT" });
+    expect(calls).toBe(0);
+    await session.close();
+  });
+
   it("rejects context beyond the conservative headless JSON reliability budget before launching the CLI", async () => {
     let calls = 0;
     const provider = createAntigravityCliReasoningProvider(

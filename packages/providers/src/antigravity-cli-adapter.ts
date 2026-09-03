@@ -18,6 +18,7 @@ export const ANTIGRAVITY_CLI_AGENT_ID = "interview-realizer";
 export const ANTIGRAVITY_CLI_ADAPTER_VERSION = "1.0.0";
 
 const MAX_CONTEXT_BYTES = 40 * 1024;
+const MAX_STREAM_JSON_STDIN_BYTES = 48 * 1024;
 const MAX_SCHEMA_BYTES = 64 * 1024;
 const MAX_SPEECH_CHARACTERS = 12_000;
 const MAX_DISCLOSURE_IDS = 256;
@@ -457,10 +458,14 @@ function createSingleTurnInput(input: ReasoningTurnInput): string {
     serializedContext
   ].join("\n");
 
-  return JSON.stringify({
+  const stdin = JSON.stringify({
     event: "user",
     message: { content: prompt }
   }) + "\n";
+  if (new TextEncoder().encode(stdin).byteLength > MAX_STREAM_JSON_STDIN_BYTES) {
+    throw new AntigravityCliAdapterError("INVALID_CONTEXT");
+  }
+  return stdin;
 }
 
 function parseAntigravityStream(

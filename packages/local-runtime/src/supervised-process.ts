@@ -2442,7 +2442,7 @@ async function terminateProcessTree(
     // promise as proof; root absence by itself is still insufficient.
     if (
       registeredClose !== undefined
-      && await promiseSettledWithin(registeredClose, TREE_GRACE_MS)
+      && await promiseSettledWithin(registeredClose, TREE_FORCE_MS)
     ) {
       return true;
     }

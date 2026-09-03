@@ -325,6 +325,29 @@ describe("supervised one-shot process execution", () => {
   });
 
   it.runIf(process.platform === "win32")(
+    "supports provider environments beyond the command-argument framing limit",
+    async () => {
+      const values: Record<string, string> = {};
+      for (let index = 0; index < 40; index += 1) {
+        values[`INTERVIEW_TEST_ENV_${String(index).padStart(2, "0")}`] =
+          `value-${String(index)}`;
+      }
+      const runtime = new SupervisedProcessRunner([{
+        id: "fixture",
+        executable: process.execPath,
+        environment: { values }
+      }]);
+
+      await expect(runtime.execute(request([FIXTURE, "echo"], {
+        stdin: "large-environment-framing"
+      }))).resolves.toMatchObject({
+        exitCode: 0,
+        stdout: "large-environment-framing"
+      });
+    }
+  );
+
+  it.runIf(process.platform === "win32")(
     "rejects provider environment keys reserved for the trusted Windows supervisor",
     async () => {
       const runtime = new SupervisedProcessRunner([{

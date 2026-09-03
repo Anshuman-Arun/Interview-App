@@ -269,17 +269,19 @@ public static class InterviewJobSupervisor
         }
     }
 
-    private static string[] ParseArguments(string packed)
+    private static string[] ParseFramedStrings(string packed, int maximumCount)
     {
         if (packed == null)
             throw new ArgumentNullException("packed");
+        if (maximumCount <= 0)
+            throw new ArgumentOutOfRangeException("maximumCount");
 
         var output = new List<string>();
         int index = 0;
         while (index < packed.Length)
         {
-            if (output.Count >= 64)
-                throw new InvalidOperationException("too many arguments");
+            if (output.Count >= maximumCount)
+                throw new InvalidOperationException("too many framed values");
 
             int colon = packed.IndexOf(':', index);
             if (colon <= index)
@@ -305,9 +307,14 @@ public static class InterviewJobSupervisor
         return output.ToArray();
     }
 
+    private static string[] ParseArguments(string packed)
+    {
+        return ParseFramedStrings(packed, 64);
+    }
+
     private static IntPtr BuildEnvironmentBlock(string packed)
     {
-        string[] framed = ParseArguments(packed);
+        string[] framed = ParseFramedStrings(packed, 512);
         if ((framed.Length & 1) != 0)
             throw new InvalidOperationException("invalid environment framing");
 
