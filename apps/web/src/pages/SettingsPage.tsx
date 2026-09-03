@@ -12,6 +12,127 @@ import {
 import { useAppearance } from "../appearance/AppearanceProvider.js";
 import "./SettingsPage.css";
 
+type DesktopRuntimeCapabilityState = "READY" | "MISSING_ASSET" | "FAILED" | "UNAVAILABLE";
+type DesktopModelSetupState = "IDLE" | "INSTALLING" | "INSTALLED" | "FAILED";
+
+interface DesktopRuntimeStatus {
+  readonly protocolVersion: 1;
+  readonly speech: { readonly state: DesktopRuntimeCapabilityState; readonly reasonCode?: string };
+  readonly tts: { readonly state: DesktopRuntimeCapabilityState; readonly reasonCode?: string };
+  readonly python: {
+    readonly strategy: "SYSTEM_CPYTHON";
+    readonly supportedVersions: readonly ["3.12", "3.13"];
+  };
+  readonly modelSetup: {
+    readonly state: DesktopModelSetupState;
+    readonly restartRequired: boolean;
+  };
+}
+
+interface DesktopRuntimeBridge {
+  readonly getLocalRuntimeStatus?: () => Promise<unknown>;
+  readonly installLocalModels?: () => Promise<unknown>;
+}
+
+function getDesktopRuntimeBridge(): Required<DesktopRuntimeBridge> | undefined {
+  const bridge = (globalThis as typeof globalThis & {
+    readonly interviewDesktop?: DesktopRuntimeBridge;
+  }).interviewDesktop;
+  if (
+    bridge === undefined
+    || typeof bridge.getLocalRuntimeStatus !== "function"
+    || typeof bridge.installLocalModels !== "function"
+  ) {
+    return undefined;
+  }
+  return bridge as Required<DesktopRuntimeBridge>;
+}
+
+function parseDesktopRuntimeStatus(value: unknown): DesktopRuntimeStatus | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const record = value as Record<string, unknown>;
+  const speech = parseCapability(record["speech"]);
+  const tts = parseCapability(record["tts"]);
+  const python = record["python"];
+  const modelSetup = record["modelSetup"];
+  if (
+    record["protocolVersion"] !== 1
+    || speech === undefined
+    || tts === undefined
+    || typeof python !== "object"
+    || python === null
+    || (python as Record<string, unknown>)["strategy"] !== "SYSTEM_CPYTHON"
+    || !Array.isArray((python as Record<string, unknown>)["supportedVersions"])
+    || typeof modelSetup !== "object"
+    || modelSetup === null
+  ) {
+    return undefined;
+  }
+  const versions = (python as Record<string, unknown>)["supportedVersions"] as unknown[];
+  const setup = modelSetup as Record<string, unknown>;
+  const setupState = setup["state"];
+  if (
+    versions.length !== 2
+    || versions[0] !== "3.12"
+    || versions[1] !== "3.13"
+    || !["IDLE", "INSTALLING", "INSTALLED", "FAILED"].includes(String(setupState))
+    || typeof setup["restartRequired"] !== "boolean"
+  ) {
+    return undefined;
+  }
+  return {
+    protocolVersion: 1,
+    speech,
+    tts,
+    python: {
+      strategy: "SYSTEM_CPYTHON",
+      supportedVersions: ["3.12", "3.13"]
+    },
+    modelSetup: {
+      state: setupState as DesktopModelSetupState,
+      restartRequired: setup["restartRequired"]
+    }
+  };
+}
+
+function parseCapability(value: unknown): DesktopRuntimeStatus["speech"] | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const record = value as Record<string, unknown>;
+  const state = record["state"];
+  if (!["READY", "MISSING_ASSET", "FAILED", "UNAVAILABLE"].includes(String(state))) {
+    return undefined;
+  }
+  const reasonCode = record["reasonCode"];
+  if (reasonCode !== undefined && typeof reasonCode !== "string") return undefined;
+  return {
+    state: state as DesktopRuntimeCapabilityState,
+    ...(reasonCode === undefined ? {} : { reasonCode })
+  };
+}
+
+function describeVoiceRuntime(status: DesktopRuntimeStatus): string {
+  if (status.speech.state === "READY" && status.tts.state === "READY") {
+    return "Voice runtime ready.";
+  }
+  if (status.modelSetup.restartRequired) {
+    return "Verified models installed. Restart Interview App to activate them.";
+  }
+  if (
+    status.speech.reasonCode === "PYTHON_RUNTIME_UNAVAILABLE"
+    || status.tts.reasonCode === "PYTHON_RUNTIME_UNAVAILABLE"
+  ) {
+    return "Voice needs a compatible system CPython 3.12 or 3.13 runtime.";
+  }
+  if (status.speech.state === "MISSING_ASSET" || status.tts.state === "MISSING_ASSET") {
+    return "Voice models are not installed yet.";
+  }
+  if (status.speech.state === "FAILED" || status.tts.state === "FAILED") {
+    return "Voice runtime failed validation. Check the Python prerequisite and retry after restart.";
+  }
+  return "Voice is unavailable; typed interviews remain fully usable.";
+}
+
+
 export function SettingsPage({
   connection
 }: {
@@ -23,10 +144,36 @@ export function SettingsPage({
   };
 }) {
   const [draftBaseUrl, setDraftBaseUrl] = useState(connection?.baseUrl ?? "");
+  const desktopRuntime = getDesktopRuntimeBridge();
+  const [runtimeStatus, setRuntimeStatus] = useState<DesktopRuntimeStatus | undefined>();
+  const [runtimeStatusError, setRuntimeStatusError] = useState<string | undefined>();
+  const [installingModels, setInstallingModels] = useState(false);
 
   useEffect(() => {
     setDraftBaseUrl(connection?.baseUrl ?? "");
   }, [connection?.baseUrl]);
+
+  useEffect(() => {
+    if (desktopRuntime === undefined) return;
+    let active = true;
+    void desktopRuntime.getLocalRuntimeStatus()
+      .then((value) => {
+        if (!active) return;
+        const parsed = parseDesktopRuntimeStatus(value);
+        if (parsed === undefined) {
+          setRuntimeStatusError("Desktop runtime status was malformed.");
+          return;
+        }
+        setRuntimeStatus(parsed);
+        setRuntimeStatusError(undefined);
+      })
+      .catch(() => {
+        if (active) setRuntimeStatusError("Desktop runtime status is unavailable.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [desktopRuntime]);
 
   const {
     settings,
@@ -284,6 +431,71 @@ export function SettingsPage({
           </div>
         </section>
       )}
+      {desktopRuntime !== undefined && (
+        <section className="expressive-settings__row">
+          <div className="expressive-settings__copy">
+            <span>{connection === undefined ? "05" : "06"}</span>
+            <div>
+              <h3>Local voice runtime</h3>
+              <p>
+                Models stay outside the installer. Every download is verified before
+                it is published to the local cache.
+              </p>
+            </div>
+          </div>
+          <div className="expressive-settings__control expressive-settings__runtime">
+            <div className="expressive-settings__runtime-status" aria-live="polite">
+              {runtimeStatusError
+                ?? (runtimeStatus === undefined
+                  ? "Checking local runtime…"
+                  : describeVoiceRuntime(runtimeStatus))}
+            </div>
+            <div className="expressive-settings__runtime-meta">
+              <span>Python: system CPython 3.12–3.13</span>
+              <span>Typed interviews do not require Python or model files.</span>
+            </div>
+            <button
+              type="button"
+              disabled={
+                installingModels
+                || runtimeStatus?.modelSetup.state === "INSTALLING"
+                || (
+                  runtimeStatus?.speech.state === "READY"
+                  && runtimeStatus.tts.state === "READY"
+                )
+              }
+              onClick={() => {
+                setInstallingModels(true);
+                setRuntimeStatusError(undefined);
+                void desktopRuntime.installLocalModels()
+                  .then((value) => {
+                    const parsed = parseDesktopRuntimeStatus(value);
+                    if (parsed === undefined) {
+                      setRuntimeStatusError("Model setup returned an invalid status.");
+                      return;
+                    }
+                    setRuntimeStatus(parsed);
+                  })
+                  .catch(() => {
+                    setRuntimeStatusError(
+                      "Model setup failed. Check network access and disk space, then retry."
+                    );
+                  })
+                  .finally(() => {
+                    setInstallingModels(false);
+                  });
+              }}
+            >
+              {installingModels || runtimeStatus?.modelSetup.state === "INSTALLING"
+                ? "Installing verified models…"
+                : runtimeStatus?.speech.state === "READY" && runtimeStatus.tts.state === "READY"
+                  ? "Voice ready"
+                  : "Install / verify voice models"}
+            </button>
+          </div>
+        </section>
+      )}
+
     </div>
   );
 }
