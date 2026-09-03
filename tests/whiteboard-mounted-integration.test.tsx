@@ -134,6 +134,50 @@ describe("Real tldraw mounted browser integration", () => {
     container.remove();
   });
 
+  it("preserves the mounted tldraw store while the paused workspace is hidden", async () => {
+    const container = document.createElement("div");
+    container.style.width = "800px";
+    container.style.height = "600px";
+    document.body.appendChild(container);
+
+    const adapter = new TldrawWhiteboardAdapter();
+    const handle = createWhiteboardCanvasMount({ adapter });
+
+    await act(async () => {
+      handle.mount(container);
+    });
+
+    const bridge = requireRealTldrawBridge(handle);
+    const shape = adapter.createStudentShape({
+      type: "geo",
+      x: 80,
+      y: 90,
+      props: { geo: "rectangle", w: 120, h: 70, text: "persist me" }
+    });
+    const revisionBeforePause = adapter.getBoardRevision();
+
+    // Paused Home hides the live workspace instead of conditionally removing
+    // it. The same bridge/store must therefore remain attached.
+    container.hidden = true;
+    container.style.display = "none";
+
+    expect(adapter.getEditor()).toBe(bridge);
+    expect(bridge.getShape(shape.id)).toBeDefined();
+    expect(adapter.getBoardRevision()).toBe(revisionBeforePause);
+
+    container.hidden = false;
+    container.style.display = "";
+
+    expect(adapter.getEditor()).toBe(bridge);
+    expect(bridge.getShape(shape.id)?.props?.["text"]).toBe("persist me");
+    expect(adapter.getBoardRevision()).toBe(revisionBeforePause);
+
+    await act(async () => {
+      handle.unmount();
+    });
+    container.remove();
+  });
+
   it("exercises real DOM pointer and user events on the mounted canvas", async () => {
     const container = document.createElement("div");
     container.style.width = "800px";
