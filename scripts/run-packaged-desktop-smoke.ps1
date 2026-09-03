@@ -19,6 +19,23 @@ if (-not (Test-Path $exe)) {
   throw "Packaged executable missing at $exe"
 }
 
+function Get-PackagedAppPids {
+  try {
+    return @(
+      Get-CimInstance Win32_Process |
+        Where-Object {
+          $_.ExecutablePath -and $_.ExecutablePath.Equals(
+            $exe,
+            [StringComparison]::OrdinalIgnoreCase
+          )
+        } |
+        ForEach-Object { [int]$_.ProcessId }
+    )
+  } catch {
+    return @()
+  }
+}
+
 function Get-WorkerPids {
   try {
     return @(
@@ -38,7 +55,7 @@ function Stop-TrackedProcess {
   }
   try {
     if (-not $Process.HasExited) {
-      Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
+      & taskkill.exe /PID $Process.Id /T /F *> $null
       $Process.WaitForExit(10000) | Out-Null
     }
   } catch {
@@ -47,6 +64,7 @@ function Stop-TrackedProcess {
 }
 
 $beforeWorkers = @(Get-WorkerPids)
+$beforeAppPids = @(Get-PackagedAppPids)
 $oldPython = $env:INTERVIEW_LOCAL_PYTHON
 $oldSmokeUserData = $env:INTERVIEW_PACKAGED_SMOKE_USER_DATA
 $smoke = $null
@@ -97,6 +115,10 @@ Start-Sleep -Milliseconds 750
 $afterWorkers = @(Get-WorkerPids | Where-Object { $beforeWorkers -notcontains $_ })
 if ($afterWorkers.Count -gt 0) {
   throw "Packaged shutdown left local-model worker processes: $($afterWorkers -join ', ')"
+}
+$afterAppPids = @(Get-PackagedAppPids | Where-Object { $beforeAppPids -notcontains $_ })
+if ($afterAppPids.Count -gt 0) {
+  throw "Packaged shutdown left Electron process descendants: $($afterAppPids -join ', ')"
 }
 
 Remove-Item -Recurse -Force $smokeRoot -ErrorAction SilentlyContinue
