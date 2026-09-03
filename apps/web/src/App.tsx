@@ -341,9 +341,10 @@ export const App: React.FC = () => {
     session.pauseSession
   ]);
 
-  const productPage = (
+  const productRoute = displayRoute.page === "interview" ? null : displayRoute;
+  const productPage = productRoute === null ? null : (
     <ProductPageRouter
-      route={displayRoute}
+      route={productRoute}
       sessions={session.availableSessions}
       activeSessionId={resumableActiveSessionId}
       currentSessionId={hasActiveInterview ? session.sessionId : null}
@@ -408,9 +409,9 @@ export const App: React.FC = () => {
     />
   );
   const showingPausedHome =
-    hasActiveInterview && session.isPaused && displayRoute.page === "home";
+    hasActiveInterview && session.isPaused && productRoute?.page === "home";
 
-  if (displayRoute.page !== "interview" && !showingPausedHome) {
+  if (productRoute !== null && !showingPausedHome) {
     return productPage;
   }
 
