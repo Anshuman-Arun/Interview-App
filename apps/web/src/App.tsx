@@ -313,6 +313,15 @@ export const App: React.FC = () => {
     hasActiveInterview,
     session.isPaused
   );
+  const interviewBackgrounded = displayRoute.page !== "interview";
+  const whiteboardStatusLabel =
+    session.whiteboardSync.status === "SYNCED"
+      ? "Board synced"
+      : session.whiteboardSync.status === "PENDING"
+        ? "Saving board…"
+        : session.whiteboardSync.status === "UNSYNCHRONIZED"
+          ? "Reconnect needed"
+          : "Connecting board…";
 
   useEffect(() => {
     if (!hasActiveInterview) return;
@@ -417,8 +426,13 @@ export const App: React.FC = () => {
     <>
       {productPage}
       <div
-        hidden={displayRoute.page !== "interview"}
-        className="interview-app-container flex flex-col h-screen w-screen bg-slate-100 font-sans text-slate-900 overflow-hidden"
+        aria-hidden={interviewBackgrounded}
+        data-backgrounded={String(interviewBackgrounded)}
+        className={
+          interviewBackgrounded
+            ? "interview-app-container interview-app-container--backgrounded flex flex-col h-screen w-screen bg-slate-100 font-sans text-slate-900 overflow-hidden"
+            : "interview-app-container flex flex-col h-screen w-screen bg-slate-100 font-sans text-slate-900 overflow-hidden"
+        }
       >
       {/* Focused live interview header */}
       <header className="app-header">
@@ -535,19 +549,17 @@ export const App: React.FC = () => {
         </button>
       </div>
 
-      {/* Error Banner */}
       {session.error !== null && (
-        <div className="bg-rose-50 border-b border-rose-200 px-6 py-2.5 flex items-center justify-between text-xs text-rose-800 shrink-0">
-          <div className="flex items-center gap-2">
-            <span className="font-bold">⚠️ Notice:</span>
-            <span>{session.error}</span>
-          </div>
+        <div className="interview-notice" role="status">
+          <span className="interview-notice__dot" aria-hidden="true" />
+          <span className="interview-notice__message">{session.error}</span>
           <button
             type="button"
             onClick={session.clearError}
-            className="text-rose-600 hover:text-rose-900 font-bold px-2"
+            className="interview-notice__dismiss"
+            aria-label="Dismiss notice"
           >
-            ✕
+            ×
           </button>
         </div>
       )}
@@ -670,35 +682,22 @@ export const App: React.FC = () => {
 
         {/* Right Panel: Whiteboard */}
         <section className="right-panel w-1/2 flex flex-col bg-slate-50 overflow-hidden">
-          {session.whiteboardSync.status !== "SYNCED" && (
-            <div className="panel-tabs bg-white border-b border-slate-200 px-4 py-2 flex items-center justify-between shrink-0">
-              <strong className="text-xs text-slate-700" data-testid="tab-whiteboard">
-                Whiteboard
-              </strong>
-              <div className="text-[11px] text-slate-500 flex items-center gap-2">
-                <span
-                  className="w-2 h-2 rounded-full"
-                  data-sync={session.whiteboardSync.status}
-                />
-                <span>
-                  {session.whiteboardSync.status === "PENDING"
-                    ? "Saving…"
-                    : session.whiteboardSync.status === "UNSYNCHRONIZED"
-                      ? "Board unavailable"
-                      : "Preparing…"}
-                </span>
-              </div>
-            </div>
-          )}
-
           <div className="flex-1 p-4 overflow-hidden flex flex-col">
             <div className="whiteboard-wrapper flex-1 bg-white border border-slate-200 rounded-lg shadow-xs overflow-hidden flex flex-col">
-              <div className="whiteboard-toolbar px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs text-slate-600">
-                <span className="font-semibold">Whiteboard</span>
+              <div className="whiteboard-toolbar">
+                <div
+                  className="whiteboard-toolbar__status"
+                  data-sync={session.whiteboardSync.status}
+                  aria-live="polite"
+                >
+                  <span className="whiteboard-toolbar__status-dot" aria-hidden="true" />
+                  <span>{whiteboardStatusLabel}</span>
+                </div>
                 <button
                   type="button"
                   onClick={() => void whiteboardAdapter.clearAiOverlay()}
-                  className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-[11px] font-medium"
+                  className="whiteboard-toolbar__action"
+                  title="Remove interviewer annotations"
                 >
                   Clear AI marks
                 </button>
