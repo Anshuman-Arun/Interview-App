@@ -316,9 +316,7 @@ function isLegacyUninitializedQuantSessionState(
   state: Readonly<ReturnType<SessionWriter["getState"]>>
 ): boolean {
   if (!state.started) return false;
-  if (state.problem !== undefined || state.quantTrading !== undefined || state.quantResearch !== undefined) {
-    return false;
-  }
+  if (state.quantTrading !== undefined || state.quantResearch !== undefined) return false;
   return state.configuration?.mode === "QUANT_TRADING"
     || state.configuration?.mode === "QUANT_RESEARCH";
 }
