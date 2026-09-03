@@ -12,6 +12,7 @@ import {
   type ReasoningTurnInput
 } from "../../domain/src/index.js";
 import { snapshotValidatedModelCapabilities } from "./runtime-capabilities.js";
+import { snapshotUntrustedModelCapabilities } from "./execution.js";
 
 export interface SupervisedCliExecutionRequest {
   readonly args: readonly string[];
