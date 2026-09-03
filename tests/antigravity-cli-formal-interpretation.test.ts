@@ -192,7 +192,7 @@ describe("Antigravity formal interpretation adapter", () => {
       signal: new AbortController().signal
     })).resolves.toEqual(candidateResult());
 
-    expect(captured?.timeoutMs).toBe(4_500);
+    expect(captured?.timeoutMs).toBe(1_250);
     expect(captured?.maxStdoutBytes).toBeLessThanOrEqual(256 * 1024);
     expect(captured?.args).toContain("--json-schema");
     if (captured === undefined) throw new Error("Expected captured formal execution");
