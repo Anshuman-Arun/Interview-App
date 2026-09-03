@@ -66,10 +66,7 @@ export class ManagedLocalVisionBackend implements VisionInferenceBackend {
     if (payload === undefined) {
       return Promise.reject(new Error("Local vision requires an execution-only image payload"));
     }
-    if (
-      payload.metadata.mimeType !== "image/png"
-      || payload.metadata.contentDigest !== request.snapshotBasis.snapshotHash
-    ) {
+    if (payload.metadata.contentDigest !== request.snapshotBasis.snapshotHash) {
       return Promise.reject(new Error("Local vision image payload does not match the request snapshot basis"));
     }
     if (this.reservations >= MAX_VISION_QUEUE_RESERVATIONS) {
