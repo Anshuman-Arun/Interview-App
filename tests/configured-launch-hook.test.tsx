@@ -286,7 +286,8 @@ describe("configured interview hook launch", () => {
         ok: false,
         error: {
           code: "CONFLICT",
-          message: "Selected provider requires configured authentication"
+          message: "Provider launch conflict",
+          providerLaunchReason: "CREDENTIALS_REQUIRED"
         }
       }, 409);
     };
