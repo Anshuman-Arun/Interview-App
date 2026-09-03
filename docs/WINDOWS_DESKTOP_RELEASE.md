@@ -136,7 +136,7 @@ Windows packaging CI validates:
 11. missing-Python graceful degradation;
 12. OS single-instance lock behavior;
 13. clean shutdown with no newly-owned `local_model_worker.py` process;
-14. silent install/reinstall/uninstall with history/cache preservation.
+14. silent prior-version install/current-version upgrade/uninstall with history/cache preservation.
 
 The packaged smoke does not switch production inference to a fixture/mock provider.
 Full typed-input behavior remains covered by the repository end-to-end suite and
