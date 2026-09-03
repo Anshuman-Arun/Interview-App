@@ -15,6 +15,7 @@ describe("expressive product routing", () => {
   it("round-trips dependency-free product routes", () => {
     const routes = [
       { page: "home" } as const,
+      { page: "new" } as const,
       { page: "interview" } as const,
       { page: "sessions" } as const,
       { page: "settings" } as const,
@@ -59,6 +60,8 @@ describe("expressive product routing", () => {
 
     expect(routeForActiveInterview({ page: "home" }, true, true))
       .toEqual({ page: "home" });
+    expect(routeForActiveInterview({ page: "new" }, true, true))
+      .toEqual({ page: "new" });
     expect(routeForActiveInterview({ page: "interview" }, true, true))
       .toEqual({ page: "home" });
     expect(routeForActiveInterview({ page: "sessions" }, true, true))
@@ -69,6 +72,7 @@ describe("expressive product routing", () => {
 
   it("uses restrained document titles", () => {
     expect(productRouteTitle({ page: "home" })).toBe("Interview");
+    expect(productRouteTitle({ page: "new" })).toBe("New interview · Interview");
     expect(productRouteTitle({ page: "sessions" })).toBe("Sessions · Interview");
     expect(productRouteTitle({ page: "settings" })).toBe("Settings · Interview");
     expect(productRouteTitle({ page: "review", sessionId, view: "replay" }))
