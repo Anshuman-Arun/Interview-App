@@ -84,6 +84,37 @@ export const App: React.FC = () => {
     whiteboardAdapter
   });
   const { route, navigate } = useProductNavigation();
+  const routeRef = useRef(route);
+  routeRef.current = route;
+
+  const openDefaultReview = useCallback((targetSessionId: SessionId): void => {
+    navigate({
+      page: "review",
+      sessionId: targetSessionId,
+      view: "replay"
+    });
+
+    void session.readSessionConfiguration(targetSessionId)
+      .then((configuration) => {
+        const currentRoute = routeRef.current;
+        if (
+          configuration.mode !== "OXFORD_MATHEMATICS"
+          || currentRoute.page !== "review"
+          || currentRoute.sessionId !== targetSessionId
+          || currentRoute.view !== "replay"
+        ) {
+          return;
+        }
+        navigate({
+          page: "review",
+          sessionId: targetSessionId,
+          view: "evaluation"
+        }, { replace: true });
+      })
+      .catch(() => {
+        // Replay is the conservative fallback for unknown or unreadable mode.
+      });
+  }, [navigate, session.readSessionConfiguration]);
 
   const recoverySessionParse = SessionIdSchema.safeParse(recoverySessionInput.trim());
   const recoverySessionId = recoverySessionParse.success
@@ -205,15 +236,11 @@ export const App: React.FC = () => {
     try {
       const recoveredStatus = await session.recoverSession(targetSessionId);
       if (recoveredStatus === null) return;
-      navigate(
-        recoveredStatus === "ACTIVE"
-          ? { page: "interview" }
-          : {
-              page: "review",
-              sessionId: targetSessionId,
-              view: "evaluation"
-            }
-      );
+      if (recoveredStatus === "ACTIVE") {
+        navigate({ page: "interview" });
+      } else {
+        openDefaultReview(targetSessionId);
+      }
     } catch {
       // Error handled in session.error
     } finally {
@@ -256,15 +283,11 @@ export const App: React.FC = () => {
     try {
       const recoveredStatus = await session.recoverSession(recoverySessionId);
       if (recoveredStatus === null) return;
-      navigate(
-        recoveredStatus === "ACTIVE"
-          ? { page: "interview" }
-          : {
-              page: "review",
-              sessionId: recoverySessionId,
-              view: "evaluation"
-            }
-      );
+      if (recoveredStatus === "ACTIVE") {
+        navigate({ page: "interview" });
+      } else {
+        openDefaultReview(recoverySessionId);
+      }
     } catch {
       // Error handled in session.error
     } finally {
@@ -506,6 +529,10 @@ export const App: React.FC = () => {
           }
         }}
         onReview={(sessionId, view, options) => {
+          if (view === "evaluation" && options === undefined) {
+            openDefaultReview(sessionId);
+            return;
+          }
           navigate(
             {
               page: "review",
