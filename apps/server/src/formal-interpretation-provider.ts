@@ -109,9 +109,9 @@ implements FormalInterpretationProvider {
       const admission = await settleUnlessAborted(admissionWork, signal);
       if (admission === ABORTED) {
         void admissionWork.then(
-          (lateSession) => lateSession.close().catch(() => undefined),
+          (lateSession) => closeAdmittedSessionBestEffort(lateSession),
           () => undefined
-        );
+        ).catch(() => undefined);
         return abstain(request);
       }
       admittedSession = admission;
@@ -152,7 +152,7 @@ implements FormalInterpretationProvider {
       // Closing the policy-admission session is cleanup only. Never allow a
       // fallible provider's close hook to hold the formal-analysis slot open
       // after the bounded inference path has otherwise settled.
-      void admittedSession.close().catch(() => undefined);
+      closeAdmittedSessionBestEffort(admittedSession);
     }
   }
 }
@@ -179,6 +179,16 @@ async function settleUnlessAborted<T>(
     if (onAbort !== undefined) {
       signal.removeEventListener("abort", onAbort);
     }
+  }
+}
+
+function closeAdmittedSessionBestEffort(
+  session: Awaited<ReturnType<typeof openProviderExecutionSession>>
+): void {
+  try {
+    void Promise.resolve(session.close()).catch(() => undefined);
+  } catch {
+    // Cleanup is never authoritative and must not escape a bounded analysis.
   }
 }
 
