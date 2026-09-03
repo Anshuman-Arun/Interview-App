@@ -36,13 +36,14 @@ function jsonResponse(body: unknown, status = 200): Response {
 function setInputValue(input: HTMLInputElement, value: string): void {
   // Intentional: use the native prototype setter so React's value tracker sees
   // the following input event as a candidate edit.
-  // eslint-disable-next-line @typescript-eslint/unbound-method
-  const setter = Object.getOwnPropertyDescriptor(
+  const descriptor = Object.getOwnPropertyDescriptor(
     HTMLInputElement.prototype,
     "value"
-  )?.set;
-  if (setter === undefined) throw new Error("HTML input value setter is unavailable");
-  setter.call(input, value);
+  );
+  if (descriptor?.set === undefined) {
+    throw new Error("HTML input value setter is unavailable");
+  }
+  descriptor.set.call(input, value);
   input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
