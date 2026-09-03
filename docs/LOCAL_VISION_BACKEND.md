@@ -47,9 +47,13 @@ The canonical model-set identity is:
 
 `ea51bb3eebca460eeded83ccc81f4d0a50aae0e4aadcf64aa8eead1e50410a4d`
 
-The upstream repository's reviewed LICENSE file is MIT. Asset manifests pin
-the exact upstream revision, release URL, size, digest, model family, and
-version. No mutable `latest` identity is used.
+Upstream licensing metadata is inconsistent: the reviewed repository
+`LICENSE` file is MIT, while the same pinned revision's `setup.py` declares
+`Apache-2.0`. The asset manifest records both declarations instead of
+silently choosing one. The Windows installer does not redistribute these model
+weights; they remain an explicit post-install download from the pinned upstream
+release. Asset manifests still pin the exact upstream revision, release URL,
+size, digest, model family, and version. No mutable `latest` identity is used.
 
 ## Why this runtime
 
