@@ -100,8 +100,9 @@ def peak_working_set_bytes() -> int | None:
         counters.cb,
     )
     if not ok:
-        error_code = ctypes.get_last_error()
-        raise OSError(error_code, "GetProcessMemoryInfo failed")
+        # Performance telemetry is informative smoke evidence, not a model
+        # correctness condition. Hosted Windows can deny this process query.
+        return None
     return int(counters.PeakWorkingSetSize)
 
 
