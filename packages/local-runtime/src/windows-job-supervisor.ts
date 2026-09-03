@@ -594,7 +594,7 @@ foreach ($name in $controlNames) {
 }
 Write-InterviewSupervisorStage "PS_CONFIG_OK"
 
-$stream = New-Object System.IO.FileStream(
+$stream = [System.IO.FileStream]::new(
   $assemblyPath,
   [System.IO.FileMode]::Open,
   [System.IO.FileAccess]::Read,

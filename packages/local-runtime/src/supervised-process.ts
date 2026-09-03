@@ -979,7 +979,7 @@ function packWindowsSupervisorArguments(
 ): string {
   let output = "";
   for (const argument of arguments_) {
-    output += `${argument.length}:${argument}`;
+    output += `${String(argument.length)}:${argument}`;
   }
   return output;
 }
