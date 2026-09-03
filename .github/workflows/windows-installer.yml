@@ -17,6 +17,7 @@ jobs:
     env:
       CI: true
       INTERVIEW_CI_PROVIDER_MODE: mock-only
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
