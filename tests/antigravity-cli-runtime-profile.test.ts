@@ -85,6 +85,25 @@ describe("supervised Antigravity runtime profile", () => {
   );
 
   it.runIf(process.platform === "win32")(
+    "returns one stable frozen runtime object for repeated selected-provider resolution",
+    async () => {
+      const source = createApplicationProviderAdapterRuntimeSource();
+      const selection = {
+        providerId: ANTIGRAVITY_CLI_PROVIDER_ID,
+        modelId: ANTIGRAVITY_CLI_MODEL_ID
+      } as const;
+
+      const first = source.resolveRuntime(selection);
+      const second = source.resolveRuntime(selection);
+
+      expect(first).toBe(second);
+      expect(Object.isFrozen(first)).toBe(true);
+      expect(hasRuntimeExecutor(first)).toBe(true);
+      await expect(source.drain()).resolves.toBeUndefined();
+    }
+  );
+
+  it.runIf(process.platform === "win32")(
     "does not claim spend-impossible billing proof from profile isolation alone",
     async () => {
       const source = createApplicationProviderAdapterRuntimeSource();
