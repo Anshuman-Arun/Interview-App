@@ -260,6 +260,42 @@ describe("desktop local model runtime", () => {
     });
   });
 
+  it("refuses model downloads before asset admission when Python is unavailable", async () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-model-install-python-missing-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: join(
+        temporaryRoot("desktop-model-install-python-bin-"),
+        process.platform === "win32" ? "python.exe" : "python3"
+      )
+    });
+    compositions.push(composition);
+
+    let cleanupCalls = 0;
+    let installCalls = 0;
+    const mutable = composition as unknown as {
+      assetManager: {
+        cleanupTemporary(signal?: AbortSignal): Promise<void>;
+        install(...args: readonly unknown[]): Promise<unknown>;
+      };
+    };
+    mutable.assetManager.cleanupTemporary = async () => {
+      cleanupCalls += 1;
+    };
+    mutable.assetManager.install = async () => {
+      installCalls += 1;
+      return {};
+    };
+
+    await expect(composition.installVoiceAssets()).rejects.toThrow(
+      "compatible Python runtime"
+    );
+    expect(cleanupCalls).toBe(0);
+    expect(installCalls).toBe(0);
+  });
+
   it("reports an incompatible Python runtime before model admission", async () => {
     const composition = new DesktopLocalRuntimeComposition({
       appDataRoot: temporaryRoot("desktop-python-incompatible-"),
