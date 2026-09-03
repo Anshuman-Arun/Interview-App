@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createHash } from "node:crypto";
-import { appendFileSync, createReadStream, lstatSync, realpathSync, rmSync } from "node:fs";
+import { createReadStream, lstatSync, realpathSync, rmSync } from "node:fs";
 import { chmod, lstat, mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path, { win32 as win32Path } from "node:path";
@@ -668,17 +668,7 @@ export class SupervisedProcessRunner {
     });
     child.stderr.on("data", (value: Buffer) => {
       if (!Buffer.isBuffer(value) || settled) return;
-      if (
-        this.platform === "win32"
-        && process.env["INTERVIEW_SUPERVISOR_STAGE_DEBUG"] === "1"
-      ) {
-        const diagnosticText = value.toString("utf8");
-        for (const match of diagnosticText.matchAll(
-          /INTERVIEW_SUPERVISOR_STAGE:[A-Z_]+/gu
-        )) {
-          process.stderr.write(match[0] + "\n");
-        }
-      }
+
       if (stderrBytes + value.length > request.maxStderrBytes) {
         requestCleanup("OUTPUT_LIMIT_EXCEEDED");
         return;
@@ -840,7 +830,6 @@ export class SupervisedProcessRunner {
       throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
     }
 
-    traceWindowsSupervisorStage("NODE_HELPER_ACQUIRE");
     let assemblyLease = acquireSharedWindowsSupervisorAssembly(
       identity.canonicalPath,
       this.temporaryRoot,
@@ -852,7 +841,6 @@ export class SupervisedProcessRunner {
         assemblyLease.entry.promise,
         request.signal
       );
-      traceWindowsSupervisorStage("NODE_HELPER_READY");
       if (request.signal !== undefined && abortSignalAborted(request.signal)) {
         throw new SupervisedProcessError("EXECUTION_CANCELLED");
       }
@@ -926,8 +914,7 @@ export class SupervisedProcessRunner {
       "INTERVIEW_SUPERVISED_STDIN_SHA256",
       "INTERVIEW_SUPERVISED_ASSEMBLY_PATH",
       "INTERVIEW_SUPERVISED_ASSEMBLY_SHA256",
-      "INTERVIEW_SUPERVISED_BOOTSTRAP",
-      "INTERVIEW_SUPERVISOR_STAGE_DEBUG_FILE"
+      "INTERVIEW_SUPERVISED_BOOTSTRAP"
     ]);
     if (
       Object.keys(supervisorEnvironment).some(
@@ -950,13 +937,7 @@ export class SupervisedProcessRunner {
     supervisorEnvironment.INTERVIEW_SUPERVISED_ASSEMBLY_SHA256 = assembly.sha256;
     supervisorEnvironment.INTERVIEW_SUPERVISED_BOOTSTRAP =
       WINDOWS_JOB_SUPERVISOR_SCRIPT;
-    if (
-      process.env["INTERVIEW_SUPERVISOR_STAGE_DEBUG"] === "1"
-      && typeof process.env["INTERVIEW_SUPERVISOR_STAGE_DEBUG_FILE"] === "string"
-    ) {
-      supervisorEnvironment.INTERVIEW_SUPERVISOR_STAGE_DEBUG_FILE =
-        process.env["INTERVIEW_SUPERVISOR_STAGE_DEBUG_FILE"];
-    }
+
     if (
       windowsEnvironmentBlockCharacters(supervisorEnvironment)
       > MAX_WINDOWS_SUPERVISOR_ENVIRONMENT_CHARACTERS
@@ -984,25 +965,6 @@ function packWindowsSupervisorArguments(
   return output;
 }
 
-function traceWindowsSupervisorStage(stage: string): void {
-  if (
-    process.platform !== "win32"
-    || process.env["INTERVIEW_SUPERVISOR_STAGE_DEBUG"] !== "1"
-  ) {
-    return;
-  }
-  const target = process.env["INTERVIEW_SUPERVISOR_STAGE_DEBUG_FILE"];
-  if (typeof target !== "string" || target.length === 0) return;
-  try {
-    appendFileSync(
-      target,
-      `INTERVIEW_SUPERVISOR_STAGE:${stage}\n`,
-      { encoding: "utf8" }
-    );
-  } catch {
-    // Temporary diagnostic only; never affect supervised execution semantics.
-  }
-}
 
 function registerWindowsSupervisorTempDirectory(
   directory: string

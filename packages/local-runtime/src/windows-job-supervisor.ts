@@ -320,7 +320,6 @@ public static class InterviewJobSupervisor
         string[] arguments = ParseArguments(packedArguments);
         try
         {
-            Console.Error.WriteLine("INTERVIEW_SUPERVISOR_STAGE:RUN_ENTER");
             using (FileStream executableLock = new FileStream(
                 executable,
                 FileMode.Open,
@@ -344,7 +343,6 @@ public static class InterviewJobSupervisor
                     throw new InvalidOperationException("stdin identity mismatch");
                 }
                 stdinLock.Position = 0;
-                Console.Error.WriteLine("INTERVIEW_SUPERVISOR_STAGE:INPUT_OK");
 
                 string actualSha256 = Sha256Hex(executableLock);
                 if (!String.Equals(
@@ -355,7 +353,6 @@ public static class InterviewJobSupervisor
                     throw new InvalidOperationException("executable identity mismatch");
                 }
 
-                Console.Error.WriteLine("INTERVIEW_SUPERVISOR_STAGE:EXE_OK");
                 job = CreateJobObjectW(IntPtr.Zero, null);
             if (job == IntPtr.Zero)
                 throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
@@ -381,7 +378,6 @@ public static class InterviewJobSupervisor
                 Marshal.FreeHGlobal(limitsPointer);
             }
 
-            Console.Error.WriteLine("INTERVIEW_SUPERVISOR_STAGE:JOB_OK");
             IntPtr childStdin = IntPtr.Zero;
             IntPtr childStdout = IntPtr.Zero;
             IntPtr childStderr = IntPtr.Zero;
@@ -399,7 +395,6 @@ public static class InterviewJobSupervisor
                 childStdout = DuplicateInheritable(GetStdHandle(STD_OUTPUT_HANDLE));
                 childStderr = DuplicateInheritable(GetStdHandle(STD_ERROR_HANDLE));
 
-                Console.Error.WriteLine("INTERVIEW_SUPERVISOR_STAGE:HANDLES_OK");
                 startup.StartupInfo.cb = (uint)Marshal.SizeOf(typeof(STARTUPINFOEX));
                 startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
                 startup.StartupInfo.hStdInput = childStdin;
@@ -455,7 +450,6 @@ public static class InterviewJobSupervisor
                 }
                 process = info.hProcess;
                 thread = info.hThread;
-                Console.Error.WriteLine("INTERVIEW_SUPERVISOR_STAGE:CREATE_OK");
             }
             finally
             {
@@ -487,14 +481,12 @@ public static class InterviewJobSupervisor
                 throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
             }
 
-            Console.Error.WriteLine("INTERVIEW_SUPERVISOR_STAGE:ASSIGN_OK");
             if (ResumeThread(thread) == 0xFFFFFFFF)
             {
                 TerminateProcess(process, 194);
                 throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
             }
             resumed = true;
-            Console.Error.WriteLine("INTERVIEW_SUPERVISOR_STAGE:RESUME_OK");
 
             if (WaitForSingleObject(process, INFINITE) != WAIT_OBJECT_0)
             {
@@ -502,7 +494,6 @@ public static class InterviewJobSupervisor
                 throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
             }
 
-            Console.Error.WriteLine("INTERVIEW_SUPERVISOR_STAGE:WAIT_OK");
             uint exitCode;
             if (!GetExitCodeProcess(process, out exitCode))
                 throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
@@ -524,17 +515,6 @@ public static class InterviewJobSupervisor
 
 export const WINDOWS_JOB_SUPERVISOR_SCRIPT = String.raw`
 $ErrorActionPreference = 'Stop'
-$stageDebugPath = $env:INTERVIEW_SUPERVISOR_STAGE_DEBUG_FILE
-function Write-InterviewSupervisorStage([string]$stage) {
-  if (-not [string]::IsNullOrWhiteSpace($stageDebugPath)) {
-    [System.IO.File]::AppendAllText(
-      $stageDebugPath,
-      "INTERVIEW_SUPERVISOR_STAGE:" + $stage + [Environment]::NewLine
-    )
-  }
-}
-Write-InterviewSupervisorStage "PS_ENTER"
-
 $executable = $env:INTERVIEW_SUPERVISED_EXECUTABLE
 $argumentsPacked = $env:INTERVIEW_SUPERVISED_ARGUMENTS
 $currentDirectoryValue = $env:INTERVIEW_SUPERVISED_CWD
@@ -544,7 +524,6 @@ $stdinBytesValue = $env:INTERVIEW_SUPERVISED_STDIN_BYTES
 $stdinSha256 = $env:INTERVIEW_SUPERVISED_STDIN_SHA256
 $assemblyPath = $env:INTERVIEW_SUPERVISED_ASSEMBLY_PATH
 $assemblySha256 = $env:INTERVIEW_SUPERVISED_ASSEMBLY_SHA256
-Write-InterviewSupervisorStage "PS_ENV_READ"
 
 if (
   [string]::IsNullOrWhiteSpace($executable) -or
@@ -574,7 +553,6 @@ $currentDirectory = if ($currentDirectoryValue.Length -eq 0) {
 } else {
   $currentDirectoryValue
 }
-Write-InterviewSupervisorStage "PS_REQUIRED_OK"
 
 $controlNames = @(
   "INTERVIEW_SUPERVISED_EXECUTABLE",
@@ -586,13 +564,11 @@ $controlNames = @(
   "INTERVIEW_SUPERVISED_STDIN_SHA256",
   "INTERVIEW_SUPERVISED_ASSEMBLY_PATH",
   "INTERVIEW_SUPERVISED_ASSEMBLY_SHA256",
-  "INTERVIEW_SUPERVISED_BOOTSTRAP",
-  "INTERVIEW_SUPERVISOR_STAGE_DEBUG_FILE"
+  "INTERVIEW_SUPERVISED_BOOTSTRAP"
 )
 foreach ($name in $controlNames) {
   [Environment]::SetEnvironmentVariable($name, $null, "Process")
 }
-Write-InterviewSupervisorStage "PS_CONFIG_OK"
 
 $stream = [System.IO.FileStream]::new(
   $assemblyPath,
@@ -600,12 +576,10 @@ $stream = [System.IO.FileStream]::new(
   [System.IO.FileAccess]::Read,
   [System.IO.FileShare]::Read
 )
-Write-InterviewSupervisorStage "PS_STREAM_OPEN"
 try {
   if ($stream.Length -le 0 -or $stream.Length -gt 5242880) {
     exit 190
   }
-  Write-InterviewSupervisorStage "PS_STREAM_SIZE_OK"
 
   $sha = [System.Security.Cryptography.SHA256]::Create()
   try {
@@ -614,7 +588,6 @@ try {
   finally {
     $sha.Dispose()
   }
-  Write-InterviewSupervisorStage "PS_HASH_OK"
   $actualSha256 = ([System.BitConverter]::ToString($digest)).Replace("-", "").ToLowerInvariant()
   if (-not [string]::Equals(
     $actualSha256,
@@ -623,7 +596,6 @@ try {
   )) {
     exit 190
   }
-  Write-InterviewSupervisorStage "PS_HASH_MATCH"
 
   $stream.Position = 0
   $bytes = [byte[]]::new([int]$stream.Length)
@@ -635,12 +607,10 @@ try {
     }
     $offset += $read
   }
-  Write-InterviewSupervisorStage "PS_READ_OK"
 }
 finally {
   $stream.Dispose()
 }
-Write-InterviewSupervisorStage "PS_BYTES_OK"
 
 try {
   $assembly = [System.Reflection.Assembly]::Load($bytes)
@@ -656,9 +626,7 @@ try {
 catch {
   exit 190
 }
-Write-InterviewSupervisorStage "PS_METHOD_OK"
 
-Write-InterviewSupervisorStage "PS_ENV_OK"
 
 try {
   $invokeArguments = [object[]]::new(7)
@@ -669,9 +637,7 @@ try {
   $invokeArguments[4] = [string]$stdinPath
   $invokeArguments[5] = [long]$stdinBytes
   $invokeArguments[6] = [string]$stdinSha256
-  Write-InterviewSupervisorStage "PS_INVOKE"
   $exitCode = [int]$runMethod.Invoke($null, $invokeArguments)
-  Write-InterviewSupervisorStage "PS_RETURN"
   exit $exitCode
 }
 catch {

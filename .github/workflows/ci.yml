@@ -87,20 +87,7 @@ jobs:
         run: pnpm test:desktop
 
       - name: Run supervised provider process safety tests
-        env:
-          INTERVIEW_SUPERVISOR_STAGE_DEBUG: "1"
-          INTERVIEW_SUPERVISOR_STAGE_DEBUG_FILE: ${{ runner.temp }}\supervisor-stages.log
         run: pnpm exec vitest run tests/supervised-process.test.ts -t "passes bounded stdin literally and returns bounded UTF-8 stdout"
-
-      - name: Print temporary supervisor stage trace
-        if: failure() && runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          if (Test-Path "${{ runner.temp }}\supervisor-stages.log") {
-            Get-Content "${{ runner.temp }}\supervisor-stages.log"
-          } else {
-            Write-Output "NO_SUPERVISOR_STAGE_TRACE"
-          }
 
       - name: Run complete Vitest suite
         # The CI variant keeps full discovery while bounding file-level
@@ -124,51 +111,6 @@ jobs:
 
       - name: Run synthetic interview demo
         run: pnpm demo
-
-
-  windows-supervisor-diagnostic:
-    name: windows supervisor diagnostic
-    runs-on: windows-latest
-    timeout-minutes: 8
-    env:
-      CI: true
-      INTERVIEW_CI_PROVIDER_MODE: mock-only
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Install pnpm 11.19.0
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-        with:
-          version: 11.19.0
-          run_install: false
-
-      - name: Set up Node 22
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Reproduce Windows supervisor echo
-        env:
-          INTERVIEW_SUPERVISOR_STAGE_DEBUG: "1"
-          INTERVIEW_SUPERVISOR_STAGE_DEBUG_FILE: ${{ runner.temp }}\supervisor-stages.log
-        run: pnpm exec vitest run tests/supervised-process.test.ts -t "passes bounded stdin literally and returns bounded UTF-8 stdout"
-
-      - name: Print supervisor stage trace
-        if: failure()
-        shell: pwsh
-        run: |
-          if (Test-Path "${{ runner.temp }}\supervisor-stages.log") {
-            Get-Content "${{ runner.temp }}\supervisor-stages.log"
-          } else {
-            Write-Output "NO_SUPERVISOR_STAGE_TRACE"
-          }
 
 
   python-runtime-compat:
