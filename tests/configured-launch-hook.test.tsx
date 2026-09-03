@@ -380,12 +380,12 @@ describe("configured interview hook launch", () => {
     };
 
     const rendered = renderHook(fetchImpl);
-    let status: Awaited<ReturnType<UseInterviewSessionResult["recoverSession"]>>;
+    let status: Awaited<ReturnType<UseInterviewSessionResult["recoverSession"]>> = null;
     await act(async () => {
       status = await rendered.current().recoverSession(sessionId);
     });
 
-    expect(status!).toBe("ACTIVE");
+    expect(status).toBe("ACTIVE");
     expect(rendered.current().sessionId).toBe(sessionId);
     expect(rendered.current().configuration).toEqual(configuration);
     expect(rendered.current().configurationSource).toBe("CONFIGURED");
