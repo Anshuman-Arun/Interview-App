@@ -13,8 +13,9 @@ import {
 } from "../../../packages/providers/src/index.js";
 
 const ANTIGRAVITY_EXECUTABLE_ID = "antigravity-cli";
-const ANTIGRAVITY_MINIMUM_SAFE_CLI_VERSION = Object.freeze([1, 1, 15] as const);
-const ANTIGRAVITY_MAXIMUM_SAFE_CLI_VERSION = Object.freeze([1, 1, 16] as const);
+const ANTIGRAVITY_SAFE_CLI_LINE = Object.freeze([1, 1] as const);
+const ANTIGRAVITY_MINIMUM_SAFE_CLI_PATCH = 15;
+const ANTIGRAVITY_MAXIMUM_SAFE_CLI_PATCH = 16;
 const ANTIGRAVITY_VERSION_CHECK_TIMEOUT_MS = 10_000;
 const ANTIGRAVITY_VERSION_STDOUT_BYTES = 256;
 const ANTIGRAVITY_VERSION_STDERR_BYTES = 4 * 1024;
@@ -228,22 +229,13 @@ export function isSupportedAntigravityCliVersionOutput(
     return false;
   }
 
-  const [minimumMajor, minimumMinor, minimumPatch] =
-    ANTIGRAVITY_MINIMUM_SAFE_CLI_VERSION;
-  const [maximumMajor, maximumMinor, maximumPatch] =
-    ANTIGRAVITY_MAXIMUM_SAFE_CLI_VERSION;
+  const [safeMajor, safeMinor] = ANTIGRAVITY_SAFE_CLI_LINE;
   // Headless, profile, auth, and protocol behavior can change even in a patch
   // release. Admit only the exact upstream release window reviewed for this
   // adapter instead of silently trusting future 1.1.x builds.
-  if (
-    major !== minimumMajor
-    || minor !== minimumMinor
-    || major !== maximumMajor
-    || minor !== maximumMinor
-  ) {
-    return false;
-  }
-  return patch >= minimumPatch && patch <= maximumPatch;
+  if (major !== safeMajor || minor !== safeMinor) return false;
+  return patch >= ANTIGRAVITY_MINIMUM_SAFE_CLI_PATCH
+    && patch <= ANTIGRAVITY_MAXIMUM_SAFE_CLI_PATCH;
 }
 
 function assertRestrictedAntigravityProfile(environment: {

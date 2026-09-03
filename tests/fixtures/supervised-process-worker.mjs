@@ -90,9 +90,9 @@ switch (mode) {
         configuredContent: readFileSync(target, "utf8"),
         mutationExisted: existsSync(marker),
         supervisorVariablesExisted:
-          process.env.INTERVIEW_SUPERVISED_CONFIG !== undefined
-          || process.env.INTERVIEW_SUPERVISED_CONFIG_JSON !== undefined
-          || process.env.INTERVIEW_SUPERVISED_BOOTSTRAP !== undefined,
+          Object.keys(process.env).some(
+            (key) => key.toUpperCase().startsWith("INTERVIEW_SUPERVISED_")
+          ),
         powershellModulePathExisted:
           process.env.PSModulePath !== undefined,
         unicodeEnvironmentValue:

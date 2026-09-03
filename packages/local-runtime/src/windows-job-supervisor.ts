@@ -314,7 +314,7 @@ public static class InterviewJobSupervisor
 
     private static IntPtr BuildEnvironmentBlock(string packed)
     {
-        string[] framed = ParseFramedStrings(packed, 512);
+        string[] framed = ParseFramedStrings(packed, 1024);
         if ((framed.Length & 1) != 0)
             throw new InvalidOperationException("invalid environment framing");
 

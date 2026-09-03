@@ -934,26 +934,14 @@ export class SupervisedProcessRunner {
     )) {
       if (typeof value === "string") supervisorEnvironment[key] = value;
     }
-    const reservedControlNames = new Set([
-      "INTERVIEW_SUPERVISED_EXECUTABLE",
-      "INTERVIEW_SUPERVISED_ARGUMENTS",
-      "INTERVIEW_SUPERVISED_CWD",
-      "INTERVIEW_SUPERVISED_PROVIDER_ENVIRONMENT",
-      "INTERVIEW_SUPERVISED_EXPECTED_SHA256",
-      "INTERVIEW_SUPERVISED_STDIN_PATH",
-      "INTERVIEW_SUPERVISED_STDIN_BYTES",
-      "INTERVIEW_SUPERVISED_STDIN_SHA256",
-      "INTERVIEW_SUPERVISED_ASSEMBLY_PATH",
-      "INTERVIEW_SUPERVISED_ASSEMBLY_SHA256",
-      "INTERVIEW_SUPERVISED_BOOTSTRAP"
-    ]);
     if (
       Object.keys(environment).some(
-        (key) => reservedControlNames.has(key.toUpperCase())
+        (key) => key.toUpperCase().startsWith("INTERVIEW_SUPERVISED_")
       )
     ) {
       throw new SupervisedProcessError("INVALID_DEFINITION");
     }
+
     supervisorEnvironment.INTERVIEW_SUPERVISED_EXECUTABLE =
       expectedIdentity.canonicalPath;
     supervisorEnvironment.INTERVIEW_SUPERVISED_ARGUMENTS = packedArguments;

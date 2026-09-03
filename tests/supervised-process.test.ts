@@ -328,9 +328,8 @@ describe("supervised one-shot process execution", () => {
     "supports provider environments beyond the command-argument framing limit",
     async () => {
       const values: Record<string, string> = {};
-      for (let index = 0; index < 40; index += 1) {
-        values[`INTERVIEW_TEST_ENV_${String(index).padStart(2, "0")}`] =
-          `value-${String(index)}`;
+      for (let index = 0; index < 256; index += 1) {
+        values[`X${String(index).padStart(3, "0")}`] = "v";
       }
       const runtime = new SupervisedProcessRunner([{
         id: "fixture",
@@ -355,7 +354,7 @@ describe("supervised one-shot process execution", () => {
         executable: process.execPath,
         environment: {
           values: {
-            INTERVIEW_SUPERVISED_PROVIDER_ENVIRONMENT: "attacker-controlled"
+            INTERVIEW_SUPERVISED_FUTURE_CONTROL: "attacker-controlled"
           }
         }
       }]);
