@@ -4,20 +4,26 @@ import {
 } from "../../../../packages/model-assets/src/index.js";
 
 export type DesktopVoiceAssetGroup = "speech" | "tts";
+export type DesktopRuntimeAssetGroup = DesktopVoiceAssetGroup | "vision";
 
 export interface DesktopRuntimeAsset {
-  readonly group: DesktopVoiceAssetGroup;
+  readonly group: DesktopRuntimeAssetGroup;
   readonly manifest: AssetManifest;
   readonly runtimeRelativePath: string;
 }
 
 export const MOONSHINE_ASSET_REVISION = "35d84fc0eb2d7451da9973c990e8a77066abb105";
 export const SILERO_SOURCE_REVISION = "7e30209a3e901f9842f81b225f3e93d8199902b1";
+export const RAPID_LATEX_OCR_RELEASE_REVISION = "68680550355330b4ac68acdb947e776bc11f46d7";
+export const RAPID_LATEX_OCR_MODEL_SET_SHA256 =
+  "ea51bb3eebca460eeded83ccc81f4d0a50aae0e4aadcf64aa8eead1e50410a4d";
 
 export const SPEECH_WORKER_MODEL_IDENTITY =
   `moonshine-tiny-en@${MOONSHINE_ASSET_REVISION}+silero-v6.2.1@${SILERO_SOURCE_REVISION}`;
 export const TTS_WORKER_MODEL_IDENTITY =
   `kokoro-af-heart+${MOONSHINE_ASSET_REVISION}`;
+export const VISION_WORKER_MODEL_IDENTITY =
+  `rapid-latex-ocr@v0.0.0+set-${RAPID_LATEX_OCR_MODEL_SET_SHA256}`;
 
 const MOONSHINE_ASSET_REPOSITORY =
   "https://huggingface.co/moonshine-ai/moonshine-voice-assets";
@@ -100,6 +106,76 @@ const SILERO_VAD: DesktopRuntimeAsset = Object.freeze({
   }),
   runtimeRelativePath: "speech/silero/silero_vad.onnx"
 });
+
+
+const RAPID_LATEX_OCR_LICENSE = Object.freeze({
+  name: "MIT",
+  url: "https://github.com/RapidAI/RapidLaTeXOCR/blob/68680550355330b4ac68acdb947e776bc11f46d7/LICENSE"
+});
+const RAPID_LATEX_OCR_RELEASE_URL =
+  "https://github.com/RapidAI/RapidLaTeXOCR/releases/download/v0.0.0";
+
+function rapidLatexAsset(input: {
+  readonly artifactId: string;
+  readonly type: AssetManifest["type"];
+  readonly filename: string;
+  readonly sizeBytes: number;
+  readonly sha256: string;
+}): DesktopRuntimeAsset {
+  return Object.freeze({
+    group: "vision",
+    manifest: parseAssetManifest({
+      schemaVersion: 1,
+      familyId: "rapid-latex-ocr",
+      artifactId: input.artifactId,
+      version: "v0.0.0",
+      type: input.type,
+      filename: input.filename,
+      sizeBytes: input.sizeBytes,
+      sha256: input.sha256,
+      sourceUrl: `${RAPID_LATEX_OCR_RELEASE_URL}/${input.filename}`,
+      modelVersion: `rapid-latex-ocr-v0.0.0+${RAPID_LATEX_OCR_MODEL_SET_SHA256}`,
+      license: RAPID_LATEX_OCR_LICENSE,
+      sourceMetadata: {
+        publisher: "RapidAI",
+        repository: "https://github.com/RapidAI/RapidLaTeXOCR",
+        revision: RAPID_LATEX_OCR_RELEASE_REVISION
+      }
+    }),
+    runtimeRelativePath: `vision/rapid-latex-ocr/${input.filename}`
+  });
+}
+
+const VISION_MODEL_ASSETS: readonly DesktopRuntimeAsset[] = Object.freeze([
+  rapidLatexAsset({
+    artifactId: "rapid-latex-ocr-image-resizer-v0.0.0",
+    type: "MODEL",
+    filename: "image_resizer.onnx",
+    sizeBytes: 38_967_751,
+    sha256: "e0b075c39700f64d50400f39c8fc186bbb3b5d84d31864008313f376603aca9d"
+  }),
+  rapidLatexAsset({
+    artifactId: "rapid-latex-ocr-encoder-v0.0.0",
+    type: "MODEL",
+    filename: "encoder.onnx",
+    sizeBytes: 89_008_136,
+    sha256: "01bf5dc25539ca0cd5b1bd29296ea495977a6ba5f629dc4178277809d26e5e7d"
+  }),
+  rapidLatexAsset({
+    artifactId: "rapid-latex-ocr-decoder-v0.0.0",
+    type: "MODEL",
+    filename: "decoder.onnx",
+    sizeBytes: 50_952_726,
+    sha256: "bd695497bf1b22279b7626f5916c79226e1e244c84355f8da7edfd2d921d0072"
+  }),
+  rapidLatexAsset({
+    artifactId: "rapid-latex-ocr-tokenizer-v0.0.0",
+    type: "TOKENIZER",
+    filename: "tokenizer.json",
+    sizeBytes: 24_174,
+    sha256: "1dc27b18d6a518d0d5ff3f4bb7bd98521fe80ad39e5b2a246d4109f1bb9d5019"
+  })
+]);
 
 export const DESKTOP_LOCAL_MODEL_ASSETS: readonly DesktopRuntimeAsset[] = Object.freeze([
   SILERO_VAD,
@@ -222,7 +298,8 @@ export const DESKTOP_LOCAL_MODEL_ASSETS: readonly DesktopRuntimeAsset[] = Object
     sha256: "908e14de5b4709da55562129164e618f5d135fcc34dac419e0c3de5189b72d2c",
     runtimeRelativePath: "tts/kokoro/voices/af_heart.kokorovoice",
     modelVersion: "kokoro-af-heart"
-  })
+  }),
+  ...VISION_MODEL_ASSETS
 ]);
 
 export const SPEECH_ASSETS = Object.freeze(
@@ -231,3 +308,10 @@ export const SPEECH_ASSETS = Object.freeze(
 export const TTS_ASSETS = Object.freeze(
   DESKTOP_LOCAL_MODEL_ASSETS.filter((asset) => asset.group === "tts")
 );
+export const VISION_ASSETS = Object.freeze(
+  DESKTOP_LOCAL_MODEL_ASSETS.filter((asset) => asset.group === "vision")
+);
+export const VOICE_ASSETS = Object.freeze([
+  ...SPEECH_ASSETS,
+  ...TTS_ASSETS
+]);
