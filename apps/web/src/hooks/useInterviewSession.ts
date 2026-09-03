@@ -1136,6 +1136,8 @@ export function useInterviewSession(
           setSequence(summary.sequence);
           setContextEpoch(summary.contextEpoch);
           setProblem(null);
+          setConfiguration(null);
+          setConfigurationSource(null);
           setTranscript(summary.history.map(historyEntryToTranscriptItem));
           stopRendererTransport();
           return summary.status;
@@ -1160,8 +1162,17 @@ export function useInterviewSession(
         setSequence(response.sequence);
         setContextEpoch(response.contextEpoch);
         setProblem(context.problem ?? null);
+        setConfiguration(context.configuration);
+        setConfigurationSource(context.configurationSource);
 
         setTranscript(response.history.map(historyEntryToTranscriptItem));
+
+        const usesOxfordWorkspace = context.configuration.mode === "OXFORD_MATHEMATICS";
+        if (!usesOxfordWorkspace) {
+          sessionMutationAdmissionRef.current = false;
+          setWhiteboardSync({ status: "UNINITIALIZED", pendingMutationCount: 0 });
+          return response.status;
+        }
 
         try {
           await synchronizeWhiteboardFor(targetSessionId);
@@ -1186,7 +1197,7 @@ export function useInterviewSession(
         if (sessionTransitionEpochRef.current !== transitionEpoch) return null;
         let msg = "Failed to recover session";
         if (err instanceof BrowserCommandProtocolError) {
-          msg = `Recovery error [${err.code}]: HTTP ${String(err.status)}`;
+          msg = err.message;
         } else if (err instanceof Error) {
           msg = err.message;
         }
@@ -1250,6 +1261,11 @@ export function useInterviewSession(
     sessionTransitionEpochRef.current = transitionEpoch;
     setError(null);
     try {
+      if (configuration !== null && configuration.mode !== "OXFORD_MATHEMATICS") {
+        sessionMutationAdmissionRef.current = false;
+        setIsPaused(false);
+        return;
+      }
       await synchronizeWhiteboardFor(targetSessionId);
       if (sessionTransitionEpochRef.current !== transitionEpoch) return;
       const coordinator = boardSyncRef.current;
@@ -1276,6 +1292,7 @@ export function useInterviewSession(
     }
   }, [
     isPaused,
+    configuration,
     isSessionStarted,
     launchRendererStream,
     options.whiteboardAdapter,
