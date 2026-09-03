@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import statistics
@@ -11,7 +12,17 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from local_vision_runtime import VisionRuntime
+RUNTIME_PATH = Path(__file__).with_name("local_vision_runtime.py")
+RUNTIME_SPEC = importlib.util.spec_from_file_location(
+    "interview_local_vision_runtime_smoke",
+    RUNTIME_PATH,
+)
+if RUNTIME_SPEC is None or RUNTIME_SPEC.loader is None:
+    raise RuntimeError("Could not load the production local vision runtime")
+vision_runtime = importlib.util.module_from_spec(RUNTIME_SPEC)
+sys.modules[RUNTIME_SPEC.name] = vision_runtime
+RUNTIME_SPEC.loader.exec_module(vision_runtime)
+VisionRuntime = vision_runtime.VisionRuntime
 
 MODEL_FILES = {
     "image_resizer.onnx": {
