@@ -36,6 +36,11 @@ interface PendingMutation {
   readonly reject: (error: Error) => void;
 }
 
+interface QuiescenceWaiter {
+  readonly resolve: (snapshot: AuthoritativeBoardSyncSnapshot) => void;
+  readonly reject: (error: Error) => void;
+}
+
 const MAX_PENDING_MUTATIONS = 64;
 const MAX_RECENT_FINGERPRINTS = 128;
 const MAX_TRANSPORT_ATTEMPTS = 2;
@@ -47,6 +52,7 @@ export class AuthoritativeBoardSyncCoordinator {
   private reason: string | undefined;
   private readonly pending: PendingMutation[] = [];
   private readonly recentFingerprints: string[] = [];
+  private readonly quiescenceWaiters = new Set<QuiescenceWaiter>();
   private draining = false;
   private lifecycleEpoch = 0;
 
@@ -78,9 +84,31 @@ export class AuthoritativeBoardSyncCoordinator {
       : undefined;
   }
 
+  /**
+   * Resolves only after every mutation already admitted to this coordinator has
+   * reached a terminal acknowledgement. Pause/resume uses this barrier before
+   * asking the server for a fresh board snapshot so it cannot race a pointer-up
+   * mutation that is still in flight.
+   */
+  public awaitQuiescence(): Promise<AuthoritativeBoardSyncSnapshot> {
+    if (this.status === "UNSYNCHRONIZED") {
+      return Promise.reject(
+        new Error(this.reason ?? "Whiteboard authority is unsynchronized")
+      );
+    }
+    if (!this.draining && this.pending.length === 0) {
+      return Promise.resolve(this.snapshot());
+    }
+    return new Promise<AuthoritativeBoardSyncSnapshot>((resolve, reject) => {
+      this.quiescenceWaiters.add({ resolve, reject });
+    });
+  }
+
   public reset(): void {
     this.lifecycleEpoch += 1;
-    this.rejectPending(new Error("Whiteboard authority synchronization was reset"));
+    const resetError = new Error("Whiteboard authority synchronization was reset");
+    this.rejectPending(resetError);
+    this.rejectQuiescenceWaiters(resetError);
     this.sessionId = undefined;
     this.authoritativeRevision = undefined;
     this.status = "UNINITIALIZED";
@@ -287,6 +315,7 @@ export class AuthoritativeBoardSyncCoordinator {
       this.reason = undefined;
     } finally {
       this.draining = false;
+      this.settleQuiescenceWaiters();
       if (this.pending.length > 0) {
         void this.drain();
       }
@@ -298,7 +327,28 @@ export class AuthoritativeBoardSyncCoordinator {
     this.status = "UNSYNCHRONIZED";
     this.reason = reason;
     this.rejectPending(cause ?? new Error(reason));
+    this.settleQuiescenceWaiters();
     return this.snapshot();
+  }
+
+  private settleQuiescenceWaiters(): void {
+    if (this.draining || this.pending.length > 0 || this.quiescenceWaiters.size === 0) {
+      return;
+    }
+    const waiters = [...this.quiescenceWaiters];
+    this.quiescenceWaiters.clear();
+    if (this.status === "UNSYNCHRONIZED") {
+      const error = new Error(this.reason ?? "Whiteboard authority is unsynchronized");
+      for (const waiter of waiters) waiter.reject(error);
+      return;
+    }
+    const snapshot = this.snapshot();
+    for (const waiter of waiters) waiter.resolve(snapshot);
+  }
+
+  private rejectQuiescenceWaiters(error: Error): void {
+    for (const waiter of this.quiescenceWaiters) waiter.reject(error);
+    this.quiescenceWaiters.clear();
   }
 
   private rejectPending(error: Error): void {
