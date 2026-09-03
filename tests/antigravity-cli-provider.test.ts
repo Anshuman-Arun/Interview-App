@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  BoardActionSchema,
   DisclosureIdSchema,
+  SocraticActionSchema,
   newGenerationId,
   type InterviewerProposal,
   type ReasoningTurnInput
@@ -110,6 +112,31 @@ async function collectProposals(
   for await (const proposal of input) proposals.push(proposal);
   return proposals;
 }
+
+describe("Antigravity structured-output contract alignment", () => {
+  it("keeps provider action enums exactly aligned with authoritative domain schemas", () => {
+    const schema = ANTIGRAVITY_CLI_PROPOSAL_SCHEMA as {
+      readonly properties?: {
+        readonly realizedAction?: { readonly enum?: readonly string[] };
+        readonly boardActions?: {
+          readonly items?: {
+            readonly properties?: {
+              readonly operation?: { readonly enum?: readonly string[] };
+            };
+          };
+        };
+      };
+    };
+    const providerActions = schema.properties?.realizedAction?.enum;
+    const providerBoardOperations =
+      schema.properties?.boardActions?.items?.properties?.operation?.enum;
+
+    expect(providerActions).toEqual(SocraticActionSchema.options);
+    expect(providerBoardOperations).toEqual(
+      BoardActionSchema.shape.operation.options
+    );
+  });
+});
 
 describe("Antigravity CLI provider registration and policy truthfulness", () => {
   it("registers one pinned real model with conservative remote/billing capabilities", () => {
