@@ -960,8 +960,18 @@ export function useInterviewSession(
     return transitionEpoch;
   }, [resetBoardSync, stopRendererTransport, voiceIntegration.voiceControls]);
 
-  const startSession = useCallback(
-    async (customSessionId?: SessionId): Promise<void> => {
+  const startSessionWith = useCallback(
+    async (
+      startOperation: (
+        client: BrowserCommandClient,
+        targetSessionId: SessionId
+      ) => Promise<{
+        readonly configuration: InterviewSessionConfiguration | null;
+        readonly configurationSource: SessionConfigurationSource | null;
+        readonly problem: InterviewProblemPublicView | null;
+      }>,
+      customSessionId?: SessionId
+    ): Promise<void> => {
       if (sessionId !== null && sessionStatus === "ACTIVE") {
         throw new Error(
           "Cannot start a new session while an active session is attached or awaiting recovery"
@@ -980,25 +990,33 @@ export function useInterviewSession(
           resetBoardSync();
         }
         const client = getCommandClient();
-        await client.startSession(targetSessionId);
+        const started = await startOperation(client, targetSessionId);
         if (sessionTransitionEpochRef.current !== transitionEpoch) return;
-        let problemView: InterviewProblemPublicView | null = null;
+
+        let resolvedConfiguration = started.configuration;
+        let resolvedConfigurationSource = started.configurationSource;
+        let problemView = started.problem;
         try {
           const context = await client.getInterviewSessionContext(targetSessionId);
           if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+          resolvedConfiguration = context.configuration;
+          resolvedConfigurationSource = context.configurationSource;
           problemView = context.problem ?? null;
         } catch {
           if (sessionTransitionEpochRef.current !== transitionEpoch) return;
-          // The authoritative start already succeeded. A read-model/context
-          // failure must not make the caller retry session creation.
-          setError("Session started, but session context could not be loaded");
+          // The authoritative start already succeeded. Never retry creation
+          // because a post-start public-context read failed.
+          setError("Session started, but authoritative session context could not be reloaded");
         }
         if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+
+        const usesOxfordWorkspace =
+          resolvedConfiguration === null
+          || resolvedConfiguration.mode === "OXFORD_MATHEMATICS";
         if (sessionId !== targetSessionId) {
-          const mayBootstrapFreshCanvas = sessionId === null;
           pendingSubmissionsRef.current.clear();
           resetBoardSync();
-          if (mayBootstrapFreshCanvas) {
+          if (usesOxfordWorkspace && sessionId === null) {
             boardBootstrapSessionRef.current = targetSessionId;
           }
         }
@@ -1007,7 +1025,15 @@ export function useInterviewSession(
         setIsPaused(false);
         setSessionStatus("ACTIVE");
         setProblem(problemView);
+        setConfiguration(resolvedConfiguration);
+        setConfigurationSource(resolvedConfigurationSource);
         setTranscript([]);
+
+        if (!usesOxfordWorkspace) {
+          sessionMutationAdmissionRef.current = false;
+          setWhiteboardSync({ status: "UNINITIALIZED", pendingMutationCount: 0 });
+          return;
+        }
 
         try {
           await synchronizeWhiteboardFor(targetSessionId);
@@ -1026,7 +1052,7 @@ export function useInterviewSession(
         if (sessionTransitionEpochRef.current !== transitionEpoch) return;
         let msg = "Failed to start interview session";
         if (err instanceof BrowserCommandProtocolError) {
-          msg = `Command error [${err.code}]: HTTP ${String(err.status)}`;
+          msg = err.message;
         } else if (err instanceof Error) {
           msg = err.message;
         }
@@ -1038,11 +1064,43 @@ export function useInterviewSession(
       beginSessionTransition,
       getCommandClient,
       launchRendererStream,
+      options.whiteboardAdapter,
       resetBoardSync,
       sessionId,
       sessionStatus,
       synchronizeWhiteboardFor
     ]
+  );
+
+  const startSession = useCallback(
+    async (customSessionId?: SessionId): Promise<void> => {
+      await startSessionWith(async (client, targetSessionId) => {
+        await client.startSession(targetSessionId);
+        return {
+          configuration: null,
+          configurationSource: null,
+          problem: null
+        };
+      }, customSessionId);
+    },
+    [startSessionWith]
+  );
+
+  const startConfiguredSession = useCallback(
+    async (
+      configured: InterviewSessionConfiguration,
+      customSessionId?: SessionId
+    ): Promise<void> => {
+      await startSessionWith(async (client, targetSessionId) => {
+        const started = await client.startConfiguredSession(targetSessionId, configured);
+        return {
+          configuration: started.configuration,
+          configurationSource: "CONFIGURED",
+          problem: started.problem ?? null
+        };
+      }, customSessionId);
+    },
+    [startSessionWith]
   );
 
   const recoverSession = useCallback(
