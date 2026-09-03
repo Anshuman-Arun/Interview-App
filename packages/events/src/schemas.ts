@@ -702,7 +702,15 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
     boardRevisionIndependent: z.literal(true).optional(),
     sourceGenerationId: GenerationIdSchema.optional(),
     sourceProposalRequestId: RequestIdSchema.optional()
-  }).strict()),
+  }).strict().superRefine((value, context) => {
+    if (value.boardRevisionIndependent === true && value.sourceGenerationId !== undefined) {
+      context.addIssue({
+        code: "custom",
+        path: ["boardRevisionIndependent"],
+        message: "Generation-bound verification cannot ignore board revision"
+      });
+    }
+  })),
   event("VERIFICATION_RESULT_ACCEPTED", z.object({
     verificationRequestId: RequestIdSchema,
     result: VerificationResultSchema
