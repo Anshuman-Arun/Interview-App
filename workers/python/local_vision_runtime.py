@@ -196,7 +196,7 @@ class VisionRuntime:
         if len(decoder_inputs) != 3:
             raise RuntimeError("vision decoder input contract changed")
 
-        # Upstream v0.0.0 samples from filtered logits at temperature 0.2.
+        # Upstream v0.0.0 samples from filtered logits at temperature 0.00001.
         # Production deliberately uses greedy argmax instead: this removes
         # stochasticity from a fallible observation backend. Canonical upstream
         # fixtures below are the regression guard for this deterministic
