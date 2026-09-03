@@ -1,0 +1,39 @@
+appId: com.anshuman.interviewapp
+productName: Interview App
+asar: true
+
+directories:
+  output: dist/windows
+
+files:
+  - package.json
+  - dist/desktop-runtime/**/*
+  - "!dist/desktop-runtime/**/*.map"
+
+extraResources:
+  - from: dist/apps/web
+    to: web
+    filter:
+      - "**/*"
+  - from: apps/desktop/preload.cjs
+    to: preload.cjs
+  - from: workers/python/local_model_worker.py
+    to: workers/python/local_model_worker.py
+  - from: workers/python/requirements-local-model-runtime.txt
+    to: workers/python/requirements-local-model-runtime.txt
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  executableName: Interview App
+  artifactName: InterviewApp-Setup-${version}.${ext}
+
+nsis:
+  oneClick: true
+  perMachine: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Interview App
+  deleteAppDataOnUninstall: false
