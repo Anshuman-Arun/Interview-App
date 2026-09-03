@@ -343,7 +343,7 @@ async function runPackagedSmoke(
   if (window === undefined || window.isDestroyed()) {
     throw new Error("Packaged smoke did not create a desktop window");
   }
-  const rendererReady = await window.webContents.executeJavaScript(
+  const rendererReady: unknown = await window.webContents.executeJavaScript(
     `Boolean(document.body)
       && document.readyState !== "loading"
       && typeof globalThis.interviewDesktop?.getBootstrap === "function"
