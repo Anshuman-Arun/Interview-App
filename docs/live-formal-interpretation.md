@@ -6,7 +6,7 @@ Production Oxford reasoning analysis remains a strict chain:
 
 committed candidate language -> fallible formal interpretation -> application validation -> deterministic verifier -> authoritative evidence -> pedagogical policy.
 
-A provider result never directly becomes correctness evidence. InterpretationCoordinator continues to require exact request/source/target/protocol binding, statement-schema validation and canonicalization, and deterministic verifier execution before any CORRECT evidence can be committed. A provider can propose a false statement; the deterministic verifier then returns CONTRADICTED, and no correctness evidence is committed.
+A provider result never directly becomes correctness evidence. InterpretationCoordinator continues to require exact request/source/target/protocol binding, statement-schema validation and canonicalization, and deterministic verifier execution before any CORRECT evidence can be committed. Production adds a problem-specific target-admission layer before that verifier: the committed sentence must be relevant to the configured Oxford claim family, every numeric literal in the formal statement must be grounded in that exact committed sentence, and the statement must match the target's permitted arithmetic claim shape. A provider can propose a false but source-faithful statement; the deterministic verifier then returns CONTRADICTED. A provider cannot substitute an unrelated true arithmetic fact or import a different number from the problem prompt and turn that into target correctness.
 
 ## Provider selection
 
@@ -32,7 +32,7 @@ It does not receive canonical solutions, protected disclosure material, intervie
 
 The Antigravity call uses native structured output and then application-side validation. The request-specific schema binds the exact request ID, source basis, committed turn, source revision, source span text, problem/version, and target claim; it permits only confidence 1 and at most one atomic candidate. The stream parser additionally requires the exact model, dedicated formal-interpreter agent, strict permission mode, zero tools/subagents, one successful turn, exact schema echo, strict JSON with no duplicate keys or trailing prose, canonical equality between textual response and structured_output, InterpretationProviderResultSchema, and bounded candidate/formal-statement output.
 
-Liam's InterpretationCoordinator remains authoritative for exact source, target, allowed protocol, candidate ambiguity, formal statement schema/canonicalization, verifier authorization, staleness, and verification-result admission.
+Before Liam's generic coordinator sees a production candidate, application-owned Oxford admission also enforces target relevance and source grounding. This is deliberately conservative: symbolic/deictic language that would require inventing an unstated concrete integer abstains until a richer deterministic protocol can represent it. Liam's InterpretationCoordinator remains authoritative for exact source, target, allowed protocol, candidate ambiguity, formal statement schema/canonicalization, verifier authorization, staleness, and verification-result admission.
 
 ## Confidence and abstention
 
@@ -58,7 +58,7 @@ Antigravity remains denied by the default no-metered policy unless the trusted h
 
 ## Automated validation
 
-Credential-free fixtures cover valid supported interpretation leading to deterministic VERIFIED, false supported interpretation leading to deterministic CONTRADICTED, provider abstention, prompt-injection-like candidate text, trailing prose, correctness/evidence-field smuggling, tool/subagent activity, oversized output, non-finite confidence, physical cancellation, unsupported configured providers, billing/data-use denial, analysis timeout, deterministic request idempotence, repeated resolver calls that never settle without permanently exhausting capacity, and a source becoming stale while runtime resolution is in flight without sending the stale candidate text to inference.
+Credential-free fixtures cover valid target-relevant interpretation leading to deterministic VERIFIED, source-faithful false interpretation leading to deterministic CONTRADICTED, unrelated arithmetic skipped before provider execution, prompt-number substitution rejected before verification, unrelated true-statement substitution rejected before verification, provider abstention, prompt-injection-like candidate text, trailing prose, correctness/evidence-field smuggling, tool/subagent activity, oversized output, non-finite confidence, physical cancellation, unsupported configured providers, billing/data-use denial, analysis timeout, deterministic request idempotence, repeated resolver calls that never settle without permanently exhausting capacity, and a source becoming stale while runtime resolution is in flight without sending the stale candidate text to inference.
 
 Existing formal-admission tests continue to cover wrong source spans, previous-turn sources, unauthorized protocols, wrong problem/version, duplicate/ambiguous candidates, stale results, deterministic-verifier disagreement, and recovery of persisted verifier work.
 
