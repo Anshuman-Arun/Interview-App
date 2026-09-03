@@ -113,7 +113,20 @@ export class LoopbackCommandServer {
       if (parsed.origin !== origin) throw new Error("Allowed origins must be exact URL origins without paths");
     }
     this.productionRuntime = options.productionRuntime ?? new ProductionSessionRuntime();
-    this.providerRuntimeResolver = options.providerRuntimeResolver ?? new ProviderRuntimeResolver();
+    const orchestratorProviderRuntime = options.orchestrator?.getProviderRuntimeResolver();
+    if (
+      options.providerRuntimeResolver !== undefined
+      && orchestratorProviderRuntime !== undefined
+      && options.providerRuntimeResolver !== orchestratorProviderRuntime
+    ) {
+      throw new Error(
+        "Command server orchestrator and launch metadata must share the same provider runtime resolver"
+      );
+    }
+    this.providerRuntimeResolver =
+      options.providerRuntimeResolver
+      ?? orchestratorProviderRuntime
+      ?? new ProviderRuntimeResolver();
     this.server = createServer((request, response) => {
       void this.handle(request, response);
     });
