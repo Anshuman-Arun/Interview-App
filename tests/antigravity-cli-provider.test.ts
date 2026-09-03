@@ -558,6 +558,23 @@ describe("Antigravity CLI one-turn protocol", () => {
     }
   });
 
+  it("uses JSON Schema code-point semantics for astral Unicode bounds", async () => {
+    const proposal: InterviewerProposal = {
+      ...PROPOSAL,
+      speechText: "😀".repeat(7_000)
+    };
+    expect(proposal.speechText?.length).toBe(14_000);
+
+    const provider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async () => executionResult(antigravityStream(proposal)))
+    );
+    const session = await provider.createSession();
+    await expect(collectProposals(
+      session.sendTurn(turnInput({ safe: true }))
+    )).resolves.toEqual([proposal]);
+    await session.close();
+  });
+
   it("accepts bounded structured output above the former 128 KiB text ceiling", async () => {
     const largeButBounded: InterviewerProposal = {
       ...PROPOSAL,
