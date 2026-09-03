@@ -6,6 +6,7 @@ import { isSessionIdAddressableForRead } from "../session-read-client.js";
 
 export type ProductRoute =
   | { readonly page: "home" }
+  | { readonly page: "new" }
   | { readonly page: "interview" }
   | { readonly page: "sessions" }
   | { readonly page: "settings" }
@@ -45,6 +46,9 @@ export function parseProductRoute(hash: string): ProductRoute {
   const parts = normalized.split("/");
   const head = parts[0];
 
+  if (head === "new" && parts.length === 1) {
+    return { page: "new" };
+  }
   if (head === "interview" && parts.length === 1) {
     return { page: "interview" };
   }
@@ -89,6 +93,8 @@ export function productRouteToHash(route: ProductRoute): string {
   switch (route.page) {
     case "home":
       return "#/";
+    case "new":
+      return "#/new";
     case "interview":
       return "#/interview";
     case "sessions":
@@ -105,6 +111,8 @@ export function productRouteTitle(route: ProductRoute): string {
     case "home":
     case "interview":
       return "Interview";
+    case "new":
+      return "New interview · Interview";
     case "sessions":
       return "Sessions · Interview";
     case "settings":
@@ -121,7 +129,9 @@ export function routeForActiveInterview(
 ): ProductRoute {
   if (!hasActiveInterview) return route;
   if (isPaused) {
-    return route.page === "home" ? route : { page: "home" };
+    return route.page === "home" || route.page === "new"
+      ? route
+      : { page: "home" };
   }
   return route.page === "interview" ? route : { page: "interview" };
 }

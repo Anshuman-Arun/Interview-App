@@ -10,6 +10,7 @@ import {
   InterviewCatalogResponseSchema,
   InterviewSessionConfigurationSchema,
   InterviewSessionContextResponseSchema,
+  ProviderOptionsResponseSchema,
   ProtocolErrorResponseSchema,
   QuantResearchStateResponseSchema,
   QuantTradingStateResponseSchema,
@@ -25,6 +26,8 @@ import {
   type NormalizedBoardMutation,
   type InterviewCatalogEntry,
   type InterviewSessionConfiguration,
+  type ProviderLaunchAvailabilityReason,
+  type ProviderLaunchOption,
   type ProtocolErrorResponse,
   type ProtocolSuccessResponse,
   type QuantResearchCandidateAction,
@@ -38,6 +41,7 @@ type SessionStartedResponse = z.infer<typeof SessionStartedResponseSchema>;
 type ConfiguredSessionStartedResponse = z.infer<typeof ConfiguredSessionStartedResponseSchema>;
 type InterviewSessionContextResponse = z.infer<typeof InterviewSessionContextResponseSchema>;
 type InterviewCatalogResponse = z.infer<typeof InterviewCatalogResponseSchema>;
+type ProviderOptionsResponse = z.infer<typeof ProviderOptionsResponseSchema>;
 type SessionResumedResponse = z.infer<typeof SessionResumedResponseSchema>;
 type SessionCompletedResponse = z.infer<typeof SessionCompletedResponseSchema>;
 type SessionArchivedResponse = z.infer<typeof SessionArchivedResponseSchema>;
@@ -98,17 +102,49 @@ export class BrowserCommandResponseError extends Error {
   }
 }
 
+function providerLaunchFailurePublicMessage(
+  reason: ProviderLaunchAvailabilityReason
+): string {
+  switch (reason) {
+    case "CREDENTIALS_REQUIRED":
+      return "Selected provider requires configured authentication";
+    case "DISABLED":
+      return "Selected provider is disabled";
+    case "RUNTIME_CONFIGURATION_UNAVAILABLE":
+      return "Selected provider runtime configuration is unavailable";
+    case "RUNTIME_DEPENDENCY_UNAVAILABLE":
+      return "Selected provider runtime dependency is unavailable";
+    case "POLICY_UNAVAILABLE":
+      return "Selected provider policy could not be verified";
+    case "POLICY_DENIED":
+      return "Selected provider is denied by the current safety policy";
+    case "CAPABILITY_UNAVAILABLE":
+      return "Selected provider does not satisfy required capabilities";
+    case "PROVIDER_UNAVAILABLE":
+      return "Selected provider is unavailable";
+    case "UNKNOWN":
+      return "Selected provider readiness could not be verified";
+  }
+}
+
 export class BrowserCommandProtocolError extends Error {
   public readonly code: ProtocolErrorResponse["error"]["code"];
+  public readonly publicMessage: string | undefined;
 
   public constructor(
     public readonly status: number,
     code: ProtocolErrorResponse["error"]["code"],
-    public readonly requestId: RequestId
+    public readonly requestId: RequestId,
+    public readonly providerLaunchReason?: ProviderLaunchAvailabilityReason
   ) {
-    super(`Command rejected with protocol error ${code}`);
+    const publicMessage =
+      code === "CONFLICT" && providerLaunchReason !== undefined
+        ? providerLaunchFailurePublicMessage(providerLaunchReason)
+        : undefined;
+    super(publicMessage ?? `Command rejected with protocol error ${code}`);
     this.name = "BrowserCommandProtocolError";
     this.code = code;
+    this.publicMessage = publicMessage;
   }
 }
 
@@ -333,6 +369,23 @@ export class BrowserCommandClient {
       options.signal
     );
     return result.entries;
+  }
+
+  public async listProviderOptions(
+    options: BrowserCommandRequestOptions = {}
+  ): Promise<readonly ProviderLaunchOption[]> {
+    const requestId = this.resolveRequestId(options);
+    const command = ClientCommandSchema.parse({
+      protocolVersion: 1,
+      type: "LIST_PROVIDER_OPTIONS",
+      requestId
+    });
+    const result: ProviderOptionsResponse = await this.send(
+      command,
+      (value) => ProviderOptionsResponseSchema.parse(value),
+      options.signal
+    );
+    return result.options;
   }
 
   public async listSessions(
@@ -694,7 +747,8 @@ export class BrowserCommandClient {
       throw new BrowserCommandProtocolError(
         response.status,
         protocolError.error.code,
-        command.requestId
+        command.requestId,
+        protocolError.error.providerLaunchReason
       );
     }
 

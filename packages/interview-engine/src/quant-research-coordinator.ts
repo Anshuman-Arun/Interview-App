@@ -219,7 +219,8 @@ export class QuantResearchCoordinator {
             type: "SESSION_STARTED",
             payload: {
               startedAt: new Date().toISOString(),
-              configuration
+              configuration,
+              configurationSource: "CONFIGURED"
             }
           },
           {

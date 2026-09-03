@@ -1,12 +1,16 @@
 import {
   DataUsePolicySchema,
+  ProviderLaunchOptionSchema,
   type InterviewerProposal,
+  type ProviderLaunchAvailabilityReason,
+  type ProviderLaunchOption,
   type ProviderPolicy,
   type ProviderSelectionReference,
   type ReasoningProvider
 } from "../../../packages/domain/src/index.js";
 import {
   ProviderControlPlaneError,
+  evaluateProviderReadiness,
   registerBuiltInProviders,
   resolveAdapterFactory,
   resolveProviderConfiguration,
@@ -122,6 +126,131 @@ export class ProviderRuntimeResolver {
     );
   }
 
+  public async listLaunchOptions(): Promise<readonly ProviderLaunchOption[]> {
+    const options: ProviderLaunchOption[] = [];
+    for (const provider of this.registry.enumerateProviders()) {
+      for (const model of provider.models) {
+        options.push(await this.evaluateLaunchOption({
+          providerId: provider.id,
+          modelId: model.id
+        }));
+      }
+    }
+    return Object.freeze(options);
+  }
+
+  public async evaluateLaunchOption(
+    inputSelection?: ProviderSelectionReference
+  ): Promise<ProviderLaunchOption> {
+    const selection = snapshotProviderSelection(inputSelection);
+    let provider: ReturnType<ProviderRegistry["getProvider"]>;
+    let model: ReturnType<ProviderRegistry["getModel"]>;
+    try {
+      provider = this.registry.getProvider(selection.providerId);
+      model = this.registry.getModel(selection.providerId, selection.modelId);
+    } catch {
+      return unavailableLaunchOption(selection, "PROVIDER_UNAVAILABLE");
+    }
+
+    const base = {
+      providerId: provider.id,
+      providerDisplayName: provider.displayName,
+      providerKind: provider.kind,
+      modelId: model.id,
+      modelDisplayName: model.displayName
+    } as const;
+
+    let runtimeConfiguration: unknown;
+    try {
+      runtimeConfiguration = await invokeRuntimeSource(this.configurationOperation, selection);
+    } catch {
+      return ProviderLaunchOptionSchema.parse({
+        ...base,
+        availability: "UNAVAILABLE",
+        reason: "RUNTIME_CONFIGURATION_UNAVAILABLE"
+      });
+    }
+
+    const configuration = composeProviderConfiguration(selection, runtimeConfiguration);
+    const readiness = await evaluateProviderReadiness({
+      registry: this.registry,
+      configuration,
+      ...(this.secretResolver === undefined ? {} : { secretResolver: this.secretResolver }),
+      requirements: ["TEXT_GENERATION"]
+    });
+    if (readiness.state !== "AVAILABLE") {
+      return ProviderLaunchOptionSchema.parse({
+        ...base,
+        availability: "UNAVAILABLE",
+        reason: mapReadinessReason(readiness.state)
+      });
+    }
+
+    let resolved: ReturnType<typeof resolveProviderConfiguration>;
+    try {
+      resolved = resolveProviderConfiguration({
+        registry: this.registry,
+        configuration,
+        requirements: ["TEXT_GENERATION"]
+      });
+    } catch {
+      // Readiness and resolution share the same immutable registry/configuration
+      // snapshot. If the second validation nevertheless fails, fail closed as a
+      // runtime configuration problem rather than inventing availability.
+      return ProviderLaunchOptionSchema.parse({
+        ...base,
+        availability: "UNAVAILABLE",
+        reason: "RUNTIME_CONFIGURATION_UNAVAILABLE"
+      });
+    }
+
+    let policy: ProviderPolicy;
+    try {
+      policy = snapshotProviderPolicy(
+        this.policyOperation === undefined
+          ? DEFAULT_PROVIDER_RUNTIME_POLICY
+          : await invokeRuntimeSource(this.policyOperation, selection)
+      );
+    } catch {
+      return ProviderLaunchOptionSchema.parse({
+        ...base,
+        availability: "UNAVAILABLE",
+        reason: "POLICY_UNAVAILABLE"
+      });
+    }
+
+    if (!providerModelFitsPolicy(model.capabilities, policy)) {
+      return ProviderLaunchOptionSchema.parse({
+        ...base,
+        availability: "UNAVAILABLE",
+        reason: "POLICY_DENIED"
+      });
+    }
+
+    if (!(selection.providerId === "mock-model" && selection.modelId === "mock-default")) {
+      try {
+        const runtime = await invokeRuntimeSource(this.adapterRuntimeOperation, selection);
+        const factory = resolveAdapterFactory(resolved);
+        await factory.createAdapter({
+          resolved,
+          ...(this.secretResolver === undefined ? {} : { secretResolver: this.secretResolver }),
+          ...(runtime === undefined ? {} : { runtime })
+        });
+      } catch (error) {
+        return ProviderLaunchOptionSchema.parse({
+          ...base,
+          availability: "UNAVAILABLE",
+          reason: launchReasonForAdapterFailure(error)
+        });
+      }
+    }
+
+    return ProviderLaunchOptionSchema.parse({
+      ...base,
+      availability: "AVAILABLE"
+    });
+  }
+
   public async resolve(input: {
     readonly selection?: ProviderSelectionReference;
     readonly mockProposal?: InterviewerProposal;
@@ -202,6 +331,78 @@ export class ProviderRuntimeResolver {
       policy
     });
   }
+}
+
+function launchReasonForAdapterFailure(
+  error: unknown
+): ProviderLaunchAvailabilityReason {
+  if (!ProviderControlPlaneError.isControlPlaneError(error)) {
+    return "RUNTIME_DEPENDENCY_UNAVAILABLE";
+  }
+  switch (error.code) {
+    case "CREDENTIALS_REQUIRED":
+    case "CREDENTIAL_RESOLUTION_FAILED":
+      return "CREDENTIALS_REQUIRED";
+    case "INCOMPATIBLE_CAPABILITY":
+    case "CAPABILITY_STATUS_UNKNOWN":
+      return "CAPABILITY_UNAVAILABLE";
+    case "DISABLED":
+      return "DISABLED";
+    default:
+      return "RUNTIME_DEPENDENCY_UNAVAILABLE";
+  }
+}
+
+function unavailableLaunchOption(
+  selection: ProviderSelectionReference,
+  reason: ProviderLaunchAvailabilityReason
+): ProviderLaunchOption {
+  return ProviderLaunchOptionSchema.parse({
+    providerId: selection.providerId,
+    providerDisplayName: selection.providerId,
+    providerKind: "OTHER",
+    modelId: selection.modelId,
+    modelDisplayName: selection.modelId,
+    availability: "UNAVAILABLE",
+    reason
+  });
+}
+
+function mapReadinessReason(
+  state: "UNAVAILABLE" | "MISCONFIGURED" | "CREDENTIALS_REQUIRED" | "DISABLED" | "UNKNOWN"
+): ProviderLaunchAvailabilityReason {
+  switch (state) {
+    case "CREDENTIALS_REQUIRED":
+      return "CREDENTIALS_REQUIRED";
+    case "DISABLED":
+      return "DISABLED";
+    case "MISCONFIGURED":
+      return "CAPABILITY_UNAVAILABLE";
+    case "UNAVAILABLE":
+      return "PROVIDER_UNAVAILABLE";
+    case "UNKNOWN":
+      return "UNKNOWN";
+  }
+}
+
+function providerModelFitsPolicy(
+  capabilities: {
+    readonly dataUse: "LOCAL_ONLY" | "REMOTE_NO_TRAINING" | "REMOTE_MAY_BE_USED_FOR_IMPROVEMENT" | "UNKNOWN";
+    readonly meteredExecution: "SUPPORTED" | "UNSUPPORTED" | "UNKNOWN";
+  },
+  policy: ProviderPolicy
+): boolean {
+  const rank = {
+    LOCAL_ONLY: 0,
+    REMOTE_NO_TRAINING: 1,
+    REMOTE_MAY_BE_USED_FOR_IMPROVEMENT: 2
+  } as const;
+  if (capabilities.dataUse === "UNKNOWN") return false;
+  if (rank[capabilities.dataUse] > rank[policy.maximumDataUse]) return false;
+  if (!policy.allowMeteredUsage && capabilities.meteredExecution !== "UNSUPPORTED") {
+    return false;
+  }
+  return true;
 }
 
 function assertRuntimeResolutionActive(

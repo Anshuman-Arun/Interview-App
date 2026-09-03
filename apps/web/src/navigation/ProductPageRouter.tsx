@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
 import type {
+  InterviewCatalogEntry,
+  InterviewSessionConfiguration,
+  ProviderLaunchOption,
   SessionId,
   StoredSessionSummary
 } from "../../../../packages/domain/src/index.js";
@@ -8,6 +11,7 @@ import type {
 } from "../../../../packages/replay/src/index.js";
 import { ProductFrame, type ProductPageId } from "../components/ProductFrame.js";
 import { HomePage } from "../pages/HomePage.js";
+import { NewInterviewPage } from "../pages/NewInterviewPage.js";
 import { ReviewPageShell, type ReviewView } from "../pages/ReviewPageShell.js";
 import { SessionsPage } from "../pages/SessionsPage.js";
 import { SettingsPage } from "../pages/SettingsPage.js";
@@ -24,6 +28,15 @@ export function ProductPageRouter({
   sessionEntryPending,
   onNavigatePage,
   onEnterInterview,
+  launchCatalog,
+  launchCatalogLoading,
+  launchCatalogError,
+  providerOptions,
+  providerOptionsLoading,
+  providerOptionsError,
+  onRefreshLaunchCatalog,
+  onRefreshProviderOptions,
+  onStartConfiguredInterview,
   onResume,
   onReview,
   onRefreshSessions,
@@ -45,6 +58,17 @@ export function ProductPageRouter({
   readonly sessionEntryPending: boolean;
   readonly onNavigatePage: (page: ProductPageId) => void;
   readonly onEnterInterview: () => void;
+  readonly launchCatalog: readonly InterviewCatalogEntry[];
+  readonly launchCatalogLoading: boolean;
+  readonly launchCatalogError: string | null;
+  readonly providerOptions: readonly ProviderLaunchOption[];
+  readonly providerOptionsLoading: boolean;
+  readonly providerOptionsError: string | null;
+  readonly onRefreshLaunchCatalog: () => Promise<readonly InterviewCatalogEntry[]>;
+  readonly onRefreshProviderOptions: () => Promise<readonly ProviderLaunchOption[]>;
+  readonly onStartConfiguredInterview: (
+    configuration: InterviewSessionConfiguration
+  ) => Promise<void>;
   readonly onResume: (sessionId: SessionId) => void;
   readonly onReview: (
     sessionId: SessionId,
@@ -91,6 +115,31 @@ export function ProductPageRouter({
           canReview={canReview}
           sessionEntryPending={sessionEntryPending}
           onReview={(sessionId) => onReview(sessionId, "evaluation")}
+        />
+      );
+      break;
+    case "new":
+      title = "New interview";
+      kicker = "Configure the room";
+      activePage = null;
+      content = (
+        <NewInterviewPage
+          catalog={launchCatalog}
+          catalogLoading={launchCatalogLoading}
+          catalogError={launchCatalogError}
+          providerOptions={providerOptions}
+          providerOptionsLoading={providerOptionsLoading}
+          providerOptionsError={providerOptionsError}
+          activeSessionId={activeSessionId}
+          startPending={sessionEntryPending}
+          onRefreshCatalog={onRefreshLaunchCatalog}
+          onRefreshProviderOptions={onRefreshProviderOptions}
+          onStart={onStartConfiguredInterview}
+          onResumeActive={
+            activeSessionId === null
+              ? null
+              : () => onResume(activeSessionId)
+          }
         />
       );
       break;

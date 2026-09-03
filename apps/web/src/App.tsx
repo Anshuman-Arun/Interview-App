@@ -1,5 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { SessionIdSchema, type SessionId } from "../../../packages/domain/src/index.js";
+import {
+  SessionIdSchema,
+  type InterviewSessionConfiguration,
+  type SessionId
+} from "../../../packages/domain/src/index.js";
 import { AppearanceDock } from "./components/AppearanceDock.js";
 import { BrandMark } from "./components/BrandMark.js";
 import { ProblemCard } from "./components/ProblemCard.js";
@@ -56,7 +60,14 @@ export const App: React.FC = () => {
   const recoverySessionInputInvalid =
     recoverySessionInput.trim().length > 0 && recoverySessionId === null;
 
-  const handleStartSession = async (): Promise<void> => {
+  const handleOpenNewInterview = (): void => {
+    if (sessionEntryPendingRef.current || sessionTerminalPendingRef.current) return;
+    navigate({ page: "new" });
+  };
+
+  const handleStartConfiguredSession = async (
+    configuration: InterviewSessionConfiguration
+  ): Promise<void> => {
     if (sessionEntryPendingRef.current || sessionTerminalPendingRef.current) return;
     sessionEntryPendingRef.current = true;
     setSessionEntryPending(true);
@@ -79,10 +90,10 @@ export const App: React.FC = () => {
         );
         return;
       }
-      await session.startSession();
+      await session.startConfiguredSession(configuration);
       navigate({ page: "interview" });
     } catch {
-      // Error handled in session.error
+      // Error handled by the authoritative session hook.
     } finally {
       sessionEntryPendingRef.current = false;
       setSessionEntryPending(false);
@@ -268,7 +279,7 @@ export const App: React.FC = () => {
     if (session.isSessionStarted && session.sessionStatus === "ACTIVE") {
       return;
     }
-    if (route.page === "home") {
+    if (route.page === "home" || route.page === "new") {
       void session.fetchAvailableSessions();
       return;
     }
@@ -313,6 +324,15 @@ export const App: React.FC = () => {
     hasActiveInterview,
     session.isPaused
   );
+  const isOxfordWorkspace =
+    session.configuration === null
+    || session.configuration.mode === "OXFORD_MATHEMATICS";
+  const activeModeLabel =
+    session.configuration?.mode === "QUANT_TRADING"
+      ? "Quant Trading"
+      : session.configuration?.mode === "QUANT_RESEARCH"
+        ? "Quant Research"
+        : "Oxford Mathematics";
 
   useEffect(() => {
     if (!hasActiveInterview) return;
@@ -321,7 +341,7 @@ export const App: React.FC = () => {
       return;
     }
     if (session.isPaused) {
-      if (route.page !== "home") {
+      if (route.page !== "home" && route.page !== "new") {
         navigate({ page: "home" }, { replace: true });
       }
       return;
@@ -348,7 +368,11 @@ export const App: React.FC = () => {
         sessions={session.availableSessions}
         activeSessionId={resumableActiveSessionId}
         currentSessionId={hasActiveInterview ? session.sessionId : null}
-        activeProblemTitle={hasActiveInterview ? session.problem?.title ?? null : null}
+        activeProblemTitle={
+          hasActiveInterview
+            ? session.problem?.title ?? activeModeLabel
+            : null
+        }
         activeSessionPaused={session.isPaused}
         canReview={(storedSession) =>
           (
@@ -359,9 +383,16 @@ export const App: React.FC = () => {
         }
         onNavigatePage={navigateProductPage}
         sessionEntryPending={sessionEntryPending}
-        onEnterInterview={() => {
-          void handleStartSession();
-        }}
+        onEnterInterview={handleOpenNewInterview}
+        launchCatalog={session.interviewCatalog}
+        launchCatalogLoading={session.interviewCatalogLoading}
+        launchCatalogError={session.interviewCatalogError}
+        providerOptions={session.providerOptions}
+        providerOptionsLoading={session.providerOptionsLoading}
+        providerOptionsError={session.providerOptionsError}
+        onRefreshLaunchCatalog={session.refreshInterviewCatalog}
+        onRefreshProviderOptions={session.refreshProviderOptions}
+        onStartConfiguredInterview={handleStartConfiguredSession}
         onResume={(sessionId) => {
           if (session.isPaused && session.sessionId === sessionId) {
             void handleResumePausedSession();
@@ -411,6 +442,103 @@ export const App: React.FC = () => {
 
   if (displayRoute.page !== "interview" && !hasActiveInterview) {
     return productPage;
+  }
+
+  if (!isOxfordWorkspace) {
+    const target = session.configuration.scenario;
+    const provider = session.configuration.providerSelection;
+    return (
+      <>
+        {productPage}
+        <div
+          hidden={displayRoute.page !== "interview"}
+          className="interview-app-container flex flex-col h-screen w-screen bg-slate-100 font-sans text-slate-900 overflow-hidden"
+          data-testid="quant-session-handoff"
+        >
+          <header className="app-header">
+            <button
+              type="button"
+              className="app-header__identity"
+              disabled={sessionEntryPending || sessionTerminalPending}
+              onClick={() => {
+                if (hasActiveInterview) session.pauseSession();
+                navigateProductPage("home");
+              }}
+              aria-label={hasActiveInterview ? "Pause interview and open Home" : "Open Home"}
+            >
+              <BrandMark size={28} title="Interview" />
+              <span className="app-header__identity-copy">
+                <strong>{activeModeLabel}</strong>
+                <small>{target.id}</small>
+              </span>
+            </button>
+            <div className="app-header__actions">
+              <span className="app-header__connection" data-connected="false">
+                <span aria-hidden="true" />
+                Deterministic session
+              </span>
+              {hasActiveInterview && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    session.pauseSession();
+                    navigateProductPage("home");
+                  }}
+                  disabled={sessionEntryPending || sessionTerminalPending}
+                  className="app-header__quiet"
+                >
+                  Home
+                </button>
+              )}
+              <AppearanceDock compact />
+            </div>
+          </header>
+          {session.error !== null && (
+            <div className="bg-rose-50 border-b border-rose-200 px-6 py-2.5 flex items-center justify-between text-xs text-rose-800 shrink-0">
+              <span>{session.error}</span>
+              <button type="button" onClick={session.clearError}>✕</button>
+            </div>
+          )}
+          <main className="flex-1 overflow-auto p-8">
+            <section className="mx-auto max-w-3xl bg-white border border-slate-200 rounded-2xl p-7 shadow-sm">
+              <p className="text-[10px] font-bold tracking-[0.16em] text-slate-500 mb-2">
+                AUTHORITATIVE SESSION READY
+              </p>
+              <h1 className="text-2xl font-semibold text-slate-950 mb-2">{activeModeLabel}</h1>
+              <p className="text-sm text-slate-600 mb-6">
+                The configured session has started successfully. Dedicated Quant actions are intentionally
+                reserved for the follow-up workspace; this screen does not route Quant authority through
+                Oxford interview controls.
+              </p>
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                <div>
+                  <dt className="text-xs text-slate-500">Scenario</dt>
+                  <dd className="font-medium text-slate-900">{target.id}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-500">Version</dt>
+                  <dd className="font-mono text-xs text-slate-900">{target.version}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-500">Provider</dt>
+                  <dd className="font-medium text-slate-900">
+                    {provider === undefined
+                      ? "Server default"
+                      : `${provider.providerId} · ${provider.modelId}`}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-500">Intervention</dt>
+                  <dd className="font-medium text-slate-900">
+                    {session.configuration.interventionPolicy}
+                  </dd>
+                </div>
+              </dl>
+            </section>
+          </main>
+        </div>
+      </>
+    );
   }
 
   return (
@@ -569,12 +697,12 @@ export const App: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => void handleStartSession()}
+                  onClick={handleOpenNewInterview}
                   disabled={sessionEntryPending}
                   className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md shadow-sm transition-colors cursor-pointer"
                   data-testid="start-session-btn"
                 >
-                  {sessionEntryPending ? "Opening…" : "Start Session"}
+                  {sessionEntryPending ? "Opening…" : "New interview"}
                 </button>
                 <form
                   onSubmit={(e) => {

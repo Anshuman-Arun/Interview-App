@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { DeliveryCommandSchema, DeliveryStatusSchema } from "./delivery.js";
-import { InterviewCatalogEntrySchema, InterviewProblemPublicViewSchema, InterviewSessionConfigurationSchema } from "./session-configuration.js";
+import {
+  InterviewCatalogEntrySchema,
+  InterviewProblemPublicViewSchema,
+  InterviewSessionConfigurationSchema,
+  ProviderLaunchAvailabilityReasonSchema,
+  ProviderLaunchOptionSchema,
+  SessionConfigurationSourceSchema
+} from "./session-configuration.js";
 import {
   DeliveryIdSchema,
   InputEpisodeIdSchema,
@@ -91,6 +98,12 @@ export const ListInterviewCatalogCommandSchema = z.object({
   type: z.literal("LIST_INTERVIEW_CATALOG")
 }).strict();
 
+export const ListProviderOptionsCommandSchema = z.object({
+  protocolVersion: ProtocolVersionSchema,
+  requestId: RequestIdSchema,
+  type: z.literal("LIST_PROVIDER_OPTIONS")
+}).strict();
+
 export const ListSessionsCommandSchema = z.object({
   protocolVersion: ProtocolVersionSchema,
   requestId: RequestIdSchema,
@@ -168,6 +181,7 @@ export const ClientCommandSchema = z.discriminatedUnion("type", [
   StartSessionCommandSchema,
   StartConfiguredSessionCommandSchema,
   ListInterviewCatalogCommandSchema,
+  ListProviderOptionsCommandSchema,
   ListSessionsCommandSchema,
   ResumeSessionCommandSchema,
   CompleteSessionCommandSchema,
@@ -210,6 +224,7 @@ export const InterviewSessionContextResponseSchema = ResponseBaseSchema.extend({
   type: z.literal("INTERVIEW_SESSION_CONTEXT"),
   sessionId: SessionIdSchema,
   configuration: InterviewSessionConfigurationSchema,
+  configurationSource: SessionConfigurationSourceSchema,
   problem: InterviewProblemPublicViewSchema.optional()
 }).strict();
 
@@ -217,6 +232,12 @@ export const InterviewCatalogResponseSchema = ResponseBaseSchema.extend({
   ok: z.literal(true),
   type: z.literal("INTERVIEW_CATALOG"),
   entries: z.array(InterviewCatalogEntrySchema).max(256)
+}).strict();
+
+export const ProviderOptionsResponseSchema = ResponseBaseSchema.extend({
+  ok: z.literal(true),
+  type: z.literal("PROVIDER_OPTIONS"),
+  options: z.array(ProviderLaunchOptionSchema).max(256)
 }).strict();
 
 export const QuantTradingStateResponseSchema = ResponseBaseSchema.extend({
@@ -347,6 +368,7 @@ export const ProtocolSuccessResponseSchema = z.discriminatedUnion("type", [
   ConfiguredSessionStartedResponseSchema,
   InterviewSessionContextResponseSchema,
   InterviewCatalogResponseSchema,
+  ProviderOptionsResponseSchema,
   QuantTradingStateResponseSchema,
   QuantResearchStateResponseSchema,
   SessionsListResponseSchema,
@@ -378,7 +400,19 @@ export const ProtocolErrorResponseSchema = z.object({
   ok: z.literal(false),
   error: z.object({
     code: ProtocolErrorCodeSchema,
-    message: z.string().min(1).max(200)
+    message: z.string().min(1).max(200),
+    providerLaunchReason: ProviderLaunchAvailabilityReasonSchema.optional()
   }).strict()
-}).strict();
+}).strict().superRefine((response, context) => {
+  if (
+    response.error.providerLaunchReason !== undefined
+    && response.error.code !== "CONFLICT"
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["error", "providerLaunchReason"],
+      message: "Provider launch reasons are valid only for bounded conflict responses"
+    });
+  }
+});
 export type ProtocolErrorResponse = z.infer<typeof ProtocolErrorResponseSchema>;
