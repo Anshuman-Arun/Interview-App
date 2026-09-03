@@ -684,6 +684,80 @@ export function useInterviewSession(
     }
   }, [listAvailableSessions]);
 
+  const refreshInterviewCatalog = useCallback(async (): Promise<readonly InterviewCatalogEntry[]> => {
+    const transportEpoch = transportEpochRef.current;
+    const requestEpoch = launchMetadataRequestEpochRef.current + 1;
+    launchMetadataRequestEpochRef.current = requestEpoch;
+    setInterviewCatalogLoading(true);
+    setInterviewCatalogError(null);
+    try {
+      const entries = await getCommandClient().listInterviewCatalog();
+      if (
+        transportEpochRef.current !== transportEpoch
+        || launchMetadataRequestEpochRef.current !== requestEpoch
+      ) {
+        throw new Error("Interview catalog read was superseded");
+      }
+      setInterviewCatalog(entries);
+      return entries;
+    } catch (err) {
+      if (
+        transportEpochRef.current === transportEpoch
+        && launchMetadataRequestEpochRef.current === requestEpoch
+      ) {
+        setInterviewCatalog([]);
+        setInterviewCatalogError(
+          err instanceof Error ? err.message : "Interview catalog could not be loaded"
+        );
+      }
+      throw err;
+    } finally {
+      if (
+        transportEpochRef.current === transportEpoch
+        && launchMetadataRequestEpochRef.current === requestEpoch
+      ) {
+        setInterviewCatalogLoading(false);
+      }
+    }
+  }, [getCommandClient]);
+
+  const refreshProviderOptions = useCallback(async (): Promise<readonly ProviderLaunchOption[]> => {
+    const transportEpoch = transportEpochRef.current;
+    const requestEpoch = launchMetadataRequestEpochRef.current + 1;
+    launchMetadataRequestEpochRef.current = requestEpoch;
+    setProviderOptionsLoading(true);
+    setProviderOptionsError(null);
+    try {
+      const options = await getCommandClient().listProviderOptions();
+      if (
+        transportEpochRef.current !== transportEpoch
+        || launchMetadataRequestEpochRef.current !== requestEpoch
+      ) {
+        throw new Error("Provider option read was superseded");
+      }
+      setProviderOptions(options);
+      return options;
+    } catch (err) {
+      if (
+        transportEpochRef.current === transportEpoch
+        && launchMetadataRequestEpochRef.current === requestEpoch
+      ) {
+        setProviderOptions([]);
+        setProviderOptionsError(
+          err instanceof Error ? err.message : "Provider options could not be loaded"
+        );
+      }
+      throw err;
+    } finally {
+      if (
+        transportEpochRef.current === transportEpoch
+        && launchMetadataRequestEpochRef.current === requestEpoch
+      ) {
+        setProviderOptionsLoading(false);
+      }
+    }
+  }, [getCommandClient]);
+
   const attachRendererStream = useCallback(
     async (targetSessionId: SessionId): Promise<void> => {
       if (abortControllerRef.current !== null) {
