@@ -282,8 +282,7 @@ function providerResultExceedsStructuralBounds(input: unknown): boolean {
   });
   if (exceedsCandidateBounds) return true;
 
-  const serialized = JSON.stringify(input);
-  if (serialized === undefined) return false;
+  const serialized = JSON.stringify(result);
   return new TextEncoder().encode(serialized).byteLength
     > MAX_FORMAL_INTERPRETATION_PROVIDER_OUTPUT_BYTES;
 }
@@ -670,7 +669,7 @@ export class InterpretationCoordinator {
     });
 
     let workItem: VerificationWorkItem;
-    let duplicateVerificationRequest = false;
+    let duplicateVerificationRequest: boolean;
     try {
       if (request.generationId === undefined) {
         const admitted = await this.verification.requestVerification({
