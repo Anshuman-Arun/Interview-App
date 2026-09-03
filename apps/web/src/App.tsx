@@ -660,6 +660,7 @@ export const App: React.FC = () => {
                 !session.isSessionStarted
                 || session.sessionStatus !== "ACTIVE"
                 || session.isPaused
+                || session.whiteboardSync.status !== "SYNCED"
                 || sessionEntryPending
                 || sessionTerminalPending
               }
@@ -678,6 +679,7 @@ export const App: React.FC = () => {
                 !session.isSessionStarted
                 || session.sessionStatus !== "ACTIVE"
                 || session.isPaused
+                || session.whiteboardSync.status !== "SYNCED"
                 || sessionEntryPending
                 || sessionTerminalPending
               }
