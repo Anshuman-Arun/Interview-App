@@ -105,6 +105,8 @@ describe("Windows desktop packaging contract", () => {
     expect(workflow).toContain("pull_request:");
     expect(workflow).toContain('"apps/desktop/**"');
     expect(workflow).toContain('CSC_IDENTITY_AUTO_DISCOVERY: "false"');
+    expect(workflow).toContain("Get-AuthenticodeSignature");
+    expect(workflow).toContain('"NotSigned"');
     expect(workflow).not.toContain("INTERVIEW_CI_PROVIDER_MODE");
     expect(generalCi).not.toContain("package Windows installer");
   });
