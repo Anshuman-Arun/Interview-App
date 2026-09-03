@@ -811,7 +811,8 @@ export class InterpretationCoordinator {
           sourceRevision: workItem.basis.committedInputSequence
         }),
         result: supplied,
-        verifier
+        verifier,
+        cancellationRequested: () => this.isCancelled(record)
       });
     } catch {
       await this.discardPendingVerification(record, "FORMAL_INTERPRETATION_RESULT_FAILED");
