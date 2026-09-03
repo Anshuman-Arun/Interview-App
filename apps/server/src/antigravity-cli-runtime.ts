@@ -13,7 +13,7 @@ import {
 } from "../../../packages/providers/src/index.js";
 
 const ANTIGRAVITY_EXECUTABLE_ID = "antigravity-cli";
-const ANTIGRAVITY_SAFE_CLI_VERSION = Object.freeze([1, 1, 16] as const);
+const ANTIGRAVITY_SAFE_CLI_VERSION = Object.freeze([1, 1, 25] as const);
 // First use also pays cold executable hashing and trusted Windows supervisor
 // compilation. Those stages are each independently bounded at 30s, so this
 // one-time local preflight must leave room for both plus `agy --version`.
@@ -254,9 +254,10 @@ export function isSupportedAntigravityCliVersionOutput(
   }
 
   const [safeMajor, safeMinor, safePatch] = ANTIGRAVITY_SAFE_CLI_VERSION;
-  // Headless, keyring restoration, profile, auth, and protocol behavior can
-  // change even in a patch release. This runtime depends on the 1.1.16 fixes
-  // for restored system-keyring account state, so admit exactly that build.
+  // Headless, keyring restoration, profile, auth, stdio, and protocol behavior
+  // can change even in a patch release. This runtime depends on the later 1.1.x
+  // fixes for keyring/account restoration, stream integrity, and piped stdio
+  // shutdown, so admit exactly the release audited for this adapter.
   return major === safeMajor && minor === safeMinor && patch === safePatch;
 }
 

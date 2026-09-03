@@ -87,8 +87,9 @@ capabilities therefore declare both local process execution and remote execution
 remote data use, and unknown metered-execution status. The standalone adapter remains fail-closed
 under no-metered policy unless a trusted runtime supplies current billing evidence.
 
-The concrete Windows application runtime requires the audited `agy 1.1.16` stream-json
-contract, forces AI-credit fallback off, leaves `modelProvider` absent, and does not inherit
+The concrete Windows application runtime requires the audited `agy 1.1.25` stream-json
+contract, including the later 1.1.x fixes for restored-keyring account state,
+headless stream integrity, and piped stdout/stderr shutdown. forces AI-credit fallback off, leaves `modelProvider` absent, and does not inherit
 API-key/custom-endpoint environment variables. The CLI still authenticates through its OS-native
 account keyring, which can represent subscription, enterprise, or Google Cloud project modes.
 Those local profile restrictions therefore do not prove that incremental spend is technically

@@ -95,18 +95,18 @@ describe("supervised Antigravity runtime profile", () => {
     }
   );
 
-  it("requires exactly the audited 1.1.16 keyring/headless contract", () => {
-    expect(isSupportedAntigravityCliVersionOutput("1.1.14\n")).toBe(false);
-    expect(isSupportedAntigravityCliVersionOutput("1.1.15\n")).toBe(false);
-    expect(isSupportedAntigravityCliVersionOutput("1.1.16\n")).toBe(true);
-    expect(isSupportedAntigravityCliVersionOutput("agy version 1.1.16\n")).toBe(true);
-    expect(isSupportedAntigravityCliVersionOutput("v1.1.16\n")).toBe(true);
-    expect(isSupportedAntigravityCliVersionOutput("1.1.17\n")).toBe(false);
+  it("requires exactly the audited 1.1.25 headless/keyring/stdio contract", () => {
+    expect(isSupportedAntigravityCliVersionOutput("1.1.16\n")).toBe(false);
     expect(isSupportedAntigravityCliVersionOutput("1.1.23\n")).toBe(false);
-    expect(isSupportedAntigravityCliVersionOutput("v1.2.0\n")).toBe(false);
+    expect(isSupportedAntigravityCliVersionOutput("1.1.24\n")).toBe(false);
+    expect(isSupportedAntigravityCliVersionOutput("1.1.25\n")).toBe(true);
+    expect(isSupportedAntigravityCliVersionOutput("agy version 1.1.25\n")).toBe(true);
+    expect(isSupportedAntigravityCliVersionOutput("v1.1.25\n")).toBe(true);
+    expect(isSupportedAntigravityCliVersionOutput("1.1.26\n")).toBe(false);
+    expect(isSupportedAntigravityCliVersionOutput("1.2.0\n")).toBe(false);
     expect(isSupportedAntigravityCliVersionOutput("2.0.0\n")).toBe(false);
-    expect(isSupportedAntigravityCliVersionOutput("1.1.16-rc.1\n")).toBe(false);
-    expect(isSupportedAntigravityCliVersionOutput("1.1.16\nextra")).toBe(false);
+    expect(isSupportedAntigravityCliVersionOutput("1.1.25-rc.1\n")).toBe(false);
+    expect(isSupportedAntigravityCliVersionOutput("1.1.25\nextra")).toBe(false);
     expect(isSupportedAntigravityCliVersionOutput("not-a-version")).toBe(false);
   });
 
