@@ -468,13 +468,12 @@ async function verifyPriorPackagedSmokeSession(
     throw new Error("Packaged upgrade smoke proof contains an invalid session ID");
   }
   const sessionId = sessionIdResult.data;
-  let priorSession: ReturnType<typeof server.registry.get>;
   try {
-    priorSession = server.registry.get(sessionId);
+    await server.runtime.sessions.ensureRecovered(sessionId);
   } catch {
-    throw new Error("Upgraded package could not reload the prior persisted session");
+    throw new Error("Upgraded package could not recover the prior persisted session");
   }
-  const state = priorSession.getState();
+  const state = server.registry.get(sessionId).getState();
   if (
     state.sessionId !== sessionId
     || !state.started
