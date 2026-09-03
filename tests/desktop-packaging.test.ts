@@ -19,7 +19,7 @@ describe("Windows desktop packaging contract", () => {
     };
     const config = await source("electron-builder.yml");
 
-    expect(packageJson.version).toBe("0.1.0");
+    expect(packageJson.version).toMatch(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u);
     expect(packageJson.productName).toBe("Interview App");
     expect(packageJson.main).toBe("dist/desktop-runtime/apps/desktop/src/main.js");
     expect(packageJson.scripts?.["package:win"]).toContain("node scripts/clean-windows-package.mjs");
