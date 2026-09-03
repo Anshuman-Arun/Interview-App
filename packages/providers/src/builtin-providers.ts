@@ -5,7 +5,8 @@ import {
   ANTIGRAVITY_CLI_ADAPTER_VERSION,
   ANTIGRAVITY_CLI_MODEL_ID,
   ANTIGRAVITY_CLI_PROVIDER_ID,
-  createAntigravityCliReasoningProvider
+  createAntigravityCliReasoningProvider,
+  type AntigravityBillingVerificationFactory
 } from "./antigravity-cli-adapter.js";
 import type { SupervisedCliExecutor } from "./supervised-cli-provider.js";
 import { GeminiApiAdapter } from "./gemini-api-adapter.js";
@@ -30,7 +31,7 @@ const isProviderControlPlaneError = ProviderControlPlaneError.isControlPlaneErro
 
 const MOCK_RUNTIME_KEYS = new Set(["proposal"]);
 const GEMINI_RUNTIME_KEYS = new Set(["fetchImpl", "billingVerificationFactory"]);
-const ANTIGRAVITY_RUNTIME_KEYS = new Set(["executor"]);
+const ANTIGRAVITY_RUNTIME_KEYS = new Set(["executor", "billingVerificationFactory"]);
 const ANTIGRAVITY_EXECUTOR_KEYS = new Set(["execute"]);
 const MAX_BUILT_IN_CREDENTIAL_LENGTH = 4_096;
 const PROPOSAL_KEYS = Object.freeze([
@@ -385,6 +386,7 @@ function snapshotAntigravityExecutor(value: unknown): SupervisedCliExecutor {
 
 function snapshotAntigravityFactoryRuntime(value: unknown): {
   readonly executor: SupervisedCliExecutor;
+  readonly billingVerificationFactory?: AntigravityBillingVerificationFactory;
 } {
   if (
     typeof value !== "object"
@@ -423,8 +425,26 @@ function snapshotAntigravityFactoryRuntime(value: unknown): {
   ) {
     return invalidAntigravityRuntime();
   }
+  const billingVerificationFactory = descriptors.billingVerificationFactory;
+  if (
+    billingVerificationFactory !== undefined
+    && (
+      billingVerificationFactory.enumerable !== true
+      || !("value" in billingVerificationFactory)
+      || typeof billingVerificationFactory.value !== "function"
+      || utilTypes.isProxy(billingVerificationFactory.value)
+    )
+  ) {
+    return invalidAntigravityRuntime();
+  }
   return Object.freeze({
-    executor: snapshotAntigravityExecutor(executor.value)
+    executor: snapshotAntigravityExecutor(executor.value),
+    ...(billingVerificationFactory === undefined
+      ? {}
+      : {
+          billingVerificationFactory:
+            billingVerificationFactory.value as AntigravityBillingVerificationFactory
+        })
   });
 }
 
@@ -434,7 +454,8 @@ const antigravityFactory: ProviderAdapterFactoryDefinition = {
     const runtime = snapshotAntigravityFactoryRuntime(input.runtime);
     return createAntigravityCliReasoningProvider(
       runtime.executor,
-      input.resolved.model.adapterModelId ?? input.resolved.model.id
+      input.resolved.model.adapterModelId ?? input.resolved.model.id,
+      runtime.billingVerificationFactory
     );
   }
 };
