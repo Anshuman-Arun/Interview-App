@@ -24,17 +24,23 @@ describe("configured launch browser boundaries", () => {
     expect(setup).not.toContain("executablePath");
   });
 
-  it("routes Quant sessions through the dedicated handoff guard rather than Oxford controls", () => {
+  it("routes Quant sessions through the dedicated workspace rather than Oxford controls", () => {
     const app = fs.readFileSync(
       path.resolve(process.cwd(), "apps/web/src/App.tsx"),
       "utf8"
     );
 
-    const quantGuard = app.indexOf("if (!isOxfordWorkspace)");
-    const oxfordProblem = app.indexOf("<ProblemCard");
+    const quantGuard = app.indexOf('session.configuration.mode !== "OXFORD_MATHEMATICS"');
+    const quantWorkspace = app.indexOf("<QuantSessionWorkspace", quantGuard);
+    const oxfordProblem = app.indexOf("<ProblemCard", quantWorkspace);
+    const quantBranch = app.slice(quantGuard, oxfordProblem);
+
     expect(quantGuard).toBeGreaterThan(-1);
-    expect(oxfordProblem).toBeGreaterThan(quantGuard);
-    expect(app).toContain('data-testid="quant-session-handoff"');
-    expect(app).toContain("Dedicated Quant actions are intentionally");
+    expect(quantWorkspace).toBeGreaterThan(quantGuard);
+    expect(oxfordProblem).toBeGreaterThan(quantWorkspace);
+    expect(quantBranch).not.toContain("<ProblemCard");
+    expect(quantBranch).not.toContain("<StudentInputArea");
+    expect(quantBranch).not.toContain("<WhiteboardCanvas");
+    expect(app).not.toContain('data-testid="quant-session-handoff"');
   });
 });

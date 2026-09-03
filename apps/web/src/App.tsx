@@ -26,9 +26,39 @@ import {
 import { useProductNavigation } from "./navigation/useProductNavigation.js";
 import type { ProductPageId } from "./components/ProductFrame.js";
 import { ReviewReadPanel } from "./pages/ReviewReadPanel.js";
+import { QuantSessionWorkspace } from "./quant/QuantSessionWorkspace.js";
 import { useAppearance } from "./appearance/AppearanceProvider.js";
 import "./styles/app.css";
 import "./styles/transcript.css";
+
+const QUANT_REATTACH_SESSION_KEY = "interview.quant.active-session";
+
+function readQuantReattachSessionId(): SessionId | null {
+  try {
+    const value = globalThis.sessionStorage.getItem(QUANT_REATTACH_SESSION_KEY);
+    if (value === null) return null;
+    const parsed = SessionIdSchema.safeParse(value);
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeQuantReattachSessionId(sessionId: SessionId): void {
+  try {
+    globalThis.sessionStorage.setItem(QUANT_REATTACH_SESSION_KEY, sessionId);
+  } catch {
+    // Reattachment is a convenience only; server authority never depends on browser storage.
+  }
+}
+
+function clearQuantReattachSessionId(): void {
+  try {
+    globalThis.sessionStorage.removeItem(QUANT_REATTACH_SESSION_KEY);
+  } catch {
+    // Reattachment is a convenience only; server authority never depends on browser storage.
+  }
+}
 
 export const App: React.FC = () => {
   const { resolvedTheme } = useAppearance();
@@ -43,6 +73,8 @@ export const App: React.FC = () => {
   const sessionTerminalPendingRef = useRef(false);
   const [sessionEntryPending, setSessionEntryPending] = useState(false);
   const [sessionTerminalPending, setSessionTerminalPending] = useState(false);
+  const [reloadQuantSessionId] = useState<SessionId | null>(() => readQuantReattachSessionId());
+  const reloadQuantRecoveryAttemptedRef = useRef(false);
 
   const whiteboardAdapter = useMemo(() => {
     return new TldrawWhiteboardAdapter();
@@ -52,6 +84,37 @@ export const App: React.FC = () => {
     whiteboardAdapter
   });
   const { route, navigate } = useProductNavigation();
+  const routeRef = useRef(route);
+  routeRef.current = route;
+
+  const openDefaultReview = useCallback((targetSessionId: SessionId): void => {
+    navigate({
+      page: "review",
+      sessionId: targetSessionId,
+      view: "replay"
+    });
+
+    void session.readSessionConfiguration(targetSessionId)
+      .then((configuration) => {
+        const currentRoute = routeRef.current;
+        if (
+          configuration.mode !== "OXFORD_MATHEMATICS"
+          || currentRoute.page !== "review"
+          || currentRoute.sessionId !== targetSessionId
+          || currentRoute.view !== "replay"
+        ) {
+          return;
+        }
+        navigate({
+          page: "review",
+          sessionId: targetSessionId,
+          view: "evaluation"
+        }, { replace: true });
+      })
+      .catch(() => {
+        // Replay is the conservative fallback for unknown or unreadable mode.
+      });
+  }, [navigate, session.readSessionConfiguration]);
 
   const recoverySessionParse = SessionIdSchema.safeParse(recoverySessionInput.trim());
   const recoverySessionId = recoverySessionParse.success
@@ -173,15 +236,11 @@ export const App: React.FC = () => {
     try {
       const recoveredStatus = await session.recoverSession(targetSessionId);
       if (recoveredStatus === null) return;
-      navigate(
-        recoveredStatus === "ACTIVE"
-          ? { page: "interview" }
-          : {
-              page: "review",
-              sessionId: targetSessionId,
-              view: "evaluation"
-            }
-      );
+      if (recoveredStatus === "ACTIVE") {
+        navigate({ page: "interview" });
+      } else {
+        openDefaultReview(targetSessionId);
+      }
     } catch {
       // Error handled in session.error
     } finally {
@@ -224,15 +283,11 @@ export const App: React.FC = () => {
     try {
       const recoveredStatus = await session.recoverSession(recoverySessionId);
       if (recoveredStatus === null) return;
-      navigate(
-        recoveredStatus === "ACTIVE"
-          ? { page: "interview" }
-          : {
-              page: "review",
-              sessionId: recoverySessionId,
-              view: "evaluation"
-            }
-      );
+      if (recoveredStatus === "ACTIVE") {
+        navigate({ page: "interview" });
+      } else {
+        openDefaultReview(recoverySessionId);
+      }
     } catch {
       // Error handled in session.error
     } finally {
@@ -301,6 +356,82 @@ export const App: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (
+      session.sessionId !== null
+      && session.isSessionStarted
+      && session.sessionStatus === "ACTIVE"
+    ) {
+      if (
+        session.configuration?.mode === "QUANT_TRADING"
+        || session.configuration?.mode === "QUANT_RESEARCH"
+      ) {
+        writeQuantReattachSessionId(session.sessionId);
+      } else if (session.configuration?.mode === "OXFORD_MATHEMATICS") {
+        clearQuantReattachSessionId();
+      }
+      return;
+    }
+    if (
+      session.sessionStatus === "COMPLETED"
+      || session.sessionStatus === "ARCHIVED"
+    ) {
+      clearQuantReattachSessionId();
+    }
+  }, [
+    session.configuration?.mode,
+    session.isSessionStarted,
+    session.sessionId,
+    session.sessionStatus
+  ]);
+
+  useEffect(() => {
+    if (
+      reloadQuantSessionId === null
+      || route.page !== "interview"
+      || session.isSessionStarted
+      || sessionEntryPendingRef.current
+      || sessionTerminalPendingRef.current
+      || reloadQuantRecoveryAttemptedRef.current
+    ) {
+      return;
+    }
+
+    reloadQuantRecoveryAttemptedRef.current = true;
+    sessionEntryPendingRef.current = true;
+    setSessionEntryPending(true);
+    void session.recoverSession(reloadQuantSessionId)
+      .then((status) => {
+        if (status === "ACTIVE") {
+          navigate({ page: "interview" }, { replace: true });
+          return;
+        }
+        clearQuantReattachSessionId();
+        if (status === "COMPLETED" || status === "ARCHIVED") {
+          navigate({
+            page: "review",
+            sessionId: reloadQuantSessionId,
+            view: "replay"
+          }, { replace: true });
+          return;
+        }
+        navigate({ page: "home" }, { replace: true });
+      })
+      .catch(() => {
+        clearQuantReattachSessionId();
+        navigate({ page: "home" }, { replace: true });
+      })
+      .finally(() => {
+        sessionEntryPendingRef.current = false;
+        setSessionEntryPending(false);
+      });
+  }, [
+    navigate,
+    reloadQuantSessionId,
+    route.page,
+    session.isSessionStarted,
+    session.recoverSession
+  ]);
 
   const handleWhiteboardEditorMount = useCallback((): void => {
     void session.synchronizeWhiteboard().catch(() => {
@@ -324,9 +455,6 @@ export const App: React.FC = () => {
     hasActiveInterview,
     session.isPaused
   );
-  const isOxfordWorkspace =
-    session.configuration === null
-    || session.configuration.mode === "OXFORD_MATHEMATICS";
   const activeModeLabel =
     session.configuration?.mode === "QUANT_TRADING"
       ? "Quant Trading"
@@ -401,6 +529,10 @@ export const App: React.FC = () => {
           }
         }}
         onReview={(sessionId, view, options) => {
+          if (view === "evaluation" && options === undefined) {
+            openDefaultReview(sessionId);
+            return;
+          }
           navigate(
             {
               page: "review",
@@ -444,99 +576,39 @@ export const App: React.FC = () => {
     return productPage;
   }
 
-  if (!isOxfordWorkspace) {
-    const target = session.configuration.scenario;
-    const provider = session.configuration.providerSelection;
+  if (
+    session.configuration !== null
+    && session.configuration.mode !== "OXFORD_MATHEMATICS"
+  ) {
     return (
       <>
         {productPage}
-        <div
-          hidden={displayRoute.page !== "interview"}
-          className="interview-app-container flex flex-col h-screen w-screen bg-slate-100 font-sans text-slate-900 overflow-hidden"
-          data-testid="quant-session-handoff"
-        >
-          <header className="app-header">
-            <button
-              type="button"
-              className="app-header__identity"
-              disabled={sessionEntryPending || sessionTerminalPending}
-              onClick={() => {
-                if (hasActiveInterview) session.pauseSession();
-                navigateProductPage("home");
-              }}
-              aria-label={hasActiveInterview ? "Pause interview and open Home" : "Open Home"}
-            >
-              <BrandMark size={28} title="Interview" />
-              <span className="app-header__identity-copy">
-                <strong>{activeModeLabel}</strong>
-                <small>{target.id}</small>
-              </span>
-            </button>
-            <div className="app-header__actions">
-              <span className="app-header__connection" data-connected="false">
-                <span aria-hidden="true" />
-                Deterministic session
-              </span>
-              {hasActiveInterview && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    session.pauseSession();
-                    navigateProductPage("home");
-                  }}
-                  disabled={sessionEntryPending || sessionTerminalPending}
-                  className="app-header__quiet"
-                >
-                  Home
-                </button>
-              )}
-              <AppearanceDock compact />
-            </div>
-          </header>
-          {session.error !== null && (
-            <div className="bg-rose-50 border-b border-rose-200 px-6 py-2.5 flex items-center justify-between text-xs text-rose-800 shrink-0">
-              <span>{session.error}</span>
-              <button type="button" onClick={session.clearError}>✕</button>
-            </div>
-          )}
-          <main className="flex-1 overflow-auto p-8">
-            <section className="mx-auto max-w-3xl bg-white border border-slate-200 rounded-2xl p-7 shadow-sm">
-              <p className="text-[10px] font-bold tracking-[0.16em] text-slate-500 mb-2">
-                AUTHORITATIVE SESSION READY
-              </p>
-              <h1 className="text-2xl font-semibold text-slate-950 mb-2">{activeModeLabel}</h1>
-              <p className="text-sm text-slate-600 mb-6">
-                The configured session has started successfully. Dedicated Quant actions are intentionally
-                reserved for the follow-up workspace; this screen does not route Quant authority through
-                Oxford interview controls.
-              </p>
-              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                <div>
-                  <dt className="text-xs text-slate-500">Scenario</dt>
-                  <dd className="font-medium text-slate-900">{target.id}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-slate-500">Version</dt>
-                  <dd className="font-mono text-xs text-slate-900">{target.version}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-slate-500">Provider</dt>
-                  <dd className="font-medium text-slate-900">
-                    {provider === undefined
-                      ? "Server default"
-                      : `${provider.providerId} · ${provider.modelId}`}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-slate-500">Intervention</dt>
-                  <dd className="font-medium text-slate-900">
-                    {session.configuration.interventionPolicy}
-                  </dd>
-                </div>
-              </dl>
-            </section>
-          </main>
-        </div>
+        <QuantSessionWorkspace
+          configuration={session.configuration}
+          quantState={session.quantState}
+          quantStateLoading={session.quantStateLoading}
+          quantActionPending={session.quantActionPending}
+          sessionStatus={session.sessionStatus}
+          paused={session.isPaused}
+          productHidden={displayRoute.page !== "interview"}
+          notice={session.error}
+          onDismissNotice={session.clearError}
+          onHome={() => {
+            if (hasActiveInterview) session.pauseSession();
+            navigateProductPage("home");
+          }}
+          onReview={() => {
+            if (session.sessionId === null) return;
+            navigate({
+              page: "review",
+              sessionId: session.sessionId,
+              view: "replay"
+            });
+          }}
+          onRefresh={session.refreshQuantState}
+          onSubmitTrading={session.submitQuantTradingAction}
+          onSubmitResearch={session.submitQuantResearchAction}
+        />
       </>
     );
   }

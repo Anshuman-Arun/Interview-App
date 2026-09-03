@@ -7,6 +7,10 @@ import {
   type InterviewProblemPublicView,
   type InterviewSessionConfiguration,
   type ProviderLaunchOption,
+  type QuantResearchCandidateAction,
+  type QuantResearchPublicState,
+  type QuantTradingCandidateAction,
+  type QuantTradingPublicState,
   type RequestId,
   type SessionHistoryEntry,
   type SessionConfigurationSource,
@@ -88,6 +92,10 @@ export interface UseInterviewSessionOptions {
   readonly fetchImpl?: typeof fetch;
 }
 
+export type QuantSessionPublicState =
+  | Readonly<{ mode: "QUANT_TRADING"; state: QuantTradingPublicState }>
+  | Readonly<{ mode: "QUANT_RESEARCH"; state: QuantResearchPublicState }>;
+
 export interface UseInterviewSessionResult {
   readonly sessionId: SessionId | null;
   readonly isConnected: boolean;
@@ -106,6 +114,9 @@ export interface UseInterviewSessionResult {
   readonly problem: InterviewProblemPublicView | null;
   readonly configuration: InterviewSessionConfiguration | null;
   readonly configurationSource: SessionConfigurationSource | null;
+  readonly quantState: QuantSessionPublicState | null;
+  readonly quantStateLoading: boolean;
+  readonly quantActionPending: boolean;
   readonly sequence: number;
   readonly contextEpoch: number;
   readonly error: string | null;
@@ -129,12 +140,22 @@ export interface UseInterviewSessionResult {
   readonly readSessionHistory: (
     signal?: AbortSignal
   ) => Promise<SessionHistoryReadResponse>;
+  readonly readSessionConfiguration: (
+    sessionId: SessionId
+  ) => Promise<InterviewSessionConfiguration>;
   readonly startSession: (customSessionId?: SessionId) => Promise<void>;
   readonly startConfiguredSession: (
     configuration: InterviewSessionConfiguration,
     customSessionId?: SessionId
   ) => Promise<void>;
   readonly recoverSession: (sessionId: SessionId) => Promise<SessionStatus | null>;
+  readonly refreshQuantState: () => Promise<QuantSessionPublicState | null>;
+  readonly submitQuantTradingAction: (
+    action: QuantTradingCandidateAction
+  ) => Promise<QuantTradingPublicState>;
+  readonly submitQuantResearchAction: (
+    action: QuantResearchCandidateAction
+  ) => Promise<QuantResearchPublicState>;
   readonly pauseSession: () => void;
   readonly resumePausedSession: () => Promise<void>;
   readonly completeSession: (summary?: string) => Promise<void>;
@@ -360,6 +381,9 @@ export function useInterviewSession(
   const [problem, setProblem] = useState<InterviewProblemPublicView | null>(null);
   const [configuration, setConfiguration] = useState<InterviewSessionConfiguration | null>(null);
   const [configurationSource, setConfigurationSource] = useState<SessionConfigurationSource | null>(null);
+  const [quantState, setQuantState] = useState<QuantSessionPublicState | null>(null);
+  const [quantStateLoading, setQuantStateLoading] = useState(false);
+  const [quantActionPending, setQuantActionPending] = useState(false);
   const [sequence, setSequence] = useState<number>(0);
   const [contextEpoch, setContextEpoch] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
@@ -379,6 +403,9 @@ export function useInterviewSession(
   const sessionListRequestEpochRef = useRef(0);
   const catalogRequestEpochRef = useRef(0);
   const providerOptionsRequestEpochRef = useRef(0);
+  const quantReadEpochRef = useRef(0);
+  const quantActionEpochRef = useRef(0);
+  const quantActionInFlightRef = useRef(false);
   const rendererRestartRef = useRef<((targetSessionId: SessionId) => void) | null>(null);
   const rendererClientRef = useRef<RendererClient | null>(null);
   const boardSyncRef = useRef<AuthoritativeBoardSyncCoordinator | null>(null);
@@ -496,6 +523,9 @@ export function useInterviewSession(
     sessionListRequestEpochRef.current += 1;
     catalogRequestEpochRef.current += 1;
     providerOptionsRequestEpochRef.current += 1;
+    quantReadEpochRef.current += 1;
+    quantActionEpochRef.current += 1;
+    quantActionInFlightRef.current = false;
     sessionTransitionEpochRef.current += 1;
     sessionMutationAdmissionRef.current = false;
     pendingSubmissionsRef.current.clear();
@@ -514,6 +544,9 @@ export function useInterviewSession(
     setProblem(null);
     setConfiguration(null);
     setConfigurationSource(null);
+    setQuantState(null);
+    setQuantStateLoading(false);
+    setQuantActionPending(false);
     setTranscript([]);
     setSequence(0);
     setContextEpoch(0);
@@ -537,6 +570,241 @@ export function useInterviewSession(
       fetchImpl
     });
   }, [baseUrl, desktopBootstrap, fetchImpl]);
+
+  const readSessionConfiguration = useCallback(async (
+    targetSessionId: SessionId
+  ): Promise<InterviewSessionConfiguration> => {
+    const context = await getCommandClient().getInterviewSessionContext(targetSessionId);
+    return context.configuration;
+  }, [getCommandClient]);
+
+  const refreshQuantState = useCallback(async (): Promise<QuantSessionPublicState | null> => {
+    const targetSessionId = sessionId;
+    const targetConfiguration = configuration;
+    if (
+      targetSessionId === null
+      || targetConfiguration === null
+      || targetConfiguration.mode === "OXFORD_MATHEMATICS"
+    ) {
+      quantReadEpochRef.current += 1;
+      setQuantState(null);
+      setQuantStateLoading(false);
+      return null;
+    }
+
+    const transitionEpoch = sessionTransitionEpochRef.current;
+    const readEpoch = quantReadEpochRef.current + 1;
+    quantReadEpochRef.current = readEpoch;
+    setQuantStateLoading(true);
+    try {
+      const response = await getCommandClient().getQuantSessionState(targetSessionId);
+      if (
+        sessionTransitionEpochRef.current !== transitionEpoch
+        || quantReadEpochRef.current !== readEpoch
+      ) return null;
+
+      const next: QuantSessionPublicState = response.type === "QUANT_TRADING_STATE"
+        ? { mode: "QUANT_TRADING", state: response.state }
+        : { mode: "QUANT_RESEARCH", state: response.state };
+      if (next.mode !== targetConfiguration.mode) {
+        throw new Error("Authoritative Quant state mode does not match the recovered session configuration");
+      }
+      setQuantState(next);
+
+      const terminal =
+        (next.mode === "QUANT_TRADING" && next.state.status !== "ACTIVE")
+        || (next.mode === "QUANT_RESEARCH" && next.state.status === "COMPLETE");
+      if (terminal) {
+        sessionMutationAdmissionRef.current = false;
+        setIsPaused(false);
+        setSessionStatus("COMPLETED");
+      }
+      return next;
+    } catch (err) {
+      if (
+        sessionTransitionEpochRef.current === transitionEpoch
+        && quantReadEpochRef.current === readEpoch
+      ) {
+        setQuantState(null);
+        setError("Authoritative Quant state could not be loaded. Refresh before submitting another action.");
+      }
+      throw err;
+    } finally {
+      if (
+        sessionTransitionEpochRef.current === transitionEpoch
+        && quantReadEpochRef.current === readEpoch
+      ) {
+        setQuantStateLoading(false);
+      }
+    }
+  }, [configuration, getCommandClient, sessionId]);
+
+  const quantActionFailureMessage = useCallback((err: unknown): string => {
+    if (err instanceof BrowserCommandProtocolError) {
+      if (err.code === "CONFLICT") {
+        return "The action conflicts with the current scenario state, such as stale progress. The latest public state has been refreshed; review it before submitting again.";
+      }
+      if (err.code === "INVALID_COMMAND") {
+        return "The authoritative Quant runtime rejected this action. Check the entered values and current public constraints.";
+      }
+      return "The authoritative Quant runtime could not admit this action.";
+    }
+    return "The action outcome could not be confirmed. Public state has been reloaded when possible; the action was not automatically retried.";
+  }, []);
+
+  const submitQuantTradingAction = useCallback(async (
+    action: QuantTradingCandidateAction
+  ): Promise<QuantTradingPublicState> => {
+    if (
+      sessionId === null
+      || sessionStatus !== "ACTIVE"
+      || configuration?.mode !== "QUANT_TRADING"
+      || quantState?.mode !== "QUANT_TRADING"
+      || quantState.state.status !== "ACTIVE"
+    ) {
+      throw new Error("Quant Trading action requires a loaded active Trading state");
+    }
+    if (quantActionInFlightRef.current) {
+      throw new Error("A Quant action is already awaiting authoritative admission");
+    }
+
+    const targetSessionId = sessionId;
+    const expectedRound = quantState.state.currentRound;
+    const transitionEpoch = sessionTransitionEpochRef.current;
+    const actionEpoch = quantActionEpochRef.current + 1;
+    quantActionEpochRef.current = actionEpoch;
+    quantReadEpochRef.current += 1;
+    quantActionInFlightRef.current = true;
+    setQuantStateLoading(false);
+    setQuantActionPending(true);
+    setError(null);
+    try {
+      const response = await getCommandClient().submitQuantTradingAction(
+        targetSessionId,
+        expectedRound,
+        action
+      );
+      if (sessionTransitionEpochRef.current === transitionEpoch) {
+        quantReadEpochRef.current += 1;
+        const next: QuantSessionPublicState = {
+          mode: "QUANT_TRADING",
+          state: response.state
+        };
+        setQuantState(next);
+        if (response.state.status !== "ACTIVE") {
+          sessionMutationAdmissionRef.current = false;
+          setIsPaused(false);
+          setSessionStatus("COMPLETED");
+        }
+      }
+      return response.state;
+    } catch (err) {
+      if (sessionTransitionEpochRef.current === transitionEpoch) {
+        setError(quantActionFailureMessage(err));
+        if (!(err instanceof BrowserCommandProtocolError) || err.code === "CONFLICT") {
+          setQuantState(null);
+        }
+        try {
+          await refreshQuantState();
+        } catch {
+          // Fail closed with quantState=null if public authority cannot be reloaded.
+        }
+      }
+      throw err;
+    } finally {
+      if (quantActionEpochRef.current === actionEpoch) {
+        quantActionInFlightRef.current = false;
+        if (sessionTransitionEpochRef.current === transitionEpoch) {
+          setQuantActionPending(false);
+        }
+      }
+    }
+  }, [
+    configuration?.mode,
+    getCommandClient,
+    quantActionFailureMessage,
+    quantState,
+    refreshQuantState,
+    sessionId,
+    sessionStatus
+  ]);
+
+  const submitQuantResearchAction = useCallback(async (
+    action: QuantResearchCandidateAction
+  ): Promise<QuantResearchPublicState> => {
+    if (
+      sessionId === null
+      || sessionStatus !== "ACTIVE"
+      || configuration?.mode !== "QUANT_RESEARCH"
+      || quantState?.mode !== "QUANT_RESEARCH"
+      || quantState.state.status !== "IN_PROGRESS"
+    ) {
+      throw new Error("Quant Research action requires a loaded in-progress Research state");
+    }
+    if (quantActionInFlightRef.current) {
+      throw new Error("A Quant action is already awaiting authoritative admission");
+    }
+
+    const targetSessionId = sessionId;
+    const expectedActionCount = quantState.state.acceptedActionCount;
+    const transitionEpoch = sessionTransitionEpochRef.current;
+    const actionEpoch = quantActionEpochRef.current + 1;
+    quantActionEpochRef.current = actionEpoch;
+    quantReadEpochRef.current += 1;
+    quantActionInFlightRef.current = true;
+    setQuantStateLoading(false);
+    setQuantActionPending(true);
+    setError(null);
+    try {
+      const response = await getCommandClient().submitQuantResearchAction(
+        targetSessionId,
+        expectedActionCount,
+        action
+      );
+      if (sessionTransitionEpochRef.current === transitionEpoch) {
+        quantReadEpochRef.current += 1;
+        const next: QuantSessionPublicState = {
+          mode: "QUANT_RESEARCH",
+          state: response.state
+        };
+        setQuantState(next);
+        if (response.state.status === "COMPLETE") {
+          sessionMutationAdmissionRef.current = false;
+          setIsPaused(false);
+          setSessionStatus("COMPLETED");
+        }
+      }
+      return response.state;
+    } catch (err) {
+      if (sessionTransitionEpochRef.current === transitionEpoch) {
+        setError(quantActionFailureMessage(err));
+        if (!(err instanceof BrowserCommandProtocolError) || err.code === "CONFLICT") {
+          setQuantState(null);
+        }
+        try {
+          await refreshQuantState();
+        } catch {
+          // Fail closed with quantState=null if public authority cannot be reloaded.
+        }
+      }
+      throw err;
+    } finally {
+      if (quantActionEpochRef.current === actionEpoch) {
+        quantActionInFlightRef.current = false;
+        if (sessionTransitionEpochRef.current === transitionEpoch) {
+          setQuantActionPending(false);
+        }
+      }
+    }
+  }, [
+    configuration?.mode,
+    getCommandClient,
+    quantActionFailureMessage,
+    quantState,
+    refreshQuantState,
+    sessionId,
+    sessionStatus
+  ]);
 
   const getBoardSyncCoordinator = useCallback((
     targetSessionId: SessionId
@@ -950,6 +1218,12 @@ export function useInterviewSession(
     const transitionEpoch = sessionTransitionEpochRef.current + 1;
     sessionTransitionEpochRef.current = transitionEpoch;
     sessionMutationAdmissionRef.current = false;
+    quantReadEpochRef.current += 1;
+    quantActionEpochRef.current += 1;
+    quantActionInFlightRef.current = false;
+    setQuantState(null);
+    setQuantStateLoading(false);
+    setQuantActionPending(false);
 
     // Session replacement is an authority boundary, not merely a React state
     // change. Revoke the old renderer synchronously and begin bounded
@@ -1687,6 +1961,12 @@ export function useInterviewSession(
     sessionMutationAdmissionRef.current = false;
     void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
     stopRendererTransport();
+    quantReadEpochRef.current += 1;
+    quantActionEpochRef.current += 1;
+    quantActionInFlightRef.current = false;
+    setQuantState(null);
+    setQuantStateLoading(false);
+    setQuantActionPending(false);
   }, [stopRendererTransport, voiceIntegration.voiceControls]);
 
   const clearError = useCallback((): void => {
@@ -1698,6 +1978,9 @@ export function useInterviewSession(
       sessionTransitionEpochRef.current += 1;
       terminalTransitionInFlightRef.current = false;
       sessionMutationAdmissionRef.current = false;
+      quantReadEpochRef.current += 1;
+      quantActionEpochRef.current += 1;
+      quantActionInFlightRef.current = false;
       rendererLaunchEpochRef.current += 1;
       rendererRestartRef.current = null;
       if (abortControllerRef.current !== null) {
@@ -1734,6 +2017,9 @@ export function useInterviewSession(
     problem,
     configuration,
     configurationSource,
+    quantState,
+    quantStateLoading,
+    quantActionPending,
     sequence,
     contextEpoch,
     error,
@@ -1749,9 +2035,13 @@ export function useInterviewSession(
     readSessionEvaluation,
     readSessionReplay,
     readSessionHistory,
+    readSessionConfiguration,
     startSession,
     startConfiguredSession,
     recoverSession,
+    refreshQuantState,
+    submitQuantTradingAction,
+    submitQuantResearchAction,
     pauseSession,
     resumePausedSession,
     completeSession,
