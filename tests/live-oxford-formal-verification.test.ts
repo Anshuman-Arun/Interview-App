@@ -853,17 +853,22 @@ describe("live Oxford formal reasoning analysis", () => {
       expect(admitted.value.verificationRequestId).toBe(request.requestId);
       expect(writer.getState().verificationRequests[request.requestId]?.status).toBe("PENDING");
 
-      const discarded = await new VerificationCoordinator(writer, []).discardPendingVerification({
-        verificationRequestId: request.requestId,
-        reason: "SCOPE_REVOKED_DURING_RECOVERY"
+      const restartProvider = new DeterministicFormalInterpretationProvider(() => {
+        throw new Error("REVOKED_SCOPE_RECOVERY_MUST_NOT_INTERPRET");
       });
-      expect(discarded.value).toMatchObject({
-        verificationRequestId: request.requestId,
-        discarded: true
+      const recovery = await new InterpretationCoordinator(
+        writer,
+        restartProvider,
+        []
+      ).interpretAndVerify(request);
+      expect(restartProvider.callCount).toBe(0);
+      expect(recovery).toMatchObject({
+        status: "VERIFIER_UNAVAILABLE",
+        reason: "VERIFIER_MISSING"
       });
       expect(writer.getState().verificationRequests[request.requestId]).toMatchObject({
         status: "DISCARDED",
-        discardReason: "SCOPE_REVOKED_DURING_RECOVERY"
+        discardReason: "FORMAL_INTERPRETATION_RECOVERY_ROUTE_UNAVAILABLE"
       });
       expect(Object.values(writer.getState().studentEvidence)).toHaveLength(0);
     } finally {
