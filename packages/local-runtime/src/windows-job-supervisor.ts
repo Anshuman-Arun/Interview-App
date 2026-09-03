@@ -481,9 +481,9 @@ $configJson = $env:INTERVIEW_SUPERVISED_CONFIG_JSON
 $assemblyPath = $env:INTERVIEW_SUPERVISED_ASSEMBLY_PATH
 $assemblySha256 = $env:INTERVIEW_SUPERVISED_ASSEMBLY_SHA256
 if (
-  [string]::IsNullOrWhiteSpace($configJson)
-  -or [string]::IsNullOrWhiteSpace($assemblyPath)
-  -or [string]::IsNullOrWhiteSpace($assemblySha256)
+  [string]::IsNullOrWhiteSpace($configJson) -or
+  [string]::IsNullOrWhiteSpace($assemblyPath) -or
+  [string]::IsNullOrWhiteSpace($assemblySha256)
 ) {
   exit 191
 }
