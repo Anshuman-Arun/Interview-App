@@ -126,12 +126,26 @@ export class ManagedLocalVisionBackend implements VisionInferenceBackend {
           maxResponseBytes: MAX_VISION_WORKER_RESPONSE_BYTES
         })
       );
-      const observation = parseWorkerObservation(
-        raw,
-        request.requestId,
-        digest,
-        request.requestedObservationKind
-      );
+      let observation: ParsedWorkerObservation;
+      try {
+        observation = parseWorkerObservation(
+          raw,
+          request.requestId,
+          digest,
+          request.requestedObservationKind
+        );
+      } catch (protocolError) {
+        try {
+          await this.client.recycleAfterUncertainRequest(workerInstance, "vision");
+        } catch (recycleError) {
+          throw new AggregateError(
+            [protocolError, recycleError],
+            "Local vision protocol failed and its worker could not be safely recycled",
+            { cause: recycleError }
+          );
+        }
+        throw protocolError;
+      }
       this.client.markHealthy("vision");
       return VisionBackendResultSchema.parse({
         protocolVersion: VISION_PROTOCOL_VERSION,
