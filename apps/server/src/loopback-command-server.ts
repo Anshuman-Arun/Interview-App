@@ -333,7 +333,10 @@ export class LoopbackCommandServer {
       }
     }
 
-    if (command.type === "START_CONFIGURED_SESSION") {
+    if (
+      command.type === "START_CONFIGURED_SESSION"
+      && !this.options.sessions.hasSession(command.sessionId)
+    ) {
       const composition = startComposition;
       if (composition === undefined) {
         throw new Error("Validated configured session composition is missing");
