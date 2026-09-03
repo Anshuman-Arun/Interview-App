@@ -178,19 +178,33 @@ export class ManagedMoonshineRuntime implements MoonshineRuntime {
         // exact worker process, while normal stream cancellation only suppresses
         // the late result.
         try {
+          const rawResult = await runWithWorkerRecycleOnTimeout(this.client, "stt", () =>
+            this.client.postJson("/v1/stt", {
+              requestId: input.requestId,
+              utteranceId: input.utteranceId,
+              pcmF32Base64: Buffer.from(input.pcmBytes).toString("base64"),
+              sampleRate: input.sampleRate
+            }, {
+              timeoutMs: 60_000,
+              maxResponseBytes: 2 * 1024 * 1024
+            })
+          );
+          let validatedResult: unknown;
+          try {
+            validatedResult = validateMoonshineWorkerResult(rawResult);
+          } catch (protocolError) {
+            await recycleAfterProtocolFailure(
+              this.client,
+              "stt",
+              workerInstance,
+              protocolError,
+              "Moonshine STT protocol output was invalid"
+            );
+            throw protocolError;
+          }
           outcome = {
             ok: true,
-            value: await runWithWorkerRecycleOnTimeout(this.client, "stt", () =>
-              this.client.postJson("/v1/stt", {
-                requestId: input.requestId,
-                utteranceId: input.utteranceId,
-                pcmF32Base64: Buffer.from(input.pcmBytes).toString("base64"),
-                sampleRate: input.sampleRate
-              }, {
-                timeoutMs: 60_000,
-                maxResponseBytes: 2 * 1024 * 1024
-              })
-            )
+            value: validatedResult
           };
         } catch (error) {
           outcome = { ok: false, error };
@@ -211,6 +225,7 @@ export class ManagedMoonshineRuntime implements MoonshineRuntime {
           }
         }
         if (!outcome.ok) throw outcome.error;
+        if (recovery === undefined) this.client.markHealthy("stt");
         return outcome.value;
       } finally {
         signal?.removeEventListener("abort", onAbort);
