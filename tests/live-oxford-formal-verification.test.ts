@@ -253,6 +253,52 @@ describe("live Oxford formal reasoning analysis", () => {
     }
   });
 
+  it("keeps analysis timeout fail-closed when an optional provider cancel getter throws", async () => {
+    const store = new SqliteEventStore(":memory:");
+    try {
+      const registry = new SessionRuntimeRegistry(store);
+      const sessionId = newSessionId();
+      const writer = registry.get(sessionId);
+      const turns = new TurnCoordinator(writer);
+      const selectedProblem = problem("oxford-prefix-sums-mod-n");
+      await turns.startSession(selectedProblem);
+      const committed = await turns.commitInput("I have an exact arithmetic claim.");
+
+      const provider = Object.defineProperty(
+        {
+          interpret() {
+            return new Promise<unknown>(() => undefined);
+          }
+        },
+        "cancel",
+        {
+          configurable: true,
+          enumerable: true,
+          get() {
+            throw new Error("hostile optional cancellation getter");
+          }
+        }
+      ) as FormalInterpretationProvider;
+
+      const analysis = new StudentReasoningAnalysisCoordinator(
+        new SessionRecoveryCoordinator(registry, store),
+        provider,
+        10
+      );
+      const outcome = await analysis.analyze({
+        sessionId,
+        turnId: committed.turnId,
+        inputEpisodeId: committed.inputEpisodeId
+      });
+
+      expect(outcome).toEqual({ status: "SKIPPED", reason: "TIME_LIMIT" });
+      expect(Object.values(writer.getState().verificationRequests)).toHaveLength(0);
+      expect(Object.values(writer.getState().studentEvidence)).toHaveLength(0);
+    } finally {
+      store.close();
+    }
+  });
+
   it("abandons a late old-turn interpretation before it can create verification or evidence", async () => {
     const store = new SqliteEventStore(":memory:");
     try {

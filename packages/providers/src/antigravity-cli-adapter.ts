@@ -905,7 +905,7 @@ function serializeBoundedPlainJson(
   return serialized;
 }
 
-function parseStrictJson(raw: string): unknown {
+export function parseStrictJson(raw: string): unknown {
   let index = 0;
   let nodes = 0;
 

@@ -20,6 +20,12 @@ import { ProviderRuntimeResolver } from "./provider-runtime.js";
 import { ServerTurnOrchestrator } from "./turn-orchestrator.js";
 import { WhiteboardVisionCoordinator } from "./whiteboard-vision-coordinator.js";
 import {
+  createApplicationProviderAdapterRuntimeSource
+} from "./antigravity-cli-runtime.js";
+import {
+  ProviderBackedFormalInterpretationProvider
+} from "./provider-backed-formal-interpretation.js";
+import {
   EphemeralAudioAssetStore,
   VoiceInputCoordinator,
   VoiceSynthesisCoordinator,
@@ -98,10 +104,26 @@ export class LocalInterviewTransportRuntime {
     const voiceRuntime = options.voiceRuntime;
     const speechWorker = voiceRuntime?.speechWorker;
     const ttsRuntime = voiceRuntime?.tts;
+
+    // The default production composition owns exactly one application adapter
+    // runtime source. Both interviewer generation and formal interpretation
+    // resolve the selected Antigravity executor through this same source, so
+    // formal analysis never creates a parallel raw CLI supervisor. When a
+    // caller injects a custom resolver, it must explicitly inject a matching
+    // formal provider too; otherwise formal analysis remains fail-closed.
+    const defaultAdapterRuntimeSource =
+      options.orchestrator === undefined
+      && options.providerRuntimeResolver === undefined
+        ? createApplicationProviderAdapterRuntimeSource()
+        : undefined;
     const providerRuntimeResolver =
       orchestratorProviderRuntime
       ?? options.providerRuntimeResolver
-      ?? new ProviderRuntimeResolver();
+      ?? new ProviderRuntimeResolver({
+        ...(defaultAdapterRuntimeSource === undefined
+          ? {}
+          : { adapterRuntimeSource: defaultAdapterRuntimeSource })
+      });
 
     this.registry = options.registry;
     this.sessions = new SessionRecoveryCoordinator(options.registry, options.store);
@@ -113,6 +135,17 @@ export class LocalInterviewTransportRuntime {
         this.audioAssets,
         ttsRuntime
       );
+    const formalInterpretationProvider =
+      options.formalInterpretationProvider
+      ?? (
+        defaultAdapterRuntimeSource === undefined
+          ? undefined
+          : new ProviderBackedFormalInterpretationProvider(
+            this.sessions,
+            providerRuntimeResolver,
+            defaultAdapterRuntimeSource
+          )
+      );
     this.orchestrator =
       options.orchestrator ??
       new ServerTurnOrchestrator(
@@ -120,7 +153,7 @@ export class LocalInterviewTransportRuntime {
         () => this.rendererStreamServer,
         undefined,
         providerRuntimeResolver,
-        options.formalInterpretationProvider
+        formalInterpretationProvider
       );
     this.sessions.setTurnRecoveryDelegate(this.orchestrator);
     this.readService = options.readService ?? new SessionReadService({
