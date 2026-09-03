@@ -244,4 +244,67 @@ describe("configured interview hook launch", () => {
     await act(async () => rendered.root.unmount());
     rendered.container.remove();
   });
+
+  it("fails launch metadata reads closed on malformed catalog and provider transport failure", async () => {
+    const fetchImpl: typeof fetch = async (input, init = {}) => {
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+      if (url !== `${BASE_URL}/v1/commands` || typeof init.body !== "string") {
+        throw new Error("Unexpected transport request");
+      }
+      const command = JSON.parse(init.body) as {
+        readonly type?: string;
+        readonly requestId?: string;
+      };
+      if (typeof command.requestId !== "string") throw new Error("Missing request ID");
+      if (command.type === "LIST_INTERVIEW_CATALOG") {
+        return jsonResponse({
+          protocolVersion: 1,
+          requestId: command.requestId,
+          ok: true,
+          type: "INTERVIEW_CATALOG",
+          entries: [{
+            mode: "OXFORD_MATHEMATICS",
+            id: "malformed-without-title",
+            version: "1.0.0"
+          }]
+        });
+      }
+      if (command.type === "LIST_PROVIDER_OPTIONS") {
+        throw new Error("provider connection unavailable");
+      }
+      throw new Error(`Unexpected command type: ${String(command.type)}`);
+    };
+
+    const rendered = renderHook(fetchImpl);
+
+    await act(async () => {
+      await expect(rendered.current().refreshInterviewCatalog()).rejects.toThrow(
+        "Command server returned an invalid response"
+      );
+    });
+    expect(rendered.current().interviewCatalog).toEqual([]);
+    expect(rendered.current().interviewCatalogError).toContain(
+      "Command server returned an invalid response"
+    );
+    expect(rendered.current().interviewCatalogLoading).toBe(false);
+
+    await act(async () => {
+      await expect(rendered.current().refreshProviderOptions()).rejects.toThrow(
+        "Command transport failed"
+      );
+    });
+    expect(rendered.current().providerOptions).toEqual([]);
+    expect(rendered.current().providerOptionsError).toContain(
+      "Command transport failed"
+    );
+    expect(rendered.current().providerOptionsLoading).toBe(false);
+
+    await act(async () => rendered.root.unmount());
+    rendered.container.remove();
+  });
+
 });
