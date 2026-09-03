@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
 import { access, lstat, readFile, realpath } from "node:fs/promises";
@@ -287,6 +288,15 @@ export class DesktopLocalRuntimeComposition {
       return;
     }
     this.pythonExecutable = pythonExecutable;
+    if (!probePythonRuntime(pythonExecutable, this.workerScriptPath, signal)) {
+      if (abortRequested(signal)) {
+        this.markPendingCapabilitiesCancelled();
+        return;
+      }
+      this.speechStatus = unavailable("PYTHON_RUNTIME_INCOMPATIBLE");
+      this.ttsStatus = unavailable("PYTHON_RUNTIME_INCOMPATIBLE");
+      return;
+    }
 
     // Runtime views copy large verified model artifacts onto the same app-data
     // filesystem. Start them sequentially so each disk-space check sees the
@@ -800,6 +810,34 @@ async function resolvePythonExecutable(
     }
   }
   return undefined;
+}
+
+function probePythonRuntime(
+  executable: string,
+  workerScriptPath: string,
+  signal: AbortSignal | undefined
+): boolean {
+  if (abortRequested(signal)) return false;
+  const result = spawnSync(
+    executable,
+    ["-I", workerScriptPath, "--check-runtime"],
+    {
+      cwd: path.dirname(workerScriptPath),
+      env: {
+        PATH: path.dirname(executable)
+      },
+      encoding: "utf8",
+      maxBuffer: 16 * 1024,
+      timeout: 5_000,
+      windowsHide: true,
+      shell: false
+    }
+  );
+  if (abortRequested(signal)) return false;
+  return result.error === undefined
+    && result.signal === null
+    && result.status === 0
+    && result.stdout.trim() === '{"runtimeCompatible":true}';
 }
 
 function requiredPythonExecutable(value: string | undefined): string {
