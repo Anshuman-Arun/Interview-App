@@ -20,14 +20,17 @@ import {
   ModelAssetError,
   ModelAssetManager
 } from "../../../../packages/model-assets/src/index.js";
+import type { VisionInferenceBackend } from "../../../../packages/interview-engine/src/index.js";
 import type { VoiceRuntimeConfiguration } from "../../../server/src/voice-runtime.js";
 import { ManagedModelWorkerClient } from "./managed-worker-client.js";
 import {
-  DESKTOP_LOCAL_MODEL_ASSETS,
   SPEECH_ASSETS,
   SPEECH_WORKER_MODEL_IDENTITY,
   TTS_ASSETS,
   TTS_WORKER_MODEL_IDENTITY,
+  VISION_ASSETS,
+  VISION_WORKER_MODEL_IDENTITY,
+  VOICE_ASSETS,
   type DesktopRuntimeAsset
 } from "./model-assets.js";
 import {
@@ -36,7 +39,14 @@ import {
   ManagedSileroVadRuntime,
   moonshineRecognizerVersion
 } from "./runtime-adapters.js";
-import { PACKAGED_LOCAL_MODEL_WORKER_SHA256 } from "./packaged-resource-integrity.js";
+import {
+  PACKAGED_LOCAL_MODEL_WORKER_SHA256,
+  PACKAGED_LOCAL_VISION_RUNTIME_SHA256
+} from "./packaged-resource-integrity.js";
+import {
+  LOCAL_VISION_RUNTIME_VERSION,
+  ManagedLocalVisionBackend
+} from "./local-vision-backend.js";
 import {
   cleanupStaleRuntimeAssetViews,
   materializeRuntimeAssetView,
@@ -45,6 +55,7 @@ import {
 
 const SPEECH_COMPONENT_ID = "desktop-local-speech";
 const TTS_COMPONENT_ID = "desktop-local-tts";
+const VISION_COMPONENT_ID = "desktop-local-vision";
 const WORKER_COMPONENT_VERSION = "2";
 const WORKER_PROTOCOL_VERSION = 2;
 const SPEECH_RUNTIME_VERSION = "moonshine-voice/0.1.5;onnxruntime/1.29.0;deps/1";
@@ -78,6 +89,7 @@ export interface DesktopLocalRuntimeCompositionOptions {
   readonly isPackaged: boolean;
   readonly pythonExecutable?: string;
   readonly workerScriptPath?: string;
+  readonly visionRuntimeModulePath?: string;
 }
 
 export class DesktopLocalRuntimeComposition {
@@ -85,17 +97,16 @@ export class DesktopLocalRuntimeComposition {
   private readonly assetManager: ModelAssetManager;
   private readonly runtimeViewsRoot: string;
   private readonly workerScriptPath: string;
+  private readonly visionRuntimeModulePath: string;
   private readonly pythonExecutableCandidate: string;
   private readonly enforcePackagedWorkerIntegrity: boolean;
   private pythonExecutable: string | undefined;
   private speechStatus: DesktopRuntimeCapabilityStatus = unavailable("NOT_STARTED");
   private ttsStatus: DesktopRuntimeCapabilityStatus = unavailable("NOT_STARTED");
-  private readonly visionStatus: DesktopRuntimeCapabilityStatus = Object.freeze({
-    state: "UNAVAILABLE",
-    reasonCode: "NO_PRODUCTION_BACKEND_CONFIGURED"
-  });
+  private visionStatus: DesktopRuntimeCapabilityStatus = unavailable("NOT_STARTED");
   private speechView: RuntimeAssetView | undefined;
   private ttsView: RuntimeAssetView | undefined;
+  private visionView: RuntimeAssetView | undefined;
   private speechWorker: SpeechWorkerCore | undefined;
   private ttsWorker: TtsWorkerCore | undefined;
   private startPromise: Promise<void> | undefined;
@@ -105,6 +116,7 @@ export class DesktopLocalRuntimeComposition {
   private stopped = false;
 
   public voiceRuntime: VoiceRuntimeConfiguration | undefined;
+  public visionBackend: VisionInferenceBackend | undefined;
 
   public constructor(options: DesktopLocalRuntimeCompositionOptions) {
     this.runtimeViewsRoot = path.join(options.appDataRoot, "runtime-models");
@@ -121,6 +133,11 @@ export class DesktopLocalRuntimeComposition {
       options.isPackaged
         ? path.join(options.resourcesPath, "workers", "python", "local_model_worker.py")
         : path.resolve(options.cwd, "workers", "python", "local_model_worker.py")
+    );
+    this.visionRuntimeModulePath = options.visionRuntimeModulePath ?? (
+      options.isPackaged
+        ? path.join(options.resourcesPath, "workers", "python", "local_vision_runtime.py")
+        : path.resolve(options.cwd, "workers", "python", "local_vision_runtime.py")
     );
     this.pythonExecutableCandidate = options.pythonExecutable
       ?? (process.platform === "win32" ? "python" : "python3");
@@ -144,7 +161,7 @@ export class DesktopLocalRuntimeComposition {
     return Object.freeze({
       speech: this.liveStatus(SPEECH_COMPONENT_ID, this.speechStatus),
       tts: this.liveStatus(TTS_COMPONENT_ID, this.ttsStatus),
-      vision: this.visionStatus
+      vision: this.liveStatus(VISION_COMPONENT_ID, this.visionStatus)
     });
   }
 
@@ -171,7 +188,36 @@ export class DesktopLocalRuntimeComposition {
     this.pythonExecutable = pythonExecutable;
 
     await this.assetManager.cleanupTemporary(signal);
-    for (const asset of DESKTOP_LOCAL_MODEL_ASSETS) {
+    for (const asset of VOICE_ASSETS) {
+      if (abortRequested(signal)) throw abortError();
+      await this.assetManager.install(asset.manifest, signal);
+    }
+  }
+
+  public async installVisionAssets(signal?: AbortSignal): Promise<void> {
+    if (!isProductionLocalModelPlatformSupported(process.platform, process.arch)) {
+      throw new Error("Local vision installation is unavailable on this platform");
+    }
+    if (abortRequested(signal)) throw abortError();
+    if (!await this.workerScriptIsSafe() || !await this.visionRuntimeModuleIsSafe()) {
+      throw new Error("Local vision installation requires the verified production workers");
+    }
+    const pythonExecutable = await resolvePythonExecutable(
+      this.pythonExecutableCandidate,
+      process.platform,
+      process.env
+    );
+    if (pythonExecutable === undefined) {
+      throw new Error("Local vision installation requires a compatible Python runtime");
+    }
+    if (!this.pythonRuntimeCompatible(pythonExecutable, signal)) {
+      if (abortRequested(signal)) throw abortError();
+      throw new Error("Local vision installation requires the pinned Python runtime");
+    }
+    this.pythonExecutable = pythonExecutable;
+
+    await this.assetManager.cleanupTemporary(signal);
+    for (const asset of VISION_ASSETS) {
       if (abortRequested(signal)) throw abortError();
       await this.assetManager.install(asset.manifest, signal);
     }
@@ -225,6 +271,7 @@ export class DesktopLocalRuntimeComposition {
       // issue useful work. Clear them even if a later filesystem cleanup fails.
       this.speechWorker = undefined;
       this.ttsWorker = undefined;
+      this.visionBackend = undefined;
 
       if (this.ttsView !== undefined) {
         try {
@@ -243,6 +290,15 @@ export class DesktopLocalRuntimeComposition {
         }
       }
 
+      if (this.visionView !== undefined) {
+        try {
+          await this.visionView.dispose();
+          this.visionView = undefined;
+        } catch (error) {
+          failures.push(error);
+        }
+      }
+
       try {
         // Retry cleanup of any failed materialization that never produced a
         // tracked RuntimeAssetView. Actively owned views remain protected.
@@ -254,7 +310,10 @@ export class DesktopLocalRuntimeComposition {
     }
 
     this.voiceRuntime = undefined;
-    const runtimeViewsDisposed = this.ttsView === undefined && this.speechView === undefined;
+    const runtimeViewsDisposed =
+      this.ttsView === undefined
+      && this.speechView === undefined
+      && this.visionView === undefined;
     this.stopped = processTreesStopped && runtimeViewsDisposed && staleCleanupSucceeded;
     // A failed process-tree stop or failed view deletion is a shutdown state,
     // not permission to return to start(). A later stopWorkers() may retry it.
@@ -275,6 +334,7 @@ export class DesktopLocalRuntimeComposition {
       }
       this.speechStatus = failed("ASSET_CACHE_UNSAFE");
       this.ttsStatus = failed("ASSET_CACHE_UNSAFE");
+      this.visionStatus = failed("ASSET_CACHE_UNSAFE");
       return;
     }
     if (abortRequested(signal)) {
@@ -285,6 +345,7 @@ export class DesktopLocalRuntimeComposition {
     if (!isProductionLocalModelPlatformSupported(process.platform, process.arch)) {
       this.speechStatus = unavailable("UNSUPPORTED_RUNTIME_PLATFORM");
       this.ttsStatus = unavailable("UNSUPPORTED_RUNTIME_PLATFORM");
+      this.visionStatus = unavailable("UNSUPPORTED_RUNTIME_PLATFORM");
       return;
     }
 
@@ -292,6 +353,7 @@ export class DesktopLocalRuntimeComposition {
     if (!workerAvailable) {
       this.speechStatus = unavailable("WORKER_EXECUTABLE_UNAVAILABLE");
       this.ttsStatus = unavailable("WORKER_EXECUTABLE_UNAVAILABLE");
+      this.visionStatus = unavailable("WORKER_EXECUTABLE_UNAVAILABLE");
       return;
     }
 
@@ -303,6 +365,7 @@ export class DesktopLocalRuntimeComposition {
     if (pythonExecutable === undefined) {
       this.speechStatus = unavailable("PYTHON_RUNTIME_UNAVAILABLE");
       this.ttsStatus = unavailable("PYTHON_RUNTIME_UNAVAILABLE");
+      this.visionStatus = unavailable("PYTHON_RUNTIME_UNAVAILABLE");
       return;
     }
     this.pythonExecutable = pythonExecutable;
@@ -313,6 +376,7 @@ export class DesktopLocalRuntimeComposition {
       }
       this.speechStatus = unavailable("PYTHON_RUNTIME_INCOMPATIBLE");
       this.ttsStatus = unavailable("PYTHON_RUNTIME_INCOMPATIBLE");
+      this.visionStatus = unavailable("PYTHON_RUNTIME_INCOMPATIBLE");
       return;
     }
 
@@ -380,36 +444,62 @@ export class DesktopLocalRuntimeComposition {
           speed: 1
         })
       });
+    } else {
+      // The authoritative server voice contract remains all-or-nothing. Vision
+      // is independent and must not weaken or alter this existing invariant.
+      if (speechReady) {
+        const cleaned = await this.cleanupCapability("speech");
+        this.speechStatus = cleaned
+          ? unavailable("VOICE_RUNTIME_INCOMPLETE", SPEECH_WORKER_MODEL_IDENTITY)
+          : failed("WORKER_CLEANUP_FAILED", SPEECH_WORKER_MODEL_IDENTITY);
+        if (!cleaned) {
+          throw new Error(
+            "Incomplete voice startup left the speech worker process tree unverified"
+          );
+        }
+      }
+      if (ttsReady) {
+        const cleaned = await this.cleanupCapability("tts");
+        this.ttsStatus = cleaned
+          ? unavailable("VOICE_RUNTIME_INCOMPLETE", TTS_WORKER_MODEL_IDENTITY)
+          : failed("WORKER_CLEANUP_FAILED", TTS_WORKER_MODEL_IDENTITY);
+        if (!cleaned) {
+          throw new Error(
+            "Incomplete voice startup left the TTS worker process tree unverified"
+          );
+        }
+      }
+    }
+
+    if (abortRequested(signal)) {
+      if (this.visionStatus.reasonCode === "NOT_STARTED") {
+        this.visionStatus = unavailable("START_CANCELLED");
+      }
       return;
     }
 
-    // The authoritative server voice contract is intentionally all-or-nothing:
-    // browser microphone ingress and generated TTS share one VoiceRuntimeConfiguration.
-    // Do not leave one successfully loaded model resident when its counterpart
-    // is unavailable and the server therefore cannot expose voice at all.
-    if (speechReady) {
-      const cleaned = await this.cleanupCapability("speech");
-      this.speechStatus = cleaned
-        ? unavailable("VOICE_RUNTIME_INCOMPLETE", SPEECH_WORKER_MODEL_IDENTITY)
-        : failed("WORKER_CLEANUP_FAILED", SPEECH_WORKER_MODEL_IDENTITY);
-      if (!cleaned) {
+    let visionFailed = false;
+    try {
+      await this.startVision(signal);
+    } catch (error) {
+      visionFailed = true;
+      if (this.visionStatus.reasonCode === "WORKER_CLEANUP_FAILED") {
         throw new Error(
-          "Incomplete voice startup left the speech worker process tree unverified"
+          "Vision worker startup failed and its process tree could not be safely cleaned",
+          { cause: error }
         );
       }
     }
-    if (ttsReady) {
-      const cleaned = await this.cleanupCapability("tts");
-      this.ttsStatus = cleaned
-        ? unavailable("VOICE_RUNTIME_INCOMPLETE", TTS_WORKER_MODEL_IDENTITY)
-        : failed("WORKER_CLEANUP_FAILED", TTS_WORKER_MODEL_IDENTITY);
-      if (!cleaned) {
-        throw new Error(
-          "Incomplete voice startup left the TTS worker process tree unverified"
-        );
-      }
+    if (
+      visionFailed
+      && !abortRequested(signal)
+      && this.visionStatus.state === "UNAVAILABLE"
+      && this.visionStatus.reasonCode !== "START_CANCELLED"
+    ) {
+      this.visionStatus = failed("WORKER_START_FAILED", VISION_WORKER_MODEL_IDENTITY);
     }
   }
+
 
   private pythonRuntimeCompatible(
     executable: string,
@@ -563,9 +653,87 @@ export class DesktopLocalRuntimeComposition {
     }
   }
 
-  private async cleanupCapability(component: "speech" | "tts"): Promise<boolean> {
-    const componentId = component === "speech" ? SPEECH_COMPONENT_ID : TTS_COMPONENT_ID;
-    const worker = component === "speech" ? this.speechWorker : this.ttsWorker;
+  private async startVision(signal?: AbortSignal): Promise<void> {
+    const readiness = await this.inspectAssets(VISION_ASSETS, signal);
+    if (readiness !== "READY") {
+      this.visionStatus = readiness === "MISSING_ASSET"
+        ? missingAsset("VISION_ASSET_MISSING")
+        : failed("VISION_ASSET_INVALID");
+      return;
+    }
+    if (!await this.visionRuntimeModuleIsSafe()) {
+      this.visionStatus = unavailable("VISION_WORKER_MODULE_UNAVAILABLE");
+      return;
+    }
+    if (abortRequested(signal)) return;
+
+    try {
+      this.visionView = await materializeRuntimeAssetView({
+        manager: this.assetManager,
+        assets: VISION_ASSETS,
+        baseRoot: this.runtimeViewsRoot,
+        ...(signal === undefined ? {} : { signal })
+      });
+      const modelRoot = path.join(
+        this.visionView.root,
+        "vision",
+        "rapid-latex-ocr"
+      );
+      const token = randomBytes(32).toString("hex");
+      this.runtimeManager.register(this.workerDefinition({
+        componentId: VISION_COMPONENT_ID,
+        component: "vision",
+        token,
+        modelIdentity: VISION_WORKER_MODEL_IDENTITY,
+        runtimeVersion: LOCAL_VISION_RUNTIME_VERSION,
+        capabilities: ["vision"],
+        args: [
+          "--component", "vision",
+          "--port", "0",
+          "--vision-model-root", modelRoot
+        ]
+      }));
+      this.visionStatus = unavailable("WORKER_STARTING", VISION_WORKER_MODEL_IDENTITY);
+      await this.runtimeManager.start(
+        VISION_COMPONENT_ID,
+        signal === undefined ? {} : { signal }
+      );
+      if (abortRequested(signal)) throw abortError();
+      const client = new ManagedModelWorkerClient(
+        this.runtimeManager,
+        VISION_COMPONENT_ID,
+        "vision",
+        token,
+        this.lifecycleAbort.signal
+      );
+      this.visionBackend = new ManagedLocalVisionBackend(client);
+      this.visionStatus = ready(
+        VISION_WORKER_MODEL_IDENTITY,
+        client.runtimeVersion()
+      );
+    } catch (error) {
+      const cleaned = await this.cleanupCapability("vision");
+      this.visionStatus = abortRequested(signal)
+        ? unavailable("START_CANCELLED", VISION_WORKER_MODEL_IDENTITY)
+        : cleaned
+          ? failed(error instanceof ModelAssetError ? "ASSET_FAILURE" : "WORKER_START_FAILED",
+              VISION_WORKER_MODEL_IDENTITY)
+          : failed("WORKER_CLEANUP_FAILED", VISION_WORKER_MODEL_IDENTITY);
+      throw error;
+    }
+  }
+
+  private async cleanupCapability(component: "speech" | "tts" | "vision"): Promise<boolean> {
+    const componentId = component === "speech"
+      ? SPEECH_COMPONENT_ID
+      : component === "tts"
+        ? TTS_COMPONENT_ID
+        : VISION_COMPONENT_ID;
+    const worker = component === "speech"
+      ? this.speechWorker
+      : component === "tts"
+        ? this.ttsWorker
+        : undefined;
     let coreShutdownFailed = false;
     if (worker !== undefined) {
       try {
@@ -596,9 +764,14 @@ export class DesktopLocalRuntimeComposition {
     }
 
     if (component === "speech") this.speechWorker = undefined;
-    else this.ttsWorker = undefined;
+    else if (component === "tts") this.ttsWorker = undefined;
+    else this.visionBackend = undefined;
 
-    const view = component === "speech" ? this.speechView : this.ttsView;
+    const view = component === "speech"
+      ? this.speechView
+      : component === "tts"
+        ? this.ttsView
+        : this.visionView;
     if (view !== undefined) {
       try {
         await view.dispose();
@@ -607,7 +780,8 @@ export class DesktopLocalRuntimeComposition {
       }
     }
     if (component === "speech") this.speechView = undefined;
-    else this.ttsView = undefined;
+    else if (component === "tts") this.ttsView = undefined;
+    else this.visionView = undefined;
     return !coreShutdownFailed;
   }
 
@@ -617,6 +791,9 @@ export class DesktopLocalRuntimeComposition {
     }
     if (this.ttsStatus.reasonCode === "NOT_STARTED") {
       this.ttsStatus = unavailable("START_CANCELLED");
+    }
+    if (this.visionStatus.reasonCode === "NOT_STARTED") {
+      this.visionStatus = unavailable("START_CANCELLED");
     }
   }
 
@@ -639,7 +816,7 @@ export class DesktopLocalRuntimeComposition {
 
   private workerDefinition(input: {
     readonly componentId: string;
-    readonly component: "speech" | "tts";
+    readonly component: "speech" | "tts" | "vision";
     readonly token: string;
     readonly modelIdentity: string;
     readonly runtimeVersion: string;
@@ -736,6 +913,21 @@ export class DesktopLocalRuntimeComposition {
         .update(await readFile(this.workerScriptPath))
         .digest("hex");
       return digest === PACKAGED_LOCAL_MODEL_WORKER_SHA256;
+    } catch {
+      return false;
+    }
+  }
+
+  private async visionRuntimeModuleIsSafe(): Promise<boolean> {
+    try {
+      const metadata = await lstat(this.visionRuntimeModulePath);
+      if (!metadata.isFile() || metadata.isSymbolicLink()) return false;
+      if (!this.enforcePackagedWorkerIntegrity) return true;
+
+      const digest = createHash("sha256")
+        .update(await readFile(this.visionRuntimeModulePath))
+        .digest("hex");
+      return digest === PACKAGED_LOCAL_VISION_RUNTIME_SHA256;
     } catch {
       return false;
     }
