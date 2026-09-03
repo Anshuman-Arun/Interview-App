@@ -401,6 +401,7 @@ export function useInterviewSession(
   const catalogRequestEpochRef = useRef(0);
   const providerOptionsRequestEpochRef = useRef(0);
   const quantReadEpochRef = useRef(0);
+  const quantActionEpochRef = useRef(0);
   const quantActionInFlightRef = useRef(false);
   const rendererRestartRef = useRef<((targetSessionId: SessionId) => void) | null>(null);
   const rendererClientRef = useRef<RendererClient | null>(null);
@@ -520,6 +521,7 @@ export function useInterviewSession(
     catalogRequestEpochRef.current += 1;
     providerOptionsRequestEpochRef.current += 1;
     quantReadEpochRef.current += 1;
+    quantActionEpochRef.current += 1;
     quantActionInFlightRef.current = false;
     sessionTransitionEpochRef.current += 1;
     sessionMutationAdmissionRef.current = false;
@@ -659,6 +661,8 @@ export function useInterviewSession(
     const targetSessionId = sessionId;
     const expectedRound = quantState.state.currentRound;
     const transitionEpoch = sessionTransitionEpochRef.current;
+    const actionEpoch = quantActionEpochRef.current + 1;
+    quantActionEpochRef.current = actionEpoch;
     quantActionInFlightRef.current = true;
     setQuantActionPending(true);
     setError(null);
@@ -695,9 +699,11 @@ export function useInterviewSession(
       }
       throw err;
     } finally {
-      quantActionInFlightRef.current = false;
-      if (sessionTransitionEpochRef.current === transitionEpoch) {
-        setQuantActionPending(false);
+      if (quantActionEpochRef.current === actionEpoch) {
+        quantActionInFlightRef.current = false;
+        if (sessionTransitionEpochRef.current === transitionEpoch) {
+          setQuantActionPending(false);
+        }
       }
     }
   }, [
@@ -729,6 +735,8 @@ export function useInterviewSession(
     const targetSessionId = sessionId;
     const expectedActionCount = quantState.state.acceptedActionCount;
     const transitionEpoch = sessionTransitionEpochRef.current;
+    const actionEpoch = quantActionEpochRef.current + 1;
+    quantActionEpochRef.current = actionEpoch;
     quantActionInFlightRef.current = true;
     setQuantActionPending(true);
     setError(null);
@@ -765,9 +773,11 @@ export function useInterviewSession(
       }
       throw err;
     } finally {
-      quantActionInFlightRef.current = false;
-      if (sessionTransitionEpochRef.current === transitionEpoch) {
-        setQuantActionPending(false);
+      if (quantActionEpochRef.current === actionEpoch) {
+        quantActionInFlightRef.current = false;
+        if (sessionTransitionEpochRef.current === transitionEpoch) {
+          setQuantActionPending(false);
+        }
       }
     }
   }, [
@@ -1193,6 +1203,7 @@ export function useInterviewSession(
     sessionTransitionEpochRef.current = transitionEpoch;
     sessionMutationAdmissionRef.current = false;
     quantReadEpochRef.current += 1;
+    quantActionEpochRef.current += 1;
     quantActionInFlightRef.current = false;
     setQuantState(null);
     setQuantStateLoading(false);
