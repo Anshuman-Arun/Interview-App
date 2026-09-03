@@ -300,6 +300,97 @@ describe("generic interview session configuration", () => {
     expect(store.eventCount(sessionId)).toBe(eventCount);
   });
 
+  it("infers pre-marker session provenance without treating every unmarked configuration as legacy", () => {
+    const configuredSessionId = newSessionId();
+    const configuredRequestId = newRequestId();
+    const divisibility = getProblemByIdentity("oxford-divisibility-chain", "1.0.0");
+    expect(divisibility).toBeDefined();
+    if (divisibility === undefined) return;
+    const configured = oxfordConfiguration(
+      divisibility.id,
+      divisibility.version,
+      divisibility.interviewer.difficulty
+    );
+
+    store.appendIdempotent({
+      sessionId: configuredSessionId,
+      requestId: configuredRequestId,
+      causationId: configuredRequestId,
+      correlationId: configuredRequestId,
+      elapsedMs: 0,
+      expectedPriorSequence: 0,
+      commandFingerprint: "1".repeat(64),
+      drafts: [{
+        source: "APPLICATION",
+        type: "SESSION_STARTED",
+        payload: {
+          startedAt: "2026-09-02T12:00:00.000Z",
+          configuration: configured
+        }
+      }],
+      result: { started: true }
+    });
+    expect(sessions.getConfigurationSource(configuredSessionId)).toBe("CONFIGURED");
+
+    const legacySessionId = newSessionId();
+    const legacyRequestId = newRequestId();
+    const legacyShape = oxfordConfiguration(
+      sixPeopleProblem.id,
+      sixPeopleProblem.version,
+      sixPeopleProblem.interviewer.difficulty
+    );
+    store.appendIdempotent({
+      sessionId: legacySessionId,
+      requestId: legacyRequestId,
+      causationId: legacyRequestId,
+      correlationId: legacyRequestId,
+      elapsedMs: 0,
+      expectedPriorSequence: 0,
+      commandFingerprint: "2".repeat(64),
+      drafts: [{
+        source: "APPLICATION",
+        type: "SESSION_STARTED",
+        payload: {
+          startedAt: "2026-09-02T12:00:01.000Z",
+          configuration: legacyShape
+        }
+      }],
+      result: { started: true }
+    });
+    expect(sessions.getConfigurationSource(legacySessionId)).toBe("LEGACY_COMPATIBILITY");
+
+    const quantSessionId = newSessionId();
+    const quantRequestId = newRequestId();
+    const quantConfiguration = InterviewSessionConfigurationSchema.parse({
+      configurationVersion: 1,
+      mode: "QUANT_TRADING",
+      scenario: {
+        id: "BASIC_MARKET_MAKING",
+        version: QUANT_TRADER_SCENARIO_VERSION
+      },
+      interventionPolicy: "BALANCED"
+    });
+    store.appendIdempotent({
+      sessionId: quantSessionId,
+      requestId: quantRequestId,
+      causationId: quantRequestId,
+      correlationId: quantRequestId,
+      elapsedMs: 0,
+      expectedPriorSequence: 0,
+      commandFingerprint: "3".repeat(64),
+      drafts: [{
+        source: "APPLICATION",
+        type: "SESSION_STARTED",
+        payload: {
+          startedAt: "2026-09-02T12:00:02.000Z",
+          configuration: quantConfiguration
+        }
+      }],
+      result: { started: true }
+    });
+    expect(sessions.getConfigurationSource(quantSessionId)).toBe("CONFIGURED");
+  });
+
   it("keeps exact configured retries idempotent even if provider readiness later changes", async () => {
     let readinessCalls = 0;
     const retryStore = new SqliteEventStore(":memory:");
