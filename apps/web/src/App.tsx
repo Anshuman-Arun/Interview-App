@@ -316,7 +316,11 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     if (!hasActiveInterview) return;
-    if (route.page === "home" && !session.isPaused) {
+    if (
+      route.page === "home"
+      && !session.isPaused
+      && !sessionEntryPendingRef.current
+    ) {
       session.pauseSession();
       return;
     }
@@ -337,77 +341,91 @@ export const App: React.FC = () => {
     session.pauseSession
   ]);
 
-  if (displayRoute.page !== "interview") {
-    return (
-      <ProductPageRouter
-        route={displayRoute}
-        sessions={session.availableSessions}
-        activeSessionId={resumableActiveSessionId}
-        currentSessionId={hasActiveInterview ? session.sessionId : null}
-        activeProblemTitle={hasActiveInterview ? session.problem?.title ?? null : null}
-        activeSessionPaused={session.isPaused}
-        canReview={(storedSession) =>
-          (
-            storedSession.status === "COMPLETED"
-            || storedSession.status === "ARCHIVED"
-          )
-          && isSessionIdAddressableForRead(storedSession.sessionId)
+  const productPage = (
+    <ProductPageRouter
+      route={displayRoute}
+      sessions={session.availableSessions}
+      activeSessionId={resumableActiveSessionId}
+      currentSessionId={hasActiveInterview ? session.sessionId : null}
+      activeProblemTitle={hasActiveInterview ? session.problem?.title ?? null : null}
+      activeSessionPaused={session.isPaused}
+      canReview={(storedSession) =>
+        (
+          storedSession.status === "COMPLETED"
+          || storedSession.status === "ARCHIVED"
+        )
+        && isSessionIdAddressableForRead(storedSession.sessionId)
+      }
+      onNavigatePage={navigateProductPage}
+      sessionEntryPending={sessionEntryPending}
+      onEnterInterview={() => {
+        void handleStartSession();
+      }}
+      onResume={(sessionId) => {
+        if (session.isPaused && session.sessionId === sessionId) {
+          void handleResumePausedSession();
+        } else {
+          void handleRecoverSession(sessionId);
         }
-        onNavigatePage={navigateProductPage}
-        sessionEntryPending={sessionEntryPending}
-        onEnterInterview={() => {
-          void handleStartSession();
-        }}
-        onResume={(sessionId) => {
-          if (session.isPaused && session.sessionId === sessionId) {
-            void handleResumePausedSession();
-          } else {
-            void handleRecoverSession(sessionId);
-          }
-        }}
-        onReview={(sessionId, view, options) => {
-          navigate(
-            {
-              page: "review",
-              sessionId,
-              view
-            },
-            options
-          );
-        }}
-        onRefreshSessions={refreshStoredSessions}
-        history={historyRead}
-        historyLoading={historyLoading}
-        historyError={historyError}
-        connection={{
-          managed: session.isTransportManaged,
-          baseUrl: session.baseUrl,
-          locked:
-            (
-              session.sessionId !== null
-              && session.sessionStatus === "ACTIVE"
-            )
-            || sessionEntryPending
-            || sessionTerminalPending,
-          onSaveBaseUrl: session.setBaseUrl
-        }}
-        notice={session.error}
-        onDismissNotice={session.clearError}
-        renderReview={(sessionId, view) => (
-          <ReviewReadPanel
-            key={sessionId}
-            sessionId={sessionId}
-            view={view}
-            readEvaluation={session.readSessionEvaluation}
-            readReplay={session.readSessionReplay}
-          />
-        )}
-      />
-    );
+      }}
+      onReview={(sessionId, view, options) => {
+        navigate(
+          {
+            page: "review",
+            sessionId,
+            view
+          },
+          options
+        );
+      }}
+      onRefreshSessions={refreshStoredSessions}
+      history={historyRead}
+      historyLoading={historyLoading}
+      historyError={historyError}
+      connection={{
+        managed: session.isTransportManaged,
+        baseUrl: session.baseUrl,
+        locked:
+          (
+            session.sessionId !== null
+            && session.sessionStatus === "ACTIVE"
+          )
+          || sessionEntryPending
+          || sessionTerminalPending,
+        onSaveBaseUrl: session.setBaseUrl
+      }}
+      notice={session.error}
+      onDismissNotice={session.clearError}
+      renderReview={(sessionId, view) => (
+        <ReviewReadPanel
+          key={sessionId}
+          sessionId={sessionId}
+          view={view}
+          readEvaluation={session.readSessionEvaluation}
+          readReplay={session.readSessionReplay}
+        />
+      )}
+    />
+  );
+  const showingPausedHome =
+    hasActiveInterview && session.isPaused && displayRoute.page === "home";
+
+  if (displayRoute.page !== "interview" && !showingPausedHome) {
+    return productPage;
   }
 
   return (
-    <div className="interview-app-container flex flex-col h-screen w-screen bg-slate-100 font-sans text-slate-900 overflow-hidden">
+    <>
+      {showingPausedHome && (
+        <div key="paused-home" className="paused-home-shell">
+          {productPage}
+        </div>
+      )}
+      <div
+        key="live-workspace"
+        hidden={showingPausedHome}
+        className="interview-app-container flex flex-col h-screen w-screen bg-slate-100 font-sans text-slate-900 overflow-hidden"
+      >
       {/* Focused live interview header */}
       <header className="app-header">
         <button
@@ -717,6 +735,7 @@ export const App: React.FC = () => {
           </div>
         </section>
       </main>
-    </div>
+      </div>
+    </>
   );
 };
