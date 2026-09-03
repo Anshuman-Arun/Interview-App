@@ -20,6 +20,7 @@ public static class InterviewJobSupervisor
     private const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000;
     private const int JobObjectExtendedLimitInformation = 9;
     private const uint CREATE_SUSPENDED = 0x00000004;
+    private const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400;
     private const uint EXTENDED_STARTUPINFO_PRESENT = 0x00080000;
     private const uint CREATE_NO_WINDOW = 0x08000000;
     private const uint STARTF_USESTDHANDLES = 0x00000100;
@@ -304,10 +305,47 @@ public static class InterviewJobSupervisor
         return output.ToArray();
     }
 
+    private static IntPtr BuildEnvironmentBlock(string packed)
+    {
+        string[] framed = ParseArguments(packed);
+        if ((framed.Length & 1) != 0)
+            throw new InvalidOperationException("invalid environment framing");
+
+        var entries = new SortedDictionary<string, string>(
+            StringComparer.OrdinalIgnoreCase);
+        for (int index = 0; index < framed.Length; index += 2)
+        {
+            string key = framed[index];
+            string value = framed[index + 1];
+            if (String.IsNullOrEmpty(key)
+                || key.IndexOf('=') >= 0
+                || key.IndexOf('\0') >= 0
+                || value == null
+                || value.IndexOf('\0') >= 0
+                || entries.ContainsKey(key))
+            {
+                throw new InvalidOperationException("invalid environment entry");
+            }
+            entries.Add(key, value);
+        }
+
+        var block = new StringBuilder();
+        foreach (KeyValuePair<string, string> entry in entries)
+        {
+            block.Append(entry.Key);
+            block.Append('=');
+            block.Append(entry.Value);
+            block.Append('\0');
+        }
+        block.Append('\0');
+        return Marshal.StringToHGlobalUni(block.ToString());
+    }
+
     public static int Run(
         string executable,
         string packedArguments,
         string currentDirectory,
+        string packedEnvironment,
         string expectedSha256,
         string stdinPath,
         long expectedStdinBytes,
@@ -434,22 +472,33 @@ public static class InterviewJobSupervisor
                 }
 
                 PROCESS_INFORMATION info;
-                if (!CreateProcessW(
+                IntPtr childEnvironment = IntPtr.Zero;
+                try
+                {
+                    childEnvironment = BuildEnvironmentBlock(packedEnvironment);
+                    if (!CreateProcessW(
                     executable,
                     CommandLine(executable, arguments ?? new string[0]),
                     IntPtr.Zero,
                     IntPtr.Zero,
                     true,
-                    CREATE_SUSPENDED | CREATE_NO_WINDOW | EXTENDED_STARTUPINFO_PRESENT,
-                    IntPtr.Zero,
+                    CREATE_SUSPENDED | CREATE_NO_WINDOW | EXTENDED_STARTUPINFO_PRESENT
+                        | CREATE_UNICODE_ENVIRONMENT,
+                    childEnvironment,
                     String.IsNullOrEmpty(currentDirectory) ? null : currentDirectory,
                     ref startup,
                     out info))
-                {
-                    throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+                    {
+                        throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+                    }
+                    process = info.hProcess;
+                    thread = info.hThread;
                 }
-                process = info.hProcess;
-                thread = info.hThread;
+                finally
+                {
+                    if (childEnvironment != IntPtr.Zero)
+                        Marshal.FreeHGlobal(childEnvironment);
+                }
             }
             finally
             {
@@ -518,6 +567,7 @@ $ErrorActionPreference = 'Stop'
 $executable = $env:INTERVIEW_SUPERVISED_EXECUTABLE
 $argumentsPacked = $env:INTERVIEW_SUPERVISED_ARGUMENTS
 $currentDirectoryValue = $env:INTERVIEW_SUPERVISED_CWD
+$providerEnvironmentPacked = $env:INTERVIEW_SUPERVISED_PROVIDER_ENVIRONMENT
 $expectedSha256 = $env:INTERVIEW_SUPERVISED_EXPECTED_SHA256
 $stdinPath = $env:INTERVIEW_SUPERVISED_STDIN_PATH
 $stdinBytesValue = $env:INTERVIEW_SUPERVISED_STDIN_BYTES
@@ -529,6 +579,7 @@ if (
   [string]::IsNullOrWhiteSpace($executable) -or
   $null -eq $argumentsPacked -or
   $null -eq $currentDirectoryValue -or
+  $null -eq $providerEnvironmentPacked -or
   [string]::IsNullOrWhiteSpace($expectedSha256) -or
   [string]::IsNullOrWhiteSpace($stdinPath) -or
   [string]::IsNullOrWhiteSpace($stdinBytesValue) -or
@@ -558,6 +609,7 @@ $controlNames = @(
   "INTERVIEW_SUPERVISED_EXECUTABLE",
   "INTERVIEW_SUPERVISED_ARGUMENTS",
   "INTERVIEW_SUPERVISED_CWD",
+  "INTERVIEW_SUPERVISED_PROVIDER_ENVIRONMENT",
   "INTERVIEW_SUPERVISED_EXPECTED_SHA256",
   "INTERVIEW_SUPERVISED_STDIN_PATH",
   "INTERVIEW_SUPERVISED_STDIN_BYTES",
@@ -629,14 +681,15 @@ catch {
 
 
 try {
-  $invokeArguments = [object[]]::new(7)
+  $invokeArguments = [object[]]::new(8)
   $invokeArguments[0] = [string]$executable
   $invokeArguments[1] = [string]$argumentsPacked
   $invokeArguments[2] = $currentDirectory
-  $invokeArguments[3] = [string]$expectedSha256
-  $invokeArguments[4] = [string]$stdinPath
-  $invokeArguments[5] = [long]$stdinBytes
-  $invokeArguments[6] = [string]$stdinSha256
+  $invokeArguments[3] = [string]$providerEnvironmentPacked
+  $invokeArguments[4] = [string]$expectedSha256
+  $invokeArguments[5] = [string]$stdinPath
+  $invokeArguments[6] = [long]$stdinBytes
+  $invokeArguments[7] = [string]$stdinSha256
   $exitCode = [int]$runMethod.Invoke($null, $invokeArguments)
   exit $exitCode
 }

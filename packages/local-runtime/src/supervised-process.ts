@@ -640,7 +640,12 @@ export class SupervisedProcessRunner {
     const requestCleanup = (failure: PendingFailure): void => {
       if (pendingFailure === undefined) pendingFailure = failure;
       signalFailureRequested?.();
-      cleanupStarted ??= terminateProcessTree(child, this.platform, launchEnvironment);
+      cleanupStarted ??= terminateProcessTree(
+        child,
+        this.platform,
+        launchEnvironment,
+        closePromise
+      );
     };
 
     const throwPendingFailure = async (): Promise<never> => {
@@ -775,7 +780,12 @@ export class SupervisedProcessRunner {
     } catch (error) {
       if (error instanceof SupervisedProcessError) {
         if (isProcessAlive(child)) {
-          const cleaned = await terminateProcessTree(child, this.platform, launchEnvironment);
+          const cleaned = await terminateProcessTree(
+            child,
+            this.platform,
+            launchEnvironment,
+            closePromise
+          );
           if (!cleaned) {
             throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
           }
@@ -783,7 +793,12 @@ export class SupervisedProcessRunner {
         throw error;
       }
       if (isProcessAlive(child)) {
-        const cleaned = await terminateProcessTree(child, this.platform, launchEnvironment);
+        const cleaned = await terminateProcessTree(
+          child,
+          this.platform,
+          launchEnvironment,
+          closePromise
+        );
         if (!cleaned) {
           throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
         }
@@ -900,14 +915,25 @@ export class SupervisedProcessRunner {
       throw new SupervisedProcessError("INVALID_DEFINITION");
     }
 
+    if (
+      windowsEnvironmentBlockCharacters(environment)
+      > MAX_WINDOWS_SUPERVISOR_ENVIRONMENT_CHARACTERS
+    ) {
+      throw new SupervisedProcessError("INVALID_REQUEST");
+    }
+    const providerEnvironmentPacked =
+      packWindowsSupervisorEnvironment(environment);
     const supervisorEnvironment = Object.create(null) as NodeJS.ProcessEnv;
-    for (const [key, value] of Object.entries(environment)) {
+    for (const [key, value] of Object.entries(
+      minimalWindowsHelperEnvironment(environment)
+    )) {
       if (typeof value === "string") supervisorEnvironment[key] = value;
     }
     const reservedControlNames = new Set([
       "INTERVIEW_SUPERVISED_EXECUTABLE",
       "INTERVIEW_SUPERVISED_ARGUMENTS",
       "INTERVIEW_SUPERVISED_CWD",
+      "INTERVIEW_SUPERVISED_PROVIDER_ENVIRONMENT",
       "INTERVIEW_SUPERVISED_EXPECTED_SHA256",
       "INTERVIEW_SUPERVISED_STDIN_PATH",
       "INTERVIEW_SUPERVISED_STDIN_BYTES",
@@ -917,7 +943,7 @@ export class SupervisedProcessRunner {
       "INTERVIEW_SUPERVISED_BOOTSTRAP"
     ]);
     if (
-      Object.keys(supervisorEnvironment).some(
+      Object.keys(environment).some(
         (key) => reservedControlNames.has(key.toUpperCase())
       )
     ) {
@@ -927,6 +953,8 @@ export class SupervisedProcessRunner {
       expectedIdentity.canonicalPath;
     supervisorEnvironment.INTERVIEW_SUPERVISED_ARGUMENTS = packedArguments;
     supervisorEnvironment.INTERVIEW_SUPERVISED_CWD = workingDirectory ?? "";
+    supervisorEnvironment.INTERVIEW_SUPERVISED_PROVIDER_ENVIRONMENT =
+      providerEnvironmentPacked;
     supervisorEnvironment.INTERVIEW_SUPERVISED_EXPECTED_SHA256 =
       expectedIdentity.contentSha256;
     supervisorEnvironment.INTERVIEW_SUPERVISED_STDIN_PATH = stdinPath;
@@ -963,6 +991,31 @@ function packWindowsSupervisorArguments(
     output += `${String(argument.length)}:${argument}`;
   }
   return output;
+}
+
+function packWindowsSupervisorEnvironment(
+  environment: NodeJS.ProcessEnv
+): string {
+  const entries = Object.entries(environment)
+    .filter((entry): entry is [string, string] => typeof entry[1] === "string")
+    .sort(([left], [right]) => {
+      const canonicalLeft = left.toUpperCase();
+      const canonicalRight = right.toUpperCase();
+      if (canonicalLeft < canonicalRight) return -1;
+      if (canonicalLeft > canonicalRight) return 1;
+      return left < right ? -1 : left > right ? 1 : 0;
+    });
+  const framed: string[] = [];
+  let previousCanonical: string | undefined;
+  for (const [key, value] of entries) {
+    const canonical = key.toUpperCase();
+    if (canonical === previousCanonical) {
+      throw new SupervisedProcessError("INVALID_DEFINITION");
+    }
+    previousCanonical = canonical;
+    framed.push(key, value);
+  }
+  return packWindowsSupervisorArguments(framed);
 }
 
 
@@ -2343,7 +2396,11 @@ function isProcessAlive(child: ChildProcessWithoutNullStreams): boolean {
 async function terminateProcessTree(
   child: ChildProcessWithoutNullStreams,
   platform: NodeJS.Platform,
-  environment?: NodeJS.ProcessEnv
+  environment?: NodeJS.ProcessEnv,
+  registeredClose?: Promise<{
+    readonly code: number | null;
+    readonly signal: NodeJS.Signals | null;
+  }>
 ): Promise<boolean> {
   const pid = child.pid;
   if (pid === undefined) {
@@ -2357,16 +2414,21 @@ async function terminateProcessTree(
 
   if (platform === "win32") {
     if (!isProcessAlive(child)) {
-      // Cleanup is requested only before the child's close event has been
-      // accepted. A dead root with an unclosed stdio tree can mean a bootstrap
-      // helper still owns inherited handles, so root absence is not proof of
-      // descendant absence.
-      return false;
+      // A fast provider may finish between a stream-limit signal and cleanup.
+      // Root absence alone is insufficient, but a close promise registered
+      // while the bootstrap was still alive proves its stdio tree closed and
+      // therefore that the kill-on-job-close boundary was released.
+      return registeredClose === undefined
+        ? false
+        : await promiseSettledWithin(registeredClose, TREE_FORCE_MS);
     }
 
     const treeKilled = environment !== undefined
       && await runWindowsTaskkill(pid, environment);
     if (treeKilled) {
+      if (registeredClose !== undefined) {
+        return await promiseSettledWithin(registeredClose, TREE_FORCE_MS);
+      }
       return await waitForChildExit(child, TREE_FORCE_MS);
     }
 
@@ -2453,6 +2515,23 @@ function minimalWindowsHelperEnvironment(
     }
   }
   return Object.freeze(output);
+}
+
+async function promiseSettledWithin(
+  operation: Promise<unknown>,
+  timeoutMs: number
+): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<false>((resolve) => {
+    timer = setTimeout(() => resolve(false), timeoutMs);
+  });
+  const settled = operation.then(
+    () => true as const,
+    () => false as const
+  );
+  const result = await Promise.race([settled, timeout]);
+  if (timer !== undefined) clearTimeout(timer);
+  return result;
 }
 
 async function waitForChildExit(
