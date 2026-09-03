@@ -16,7 +16,8 @@ import {
 
 const MAX_WORKER_INTERPRETATION_CHARS = 1_000;
 const MAX_WORKER_RESPONSE_BYTES = 16 * 1024;
-const VISION_INFERENCE_TIMEOUT_MS = 20_000;
+const VISION_INFERENCE_TIMEOUT_MS = 15_000;
+const MAX_LOCAL_VISION_PNG_BYTES = 8 * 1024 * 1024;
 
 export const LOCAL_VISION_BACKEND_PROVENANCE: VisionBackendProvenance = Object.freeze({
   backendId: "desktop-local-vision",
@@ -35,7 +36,7 @@ interface WorkerVisionObservation {
   readonly confidenceClass: ConfidenceClass;
 }
 
-interface LocalVisionWorkerClient {
+export interface LocalVisionWorkerClient {
   readonly postJson: ManagedModelWorkerClient["postJson"];
   readonly workerInstanceIdentity: ManagedModelWorkerClient["workerInstanceIdentity"];
   readonly markHealthy: ManagedModelWorkerClient["markHealthy"];
@@ -68,6 +69,7 @@ export class ManagedLocalVisionBackend implements VisionInferenceBackend {
       payload.metadata.mimeType !== "image/png"
       || payload.metadata.contentDigest !== request.snapshotBasis.snapshotHash
       || payload.metadata.byteSize <= 0
+      || payload.metadata.byteSize > MAX_LOCAL_VISION_PNG_BYTES
       || payload.metadata.width <= 0
       || payload.metadata.height <= 0
     ) {
@@ -111,18 +113,17 @@ export class ManagedLocalVisionBackend implements VisionInferenceBackend {
     let observation: WorkerVisionObservation;
     try {
       observation = parseWorkerObservation(candidate);
+      if (
+        request.requestedObservationKind !== "ANY"
+        && observation.observationKind !== request.requestedObservationKind
+      ) {
+        throw new Error("Local vision worker returned an observation outside the requested class");
+      }
     } catch (error) {
       await this.recycleWorkerAfterUncertainFailure(workerInstance);
       throw error;
     }
     this.client.markHealthy("vision");
-
-    if (
-      request.requestedObservationKind !== "ANY"
-      && observation.observationKind !== request.requestedObservationKind
-    ) {
-      throw new Error("Local vision worker returned an observation outside the requested class");
-    }
 
     return VisionBackendResultSchema.parse({
       protocolVersion: 1,
