@@ -465,12 +465,18 @@ describe("live Oxford formal reasoning analysis", () => {
       expect(writer.getState().verificationRequests[request.requestId]?.status).toBe("PENDING");
 
       // A new coordinator models a restarted process with no in-memory request cache.
+      // Recovery must use the durable app-owned verification request and never
+      // consult a fallible interpreter again.
+      const restartProvider = new DeterministicFormalInterpretationProvider(() => {
+        throw new Error("RECOVERY_INTERPRETER_MUST_NOT_RUN");
+      });
       const restarted = new InterpretationCoordinator(
         writer,
-        deterministicProvider("CORRECT"),
+        restartProvider,
         profile.scopes
       );
       const outcome = await restarted.interpretAndVerify(request);
+      expect(restartProvider.callCount).toBe(0);
       expect(outcome).toMatchObject({
         status: "ACCEPTED",
         verificationStatus: "VERIFIED",
@@ -671,7 +677,7 @@ describe("live Oxford formal reasoning analysis", () => {
         verificationStatus: "VERIFIED",
         duplicateVerificationRequest: true
       });
-      expect(provider.callCount).toBe(2);
+      expect(provider.callCount).toBe(1);
 
       const profile = resolveOxfordFormalAnalysisProfile(selectedProblem);
       if (profile === undefined) throw new Error("Missing Oxford formal profile");
