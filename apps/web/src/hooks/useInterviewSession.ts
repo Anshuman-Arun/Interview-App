@@ -140,6 +140,9 @@ export interface UseInterviewSessionResult {
   readonly readSessionHistory: (
     signal?: AbortSignal
   ) => Promise<SessionHistoryReadResponse>;
+  readonly readSessionConfiguration: (
+    sessionId: SessionId
+  ) => Promise<InterviewSessionConfiguration>;
   readonly startSession: (customSessionId?: SessionId) => Promise<void>;
   readonly startConfiguredSession: (
     configuration: InterviewSessionConfiguration,
@@ -567,6 +570,13 @@ export function useInterviewSession(
       fetchImpl
     });
   }, [baseUrl, desktopBootstrap, fetchImpl]);
+
+  const readSessionConfiguration = useCallback(async (
+    targetSessionId: SessionId
+  ): Promise<InterviewSessionConfiguration> => {
+    const context = await getCommandClient().getInterviewSessionContext(targetSessionId);
+    return context.configuration;
+  }, [getCommandClient]);
 
   const refreshQuantState = useCallback(async (): Promise<QuantSessionPublicState | null> => {
     const targetSessionId = sessionId;
@@ -2025,6 +2035,7 @@ export function useInterviewSession(
     readSessionEvaluation,
     readSessionReplay,
     readSessionHistory,
+    readSessionConfiguration,
     startSession,
     startConfiguredSession,
     recoverSession,
