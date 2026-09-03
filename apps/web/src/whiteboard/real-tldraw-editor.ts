@@ -5,6 +5,8 @@ import {
 } from "../../../../packages/domain/src/index.js";
 import {
   Box,
+  getSnapshot,
+  loadSnapshot,
   type Editor,
   type TLShape,
   type TLShapeId,
@@ -121,19 +123,38 @@ export class RealTldrawEditorBridge implements TldrawEditor {
     }
   }
 
-  public restoreShapes(shapes: readonly TLShapePartialRecord[]): void {
-    for (const shape of shapes) this.assertValidPartialOwnership(shape);
-    const nativeShapes = shapes.map((shape) => this.toNativePartial(shape));
+  public captureEditorSnapshot(): unknown {
+    const incompleteStudentStrokeIds = this.nativeEditor
+      .getCurrentPageShapes()
+      .filter((shape) =>
+        effectiveNativeLayer(shape) === STUDENT_LAYER
+        && isIncompleteFreehandShape(shape)
+      )
+      .map((shape) => shape.id);
 
-    // Route remount restoration is presentation continuity, not a new student
-    // mutation. Never let Ctrl+Z erase the entire pre-pause canvas as one
-    // synthetic history entry.
-    this.runAdapterMutation(
-      () => {
-        this.nativeEditor.createShapes(nativeShapes);
-      },
-      true
+    if (incompleteStudentStrokeIds.length > 0) {
+      // These pointer-in-progress shapes have intentionally not been admitted
+      // as authoritative mutations. Remove them before snapshotting so tldraw
+      // also drops dependent bindings / selection references consistently.
+      this.runAdapterMutation(
+        () => {
+          this.nativeEditor.deleteShapes(incompleteStudentStrokeIds);
+        },
+        true
+      );
+    }
+
+    return getSnapshot(this.nativeEditor.store);
+  }
+
+  public restoreEditorSnapshot(snapshot: unknown): void {
+    loadSnapshot(
+      this.nativeEditor.store,
+      snapshot as Parameters<typeof loadSnapshot>[1]
     );
+    // Snapshot restoration is continuity, not a user edit. A brand-new editor
+    // has no legitimate pre-remount undo stack to retain.
+    this.nativeEditor.clearHistory();
   }
 
   public deleteShapes(ids: readonly string[]): void {
