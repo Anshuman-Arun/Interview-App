@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { VerificationResultSchema } from "../packages/domain/src/index.js";
+import { VerificationWorkItemSchema } from "../packages/interview-engine/src/index.js";
 import {
   AbstainingVerifier,
   MAX_TWO_COLOUR_GRAPH_STATEMENT_CHARACTERS,
@@ -146,4 +147,35 @@ describe("deterministic verifier contract hardening", () => {
       expect(result.status).toBe("UNRESOLVED");
     }
   });
+
+  it("forbids generation-bound verification from declaring board-revision independence", () => {
+    const parsed = VerificationWorkItemSchema.safeParse({
+      protocolVersion: 1,
+      verificationRequestId: "verification-request",
+      verifier: "deterministic-verifier",
+      basis: {
+        contextEpoch: 0,
+        committedInputSequence: 1,
+        transcriptRevision: 0,
+        boardRevision: 0,
+        problemStateRevision: 0,
+        policyRevision: 0,
+        inputEpisodeId: "episode",
+        turnId: "turn"
+      },
+      candidateFormalInterpretation: "{}",
+      interpretationConfidence: 1,
+      evidenceKey: {
+        problemId: "problem",
+        subject: { kind: "CLAIM", claimId: "claim" },
+        dimension: "CORRECTNESS"
+      },
+      evidenceEventIds: ["event"],
+      boardRevisionIndependent: true,
+      sourceGenerationId: "generation"
+    });
+
+    expect(parsed.success).toBe(false);
+  });
+
 });
