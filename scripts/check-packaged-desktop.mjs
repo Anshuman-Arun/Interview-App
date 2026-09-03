@@ -83,15 +83,18 @@ async function verifyRendererTree() {
 async function inspectAsar() {
   const asarPath = path.join(RESOURCES, "app.asar");
   await requireRegularFile(asarPath, "app.asar");
-  const command = process.platform === "win32" ? "npx.cmd" : "npx";
   const result = spawnSync(
-    command,
+    "npx",
     ["--yes", "@electron/asar@4.3.0", "list", asarPath],
     {
       cwd: ROOT,
       encoding: "utf8",
       maxBuffer: 64 * 1024 * 1024,
-      windowsHide: true
+      windowsHide: true,
+      // Windows cannot execute npm/npx .cmd shims directly through
+      // child_process without a command shell. The command and all arguments
+      // here are application-owned constants/paths, never renderer input.
+      shell: process.platform === "win32"
     }
   );
   if (result.error !== undefined) throw result.error;
