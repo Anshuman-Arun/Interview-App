@@ -230,7 +230,10 @@ export function toInterviewProblemPublicView(
     difficulty: composition.problem.interviewer.difficulty,
     prompt: composition.problem.public.prompt,
     givenInformation: [...composition.problem.public.givenInformation],
-    topics: [...composition.problem.interviewer.topics]
+    // Interviewer topics are pedagogical/solution-structure metadata. Keep the
+    // established public-view field shape for protocol compatibility, but do
+    // not send those private hints to the renderer.
+    topics: []
   });
 }
 
