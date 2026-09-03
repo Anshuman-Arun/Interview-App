@@ -100,8 +100,9 @@ describe("supervised Antigravity runtime profile", () => {
     expect(isSupportedAntigravityCliVersionOutput("1.1.3\n")).toBe(false);
     expect(isSupportedAntigravityCliVersionOutput("1.1.4\n")).toBe(true);
     expect(isSupportedAntigravityCliVersionOutput("1.1.23\n")).toBe(true);
-    expect(isSupportedAntigravityCliVersionOutput("agy version 2.0.0\n")).toBe(true);
-    expect(isSupportedAntigravityCliVersionOutput("v2.0.0\n")).toBe(true);
+    expect(isSupportedAntigravityCliVersionOutput("agy version 1.1.23\n")).toBe(true);
+    expect(isSupportedAntigravityCliVersionOutput("v1.2.0\n")).toBe(true);
+    expect(isSupportedAntigravityCliVersionOutput("2.0.0\n")).toBe(false);
     expect(isSupportedAntigravityCliVersionOutput("1.1.4-rc.1\n")).toBe(false);
     expect(isSupportedAntigravityCliVersionOutput("1.1.4\nextra")).toBe(false);
     expect(isSupportedAntigravityCliVersionOutput("not-a-version")).toBe(false);
