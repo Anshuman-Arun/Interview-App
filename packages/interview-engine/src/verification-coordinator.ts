@@ -287,21 +287,30 @@ export class VerificationCoordinator {
     readonly candidateFormalInterpretation: string;
     readonly interpretationConfidence: number;
     readonly evidenceKey: EvidenceKey;
+    readonly expectedProblemVersion?: string;
     readonly envelope?: CommandEnvelope;
   }) {
     const verifier = VerifierIdSchema.parse(input.verifier);
     const evidenceKey = EvidenceKeySchema.parse(input.evidenceKey);
+    const expectedProblemVersion = input.expectedProblemVersion === undefined
+      ? undefined
+      : z.string().min(1).max(128).parse(input.expectedProblemVersion);
     const interpretation = FormalInterpretationProposalSchema.parse({
       candidateFormalInterpretation: input.candidateFormalInterpretation,
       interpretationConfidence: input.interpretationConfidence
     });
     const verificationRequestId = newRequestId();
+    const snapshot = this.writer.getState();
     const envelope = CommandEnvelopeSchema.parse(input.envelope ?? createCommandEnvelope({
       sessionId: this.writer.sessionId,
       producer: "verification-coordinator",
       correlationId: verificationRequestId,
       inputEpisodeId: input.inputEpisodeId,
-      turnId: input.turnId
+      turnId: input.turnId,
+      contextEpoch: snapshot.contextEpoch,
+      ...(snapshot.lastCommittedInputSequence === undefined
+        ? {}
+        : { sourceRevision: snapshot.lastCommittedInputSequence })
     }));
     const effectiveRequestId = envelope.correlationId;
 
@@ -313,7 +322,8 @@ export class VerificationCoordinator {
         verifier,
         candidateFormalInterpretation: interpretation.candidateFormalInterpretation,
         interpretationConfidence: interpretation.interpretationConfidence,
-        evidenceKey
+        evidenceKey,
+        ...(expectedProblemVersion === undefined ? {} : { expectedProblemVersion })
       }
     }, VerificationWorkItemSchema, (state) => {
       if (state.status !== "ACTIVE") throw new Error("Verification requires an active session");
@@ -333,7 +343,20 @@ export class VerificationCoordinator {
         state.lastCommittedInputSequence === undefined
         || turn.committedSequence !== state.lastCommittedInputSequence
       ) throw new Error("Verification requires the latest committed Turn");
-      if (state.problem?.id !== evidenceKey.problemId) throw new Error("Verification evidence is scoped to a different problem");
+      if (
+        envelope.inputEpisodeId !== input.inputEpisodeId
+        || envelope.turnId !== input.turnId
+        || envelope.contextEpoch !== state.contextEpoch
+        || envelope.sourceRevision !== state.lastCommittedInputSequence
+      ) {
+        throw new Error("Verification source basis changed before durable admission");
+      }
+      if (
+        state.problem?.id !== evidenceKey.problemId
+        || (expectedProblemVersion !== undefined && state.problem.version !== expectedProblemVersion)
+      ) {
+        throw new Error("Verification evidence is scoped to a different problem");
+      }
       if (evidenceKey.subject.kind !== "CLAIM" || evidenceKey.dimension !== "CORRECTNESS") {
         throw new Error("Phase 0 deterministic verification may commit only claim correctness evidence");
       }
