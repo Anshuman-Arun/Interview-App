@@ -23,9 +23,6 @@ import {
   createApplicationProviderAdapterRuntimeSource
 } from "./antigravity-cli-runtime.js";
 import {
-  ProviderBackedFormalInterpretationProvider
-} from "./provider-backed-formal-interpretation.js";
-import {
   EphemeralAudioAssetStore,
   VoiceInputCoordinator,
   VoiceSynthesisCoordinator,
@@ -135,17 +132,6 @@ export class LocalInterviewTransportRuntime {
         this.audioAssets,
         ttsRuntime
       );
-    const formalInterpretationProvider =
-      options.formalInterpretationProvider
-      ?? (
-        defaultAdapterRuntimeSource === undefined
-          ? undefined
-          : new ProviderBackedFormalInterpretationProvider(
-            this.sessions,
-            providerRuntimeResolver,
-            defaultAdapterRuntimeSource
-          )
-      );
     this.orchestrator =
       options.orchestrator ??
       new ServerTurnOrchestrator(
@@ -153,7 +139,7 @@ export class LocalInterviewTransportRuntime {
         () => this.rendererStreamServer,
         undefined,
         providerRuntimeResolver,
-        formalInterpretationProvider
+        options.formalInterpretationProvider
       );
     this.sessions.setTurnRecoveryDelegate(this.orchestrator);
     this.readService = options.readService ?? new SessionReadService({
