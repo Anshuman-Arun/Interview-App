@@ -13,6 +13,7 @@ import {
 import { SqliteEventStore } from "../packages/persistence/src/index.js";
 import { sixPeopleProblem } from "../packages/problems/src/index.js";
 import {
+  ANTIGRAVITY_CLI_ADAPTER_VERSION,
   ANTIGRAVITY_CLI_AGENT_ID,
   ANTIGRAVITY_CLI_MODEL_ID,
   ANTIGRAVITY_CLI_PROPOSAL_SCHEMA_ARGUMENT,
@@ -1709,7 +1710,14 @@ function antigravityResolver(
           return undefined;
         }
         return {
-          executor: Object.freeze({ execute })
+          executor: Object.freeze({ execute }),
+          billingVerificationFactory: (now: Date) => ({
+            billingClass: "ACCOUNT_QUOTA" as const,
+            enforcementMechanism: "test-only pinned no-overage Antigravity profile",
+            verifiedAt: now.toISOString(),
+            adapterVersion: ANTIGRAVITY_CLI_ADAPTER_VERSION,
+            spendImpossible: true
+          })
         };
       },
       ...(drain === undefined ? {} : { drain })
@@ -1718,7 +1726,7 @@ function antigravityResolver(
       resolvePolicy(selection) {
         return selection.providerId === ANTIGRAVITY_SELECTION.providerId
           ? {
-              allowMeteredUsage: true,
+              allowMeteredUsage: false,
               maximumDataUse: "REMOTE_MAY_BE_USED_FOR_IMPROVEMENT" as const,
               billingVerificationMaxAgeMs: 60_000
             }
