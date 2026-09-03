@@ -10,6 +10,21 @@ async function source(relativePath: string): Promise<string> {
 }
 
 describe("Windows desktop packaging contract", () => {
+  it("keeps Vite-bundled renderer packages out of production dependencies", async () => {
+    const packageJson = JSON.parse(await source("package.json")) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    for (const name of ["@tldraw/assets", "katex", "react", "react-dom", "tldraw"]) {
+      expect(packageJson.dependencies?.[name]).toBeUndefined();
+      expect(packageJson.devDependencies?.[name]).toBeDefined();
+    }
+    expect(packageJson.dependencies).toEqual({
+      pngjs: "^7.0.0",
+      zod: "^4.4.3"
+    });
+  });
+
   it("pins mature packaging tooling and deterministic Windows artifact identity", async () => {
     const packageJson = JSON.parse(await source("package.json")) as {
       version?: string;
