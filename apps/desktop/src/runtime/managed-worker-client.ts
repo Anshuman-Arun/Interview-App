@@ -43,6 +43,8 @@ export class ManagedWorkerResponseError extends Error {
 
 export class ManagedModelWorkerClient {
   private recyclePromise: Promise<void> | undefined;
+  private recycleWorkerInstance: string | undefined;
+  private readonly recycleScopes = new Set<ManagedWorkerRecoveryScope>();
   private readonly uncertainRecycleCounts = new Map<ManagedWorkerRecoveryScope, number>();
 
   public constructor(
@@ -180,20 +182,30 @@ export class ManagedModelWorkerClient {
     }
     if (currentWorkerInstance !== expectedWorkerInstance) return Promise.resolve();
 
-    const prior = this.uncertainRecycleCounts.get(scope) ?? 0;
-    const exhausted = prior >= MAX_CONSECUTIVE_UNCERTAIN_RECYCLES;
-    if (!exhausted) this.uncertainRecycleCounts.set(scope, prior + 1);
-
-    if (this.recyclePromise !== undefined) {
-      return exhausted
-        ? this.recyclePromise.then(async () => {
-            await this.manager.stop(this.componentId);
-            throw new ManagedWorkerRecoveryExhaustedError();
-          })
-        : this.recyclePromise;
+    if (
+      this.recyclePromise !== undefined
+      && this.recycleWorkerInstance === expectedWorkerInstance
+    ) {
+      if (this.recycleScopes.has(scope)) return this.recyclePromise;
+      this.recycleScopes.add(scope);
+      const exhausted = this.recordUncertainRecycle(scope);
+      if (!exhausted) return this.recyclePromise;
+      return this.recyclePromise.then(async () => {
+        if (this.lifecycleSignal?.aborted === true) return;
+        await this.manager.stop(this.componentId);
+        throw new ManagedWorkerRecoveryExhaustedError();
+      });
     }
 
-    const operation = (async (): Promise<void> => {
+    const exhausted = this.recordUncertainRecycle(scope);
+    this.recycleWorkerInstance = expectedWorkerInstance;
+    this.recycleScopes.clear();
+    this.recycleScopes.add(scope);
+
+    // Defer stop/start to the next microtask so concurrent failures from this
+    // same worker instance can coalesce against recyclePromise before the
+    // manager leaves READY.
+    const operation = Promise.resolve().then(async (): Promise<void> => {
       await this.manager.stop(this.componentId);
       if (this.lifecycleSignal?.aborted === true) return;
       if (exhausted) {
@@ -203,12 +215,23 @@ export class ManagedModelWorkerClient {
         this.componentId,
         this.lifecycleSignal === undefined ? {} : { signal: this.lifecycleSignal }
       );
-    })();
+    });
     this.recyclePromise = operation;
     void operation.finally(() => {
-      if (this.recyclePromise === operation) this.recyclePromise = undefined;
+      if (this.recyclePromise === operation) {
+        this.recyclePromise = undefined;
+        this.recycleWorkerInstance = undefined;
+        this.recycleScopes.clear();
+      }
     }).catch(() => undefined);
     return operation;
+  }
+
+  private recordUncertainRecycle(scope: ManagedWorkerRecoveryScope): boolean {
+    const prior = this.uncertainRecycleCounts.get(scope) ?? 0;
+    if (prior >= MAX_CONSECUTIVE_UNCERTAIN_RECYCLES) return true;
+    this.uncertainRecycleCounts.set(scope, prior + 1);
+    return false;
   }
 
   private readyStatus(): LocalComponentStatus {
