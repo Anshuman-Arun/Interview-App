@@ -819,6 +819,10 @@ class VisionRuntime:
             and quality["balanced"]
             and quality["meanMargin"] >= 1.5
             and len(latex) <= 512
+            and (
+                output_kind != "EQUATION"
+                or self._looks_mathematical(latex)
+            )
         ) else "MEDIUM"
         return {
             "observationKind": output_kind,
