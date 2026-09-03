@@ -679,7 +679,25 @@ class VisionRuntime:
         # The optional vision module is imported only for this component.
         # Missing/corrupt vision packaging therefore cannot break speech/TTS.
         try:
-            from local_vision_runtime import VisionProtocolError, VisionRuntime as Backend
+            # -I intentionally removes the script directory from sys.path.
+            # Load the fixed sibling module by file identity instead of making
+            # it importable globally or accepting any path from a request.
+            import importlib.util
+
+            module_path = Path(__file__).resolve(strict=True).with_name(
+                "local_vision_runtime.py"
+            )
+            module_file = require_file(str(module_path), "local vision runtime module")
+            spec = importlib.util.spec_from_file_location(
+                "interview_local_vision_runtime",
+                module_file,
+            )
+            if spec is None or spec.loader is None:
+                raise RuntimeError("vision module loader is unavailable")
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            VisionProtocolError = getattr(module, "VisionProtocolError")
+            Backend = getattr(module, "VisionRuntime")
         except Exception as exc:
             raise RuntimeError("local vision runtime module is unavailable") from exc
 
