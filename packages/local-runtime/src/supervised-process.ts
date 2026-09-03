@@ -962,7 +962,6 @@ function acquireSharedWindowsSupervisorAssembly(
   if (entry === undefined) {
     const controller = new AbortController();
     const promise = compileWindowsSupervisorAssembly(
-      powershell,
       temporaryRoot,
       environment,
       controller.signal
@@ -1068,7 +1067,6 @@ async function verifyWindowsSupervisorAssembly(
 }
 
 async function compileWindowsSupervisorAssembly(
-  powershell: string,
   temporaryRoot: string,
   environment: NodeJS.ProcessEnv,
   signal: AbortSignal
@@ -1081,23 +1079,36 @@ async function compileWindowsSupervisorAssembly(
     path.join(temporaryRoot, "interview-job-supervisor-")
   );
   const output = path.join(directory, "InterviewJobSupervisor.dll");
+  const source = path.join(directory, "InterviewJobSupervisor.cs");
   let child: ChildProcessWithoutNullStreams | undefined;
   let succeeded = false;
   try {
+    await writeFile(source, WINDOWS_JOB_SUPERVISOR_CSHARP_SOURCE, {
+      encoding: "utf8",
+      flag: "wx"
+    });
+    const sourceHash = createHash("sha256")
+      .update(WINDOWS_JOB_SUPERVISOR_CSHARP_SOURCE, "utf8")
+      .digest("hex");
+    if (await sha256Executable(source, signal) !== sourceHash) {
+      throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
+    }
+
+    const compiler = await windowsCSharpCompilerExecutablePath(environment);
     const compilerEnvironment = windowsSupervisorCompilerEnvironment(
       environment,
       temporaryRoot,
-      output
+      compiler
     );
     const args = [
-      "-NoLogo",
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-      "$ErrorActionPreference='Stop'; Add-Type -TypeDefinition $env:INTERVIEW_SUPERVISOR_SOURCE -Language CSharp -OutputAssembly $env:INTERVIEW_SUPERVISOR_OUTPUT -OutputType Library"
+      "/nologo",
+      "/target:library",
+      "/optimize+",
+      `/out:${output}`,
+      source
     ];
 
-    child = spawn(powershell, args, {
+    child = spawn(compiler, args, {
       env: compilerEnvironment,
       shell: false,
       windowsHide: true,
@@ -1171,6 +1182,10 @@ async function compileWindowsSupervisorAssembly(
       throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
     }
 
+    if (await sha256Executable(source, signal) !== sourceHash) {
+      throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
+    }
+
     const info = await lstat(output, { bigint: true });
     const canonical = await realpath(output);
     if (
@@ -1233,19 +1248,17 @@ async function compileWindowsSupervisorAssembly(
 function windowsSupervisorCompilerEnvironment(
   environment: NodeJS.ProcessEnv,
   temporaryRoot: string,
-  output: string
+  compiler: string
 ): NodeJS.ProcessEnv {
   const result = Object.create(null) as NodeJS.ProcessEnv;
   const system32 = windowsSystem32ExecutablePath(environment);
   const systemRoot = win32Path.dirname(system32);
   result.SYSTEMROOT = systemRoot;
   result.WINDIR = systemRoot;
-  result.PATH = system32;
+  result.PATH = `${win32Path.dirname(compiler)};${system32}`;
   result.PATHEXT = ".COM;.EXE;.BAT;.CMD";
   result.TEMP = temporaryRoot;
   result.TMP = temporaryRoot;
-  result.INTERVIEW_SUPERVISOR_SOURCE = WINDOWS_JOB_SUPERVISOR_CSHARP_SOURCE;
-  result.INTERVIEW_SUPERVISOR_OUTPUT = output;
   if (
     windowsEnvironmentBlockCharacters(result)
     > MAX_WINDOWS_SUPERVISOR_ENVIRONMENT_CHARACTERS
@@ -1253,6 +1266,38 @@ function windowsSupervisorCompilerEnvironment(
     throw new SupervisedProcessError("INVALID_DEFINITION");
   }
   return Object.freeze(result);
+}
+
+async function windowsCSharpCompilerExecutablePath(
+  environment: NodeJS.ProcessEnv
+): Promise<string> {
+  const system32 = windowsSystem32ExecutablePath(environment);
+  const systemRoot = win32Path.dirname(system32);
+  const candidates = [
+    win32Path.join(
+      systemRoot,
+      "Microsoft.NET",
+      "Framework64",
+      "v4.0.30319",
+      "csc.exe"
+    ),
+    win32Path.join(
+      systemRoot,
+      "Microsoft.NET",
+      "Framework",
+      "v4.0.30319",
+      "csc.exe"
+    )
+  ];
+  for (const candidate of candidates) {
+    try {
+      const identity = await inspectExecutable(candidate, "win32");
+      if (identity.linkCount === 1n) return identity.canonicalPath;
+    } catch {
+      // Try the next application-owned framework location.
+    }
+  }
+  throw new SupervisedProcessError("EXECUTABLE_UNAVAILABLE");
 }
 
 function snapshotExecutableDefinitions(
@@ -1683,6 +1728,9 @@ async function inspectExecutable(
   platform: NodeJS.Platform
 ): Promise<ExecutableIdentity> {
   try {
+    if (platform === "win32") {
+      await assertNoWindowsParentReparsePoints(executable);
+    }
     const [info, canonicalPath] = await Promise.all([
       lstat(executable, { bigint: true }),
       realpath(executable)
@@ -1697,12 +1745,19 @@ async function inspectExecutable(
     }
     const configured = path.resolve(executable);
     const actual = path.resolve(canonicalPath);
-    const sameConfiguredPath = platform === "win32"
-      ? normalizeWindowsIdentityPath(configured)
-        === normalizeWindowsIdentityPath(actual)
-      : configured === actual;
-    if (!sameConfiguredPath) {
+    if (platform !== "win32" && configured !== actual) {
       throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
+    }
+    if (platform === "win32") {
+      const canonicalInfo = await lstat(actual, { bigint: true });
+      if (
+        !canonicalInfo.isFile()
+        || canonicalInfo.isSymbolicLink()
+        || canonicalInfo.dev !== info.dev
+        || canonicalInfo.ino !== info.ino
+      ) {
+        throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
+      }
     }
     return Object.freeze({
       device: info.dev,
@@ -1723,6 +1778,12 @@ function tryInspectExecutableSync(
   platform: NodeJS.Platform
 ): ExecutableIdentity | undefined {
   try {
+    if (
+      platform === "win32"
+      && windowsParentPathContainsReparsePointSync(executable)
+    ) {
+      return undefined;
+    }
     const info = lstatSync(executable, { bigint: true });
     const canonicalPath = realpathSync(executable);
     if (
@@ -1733,11 +1794,18 @@ function tryInspectExecutableSync(
     ) return undefined;
     const configured = path.resolve(executable);
     const actual = path.resolve(canonicalPath);
-    const sameConfiguredPath = platform === "win32"
-      ? normalizeWindowsIdentityPath(configured)
-        === normalizeWindowsIdentityPath(actual)
-      : configured === actual;
-    if (!sameConfiguredPath) return undefined;
+    if (platform !== "win32" && configured !== actual) return undefined;
+    if (platform === "win32") {
+      const canonicalInfo = lstatSync(actual, { bigint: true });
+      if (
+        !canonicalInfo.isFile()
+        || canonicalInfo.isSymbolicLink()
+        || canonicalInfo.dev !== info.dev
+        || canonicalInfo.ino !== info.ino
+      ) {
+        return undefined;
+      }
+    }
     return Object.freeze({
       device: info.dev,
       inode: info.ino,
@@ -1939,6 +2007,38 @@ function trustedWindowsTemporaryRoot(): string {
   return configured;
 }
 
+async function assertNoWindowsParentReparsePoints(
+  executable: string
+): Promise<void> {
+  const parent = win32Path.dirname(win32Path.resolve(executable));
+  const root = win32Path.parse(parent).root;
+  const relative = win32Path.relative(root, parent);
+  let current = root;
+  if (relative.length === 0) return;
+  for (const segment of relative.split(win32Path.sep)) {
+    current = win32Path.join(current, segment);
+    const info = await lstat(current, { bigint: true });
+    if (info.isSymbolicLink()) {
+      throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
+    }
+  }
+}
+
+function windowsParentPathContainsReparsePointSync(
+  executable: string
+): boolean {
+  const parent = win32Path.dirname(win32Path.resolve(executable));
+  const root = win32Path.parse(parent).root;
+  const relative = win32Path.relative(root, parent);
+  let current = root;
+  if (relative.length === 0) return false;
+  for (const segment of relative.split(win32Path.sep)) {
+    current = win32Path.join(current, segment);
+    if (lstatSync(current, { bigint: true }).isSymbolicLink()) return true;
+  }
+  return false;
+}
+
 function normalizeWindowsIdentityPath(value: string): string {
   let normalized = win32Path.resolve(value).replaceAll("/", "\\");
   if (normalized.toLowerCase().startsWith("\\\\?\\unc\\")) {
@@ -1955,8 +2055,7 @@ function sameExecutableIdentity(
   platform: NodeJS.Platform
 ): boolean {
   const samePath = platform === "win32"
-    ? normalizeWindowsIdentityPath(left.canonicalPath)
-      === normalizeWindowsIdentityPath(right.canonicalPath)
+    ? true
     : left.canonicalPath === right.canonicalPath;
   return samePath
     && left.device === right.device
