@@ -36,6 +36,8 @@ MAX_PYTHON_EXCLUSIVE = (3, 14)
 EXPECTED_DISTRIBUTIONS = {
     "moonshine-voice": "0.1.5",
     "onnxruntime": "1.29.0",
+    "Pillow": "12.3.0",
+    "tokenizers": "0.23.1",
     "numpy": "2.5.2",
     "sounddevice": "0.5.6",
     "requests": "2.34.2",
@@ -79,7 +81,7 @@ VISION_MODEL_IDENTITY = (
     "rapid-latex-ocr@v0.0.0+set-"
     "ea51bb3eebca460eeded83ccc81f4d0a50aae0e4aadcf64aa8eead1e50410a4d"
 )
-VISION_RUNTIME_VERSION = "onnxruntime/1.29.0;numpy/2.5.2;vision/1"
+VISION_RUNTIME_VERSION = "onnxruntime/1.29.0;numpy/2.5.2;pillow/12.3.0;tokenizers/0.23.1;vision/2"
 MAX_VISION_PNG_BYTES = 2 * 1024 * 1024
 MAX_VISION_REQUEST_ID_LENGTH = 160
 MAX_VISION_RESPONSE_CHARS = 4_000
@@ -274,6 +276,8 @@ def require_runtime_environment() -> None:
         import moonshine_voice
         import numpy  # noqa: F401
         import onnxruntime as ort
+        from PIL import Image  # noqa: F401
+        from tokenizers import Tokenizer  # noqa: F401
         from moonshine_voice.moonshine_api import ModelArch  # noqa: F401
         from moonshine_voice.transcriber import Transcriber  # noqa: F401
         from moonshine_voice.tts import TextToSpeech  # noqa: F401
