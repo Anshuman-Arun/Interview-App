@@ -890,16 +890,8 @@ export class SupervisedProcessRunner {
       .update(stdinBytes)
       .digest("hex");
 
-    const configuration = JSON.stringify({
-      executable: expectedIdentity.canonicalPath,
-      arguments: [...definition.fixedArgs, ...request.args],
-      cwd: workingDirectory ?? null,
-      expectedSha256: expectedIdentity.contentSha256,
-      stdinPath,
-      stdinBytes: stdinBytes.byteLength,
-      stdinSha256,
-      environmentKeys: Object.keys(environment)
-    });
+    const providerArguments = [...definition.fixedArgs, ...request.args];
+    const packedArguments = packWindowsSupervisorArguments(providerArguments);
     if (request.signal !== undefined && abortSignalAborted(request.signal)) {
       throw new SupervisedProcessError("EXECUTION_CANCELLED");
     }
@@ -924,7 +916,36 @@ export class SupervisedProcessRunner {
     for (const [key, value] of Object.entries(environment)) {
       if (typeof value === "string") supervisorEnvironment[key] = value;
     }
-    supervisorEnvironment.INTERVIEW_SUPERVISED_CONFIG_JSON = configuration;
+    const reservedControlNames = new Set([
+      "INTERVIEW_SUPERVISED_EXECUTABLE",
+      "INTERVIEW_SUPERVISED_ARGUMENTS",
+      "INTERVIEW_SUPERVISED_CWD",
+      "INTERVIEW_SUPERVISED_EXPECTED_SHA256",
+      "INTERVIEW_SUPERVISED_STDIN_PATH",
+      "INTERVIEW_SUPERVISED_STDIN_BYTES",
+      "INTERVIEW_SUPERVISED_STDIN_SHA256",
+      "INTERVIEW_SUPERVISED_ASSEMBLY_PATH",
+      "INTERVIEW_SUPERVISED_ASSEMBLY_SHA256",
+      "INTERVIEW_SUPERVISED_BOOTSTRAP",
+      "INTERVIEW_SUPERVISOR_STAGE_DEBUG_FILE"
+    ]);
+    if (
+      Object.keys(supervisorEnvironment).some(
+        (key) => reservedControlNames.has(key.toUpperCase())
+      )
+    ) {
+      throw new SupervisedProcessError("INVALID_DEFINITION");
+    }
+    supervisorEnvironment.INTERVIEW_SUPERVISED_EXECUTABLE =
+      expectedIdentity.canonicalPath;
+    supervisorEnvironment.INTERVIEW_SUPERVISED_ARGUMENTS = packedArguments;
+    supervisorEnvironment.INTERVIEW_SUPERVISED_CWD = workingDirectory ?? "";
+    supervisorEnvironment.INTERVIEW_SUPERVISED_EXPECTED_SHA256 =
+      expectedIdentity.contentSha256;
+    supervisorEnvironment.INTERVIEW_SUPERVISED_STDIN_PATH = stdinPath;
+    supervisorEnvironment.INTERVIEW_SUPERVISED_STDIN_BYTES =
+      String(stdinBytes.byteLength);
+    supervisorEnvironment.INTERVIEW_SUPERVISED_STDIN_SHA256 = stdinSha256;
     supervisorEnvironment.INTERVIEW_SUPERVISED_ASSEMBLY_PATH = assembly.path;
     supervisorEnvironment.INTERVIEW_SUPERVISED_ASSEMBLY_SHA256 = assembly.sha256;
     supervisorEnvironment.INTERVIEW_SUPERVISED_BOOTSTRAP =
@@ -951,6 +972,16 @@ export class SupervisedProcessRunner {
       bootstrapStdin: ""
     });
   }
+}
+
+function packWindowsSupervisorArguments(
+  arguments_: readonly string[]
+): string {
+  let output = "";
+  for (const argument of arguments_) {
+    output += `${argument.length}:${argument}`;
+  }
+  return output;
 }
 
 function traceWindowsSupervisorStage(stage: string): void {
