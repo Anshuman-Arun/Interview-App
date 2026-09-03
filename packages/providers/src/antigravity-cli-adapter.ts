@@ -889,6 +889,13 @@ function parseStrictJson(raw: string): unknown {
       for (;;) {
         skipWhitespace();
         const key = parseString();
+        if (
+          key === "__proto__"
+          || key === "prototype"
+          || key === "constructor"
+        ) {
+          throw new Error("Unsafe JSON object key");
+        }
         if (keys.has(key)) throw new Error("Duplicate JSON object key");
         keys.add(key);
         skipWhitespace();
