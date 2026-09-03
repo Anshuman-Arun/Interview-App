@@ -288,7 +288,7 @@ export class DesktopLocalRuntimeComposition {
       return;
     }
     this.pythonExecutable = pythonExecutable;
-    if (!probePythonRuntime(pythonExecutable, this.workerScriptPath, signal)) {
+    if (!this.pythonRuntimeCompatible(pythonExecutable, signal)) {
       if (abortRequested(signal)) {
         this.markPendingCapabilitiesCancelled();
         return;
@@ -391,6 +391,13 @@ export class DesktopLocalRuntimeComposition {
         );
       }
     }
+  }
+
+  private pythonRuntimeCompatible(
+    executable: string,
+    signal?: AbortSignal
+  ): boolean {
+    return probePythonRuntime(executable, this.workerScriptPath, signal);
   }
 
   private async startSpeech(signal?: AbortSignal): Promise<void> {
