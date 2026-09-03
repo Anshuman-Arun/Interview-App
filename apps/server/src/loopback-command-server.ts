@@ -43,6 +43,7 @@ import {
 } from "./interview-session-composition.js";
 import { createLegacyDefaultSessionConfiguration } from "./legacy-session-compatibility.js";
 import { ProductionSessionRuntime } from "./production-session-runtime.js";
+import { ProviderRuntimeResolver } from "./provider-runtime.js";
 
 const MAX_COMMAND_BYTES = 64 * 1024;
 const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(["127.0.0.1", "::1"]);
@@ -66,6 +67,7 @@ export interface LoopbackCommandServerOptions {
   readonly reads?: SessionReadService;
   readonly orchestrator?: ServerTurnOrchestrator;
   readonly productionRuntime?: ProductionSessionRuntime;
+  readonly providerRuntimeResolver?: ProviderRuntimeResolver;
   readonly whiteboardVision?: WhiteboardVisionCoordinator;
   readonly onSessionTerminal?: (sessionId: SessionId) => void | Promise<void>;
   readonly port?: number;
@@ -90,6 +92,7 @@ class ProtocolHttpError extends Error {
 export class LoopbackCommandServer {
   private readonly server: Server;
   private readonly productionRuntime: ProductionSessionRuntime;
+  private readonly providerRuntimeResolver: ProviderRuntimeResolver;
   private boundAddress: BoundLoopbackAddress | undefined;
 
   public constructor(private readonly options: LoopbackCommandServerOptions) {
@@ -109,6 +112,7 @@ export class LoopbackCommandServer {
       if (parsed.origin !== origin) throw new Error("Allowed origins must be exact URL origins without paths");
     }
     this.productionRuntime = options.productionRuntime ?? new ProductionSessionRuntime();
+    this.providerRuntimeResolver = options.providerRuntimeResolver ?? new ProviderRuntimeResolver();
     this.server = createServer((request, response) => {
       void this.handle(request, response);
     });
