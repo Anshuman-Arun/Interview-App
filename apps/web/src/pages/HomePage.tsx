@@ -65,7 +65,7 @@ export function HomePage({
                 disabled={sessionEntryPending}
                 data-testid="start-session-btn"
               >
-                {sessionEntryPending ? "Opening room…" : "Enter interview"}
+                {sessionEntryPending ? "Opening room…" : "New interview"}
                 <span aria-hidden="true">↗</span>
               </button>
             ) : (
