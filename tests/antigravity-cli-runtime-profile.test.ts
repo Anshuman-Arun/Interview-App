@@ -80,6 +80,33 @@ describe("supervised Antigravity runtime profile", () => {
     }
   );
 
+  it.runIf(process.platform === "win32")(
+    "exposes account-quota billing proof only with the pinned isolated runtime profile",
+    async () => {
+      const source = createApplicationProviderAdapterRuntimeSource();
+      const runtime = source.resolveRuntime({
+        providerId: ANTIGRAVITY_CLI_PROVIDER_ID,
+        modelId: ANTIGRAVITY_CLI_MODEL_ID
+      });
+      const billingVerificationFactory = runtimeBillingVerificationFactory(runtime);
+      const now = new Date("2026-09-02T12:00:00.000Z");
+      const verification = billingVerificationFactory(now) as {
+        readonly billingClass?: unknown;
+        readonly adapterVersion?: unknown;
+        readonly spendImpossible?: unknown;
+        readonly verifiedAt?: unknown;
+      };
+
+      expect(verification).toMatchObject({
+        billingClass: "ACCOUNT_QUOTA",
+        spendImpossible: true,
+        verifiedAt: now.toISOString()
+      });
+      expect(typeof verification.adapterVersion).toBe("string");
+      await expect(source.drain()).resolves.toBeUndefined();
+    }
+  );
+
   it("pins a primary-only custom agent using only documented capability fields", () => {
     expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain(
       "name: interview-realizer"
@@ -123,6 +150,26 @@ describe("supervised Antigravity runtime profile", () => {
   });
 });
 
+
+function runtimeBillingVerificationFactory(
+  value: unknown
+): (now: Date) => unknown {
+  if (typeof value !== "object" || value === null) {
+    throw new Error("runtime unavailable");
+  }
+  const descriptor = Object.getOwnPropertyDescriptor(
+    value,
+    "billingVerificationFactory"
+  );
+  if (
+    descriptor === undefined
+    || !("value" in descriptor)
+    || typeof descriptor.value !== "function"
+  ) {
+    throw new Error("billing verification factory unavailable");
+  }
+  return descriptor.value as (now: Date) => unknown;
+}
 
 function hasRuntimeExecutor(value: unknown): boolean {
   if (typeof value !== "object" || value === null) return false;
