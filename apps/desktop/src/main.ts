@@ -650,6 +650,11 @@ function shutdownDesktop(): Promise<void> {
       failures.push(error);
     }
 
+    const activeModelInstall = modelInstallPromise;
+    if (activeModelInstall !== undefined) {
+      await activeModelInstall.catch(() => undefined);
+    }
+
     const currentLocalRuntime = localRuntime;
     if (currentLocalRuntime !== undefined) {
       try {
