@@ -27,20 +27,20 @@ import {
 
 const MAX_VISION_QUEUE_RESERVATIONS = 4;
 const MAX_VISION_WORKER_RESPONSE_BYTES = 16 * 1024;
-const VISION_WORKER_TIMEOUT_MS = 60_000;
+const VISION_WORKER_TIMEOUT_MS = 15_000;
 
 export const LOCAL_VISION_RUNTIME_VERSION =
-  "onnxruntime/1.29.0;numpy/2.5.2;pillow/12.3.0;tokenizers/0.23.1;vision/3";
+  "onnxruntime/1.29.0;numpy/2.5.2;pillow/12.3.0;tokenizers/0.23.1;vision/4";
 export const LOCAL_VISION_MODEL_IDENTITY = VISION_WORKER_MODEL_IDENTITY;
 
 const LOCAL_VISION_PROVENANCE: VisionBackendProvenance =
   VisionBackendProvenanceSchema.parse({
     backendId: "desktop-local-whiteboard-vision",
-    backendVersion: "1.1.0",
+    backendVersion: "1.2.0",
     providerId: "local-offline",
     modelId: "rapid-latex-ocr",
     modelVersion: `v0.0.0+${RAPID_LATEX_OCR_MODEL_SET_SHA256}`,
-    visionCapabilityVersion: "2"
+    visionCapabilityVersion: "3"
   });
 
 interface ParsedWorkerObservation {
