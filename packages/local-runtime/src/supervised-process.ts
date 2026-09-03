@@ -668,12 +668,6 @@ export class SupervisedProcessRunner {
     });
     child.stderr.on("data", (value: Buffer) => {
       if (!Buffer.isBuffer(value) || settled) return;
-      if (
-        process.platform === "win32"
-        && process.env["INTERVIEW_SUPERVISED_DEBUG_STDERR"] === "1"
-      ) {
-        process.stderr.write(value);
-      }
       if (stderrBytes + value.length > request.maxStderrBytes) {
         requestCleanup("OUTPUT_LIMIT_EXCEEDED");
         return;
