@@ -6,8 +6,12 @@ import {
 } from "../packages/domain/src/index.js";
 import {
   DeterministicFormalInterpretationProvider,
+  InterpretationCoordinator,
   SessionRuntimeRegistry,
   TurnCoordinator,
+  VerificationCoordinator,
+  createCommandEnvelope,
+  createCommittedTurnFormalInterpretationRequest,
   decidePedagogicalPolicy,
   echoInterpretationCandidateSource,
   providerResultFor,
@@ -413,4 +417,153 @@ describe("live Oxford formal reasoning analysis", () => {
       store.close();
     }
   });
+
+  it("resumes a crash-stranded direct verification idempotently without duplicating evidence", async () => {
+    const store = new SqliteEventStore(":memory:");
+    try {
+      const registry = new SessionRuntimeRegistry(store);
+      const sessionId = newSessionId();
+      const writer = registry.get(sessionId);
+      const turns = new TurnCoordinator(writer);
+      const selectedProblem = problem("oxford-euclid-primes");
+      await turns.startSession(selectedProblem);
+      const committed = await turns.commitInput("31 is congruent to 1 modulo 5.");
+
+      const profile = resolveOxfordFormalAnalysisProfile(selectedProblem);
+      if (profile === undefined) throw new Error("Missing Oxford formal profile");
+      const request = createCommittedTurnFormalInterpretationRequest(writer, {
+        inputEpisodeId: committed.inputEpisodeId,
+        turnId: committed.turnId,
+        target: profile.target,
+        allowedProtocols: profile.allowedProtocols,
+        requestId: "formal_analysis_recovery_fixture"
+      });
+      const verifier = profile.scopes[0]?.verifier;
+      if (verifier === undefined) throw new Error("Missing verifier scope");
+
+      const verification = new VerificationCoordinator(writer, profile.scopes);
+      const admitted = await verification.requestVerification({
+        inputEpisodeId: committed.inputEpisodeId,
+        turnId: committed.turnId,
+        verifier,
+        candidateFormalInterpretation: statementFor(request, "CORRECT"),
+        interpretationConfidence: 1,
+        evidenceKey: profile.target,
+        envelope: createCommandEnvelope({
+          sessionId,
+          producer: "interpretation-coordinator",
+          requestId: request.requestId,
+          correlationId: request.requestId,
+          inputEpisodeId: committed.inputEpisodeId,
+          turnId: committed.turnId,
+          contextEpoch: request.basis.contextEpoch,
+          sourceRevision: request.source.sourceRevision
+        })
+      });
+      expect(admitted.duplicate).toBe(false);
+      expect(writer.getState().verificationRequests[request.requestId]?.status).toBe("PENDING");
+
+      // A new coordinator models a restarted process with no in-memory request cache.
+      const restarted = new InterpretationCoordinator(
+        writer,
+        deterministicProvider("CORRECT"),
+        profile.scopes
+      );
+      const outcome = await restarted.interpretAndVerify(request);
+      expect(outcome).toMatchObject({
+        status: "ACCEPTED",
+        verificationStatus: "VERIFIED",
+        evidenceCommitted: true,
+        duplicateVerificationRequest: true
+      });
+
+      const state = writer.getState();
+      expect(Object.values(state.verificationRequests)).toHaveLength(1);
+      expect(state.studentEvidence[evidenceKeyToString(profile.target)]).toMatchObject({
+        value: "CORRECT",
+        inferenceConfidence: 1
+      });
+      expect(state.evidenceHistory[evidenceKeyToString(profile.target)]).toHaveLength(1);
+    } finally {
+      store.close();
+    }
+  });
+
+  it("rejects an interpretation-provider attempt to write authoritative evidence directly", async () => {
+    const store = new SqliteEventStore(":memory:");
+    try {
+      const registry = new SessionRuntimeRegistry(store);
+      const sessionId = newSessionId();
+      const writer = registry.get(sessionId);
+      const turns = new TurnCoordinator(writer);
+      const selectedProblem = problem("oxford-divisibility-chain");
+      await turns.startSession(selectedProblem);
+      const committed = await turns.commitInput("I have a numerical divisibility claim.");
+
+      const malicious: FormalInterpretationProvider = {
+        interpret(request) {
+          return Promise.resolve({
+            ...interpretationResult(request, "CORRECT"),
+            studentEvidence: {
+              value: "CORRECT",
+              authority: "provider"
+            }
+          });
+        }
+      };
+      const outcome = await new StudentReasoningAnalysisCoordinator(
+        new SessionRecoveryCoordinator(registry, store),
+        malicious
+      ).analyze({
+        sessionId,
+        turnId: committed.turnId,
+        inputEpisodeId: committed.inputEpisodeId
+      });
+
+      expect(outcome.status).toBe("ANALYZED");
+      if (outcome.status !== "ANALYZED") throw new Error("Expected analysis");
+      expect(outcome.interpretation).toMatchObject({
+        status: "INVALID_PROVIDER_OUTPUT",
+        reason: "MALFORMED_PROVIDER_RESULT"
+      });
+      expect(Object.values(writer.getState().verificationRequests)).toHaveLength(0);
+      expect(Object.values(writer.getState().studentEvidence)).toHaveLength(0);
+    } finally {
+      store.close();
+    }
+  });
+
+  it("continues a supported Oxford interview when no production interpretation provider is configured", async () => {
+    const store = new SqliteEventStore(":memory:");
+    try {
+      const registry = new SessionRuntimeRegistry(store);
+      const sessionId = newSessionId();
+      const writer = registry.get(sessionId);
+      const turns = new TurnCoordinator(writer);
+      const selectedProblem = problem("oxford-domino-chessboard");
+      await turns.startSession(selectedProblem);
+      const committed = await turns.commitInput("Maybe symmetry is useful here.");
+
+      const orchestrator = new ServerTurnOrchestrator(
+        new SessionRecoveryCoordinator(registry, store),
+        () => undefined
+      );
+      await orchestrator.orchestrateTurn({
+        sessionId,
+        turnId: committed.turnId,
+        inputEpisodeId: committed.inputEpisodeId,
+        studentText: "Maybe symmetry is useful here."
+      });
+
+      const state = writer.getState();
+      expect(Object.values(state.verificationRequests)).toHaveLength(0);
+      expect(state.pedagogicalActions[committed.turnId]).toMatchObject({
+        requiredAction: "PROBE_JUSTIFICATION"
+      });
+      expect(Object.values(state.generations)).toHaveLength(1);
+    } finally {
+      store.close();
+    }
+  });
+
 });
