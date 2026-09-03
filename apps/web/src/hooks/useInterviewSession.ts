@@ -3,9 +3,13 @@ import {
   RequestIdSchema,
   SessionIdSchema,
   type DeliveryId,
+  type InterviewCatalogEntry,
   type InterviewProblemPublicView,
+  type InterviewSessionConfiguration,
+  type ProviderLaunchOption,
   type RequestId,
   type SessionHistoryEntry,
+  type SessionConfigurationSource,
   type SessionId,
   type SessionStatus,
   type StoredSessionSummary
@@ -92,8 +96,16 @@ export interface UseInterviewSessionResult {
   readonly isStreaming: boolean;
   readonly sessionStatus: SessionStatus;
   readonly availableSessions: readonly StoredSessionSummary[];
+  readonly interviewCatalog: readonly InterviewCatalogEntry[];
+  readonly interviewCatalogLoading: boolean;
+  readonly interviewCatalogError: string | null;
+  readonly providerOptions: readonly ProviderLaunchOption[];
+  readonly providerOptionsLoading: boolean;
+  readonly providerOptionsError: string | null;
   readonly transcript: readonly TranscriptItem[];
   readonly problem: InterviewProblemPublicView | null;
+  readonly configuration: InterviewSessionConfiguration | null;
+  readonly configurationSource: SessionConfigurationSource | null;
   readonly sequence: number;
   readonly contextEpoch: number;
   readonly error: string | null;
@@ -104,6 +116,8 @@ export interface UseInterviewSessionResult {
   readonly setBaseUrl: (url: string) => void;
   readonly fetchAvailableSessions: () => Promise<readonly StoredSessionSummary[]>;
   readonly fetchAvailableSessionsStrict: () => Promise<readonly StoredSessionSummary[]>;
+  readonly refreshInterviewCatalog: () => Promise<readonly InterviewCatalogEntry[]>;
+  readonly refreshProviderOptions: () => Promise<readonly ProviderLaunchOption[]>;
   readonly readSessionEvaluation: (
     sessionId: SessionId,
     signal?: AbortSignal
@@ -116,6 +130,10 @@ export interface UseInterviewSessionResult {
     signal?: AbortSignal
   ) => Promise<SessionHistoryReadResponse>;
   readonly startSession: (customSessionId?: SessionId) => Promise<void>;
+  readonly startConfiguredSession: (
+    configuration: InterviewSessionConfiguration,
+    customSessionId?: SessionId
+  ) => Promise<void>;
   readonly recoverSession: (sessionId: SessionId) => Promise<SessionStatus | null>;
   readonly pauseSession: () => void;
   readonly resumePausedSession: () => Promise<void>;
