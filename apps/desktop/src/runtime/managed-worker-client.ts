@@ -151,7 +151,6 @@ export class ManagedModelWorkerClient {
           readWorkerErrorCode(parsed)
         );
       }
-      this.uncertainRecycleCounts.delete(recoveryScopeForPath(pathname));
       return parsed;
     } catch (error) {
       if (controller.signal.reason === timeoutReason) {
@@ -167,6 +166,10 @@ export class ManagedModelWorkerClient {
       clearTimeout(timer);
       unlink();
     }
+  }
+
+  public markHealthy(scope: ManagedWorkerRecoveryScope): void {
+    this.uncertainRecycleCounts.delete(scope);
   }
 
   public recycleAfterUncertainRequest(
@@ -245,15 +248,6 @@ export class ManagedModelWorkerClient {
     }
     return status;
   }
-}
-
-function recoveryScopeForPath(
-  pathname: "/v1/vad" | "/v1/stt" | "/v1/tts" | "/v1/tts/cancel"
-): ManagedWorkerRecoveryScope {
-  if (pathname === "/v1/vad") return "vad";
-  if (pathname === "/v1/stt") return "stt";
-  if (pathname === "/v1/tts") return "tts";
-  return "tts-cancel";
 }
 
 function readWorkerErrorCode(value: unknown): string | undefined {
