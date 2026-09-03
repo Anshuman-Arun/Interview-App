@@ -146,11 +146,12 @@ function resultFor(
 }
 
 function executorReturning(
-  _request: FormalInterpretationRequest,
+  request: FormalInterpretationRequest,
   outputFactory: () => unknown,
   inspect?: (input: SupervisedCliExecutionRequest) => void,
   responseSuffix = ""
 ): SupervisedCliExecutor {
+  void request;
   return Object.freeze({
     async execute(input: SupervisedCliExecutionRequest) {
       inspect?.(input);
@@ -481,15 +482,25 @@ describe("provider-backed Oxford formal interpretation", () => {
       const executor: SupervisedCliExecutor = Object.freeze({
         execute(input: SupervisedCliExecutionRequest) {
           markStarted();
-          return new Promise<never>((_resolve, reject) => {
+          return new Promise((resolve) => {
             if (input.signal.aborted) {
               sawAbort = true;
-              reject(new Error("aborted"));
+              resolve({
+                exitCode: 1,
+                stdout: "",
+                stdoutBytes: 0,
+                stderrBytes: 0
+              });
               return;
             }
             input.signal.addEventListener("abort", () => {
               sawAbort = true;
-              reject(new Error("aborted"));
+              resolve({
+                exitCode: 1,
+                stdout: "",
+                stdoutBytes: 0,
+                stderrBytes: 0
+              });
             }, { once: true });
           });
         }
