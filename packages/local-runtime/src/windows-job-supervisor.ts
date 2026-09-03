@@ -661,7 +661,7 @@ Write-InterviewSupervisorStage "PS_METHOD_OK"
 Write-InterviewSupervisorStage "PS_ENV_OK"
 
 try {
-  $invokeArguments = New-Object object[] 7
+  $invokeArguments = [object[]]::new(7)
   $invokeArguments[0] = [string]$executable
   $invokeArguments[1] = [string]$argumentsPacked
   $invokeArguments[2] = $currentDirectory
