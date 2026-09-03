@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Production local speech/TTS worker for Interview App.
+"""Production local speech/TTS/vision worker for Interview App.
 
 The desktop process owns lifecycle and model paths. This worker only binds to
 loopback, requires a per-process bearer token, emits one bounded readiness
@@ -29,13 +29,15 @@ WORKER_COMPONENT_VERSION = "2"
 WORKER_PROTOCOL_VERSION = 2
 MOONSHINE_VERSION = "0.1.5"
 ONNXRUNTIME_VERSION = "1.29.0"
-PYTHON_DEPENDENCY_LOCK_VERSION = "1"
+PYTHON_DEPENDENCY_LOCK_VERSION = "2"
 MIN_PYTHON = (3, 12)
 MAX_PYTHON_EXCLUSIVE = (3, 14)
 EXPECTED_DISTRIBUTIONS = {
     "moonshine-voice": "0.1.5",
     "onnxruntime": "1.29.0",
     "numpy": "2.5.2",
+    "Pillow": "12.3.0",
+    "tokenizers": "0.23.2",
     "sounddevice": "0.5.6",
     "requests": "2.34.2",
     "tqdm": "4.70.0",
@@ -61,6 +63,11 @@ MAX_WORDS = 1_000
 MAX_TTS_TEXT_CHARS = 4_000
 MAX_TTS_SECONDS = 60
 MAX_TTS_CANCELLATION_TOMBSTONES = 256
+MAX_VISION_PNG_BYTES = 8 * 1024 * 1024
+MAX_VISION_DIMENSION = 4096
+MAX_VISION_PIXELS = 16 * 1024 * 1024
+MAX_VISION_INTERPRETATION_CHARS = 1000
+MAX_VISION_DECODE_TOKENS = 256
 MAX_VAD_STREAMS = 64
 MAX_VAD_EVICTED_STREAM_TOMBSTONES = 4_096
 MAX_SPEECH_NATIVE_RESERVATIONS = 4
@@ -74,6 +81,9 @@ SPEECH_MODEL_IDENTITY = (
     "silero-v6.2.1@7e30209a3e901f9842f81b225f3e93d8199902b1"
 )
 TTS_MODEL_IDENTITY = "kokoro-af-heart+35d84fc0eb2d7451da9973c990e8a77066abb105"
+VISION_MODEL_IDENTITY = (
+    "rapidlatex-v0.0.0@68680550355330b4ac68acdb947e776bc11f46d7+geometry-v1"
+)
 
 SPEECH_ASSET_SPECS = {
     "decoder_model_merged.ort": (
@@ -93,6 +103,25 @@ SILERO_ASSET_SPEC = (
     2_327_524,
     "1a153a22f4509e292a94e67d6f9b85e8deb25b4988682b7e174c65279d8788e3",
 )
+VISION_ASSET_SPECS = {
+    "rapidlatex/image_resizer.onnx": (
+        38_967_751,
+        "e0b075c39700f64d50400f39c8fc186bbb3b5d84d31864008313f376603aca9d",
+    ),
+    "rapidlatex/encoder.onnx": (
+        89_008_136,
+        "01bf5dc25539ca0cd5b1bd29296ea495977a6ba5f629dc4178277809d26e5e7d",
+    ),
+    "rapidlatex/decoder.onnx": (
+        50_952_726,
+        "bd695497bf1b22279b7626f5916c79226e1e244c84355f8da7edfd2d921d0072",
+    ),
+    "rapidlatex/tokenizer.json": (
+        24_174,
+        "0000000000000000000000000000000000000000000000000000000000000000",
+    ),
+}
+
 TTS_ASSET_SPECS = {
     "en_us/dict_filtered_heteronyms.tsv": (
         2_900_453,
@@ -263,6 +292,8 @@ def require_runtime_environment() -> None:
         import moonshine_voice
         import numpy  # noqa: F401
         import onnxruntime as ort
+        import PIL  # noqa: F401
+        import tokenizers  # noqa: F401
         from moonshine_voice.moonshine_api import ModelArch  # noqa: F401
         from moonshine_voice.transcriber import Transcriber  # noqa: F401
         from moonshine_voice.tts import TextToSpeech  # noqa: F401
@@ -663,6 +694,383 @@ class TtsRuntime:
         return {"accepted": True}
 
 
+class VisionRuntime:
+    """Bounded, local-only RapidLaTeXOCR ONNX inference plus geometry heuristics."""
+
+    _OBSERVATION_KINDS = {
+        "ANY",
+        "TEXT",
+        "EQUATION",
+        "DIAGRAM_RELATION",
+        "ARROW",
+        "LABEL",
+        "GENERAL_BOARD_DESCRIPTION",
+    }
+
+    def __init__(self, *, asset_root: Path) -> None:
+        import numpy as np
+        import onnxruntime as ort
+        from PIL import Image
+        from tokenizers import Tokenizer
+
+        if getattr(ort, "__version__", None) != ONNXRUNTIME_VERSION:
+            raise RuntimeError("onnxruntime version mismatch")
+        providers = ["CPUExecutionProvider"]
+        options = ort.SessionOptions()
+        options.enable_cpu_mem_arena = False
+        options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        options.inter_op_num_threads = 1
+
+        rapid_root = asset_root / "rapidlatex"
+        self._np = np
+        self._Image = Image
+        self._resizer = ort.InferenceSession(
+            str(rapid_root / "image_resizer.onnx"),
+            providers=providers,
+            sess_options=options,
+        )
+        self._encoder = ort.InferenceSession(
+            str(rapid_root / "encoder.onnx"),
+            providers=providers,
+            sess_options=options,
+        )
+        self._decoder = ort.InferenceSession(
+            str(rapid_root / "decoder.onnx"),
+            providers=providers,
+            sess_options=options,
+        )
+        self._tokenizer = Tokenizer.from_file(str(rapid_root / "tokenizer.json"))
+        self._native_slot = threading.BoundedSemaphore(1)
+        self.runtime_version = (
+            f"onnxruntime/{ONNXRUNTIME_VERSION};pillow/12.3.0;"
+            f"tokenizers/0.23.2;rapidlatex-adapter/1;deps/{PYTHON_DEPENDENCY_LOCK_VERSION}"
+        )
+
+    def close(self) -> None:
+        return
+
+    def analyze(self, body: dict[str, Any]) -> dict[str, Any]:
+        request_id = body.get("requestId")
+        kind = body.get("requestedObservationKind")
+        width = body.get("width")
+        height = body.get("height")
+        snapshot_hash = body.get("snapshotHash")
+        png_base64 = body.get("pngBase64")
+        if not isinstance(request_id, str) or not (1 <= len(request_id) <= 160):
+            raise ProtocolError(400, "INVALID_REQUEST_ID")
+        if kind not in self._OBSERVATION_KINDS:
+            raise ProtocolError(400, "INVALID_OBSERVATION_KIND")
+        if (
+            isinstance(width, bool)
+            or not isinstance(width, int)
+            or isinstance(height, bool)
+            or not isinstance(height, int)
+            or width < 1
+            or height < 1
+            or width > MAX_VISION_DIMENSION
+            or height > MAX_VISION_DIMENSION
+            or width * height > MAX_VISION_PIXELS
+        ):
+            raise ProtocolError(400, "INVALID_IMAGE_DIMENSIONS")
+        if (
+            not isinstance(snapshot_hash, str)
+            or len(snapshot_hash) != 64
+            or any(ch not in "0123456789abcdef" for ch in snapshot_hash)
+        ):
+            raise ProtocolError(400, "INVALID_SNAPSHOT_HASH")
+        raw = self._decode_png_base64(png_base64)
+        if hashlib.sha256(raw).hexdigest() != snapshot_hash:
+            raise ProtocolError(409, "SNAPSHOT_HASH_MISMATCH")
+
+        image = self._open_png(raw, width, height)
+        if not self._native_slot.acquire(blocking=False):
+            raise ProtocolError(429, "VISION_BUSY")
+        try:
+            geometry = self._geometry_observation(image, kind)
+            if geometry is not None:
+                return geometry
+            latex, quality = self._recognize_formula(image)
+        finally:
+            self._native_slot.release()
+
+        if not latex:
+            return {
+                "observationKind": "GENERAL_BOARD_DESCRIPTION"
+                if kind == "ANY"
+                else kind,
+                "interpretation": "Visible board region is illegible or contains no confidently recognized mathematical text.",
+                "confidenceClass": "LOW",
+            }
+        if len(latex) > MAX_VISION_INTERPRETATION_CHARS - 24:
+            latex = latex[: MAX_VISION_INTERPRETATION_CHARS - 27] + "..."
+
+        output_kind = kind
+        if kind == "ANY":
+            output_kind = "EQUATION" if self._looks_mathematical(latex) else "LABEL"
+        if output_kind == "EQUATION":
+            interpretation = f"Visible expression: {latex}"
+        elif output_kind in {"TEXT", "LABEL"}:
+            interpretation = f"Visible label/text: {latex}"
+        else:
+            interpretation = f"Visible board content: {latex}"
+
+        confidence_class = "HIGH" if (
+            quality["eos"]
+            and quality["balanced"]
+            and quality["meanMargin"] >= 1.5
+            and len(latex) <= 512
+        ) else "MEDIUM"
+        return {
+            "observationKind": output_kind,
+            "interpretation": interpretation,
+            "confidenceClass": confidence_class,
+        }
+
+    def _decode_png_base64(self, value: Any) -> bytes:
+        if (
+            not isinstance(value, str)
+            or len(value) > ((MAX_VISION_PNG_BYTES + 2) // 3) * 4 + 8
+        ):
+            raise ProtocolError(413, "VISION_IMAGE_TOO_LARGE")
+        try:
+            raw = base64.b64decode(value, validate=True)
+        except Exception as exc:
+            raise ProtocolError(400, "INVALID_VISION_IMAGE") from exc
+        if (
+            not raw
+            or len(raw) > MAX_VISION_PNG_BYTES
+            or base64.b64encode(raw).decode("ascii") != value
+        ):
+            raise ProtocolError(400, "INVALID_VISION_IMAGE")
+        if raw[:8] != b"\x89PNG\r\n\x1a\n":
+            raise ProtocolError(400, "INVALID_VISION_IMAGE")
+        return raw
+
+    def _open_png(self, raw: bytes, width: int, height: int):
+        import io
+        from PIL import Image, ImageOps, UnidentifiedImageError
+
+        previous_limit = Image.MAX_IMAGE_PIXELS
+        Image.MAX_IMAGE_PIXELS = MAX_VISION_PIXELS
+        try:
+            try:
+                image = Image.open(io.BytesIO(raw))
+                if image.format != "PNG" or image.size != (width, height):
+                    raise ProtocolError(400, "INVALID_VISION_IMAGE")
+                if image.n_frames != 1:
+                    raise ProtocolError(400, "INVALID_VISION_IMAGE")
+                image.load()
+            except ProtocolError:
+                raise
+            except (UnidentifiedImageError, OSError, ValueError) as exc:
+                raise ProtocolError(400, "INVALID_VISION_IMAGE") from exc
+        finally:
+            Image.MAX_IMAGE_PIXELS = previous_limit
+
+        if "A" in image.getbands():
+            rgba = image.convert("RGBA")
+            background = Image.new("RGBA", rgba.size, (255, 255, 255, 255))
+            background.alpha_composite(rgba)
+            image = background.convert("L")
+        else:
+            image = ImageOps.grayscale(image)
+        arr = self._np.asarray(image, dtype=self._np.uint8)
+        if float(arr.mean()) < 127.5:
+            image = ImageOps.invert(image)
+        return image
+
+    def _geometry_observation(self, image: Any, requested_kind: str):
+        np = self._np
+        small = image.copy()
+        small.thumbnail((256, 256), self._Image.Resampling.BILINEAR)
+        gray = np.asarray(small, dtype=np.uint8)
+        ink = gray < 180
+        count = int(ink.sum())
+        if count < 8:
+            return {
+                "observationKind": "GENERAL_BOARD_DESCRIPTION"
+                if requested_kind == "ANY"
+                else requested_kind,
+                "interpretation": "Visible board region is blank or too faint to interpret.",
+                "confidenceClass": "LOW",
+            }
+        ys, xs = np.nonzero(ink)
+        span_w = int(xs.max() - xs.min() + 1)
+        span_h = int(ys.max() - ys.min() + 1)
+        aspect = span_w / max(1, span_h)
+        row_peak = float(ink.sum(axis=1).max()) / max(1, span_w)
+        col_peak = float(ink.sum(axis=0).max()) / max(1, span_h)
+        fill = count / max(1, span_w * span_h)
+
+        arrow_like = aspect >= 2.4 and row_peak >= 0.42 and fill <= 0.28
+        diagram_like = (
+            0.45 <= aspect <= 2.2
+            and span_w >= 28
+            and span_h >= 28
+            and fill <= 0.22
+            and max(row_peak, col_peak) >= 0.20
+        )
+
+        if requested_kind == "ARROW" or (requested_kind == "ANY" and arrow_like):
+            if not arrow_like:
+                return {
+                    "observationKind": "ARROW",
+                    "interpretation": "No sufficiently clear arrow-like connector is visible in this crop.",
+                    "confidenceClass": "LOW",
+                }
+            return {
+                "observationKind": "ARROW",
+                "interpretation": "Visible long arrow-like connector between board regions.",
+                "confidenceClass": "MEDIUM",
+            }
+        if requested_kind == "DIAGRAM_RELATION" or (
+            requested_kind == "ANY" and diagram_like
+        ):
+            if not diagram_like:
+                return {
+                    "observationKind": "DIAGRAM_RELATION",
+                    "interpretation": "Diagram structure is present but its relation is not reliably legible.",
+                    "confidenceClass": "LOW",
+                }
+            return {
+                "observationKind": "DIAGRAM_RELATION",
+                "interpretation": "Visible bounded diagram-like structure with connected or aligned marks.",
+                "confidenceClass": "MEDIUM",
+            }
+        return None
+
+    def _recognize_formula(self, image: Any) -> tuple[str, dict[str, Any]]:
+        np = self._np
+        input_image = self._formula_crop(image)
+        r = 1.0
+        w, h = input_image.size
+        final = None
+        for _ in range(10):
+            current_h = max(1, int(h * r))
+            final, padded = self._formula_preprocess(input_image, r, w, current_h)
+            inputs = {self._resizer.get_inputs()[0].name: final.astype(np.float32)}
+            resizer_output = self._resizer.run(None, inputs)[0]
+            next_w = (int(np.argmax(resizer_output, axis=-1).reshape(-1)[0]) + 1) * 32
+            if next_w == padded.size[0]:
+                break
+            r = next_w / padded.size[0]
+            w = next_w
+        if final is None:
+            raise RuntimeError("RapidLaTeX preprocessing produced no model input")
+
+        encoder_input = self._encoder.get_inputs()[0].name
+        context = self._encoder.run(None, {encoder_input: final.astype(np.float32)})[0]
+        tokens = np.asarray([[1]], dtype=np.int64)
+        mask = np.ones_like(tokens, dtype=bool)
+        margins: list[float] = []
+        eos = False
+        for _ in range(MAX_VISION_DECODE_TOKENS):
+            decoder_inputs = self._decoder.get_inputs()
+            feeds = {
+                decoder_inputs[0].name: tokens[:, -512:].astype(np.int64),
+                decoder_inputs[1].name: mask[:, -512:],
+                decoder_inputs[2].name: context,
+            }
+            logits = np.asarray(self._decoder.run(None, feeds)[0])[:, -1, :]
+            row = logits[0]
+            if row.size < 2 or not np.isfinite(row).all():
+                raise RuntimeError("RapidLaTeX decoder returned invalid logits")
+            best_two = np.partition(row, -2)[-2:]
+            margins.append(float(best_two.max() - best_two.min()))
+            token = int(np.argmax(row))
+            tokens = np.concatenate(
+                (tokens, np.asarray([[token]], dtype=np.int64)), axis=1
+            )
+            mask = np.pad(mask, ((0, 0), (0, 1)), constant_values=True)
+            if token == 2:
+                eos = True
+                break
+
+        decoded = self._tokenizer.decode(tokens[0, 1:].tolist(), skip_special_tokens=True)
+        latex = self._normalize_latex(decoded)
+        balanced = self._balanced_latex(latex)
+        return latex, {
+            "eos": eos,
+            "balanced": balanced,
+            "meanMargin": sum(margins) / len(margins) if margins else 0.0,
+        }
+
+    def _formula_crop(self, image: Any):
+        np = self._np
+        arr = np.asarray(image, dtype=np.uint8)
+        ink = arr < 245
+        if not bool(ink.any()):
+            return self._Image.new("L", (32, 32), 255)
+        ys, xs = np.nonzero(ink)
+        crop = image.crop((
+            int(xs.min()),
+            int(ys.min()),
+            int(xs.max()) + 1,
+            int(ys.max()) + 1,
+        ))
+        return self._minmax_formula(self._pad_formula(crop))
+
+    def _pad_formula(self, image: Any):
+        width, height = image.size
+        out_w = max(32, ((width + 31) // 32) * 32)
+        out_h = max(32, ((height + 31) // 32) * 32)
+        padded = self._Image.new("L", (out_w, out_h), 255)
+        padded.paste(image, (0, 0))
+        return padded
+
+    def _minmax_formula(self, image: Any):
+        width, height = image.size
+        scale = min(1.0, 672 / width, 192 / height)
+        if scale < 1.0:
+            image = image.resize(
+                (max(1, int(width * scale)), max(1, int(height * scale))),
+                self._Image.Resampling.BILINEAR,
+            )
+        width, height = image.size
+        if width < 32 or height < 32:
+            padded = self._Image.new("L", (max(32, width), max(32, height)), 255)
+            padded.paste(image, (0, 0))
+            image = padded
+        return image
+
+    def _formula_preprocess(self, input_image: Any, ratio: float, width: int, height: int):
+        resize_mode = (
+            self._Image.Resampling.BILINEAR
+            if ratio > 1
+            else self._Image.Resampling.LANCZOS
+        )
+        resized = input_image.resize((max(1, width), max(1, height)), resize_mode)
+        padded = self._minmax_formula(self._pad_formula(resized))
+        gray = self._np.asarray(padded, dtype=self._np.float32)
+        normalized = (gray - (0.7931 * 255.0)) / (0.1738 * 255.0)
+        return normalized[None, None, :, :].astype(self._np.float32), padded
+
+    @staticmethod
+    def _normalize_latex(value: str) -> str:
+        normalized = value.replace("[EOS]", "").replace("[BOS]", "").replace("[PAD]", "")
+        normalized = normalized.replace("Ġ", " ").strip()
+        if any(ord(ch) < 32 and ch not in "\t\n" for ch in normalized):
+            return ""
+        return normalized
+
+    @staticmethod
+    def _balanced_latex(value: str) -> bool:
+        balance = 0
+        for ch in value:
+            if ch == "{":
+                balance += 1
+            elif ch == "}":
+                balance -= 1
+                if balance < 0:
+                    return False
+        return balance == 0
+
+    @staticmethod
+    def _looks_mathematical(value: str) -> bool:
+        markers = ("=", "\\", "^", "_", "+", "-", "<", ">", "\\frac", "\\sum")
+        return any(marker in value for marker in markers)
+
+
 class WorkerServer(ThreadingHTTPServer):
     daemon_threads = False
     block_on_close = True
@@ -730,6 +1138,8 @@ class Handler(BaseHTTPRequestHandler):
                 output = self.server.runtime.synthesize(body)
             elif self.server.component == "tts" and self.path == "/v1/tts/cancel":
                 output = self.server.runtime.cancel(body)
+            elif self.server.component == "vision" and self.path == "/v1/vision":
+                output = self.server.runtime.analyze(body)
             else:
                 raise ProtocolError(404, "NOT_FOUND")
             self._send_json(200, output)
@@ -780,12 +1190,13 @@ class Handler(BaseHTTPRequestHandler):
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--component", choices=("speech", "tts"))
+    parser.add_argument("--component", choices=("speech", "tts", "vision"))
     parser.add_argument("--check-runtime", action="store_true")
     parser.add_argument("--port", type=int, default=0)
     parser.add_argument("--silero-model")
     parser.add_argument("--moonshine-model-root")
     parser.add_argument("--tts-asset-root")
+    parser.add_argument("--vision-asset-root")
     args = parser.parse_args()
     if args.port != 0:
         raise RuntimeError("production worker requires dynamic loopback port allocation")
@@ -795,6 +1206,7 @@ def parse_args() -> argparse.Namespace:
             or args.silero_model is not None
             or args.moonshine_model_root is not None
             or args.tts_asset_root is not None
+            or args.vision_asset_root is not None
         ):
             raise RuntimeError("runtime check does not accept worker/model arguments")
     elif args.component is None:
@@ -865,7 +1277,7 @@ def main() -> int:
         )
         model_identity = SPEECH_MODEL_IDENTITY
         capabilities = ["vad", "stt"]
-    else:
+    elif args.component == "tts":
         if not args.tts_asset_root:
             raise RuntimeError("TTS asset root is required")
         tts_asset_root = require_directory(args.tts_asset_root, "TTS asset root")
@@ -873,6 +1285,16 @@ def main() -> int:
         runtime = TtsRuntime(asset_root=tts_asset_root)
         model_identity = TTS_MODEL_IDENTITY
         capabilities = ["tts"]
+    else:
+        if sys.platform != "win32":
+            raise RuntimeError("production vision runtime is verified only on Windows x64")
+        if not args.vision_asset_root:
+            raise RuntimeError("vision asset root is required")
+        vision_asset_root = require_directory(args.vision_asset_root, "vision asset root")
+        verify_asset_tree(vision_asset_root, VISION_ASSET_SPECS, "vision asset root")
+        runtime = VisionRuntime(asset_root=vision_asset_root)
+        model_identity = VISION_MODEL_IDENTITY
+        capabilities = ["vision"]
 
     server = WorkerServer(("127.0.0.1", 0), Handler, token=token, component=args.component, runtime=runtime)
     port = int(server.server_address[1])
