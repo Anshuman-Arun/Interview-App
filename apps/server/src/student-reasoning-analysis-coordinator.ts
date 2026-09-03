@@ -215,7 +215,9 @@ export class StudentReasoningAnalysisCoordinator {
     }
 
     while (this.contexts.size >= MAX_STUDENT_REASONING_ANALYSIS_SESSION_CONTEXTS) {
-      const evictable = [...this.contexts.entries()].find(([, context]) => context.active.size === 0);
+      const evictable = [...this.contexts.entries()].find(([, context]) =>
+        context.active.size === 0 && !context.coordinator.hasActiveWork()
+      );
       if (evictable === undefined) return undefined;
       this.contexts.delete(evictable[0]);
     }
