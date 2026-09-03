@@ -50,7 +50,7 @@ $beforeWorkers = @(Get-WorkerPids)
 $oldPython = $env:INTERVIEW_LOCAL_PYTHON
 $oldSmokeUserData = $env:INTERVIEW_PACKAGED_SMOKE_USER_DATA
 $smoke = $null
-$host = $null
+$instanceHost = $null
 $probe = $null
 try {
   $env:INTERVIEW_LOCAL_PYTHON = Join-Path $smokeRoot "missing-python.exe"
@@ -69,9 +69,9 @@ try {
     throw "Packaged smoke did not persist SQLite data under isolated Unicode userData"
   }
 
-  $host = Start-Process -FilePath $exe -ArgumentList "--packaged-single-instance-smoke-host" -PassThru
+  $instanceHost = Start-Process -FilePath $exe -ArgumentList "--packaged-single-instance-smoke-host" -PassThru
   Start-Sleep -Seconds 5
-  if ($host.HasExited) {
+  if ($instanceHost.HasExited) {
     throw "Single-instance smoke host exited before the probe"
   }
 
@@ -79,15 +79,15 @@ try {
   if (-not $probe.WaitForExit(15000)) {
     throw "Second packaged instance did not yield the single-instance lock"
   }
-  if (-not $host.WaitForExit(30000)) {
+  if (-not $instanceHost.WaitForExit(30000)) {
     throw "Single-instance host did not shut down cleanly after the probe"
   }
-  if ($host.ExitCode -ne 0 -or $probe.ExitCode -ne 0) {
+  if ($instanceHost.ExitCode -ne 0 -or $probe.ExitCode -ne 0) {
     throw "Single-instance smoke process failed"
   }
 } finally {
   Stop-TrackedProcess $probe
-  Stop-TrackedProcess $host
+  Stop-TrackedProcess $instanceHost
   Stop-TrackedProcess $smoke
   $env:INTERVIEW_LOCAL_PYTHON = $oldPython
   $env:INTERVIEW_PACKAGED_SMOKE_USER_DATA = $oldSmokeUserData
