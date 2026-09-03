@@ -149,6 +149,7 @@ describe("live Oxford formal reasoning analysis", () => {
         });
         const verification = Object.values(state.verificationRequests)[0];
         expect(verification?.sourceGenerationId).toBeUndefined();
+        expect(verification?.boardRevisionIndependent).toBe(true);
         expect(verification?.result?.status).toBe("VERIFIED");
         expect(state.generations).toEqual({});
         expect(state.deliveries).toEqual({});
@@ -450,6 +451,7 @@ describe("live Oxford formal reasoning analysis", () => {
         candidateFormalInterpretation: statementFor(request, "CORRECT"),
         interpretationConfidence: 1,
         evidenceKey: profile.target,
+        boardRevisionIndependent: true,
         envelope: createCommandEnvelope({
           sessionId,
           producer: "interpretation-coordinator",
@@ -614,6 +616,7 @@ describe("live Oxford formal reasoning analysis", () => {
         interpretationConfidence: 1,
         evidenceKey: profile.target,
         expectedProblemVersion: selectedProblem.version,
+        boardRevisionIndependent: true,
         envelope: staleEnvelope
       })).rejects.toThrow("Verification source basis changed before durable admission");
       expect(Object.values(writer.getState().verificationRequests)).toHaveLength(0);
@@ -666,6 +669,7 @@ describe("live Oxford formal reasoning analysis", () => {
         interpretationConfidence: 1,
         evidenceKey: profile.target,
         expectedProblemVersion: selectedProblem.version,
+        boardRevisionIndependent: true,
         envelope
       });
 
@@ -896,6 +900,7 @@ describe("live Oxford formal reasoning analysis", () => {
         interpretationConfidence: 1,
         evidenceKey: profile.target,
         expectedProblemVersion: selectedProblem.version,
+        boardRevisionIndependent: true,
         envelope: createCommandEnvelope({
           sessionId,
           producer: "interpretation-coordinator",
@@ -964,6 +969,7 @@ describe("live Oxford formal reasoning analysis", () => {
         interpretationConfidence: 1,
         evidenceKey: profile.target,
         expectedProblemVersion: selectedProblem.version,
+        boardRevisionIndependent: true,
         envelope: createCommandEnvelope({
           sessionId,
           producer: "interpretation-coordinator",
