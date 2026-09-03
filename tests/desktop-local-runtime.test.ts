@@ -610,6 +610,42 @@ describe("desktop local model runtime", () => {
     expect(recycledInstance).toBe(workerInstance);
   });
 
+  it("counts concurrent uncertainty from one worker instance only once", async () => {
+    const token = "c".repeat(64);
+    const runtime = fixtureManager(
+      "speech-concurrent-recycle-budget",
+      "speech",
+      "fixture-speech-1",
+      token
+    );
+    await runtime.start("speech-concurrent-recycle-budget");
+    const client = new ManagedModelWorkerClient(
+      runtime,
+      "speech-concurrent-recycle-budget",
+      "speech",
+      token
+    );
+
+    const firstInstance = client.workerInstanceIdentity();
+    const first = client.recycleAfterUncertainRequest(firstInstance, "vad");
+    const second = client.recycleAfterUncertainRequest(firstInstance, "vad");
+    const third = client.recycleAfterUncertainRequest(firstInstance, "vad");
+    expect(second).toBe(first);
+    expect(third).toBe(first);
+    await expect(first).resolves.toBeUndefined();
+
+    await expect(client.recycleAfterUncertainRequest(
+      client.workerInstanceIdentity(),
+      "vad"
+    )).resolves.toBeUndefined();
+
+    await expect(client.recycleAfterUncertainRequest(
+      client.workerInstanceIdentity(),
+      "vad"
+    )).rejects.toBeInstanceOf(ManagedWorkerRecoveryExhaustedError);
+    expect(runtime.getStatus("speech-concurrent-recycle-budget").state).toBe("STOPPED");
+  }, 20_000);
+
   it("bounds consecutive uncertain worker recycles and stops after exhaustion", async () => {
     const token = "3".repeat(64);
     const runtime = fixtureManager(
