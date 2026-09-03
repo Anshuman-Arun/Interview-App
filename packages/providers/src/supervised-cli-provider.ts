@@ -73,8 +73,16 @@ export class SupervisedCliReasoningProvider implements ReasoningProvider {
 
   public constructor(definition: SupervisedCliProviderDefinition) {
     const snapshot = snapshotProviderDefinition(definition);
+    let safeCapabilities: unknown;
+    try {
+      safeCapabilities = snapshotUntrustedModelCapabilities(
+        snapshot.capabilities
+      );
+    } catch {
+      throw new Error("Supervised CLI provider definition is invalid");
+    }
     const parsedCapabilities = ModelCapabilitiesSchema.safeParse(
-      snapshot.capabilities
+      safeCapabilities
     );
     const parsedProviderId = ProviderRuntimeNameSchema.safeParse(
       snapshot.providerId
