@@ -38,24 +38,41 @@ const REMOTE_NO_METERED_POLICY = Object.freeze({
 });
 
 describe("production provider runtime resolution", () => {
-  it("rejects ambiguous composition instead of silently ignoring a provider runtime resolver", async () => {
+  it("requires custom orchestrator launch metadata to share its provider resolver", async () => {
     const store = new SqliteEventStore(":memory:");
     const registry = new SessionRuntimeRegistry(store);
     try {
       const sessions = new SessionRecoveryCoordinator(registry, store);
-      const orchestrator = new ServerTurnOrchestrator(sessions, () => undefined);
+      const sharedResolver = new ProviderRuntimeResolver();
+      const orchestrator = new ServerTurnOrchestrator(
+        sessions,
+        () => undefined,
+        undefined,
+        sharedResolver
+      );
+      const security = {
+        host: "127.0.0.1" as const,
+        allowedOrigins: new Set(["http://127.0.0.1:5173"]),
+        clientToken: "provider-runtime-composition-token-long-enough"
+      };
 
       expect(() => new LocalInterviewTransportRuntime({
-        security: {
-          host: "127.0.0.1",
-          allowedOrigins: new Set(["http://127.0.0.1:5173"]),
-          clientToken: "provider-runtime-composition-token-long-enough"
-        },
+        security,
         registry,
         store,
         orchestrator,
         providerRuntimeResolver: new ProviderRuntimeResolver()
-      })).toThrow(/both an orchestrator and a provider runtime resolver/u);
+      })).toThrow(/must share the same provider runtime resolver/u);
+
+      const aligned = new LocalInterviewTransportRuntime({
+        security,
+        registry,
+        store,
+        orchestrator,
+        providerRuntimeResolver: sharedResolver
+      });
+      expect(aligned.orchestrator).toBe(orchestrator);
+      await aligned.stop();
     } finally {
       await registry.closeAll();
       store.close();
