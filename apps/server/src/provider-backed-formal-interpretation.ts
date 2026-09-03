@@ -430,7 +430,6 @@ function exactJsonValueSchema(value: unknown): Readonly<Record<string, unknown>>
   }
   if (
     typeof value === "object"
-    && value !== null
     && !utilTypes.isProxy(value)
     && !Array.isArray(value)
   ) {
