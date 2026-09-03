@@ -628,19 +628,19 @@ describe("desktop local model runtime", () => {
 
     const firstInstance = client.workerInstanceIdentity();
     await expect(
-      client.recycleAfterUncertainRequest(firstInstance)
+      client.recycleAfterUncertainRequest(firstInstance, "vad")
     ).resolves.toBeUndefined();
     const secondInstance = client.workerInstanceIdentity();
     expect(secondInstance).not.toBe(firstInstance);
 
     await expect(
-      client.recycleAfterUncertainRequest(secondInstance)
+      client.recycleAfterUncertainRequest(secondInstance, "vad")
     ).resolves.toBeUndefined();
     const thirdInstance = client.workerInstanceIdentity();
     expect(thirdInstance).not.toBe(secondInstance);
 
     await expect(
-      client.recycleAfterUncertainRequest(thirdInstance)
+      client.recycleAfterUncertainRequest(thirdInstance, "vad")
     ).rejects.toBeInstanceOf(ManagedWorkerRecoveryExhaustedError);
     expect(runtime.getStatus("speech-recycle-budget").state).toBe("STOPPED");
   }, 20_000);
@@ -661,16 +661,59 @@ describe("desktop local model runtime", () => {
       token
     );
 
-    await client.recycleAfterUncertainRequest(client.workerInstanceIdentity());
+    await client.recycleAfterUncertainRequest(client.workerInstanceIdentity(), "vad");
     await expect(client.postJson("/v1/vad", {
       pcmF32Base64: "AAAAAA==",
       sampleRate: 16_000,
       streamId: "recycle-reset-health"
     })).resolves.toEqual({ speechProbability: 0.875 });
 
-    await client.recycleAfterUncertainRequest(client.workerInstanceIdentity());
-    await client.recycleAfterUncertainRequest(client.workerInstanceIdentity());
+    await client.recycleAfterUncertainRequest(client.workerInstanceIdentity(), "vad");
+    await client.recycleAfterUncertainRequest(client.workerInstanceIdentity(), "vad");
     expect(runtime.getStatus("speech-recycle-reset").state).toBe("READY");
+  }, 20_000);
+
+  it("does not let healthy VAD traffic reset a broken STT recovery budget", async () => {
+    const token = "0".repeat(64);
+    const runtime = fixtureManager(
+      "speech-stt-recycle-budget",
+      "speech",
+      "fixture-speech-1",
+      token
+    );
+    await runtime.start("speech-stt-recycle-budget");
+    const client = new ManagedModelWorkerClient(
+      runtime,
+      "speech-stt-recycle-budget",
+      "speech",
+      token
+    );
+
+    await client.recycleAfterUncertainRequest(
+      client.workerInstanceIdentity(),
+      "stt"
+    );
+    await expect(client.postJson("/v1/vad", {
+      pcmF32Base64: "AAAAAA==",
+      sampleRate: 16_000,
+      streamId: "stt-budget-vad-health-1"
+    })).resolves.toEqual({ speechProbability: 0.875 });
+
+    await client.recycleAfterUncertainRequest(
+      client.workerInstanceIdentity(),
+      "stt"
+    );
+    await expect(client.postJson("/v1/vad", {
+      pcmF32Base64: "AAAAAA==",
+      sampleRate: 16_000,
+      streamId: "stt-budget-vad-health-2"
+    })).resolves.toEqual({ speechProbability: 0.875 });
+
+    await expect(client.recycleAfterUncertainRequest(
+      client.workerInstanceIdentity(),
+      "stt"
+    )).rejects.toBeInstanceOf(ManagedWorkerRecoveryExhaustedError);
+    expect(runtime.getStatus("speech-stt-recycle-budget").state).toBe("STOPPED");
   }, 20_000);
 
   it("does not reset uncertain recycle budget after a request-level 4xx", async () => {
@@ -689,14 +732,14 @@ describe("desktop local model runtime", () => {
       token
     );
 
-    await client.recycleAfterUncertainRequest(client.workerInstanceIdentity());
+    await client.recycleAfterUncertainRequest(client.workerInstanceIdentity(), "vad");
     await expect(client.postJson("/v1/tts", {
       requestId: "not-a-speech-request"
     })).rejects.toMatchObject({ statusCode: 404 });
 
-    await client.recycleAfterUncertainRequest(client.workerInstanceIdentity());
+    await client.recycleAfterUncertainRequest(client.workerInstanceIdentity(), "vad");
     await expect(
-      client.recycleAfterUncertainRequest(client.workerInstanceIdentity())
+      client.recycleAfterUncertainRequest(client.workerInstanceIdentity(), "vad")
     ).rejects.toBeInstanceOf(ManagedWorkerRecoveryExhaustedError);
     expect(runtime.getStatus("speech-recycle-4xx").state).toBe("STOPPED");
   }, 20_000);
@@ -718,7 +761,7 @@ describe("desktop local model runtime", () => {
 
     lifecycle.abort();
     await expect(
-      client.recycleAfterUncertainRequest(workerInstance)
+      client.recycleAfterUncertainRequest(workerInstance, "vad")
     ).resolves.toBeUndefined();
 
     const after = runtime.getStatus("speech-timeout-shutdown");
