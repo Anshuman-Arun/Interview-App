@@ -723,6 +723,7 @@ export class InterpretationCoordinator {
           interpretationConfidence: candidate.confidence,
           evidenceKey: request.target,
           expectedProblemVersion: request.problem.version,
+          boardRevisionIndependent: true,
           envelope: createCommandEnvelope({
             sessionId: request.sessionId,
             producer: "interpretation-coordinator",
@@ -893,6 +894,7 @@ export class InterpretationCoordinator {
 
     if (
       persisted.sourceGenerationId !== undefined
+      || persisted.boardRevisionIndependent !== true
       || !evidenceKeysEqual(persisted.evidenceKey, request.target)
       || !sameDirectVerificationBasis(request.basis, persisted.basis)
       || persisted.basis.inputEpisodeId !== request.source.inputEpisodeId
@@ -934,19 +936,6 @@ export class InterpretationCoordinator {
       }).catch(() => undefined);
       return this.finishFailure(mapStatementFailure(statement.reason, request.requestId, 0));
     }
-    if (statement.canonicalStatement !== persisted.candidateFormalInterpretation) {
-      await this.verification.discardPendingVerification({
-        verificationRequestId: request.requestId,
-        reason: "FORMAL_INTERPRETATION_RECOVERY_STATEMENT_NOT_CANONICAL"
-      }).catch(() => undefined);
-      return this.finishFailure(failed(
-        "INVALID_PROPOSAL",
-        "MALFORMED_INTERPRETATION",
-        0,
-        request.requestId
-      ));
-    }
-
     const verifier = this.router.createVerifier(route);
     if (verifier === undefined) {
       await this.verification.discardPendingVerification({
@@ -969,7 +958,8 @@ export class InterpretationCoordinator {
       candidateFormalInterpretation: persisted.candidateFormalInterpretation,
       interpretationConfidence: persisted.interpretationConfidence,
       evidenceKey: persisted.evidenceKey,
-      evidenceEventIds: persisted.evidenceEventIds
+      evidenceEventIds: persisted.evidenceEventIds,
+      boardRevisionIndependent: true
     });
     record.dispatchStarted = true;
     record.verificationRequestId = workItem.verificationRequestId;
