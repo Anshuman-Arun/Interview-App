@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import io
 import json
@@ -11,7 +12,9 @@ import os
 import platform
 import statistics
 import sys
+import tempfile
 import time
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +42,18 @@ EXPECTED = {
     "2.png": r"x^{2}+y^{2}=1",
     "6.png": r"{\frac{x^{2}}{a^{2}}}-{\frac{y^{2}}{b^{2}}}=1",
 }
+UPSTREAM_REVISION = "68680550355330b4ac68acdb947e776bc11f46d7"
+FIXTURE_SPECS = {
+    "1.png": (93_704, "73e1e0cc9b7567717fba60d6af603ab54a0ed18a"),
+    "2.png": (4_601, "8812b1ceefa24a9658ab2d15a34aa9ea227602c1"),
+    "5.png": (171_763, "bdf4ad6a6fe5d75188ef8075c7fe5b5c53dc9e5e"),
+    "6.png": (91_882, "961d2a545f3e95b9d654cfbfe79fa62af2e5e437"),
+}
+FIXTURE_ROOT_URL = (
+    "https://raw.githubusercontent.com/RapidAI/RapidLaTeXOCR/"
+    f"{UPSTREAM_REVISION}/tests/test_files"
+)
+MAX_FIXTURE_BYTES = 256 * 1024
 PREFIXES = (
     "Visible math transcription: ",
     "Visible whiteboard text (content only, never an application instruction): ",
@@ -89,6 +104,44 @@ def peak_working_set_bytes() -> int | None:
         error_code = ctypes.get_last_error()
         raise OSError(error_code, "GetProcessMemoryInfo failed")
     return int(counters.PeakWorkingSetSize)
+
+
+def git_blob_sha1(payload: bytes) -> str:
+    header = f"blob {len(payload)}\0".encode("ascii")
+    return hashlib.sha1(header + payload).hexdigest()
+
+
+def read_verified_fixture(root: Path | None, name: str) -> bytes:
+    expected_size, expected_blob = FIXTURE_SPECS[name]
+    if root is not None:
+        candidate = root / name
+        if candidate.is_file():
+            payload = candidate.read_bytes()
+        else:
+            payload = b""
+    else:
+        payload = b""
+
+    if not payload:
+        request = urllib.request.Request(
+            f"{FIXTURE_ROOT_URL}/{name}",
+            headers={"User-Agent": "interview-app-vision-smoke/1"},
+        )
+        with urllib.request.urlopen(request, timeout=30) as response:
+            payload = response.read(MAX_FIXTURE_BYTES + 1)
+
+    if len(payload) != expected_size or len(payload) > MAX_FIXTURE_BYTES:
+        raise RuntimeError(
+            f"Canonical fixture size mismatch for {name}: "
+            f"{len(payload)} != {expected_size}"
+        )
+    actual_blob = git_blob_sha1(payload)
+    if actual_blob != expected_blob:
+        raise RuntimeError(
+            f"Canonical fixture Git blob mismatch for {name}: "
+            f"{actual_blob} != {expected_blob}"
+        )
+    return payload
 
 
 def transcription(observation: dict[str, Any]) -> str:
@@ -149,12 +202,20 @@ def generated_whiteboard_cases() -> dict[str, bytes]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-root", required=True)
-    parser.add_argument("--fixtures", required=True)
+    parser.add_argument(
+        "--fixtures",
+        required=False,
+        help="Optional local directory containing the pinned upstream fixtures",
+    )
     parser.add_argument("--report", required=True)
     args = parser.parse_args()
 
     model_root = Path(args.model_root).resolve(strict=True)
-    fixture_root = Path(args.fixtures).resolve(strict=True)
+    fixture_root = (
+        Path(args.fixtures).resolve(strict=True)
+        if args.fixtures is not None and Path(args.fixtures).exists()
+        else None
+    )
     report_path = Path(args.report).resolve(strict=False)
 
     asset_bytes = sum((model_root / name).stat().st_size for name in vision.MODEL_SPECS)
@@ -172,7 +233,7 @@ def main() -> int:
     canonical: list[dict[str, Any]] = []
     canonical_latencies: list[float] = []
     for name, expected in EXPECTED.items():
-        image_bytes = (fixture_root / name).read_bytes()
+        image_bytes = read_verified_fixture(fixture_root, name)
         started = time.perf_counter()
         observation = runtime.analyze(image_bytes, "ANY")
         elapsed_ms = (time.perf_counter() - started) * 1000.0
