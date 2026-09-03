@@ -699,6 +699,7 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
     interpretationConfidence: z.number().min(0).max(1),
     evidenceKey: EvidenceKeySchema,
     evidenceEventIds: z.array(EventIdSchema).min(1),
+    boardRevisionIndependent: z.literal(true).optional(),
     sourceGenerationId: GenerationIdSchema.optional(),
     sourceProposalRequestId: RequestIdSchema.optional()
   }).strict()),
