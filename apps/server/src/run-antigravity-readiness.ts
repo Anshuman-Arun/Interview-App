@@ -25,36 +25,23 @@ async function main(): Promise<void> {
     });
     const executor = readExecutor(runtime);
 
-    const agents = await executeReadinessJsonCommand(executor, [
-      "agents",
-      "--output-format",
-      "json"
-    ]);
-    if (!jsonContainsExactString(agents, "interview-realizer")) {
-      throw new Error("Antigravity isolated custom agent was not discovered");
-    }
-
-    const models = await executeReadinessJsonCommand(executor, [
-      "models",
-      "--output-format",
-      "json"
-    ]);
-    if (!jsonContainsExactString(models, ANTIGRAVITY_CLI_MODEL_ID)) {
-      throw new Error("Pinned Antigravity model is unavailable");
-    }
-
-    await executeReadinessJsonCommand(executor, [
+    const usage = await executeReadinessJsonCommand(executor, [
       "-p",
       "/usage",
+      "--model",
+      ANTIGRAVITY_CLI_MODEL_ID,
+      "--agent",
+      "interview-realizer",
       "--output-format",
       "json"
     ]);
+    assertZeroTurnUsageEnvelope(usage);
   } finally {
     await source.drain();
   }
 
   process.stdout.write(
-    "Antigravity readiness smoke passed: supervised launch, isolated custom agent discovery, pinned model availability, cached authentication, and quota lookup are usable.\n"
+    "Antigravity readiness smoke passed: supervised launch, isolated custom agent selection, pinned model selection, cached authentication, and quota lookup are usable without a model turn.\n"
   );
 }
 
@@ -86,34 +73,25 @@ async function executeReadinessJsonCommand(
   }
 }
 
-function jsonContainsExactString(value: unknown, expected: string): boolean {
-  const pending: Array<{ readonly value: unknown; readonly depth: number }> = [
-    { value, depth: 0 }
-  ];
-  let nodes = 0;
-  while (pending.length > 0) {
-    const current = pending.pop();
-    if (current === undefined) break;
-    nodes += 1;
-    if (nodes > 4_096 || current.depth > 16) {
-      throw new Error("Antigravity readiness JSON exceeded inspection bounds");
-    }
-    if (typeof current.value === "string") {
-      if (current.value === expected) return true;
-      continue;
-    }
-    if (current.value === null || typeof current.value !== "object") continue;
-    if (Array.isArray(current.value)) {
-      for (const item of current.value) {
-        pending.push({ value: item, depth: current.depth + 1 });
-      }
-      continue;
-    }
-    for (const item of Object.values(current.value as Record<string, unknown>)) {
-      pending.push({ value: item, depth: current.depth + 1 });
+function assertZeroTurnUsageEnvelope(value: unknown): void {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("Antigravity usage probe returned an invalid envelope");
+  }
+  const record = value as Record<string, unknown>;
+  if (record.status !== "SUCCESS" || record.num_turns !== 0) {
+    throw new Error("Antigravity usage probe did not complete as a zero-turn command");
+  }
+  const usage = record.usage;
+  if (
+    typeof usage === "object"
+    && usage !== null
+    && !Array.isArray(usage)
+  ) {
+    const totalTokens = (usage as Record<string, unknown>).total_tokens;
+    if (typeof totalTokens === "number" && totalTokens !== 0) {
+      throw new Error("Antigravity readiness probe unexpectedly consumed model tokens");
     }
   }
-  return false;
 }
 
 function readExecutor(value: unknown): SupervisedCliExecutor {
