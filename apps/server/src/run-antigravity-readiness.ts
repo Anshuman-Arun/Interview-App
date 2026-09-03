@@ -24,25 +24,26 @@ async function main(): Promise<void> {
       modelId: ANTIGRAVITY_CLI_MODEL_ID
     });
     const executor = readExecutor(runtime);
-    const agents = await executeReadinessCommand(executor, [
+
+    const agents = await executeReadinessJsonCommand(executor, [
       "agents",
       "--output-format",
       "json"
     ]);
-    if (!agents.stdout.includes("interview-realizer")) {
+    if (!jsonContainsExactString(agents, "interview-realizer")) {
       throw new Error("Antigravity isolated custom agent was not discovered");
     }
 
-    const models = await executeReadinessCommand(executor, [
+    const models = await executeReadinessJsonCommand(executor, [
       "models",
       "--output-format",
       "json"
     ]);
-    if (!models.stdout.includes(ANTIGRAVITY_CLI_MODEL_ID)) {
+    if (!jsonContainsExactString(models, ANTIGRAVITY_CLI_MODEL_ID)) {
       throw new Error("Pinned Antigravity model is unavailable");
     }
 
-    await executeReadinessCommand(executor, [
+    await executeReadinessJsonCommand(executor, [
       "-p",
       "/usage",
       "--output-format",
@@ -57,12 +58,10 @@ async function main(): Promise<void> {
   );
 }
 
-async function executeReadinessCommand(
+async function executeReadinessJsonCommand(
   executor: SupervisedCliExecutor,
   args: readonly string[]
-): Promise<{
-  readonly stdout: string;
-}> {
+): Promise<unknown> {
   const controller = new AbortController();
   const result = await executor.execute({
     args,
@@ -80,7 +79,41 @@ async function executeReadinessCommand(
   ) {
     throw new Error("Antigravity readiness command failed");
   }
-  return Object.freeze({ stdout: result.stdout });
+  try {
+    return JSON.parse(result.stdout) as unknown;
+  } catch {
+    throw new Error("Antigravity readiness command returned malformed JSON");
+  }
+}
+
+function jsonContainsExactString(value: unknown, expected: string): boolean {
+  const pending: Array<{ readonly value: unknown; readonly depth: number }> = [
+    { value, depth: 0 }
+  ];
+  let nodes = 0;
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (current === undefined) break;
+    nodes += 1;
+    if (nodes > 4_096 || current.depth > 16) {
+      throw new Error("Antigravity readiness JSON exceeded inspection bounds");
+    }
+    if (typeof current.value === "string") {
+      if (current.value === expected) return true;
+      continue;
+    }
+    if (current.value === null || typeof current.value !== "object") continue;
+    if (Array.isArray(current.value)) {
+      for (const item of current.value) {
+        pending.push({ value: item, depth: current.depth + 1 });
+      }
+      continue;
+    }
+    for (const item of Object.values(current.value as Record<string, unknown>)) {
+      pending.push({ value: item, depth: current.depth + 1 });
+    }
+  }
+  return false;
 }
 
 function readExecutor(value: unknown): SupervisedCliExecutor {
