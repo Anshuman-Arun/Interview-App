@@ -19,7 +19,7 @@ import {
   type OxfordFormalAnalysisProfile
 } from "./oxford-formal-analysis-catalog.js";
 import {
-  isOxfordFormalAnalysisSourceRelevant
+  createOxfordFormalAdmissionProvider
 } from "./oxford-formal-candidate-admission.js";
 
 export const DEFAULT_STUDENT_REASONING_ANALYSIS_TIMEOUT_MS = 1_500 as const;
@@ -35,7 +35,6 @@ export type StudentReasoningAnalysisOutcome =
       readonly status: "SKIPPED";
       readonly reason:
         | "UNSUPPORTED_PROBLEM"
-        | "SOURCE_NOT_RELEVANT"
         | "EMPTY_SOURCE"
         | "STALE_SOURCE"
         | "RESOURCE_LIMIT"
@@ -106,9 +105,6 @@ export class StudentReasoningAnalysisCoordinator {
 
     const profile = resolveOxfordFormalAnalysisProfile(state.problem);
     if (profile === undefined) return { status: "SKIPPED", reason: "UNSUPPORTED_PROBLEM" };
-    if (!isOxfordFormalAnalysisSourceRelevant(profile, turn.studentText)) {
-      return { status: "SKIPPED", reason: "SOURCE_NOT_RELEVANT" };
-    }
 
     let context: SessionAnalysisContext | undefined;
     try {
@@ -244,7 +240,7 @@ export class StudentReasoningAnalysisCoordinator {
       profileKey,
       coordinator: new InterpretationCoordinator(
         this.sessions.getWriter(sessionId),
-        this.provider,
+        createOxfordFormalAdmissionProvider(profile, this.provider),
         profile.scopes,
         { maxInFlight: MAX_STUDENT_REASONING_ANALYSIS_IN_FLIGHT }
       ),
