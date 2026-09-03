@@ -736,23 +736,50 @@ async function resolvePythonExecutable(
     if (!path.isAbsolute(candidate)) return undefined;
     candidates.push(candidate);
   } else {
-    const rawPath = environment["PATH"];
-    if (typeof rawPath !== "string" || rawPath.length === 0) return undefined;
     const names = platform === "win32"
       ? [candidate.toLowerCase().endsWith(".exe") ? candidate : `${candidate}.exe`]
       : [candidate];
-    for (const rawEntry of rawPath.split(path.delimiter)) {
-      const entry = rawEntry.startsWith('"') && rawEntry.endsWith('"')
-        ? rawEntry.slice(1, -1)
-        : rawEntry;
-      if (entry.length === 0 || !path.isAbsolute(entry)) continue;
-      for (const name of names) candidates.push(path.join(entry, name));
+
+    if (
+      platform === "win32"
+      && (candidate.toLowerCase() === "python" || candidate.toLowerCase() === "python.exe")
+    ) {
+      const localAppData = environment["LOCALAPPDATA"];
+      if (typeof localAppData === "string" && path.isAbsolute(localAppData)) {
+        for (const version of ["Python313", "Python312"]) {
+          candidates.push(path.join(localAppData, "Programs", "Python", version, "python.exe"));
+        }
+      }
+      const programFiles = environment["ProgramFiles"];
+      if (typeof programFiles === "string" && path.isAbsolute(programFiles)) {
+        for (const version of ["Python313", "Python312"]) {
+          candidates.push(path.join(programFiles, version, "python.exe"));
+        }
+      }
     }
+
+    const rawPath = environment["PATH"];
+    if (typeof rawPath === "string" && rawPath.length > 0) {
+      for (const rawEntry of rawPath.split(path.delimiter)) {
+        const entry = rawEntry.startsWith('"') && rawEntry.endsWith('"')
+          ? rawEntry.slice(1, -1)
+          : rawEntry;
+        if (entry.length === 0 || !path.isAbsolute(entry)) continue;
+        for (const name of names) candidates.push(path.join(entry, name));
+      }
+    }
+    if (candidates.length === 0) return undefined;
   }
 
   for (const executableCandidate of candidates.slice(0, 256)) {
     try {
       const executable = path.resolve(executableCandidate);
+      if (
+        platform === "win32"
+        && executable.toLowerCase().includes("\\microsoft\\windowsapps\\")
+      ) {
+        continue;
+      }
       const launcherMetadata = await lstat(executable);
       const target = launcherMetadata.isSymbolicLink()
         ? await realpath(executable)
