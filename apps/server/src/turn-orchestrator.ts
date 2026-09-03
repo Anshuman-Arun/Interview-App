@@ -75,6 +75,10 @@ export class ServerTurnOrchestrator {
     );
   }
 
+  public getProviderRuntimeResolver(): ProviderRuntimeResolver {
+    return this.providerRuntime;
+  }
+
   public async orchestrateTurn(input: TurnOrchestrationInput): Promise<void> {
     await this.orchestrateTurnWithDisposition(input);
   }
