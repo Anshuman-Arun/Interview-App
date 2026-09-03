@@ -39,6 +39,9 @@ const FIXTURE = fileURLToPath(new URL("./fixtures/local-model-http-worker.mjs", 
 const PRODUCTION_WORKER = fileURLToPath(
   new URL("../workers/python/local_model_worker.py", import.meta.url)
 );
+const PRODUCTION_VISION_RUNTIME = fileURLToPath(
+  new URL("../workers/python/local_vision_runtime.py", import.meta.url)
+);
 const temporaryRoots: string[] = [];
 const managers: LocalRuntimeManager[] = [];
 const compositions: DesktopLocalRuntimeComposition[] = [];
@@ -61,10 +64,10 @@ describe("desktop local model runtime", () => {
       "-c",
       [
         "import ast, pathlib, sys",
-        "source = pathlib.Path(sys.argv[1]).read_text(encoding='utf-8')",
-        "ast.parse(source, filename=sys.argv[1])"
+        "[(lambda p: ast.parse(pathlib.Path(p).read_text(encoding='utf-8'), filename=p))(p) for p in sys.argv[1:]]"
       ].join("; "),
-      PRODUCTION_WORKER
+      PRODUCTION_WORKER,
+      PRODUCTION_VISION_RUNTIME
     ], {
       encoding: "utf8",
       windowsHide: true
@@ -255,7 +258,7 @@ describe("desktop local model runtime", () => {
       },
       vision: {
         state: "UNAVAILABLE",
-        reasonCode: "NO_PRODUCTION_BACKEND_CONFIGURED"
+        reasonCode: "PYTHON_RUNTIME_UNAVAILABLE"
       }
     });
   });
@@ -375,7 +378,7 @@ describe("desktop local model runtime", () => {
       },
       vision: {
         state: "UNAVAILABLE",
-        reasonCode: "NO_PRODUCTION_BACKEND_CONFIGURED"
+        reasonCode: "START_CANCELLED"
       }
     });
   });
@@ -440,8 +443,8 @@ describe("desktop local model runtime", () => {
         reasonCode: "TTS_ASSET_MISSING"
       },
       vision: {
-        state: "UNAVAILABLE",
-        reasonCode: "NO_PRODUCTION_BACKEND_CONFIGURED"
+        state: "MISSING_ASSET",
+        reasonCode: "VISION_ASSET_MISSING"
       }
     });
   });

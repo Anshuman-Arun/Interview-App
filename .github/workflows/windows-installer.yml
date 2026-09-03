@@ -14,6 +14,7 @@ on:
       - "apps/server/**"
       - "packages/**"
       - "workers/python/local_model_worker.py"
+      - "workers/python/local_vision_runtime.py"
       - "workers/python/requirements-local-model-runtime.txt"
       - "scripts/check-packaged-desktop.mjs"
       - "scripts/clean-windows-package.mjs"
@@ -157,3 +158,4 @@ jobs:
           path: dist/windows/InterviewApp-Setup-*.exe
           if-no-files-found: error
           retention-days: 14
+

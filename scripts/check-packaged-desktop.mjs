@@ -14,6 +14,7 @@ const RESOURCES = path.join(PACKAGE_ROOT, "resources");
 const exactCopies = [
   ["preload.cjs", "apps/desktop/preload.cjs"],
   ["workers/python/local_model_worker.py", "workers/python/local_model_worker.py"],
+  ["workers/python/local_vision_runtime.py", "workers/python/local_vision_runtime.py"],
   [
     "workers/python/requirements-local-model-runtime.txt",
     "workers/python/requirements-local-model-runtime.txt"
@@ -184,6 +185,7 @@ async function main() {
   const workerFiles = (await walk(path.join(RESOURCES, "workers", "python"))).sort();
   const allowedWorkerFiles = [
     "local_model_worker.py",
+    "local_vision_runtime.py",
     "requirements-local-model-runtime.txt"
   ];
   if (JSON.stringify(workerFiles) !== JSON.stringify(allowedWorkerFiles)) {

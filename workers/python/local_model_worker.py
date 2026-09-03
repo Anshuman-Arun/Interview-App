@@ -16,6 +16,7 @@ import json
 import math
 import os
 import platform
+import re
 import stat
 import sys
 import threading
@@ -35,6 +36,18 @@ MAX_PYTHON_EXCLUSIVE = (3, 14)
 EXPECTED_DISTRIBUTIONS = {
     "moonshine-voice": "0.1.5",
     "onnxruntime": "1.29.0",
+    "Pillow": "12.3.0",
+    "tokenizers": "0.23.1",
+    "huggingface-hub": "1.30.0",
+    "click": "8.5.0",
+    "fsspec": "2026.7.0",
+    "hf-xet": "1.6.0",
+    "httpx": "0.28.1",
+    "PyYAML": "6.0.3",
+    "typing-extensions": "4.16.0",
+    "anyio": "4.15.0",
+    "httpcore": "1.0.9",
+    "h11": "0.16.0",
     "numpy": "2.5.2",
     "sounddevice": "0.5.6",
     "requests": "2.34.2",
@@ -74,6 +87,16 @@ SPEECH_MODEL_IDENTITY = (
     "silero-v6.2.1@7e30209a3e901f9842f81b225f3e93d8199902b1"
 )
 TTS_MODEL_IDENTITY = "kokoro-af-heart+35d84fc0eb2d7451da9973c990e8a77066abb105"
+VISION_MODEL_IDENTITY = (
+    "rapid-latex-ocr@v0.0.0+set-"
+    "ea51bb3eebca460eeded83ccc81f4d0a50aae0e4aadcf64aa8eead1e50410a4d"
+)
+VISION_RUNTIME_VERSION = "onnxruntime/1.29.0;numpy/2.5.2;pillow/12.3.0;tokenizers/0.23.1;vision/4"
+MAX_VISION_PNG_BYTES = 2 * 1024 * 1024
+MAX_VISION_REQUEST_ID_LENGTH = 160
+MAX_VISION_RESPONSE_CHARS = 4_000
+VISION_REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/_-]*$")
+
 
 SPEECH_ASSET_SPECS = {
     "decoder_model_merged.ort": (
@@ -263,6 +286,8 @@ def require_runtime_environment() -> None:
         import moonshine_voice
         import numpy  # noqa: F401
         import onnxruntime as ort
+        from PIL import Image  # noqa: F401
+        from tokenizers import Tokenizer  # noqa: F401
         from moonshine_voice.moonshine_api import ModelArch  # noqa: F401
         from moonshine_voice.transcriber import Transcriber  # noqa: F401
         from moonshine_voice.tts import TextToSpeech  # noqa: F401
@@ -663,6 +688,141 @@ class TtsRuntime:
         return {"accepted": True}
 
 
+class VisionRuntime:
+    def __init__(self, *, model_root: Path) -> None:
+        # The optional vision module is imported only for this component.
+        # Missing/corrupt vision packaging therefore cannot break speech/TTS.
+        try:
+            # -I intentionally removes the script directory from sys.path.
+            # Load the fixed sibling module by file identity instead of making
+            # it importable globally or accepting any path from a request.
+            import importlib.util
+
+            module_path = Path(__file__).resolve(strict=True).with_name(
+                "local_vision_runtime.py"
+            )
+            module_file = require_file(str(module_path), "local vision runtime module")
+            spec = importlib.util.spec_from_file_location(
+                "interview_local_vision_runtime",
+                module_file,
+            )
+            if spec is None or spec.loader is None:
+                raise RuntimeError("vision module loader is unavailable")
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            VisionProtocolError = getattr(module, "VisionProtocolError")
+            Backend = getattr(module, "VisionRuntime")
+        except Exception as exc:
+            raise RuntimeError("local vision runtime module is unavailable") from exc
+
+        self._vision_protocol_error = VisionProtocolError
+        self._backend = Backend(model_root)
+        self._native_lock = threading.Lock()
+        self._native_slots = threading.BoundedSemaphore(2)
+        self.runtime_version = VISION_RUNTIME_VERSION
+
+    def close(self) -> None:
+        self._backend.close()
+
+    def analyze(self, body: dict[str, Any]) -> dict[str, Any]:
+        if set(body) != {
+            "requestId",
+            "imageSha256",
+            "pngBase64",
+            "requestedObservationKind",
+        }:
+            raise ProtocolError(400, "INVALID_VISION_REQUEST")
+
+        request_id = body.get("requestId")
+        image_sha256 = body.get("imageSha256")
+        encoded = body.get("pngBase64")
+        requested_kind = body.get("requestedObservationKind")
+        if (
+            not isinstance(request_id, str)
+            or not (1 <= len(request_id) <= MAX_VISION_REQUEST_ID_LENGTH)
+            or VISION_REQUEST_ID_PATTERN.fullmatch(request_id) is None
+        ):
+            raise ProtocolError(400, "INVALID_REQUEST_ID")
+        if (
+            not isinstance(image_sha256, str)
+            or len(image_sha256) != 64
+            or any(ch not in "0123456789abcdef" for ch in image_sha256)
+        ):
+            raise ProtocolError(400, "INVALID_IMAGE_IDENTITY")
+        if (
+            not isinstance(encoded, str)
+            or not encoded
+            or len(encoded) > ((MAX_VISION_PNG_BYTES + 2) // 3) * 4 + 8
+        ):
+            raise ProtocolError(413, "IMAGE_TOO_LARGE")
+        if not isinstance(requested_kind, str) or len(requested_kind) > 64:
+            raise ProtocolError(400, "INVALID_OBSERVATION_KIND")
+        try:
+            raw = base64.b64decode(encoded, validate=True)
+        except Exception as exc:
+            raise ProtocolError(400, "INVALID_IMAGE") from exc
+        if not raw or len(raw) > MAX_VISION_PNG_BYTES:
+            raise ProtocolError(413, "IMAGE_TOO_LARGE")
+        if hashlib.sha256(raw).hexdigest() != image_sha256:
+            raise ProtocolError(409, "IMAGE_IDENTITY_MISMATCH")
+
+        if not self._native_slots.acquire(blocking=False):
+            raise ProtocolError(429, "VISION_BUSY")
+        try:
+            with self._native_lock:
+                try:
+                    observation = self._backend.analyze(raw, requested_kind)
+                except self._vision_protocol_error as exc:
+                    code = str(exc)
+                    if (
+                        not code
+                        or len(code) > 128
+                        or any(ch not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_" for ch in code)
+                    ):
+                        code = "INVALID_IMAGE"
+                    raise ProtocolError(400, code) from exc
+        finally:
+            self._native_slots.release()
+
+        if (
+            not isinstance(observation, dict)
+            or set(observation) != {"observationKind", "interpretation", "confidence"}
+        ):
+            raise RuntimeError("vision runtime returned an invalid observation")
+        observation_kind = observation.get("observationKind")
+        interpretation = observation.get("interpretation")
+        confidence = observation.get("confidence")
+        if (
+            not isinstance(observation_kind, str)
+            or observation_kind not in {
+                "TEXT",
+                "EQUATION",
+                "DIAGRAM_RELATION",
+                "ARROW",
+                "LABEL",
+                "GENERAL_BOARD_DESCRIPTION",
+            }
+            or not isinstance(interpretation, str)
+            or not interpretation.strip()
+            or len(interpretation) > MAX_VISION_RESPONSE_CHARS
+            or isinstance(confidence, bool)
+            or not isinstance(confidence, (int, float))
+            or not math.isfinite(float(confidence))
+            or float(confidence) < 0
+            or float(confidence) > 1
+        ):
+            raise RuntimeError("vision runtime returned an unbounded observation")
+        return {
+            "requestId": request_id,
+            "imageSha256": image_sha256,
+            "observation": {
+                "observationKind": observation_kind,
+                "interpretation": interpretation,
+                "confidence": float(confidence),
+            },
+        }
+
+
 class WorkerServer(ThreadingHTTPServer):
     daemon_threads = False
     block_on_close = True
@@ -730,6 +890,8 @@ class Handler(BaseHTTPRequestHandler):
                 output = self.server.runtime.synthesize(body)
             elif self.server.component == "tts" and self.path == "/v1/tts/cancel":
                 output = self.server.runtime.cancel(body)
+            elif self.server.component == "vision" and self.path == "/v1/vision":
+                output = self.server.runtime.analyze(body)
             else:
                 raise ProtocolError(404, "NOT_FOUND")
             self._send_json(200, output)
@@ -780,12 +942,13 @@ class Handler(BaseHTTPRequestHandler):
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--component", choices=("speech", "tts"))
+    parser.add_argument("--component", choices=("speech", "tts", "vision"))
     parser.add_argument("--check-runtime", action="store_true")
     parser.add_argument("--port", type=int, default=0)
     parser.add_argument("--silero-model")
     parser.add_argument("--moonshine-model-root")
     parser.add_argument("--tts-asset-root")
+    parser.add_argument("--vision-model-root")
     args = parser.parse_args()
     if args.port != 0:
         raise RuntimeError("production worker requires dynamic loopback port allocation")
@@ -795,6 +958,7 @@ def parse_args() -> argparse.Namespace:
             or args.silero_model is not None
             or args.moonshine_model_root is not None
             or args.tts_asset_root is not None
+            or args.vision_model_root is not None
         ):
             raise RuntimeError("runtime check does not accept worker/model arguments")
     elif args.component is None:
@@ -865,7 +1029,7 @@ def main() -> int:
         )
         model_identity = SPEECH_MODEL_IDENTITY
         capabilities = ["vad", "stt"]
-    else:
+    elif args.component == "tts":
         if not args.tts_asset_root:
             raise RuntimeError("TTS asset root is required")
         tts_asset_root = require_directory(args.tts_asset_root, "TTS asset root")
@@ -873,6 +1037,13 @@ def main() -> int:
         runtime = TtsRuntime(asset_root=tts_asset_root)
         model_identity = TTS_MODEL_IDENTITY
         capabilities = ["tts"]
+    else:
+        if not args.vision_model_root:
+            raise RuntimeError("vision model root is required")
+        vision_model_root = require_directory(args.vision_model_root, "vision model root")
+        runtime = VisionRuntime(model_root=vision_model_root)
+        model_identity = VISION_MODEL_IDENTITY
+        capabilities = ["vision"]
 
     server = WorkerServer(("127.0.0.1", 0), Handler, token=token, component=args.component, runtime=runtime)
     port = int(server.server_address[1])
