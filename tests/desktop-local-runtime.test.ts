@@ -34,6 +34,7 @@ import {
   materializeRuntimeAssetView
 } from "../apps/desktop/src/runtime/runtime-asset-view.js";
 import { ModelAssetManager } from "../packages/model-assets/src/index.js";
+import { VISION_WORKER_MODEL_IDENTITY } from "../apps/desktop/src/runtime/model-assets.js";
 
 const FIXTURE = fileURLToPath(new URL("./fixtures/local-model-http-worker.mjs", import.meta.url));
 const PRODUCTION_WORKER = fileURLToPath(
@@ -200,6 +201,51 @@ describe("desktop local model runtime", () => {
     expect(definition.environment?.values?.["PATH"]).toBe(dirname(process.execPath));
     expect(args[0]).toBe("-I");
     expect(args[1]).toBe(PRODUCTION_WORKER);
+  });
+
+  it("requires replacement vision workers to re-handshake exact runtime and model identity", () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-vision-handshake-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: "python"
+    });
+    compositions.push(composition);
+
+    const mutable = composition as unknown as {
+      pythonExecutable?: string;
+      workerDefinition(input: {
+        readonly componentId: string;
+        readonly component: "speech" | "tts" | "vision";
+        readonly token: string;
+        readonly modelIdentity: string;
+        readonly runtimeVersion: string;
+        readonly capabilities: readonly string[];
+        readonly args: readonly string[];
+      }): LocalComponentDefinition;
+    };
+    mutable.pythonExecutable = process.execPath;
+    const runtimeVersion =
+      "onnxruntime/1.29.0;pillow/12.3.0;tokenizers/0.23.2;rapidlatex-adapter/1;deps/2";
+    const definition = mutable.workerDefinition({
+      componentId: "desktop-local-vision-fixture",
+      component: "vision",
+      token: "b".repeat(64),
+      modelIdentity: VISION_WORKER_MODEL_IDENTITY,
+      runtimeVersion,
+      capabilities: ["vision"],
+      args: ["--component", "vision", "--vision-asset-root", "fixture"]
+    });
+
+    expect(definition.expectedHandshake).toEqual({
+      componentVersion: "2",
+      protocolVersion: 2,
+      workerType: "vision",
+      runtimeVersion,
+      modelVersionOrHash: VISION_WORKER_MODEL_IDENTITY,
+      capabilities: ["vision"]
+    });
   });
 
   it("preserves a POSIX virtualenv-style Python launcher symlink after validation", async () => {
