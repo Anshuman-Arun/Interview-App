@@ -89,7 +89,18 @@ jobs:
       - name: Run supervised provider process safety tests
         env:
           INTERVIEW_SUPERVISOR_STAGE_DEBUG: "1"
+          INTERVIEW_SUPERVISOR_STAGE_DEBUG_FILE: ${{ runner.temp }}\supervisor-stages.log
         run: pnpm exec vitest run tests/supervised-process.test.ts -t "passes bounded stdin literally and returns bounded UTF-8 stdout"
+
+      - name: Print temporary supervisor stage trace
+        if: failure() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (Test-Path "${{ runner.temp }}\supervisor-stages.log") {
+            Get-Content "${{ runner.temp }}\supervisor-stages.log"
+          } else {
+            Write-Output "NO_SUPERVISOR_STAGE_TRACE"
+          }
 
       - name: Run complete Vitest suite
         # The CI variant keeps full discovery while bounding file-level
