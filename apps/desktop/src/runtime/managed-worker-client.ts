@@ -8,6 +8,8 @@ const MAX_JSON_RESPONSE_BYTES = 16 * 1024 * 1024;
 const MAX_JSON_RESPONSE_CHUNKS = 1_024;
 const MAX_CONSECUTIVE_UNCERTAIN_RECYCLES = 2;
 
+export type ManagedWorkerRecoveryScope = "vad" | "stt" | "tts";
+
 export class ManagedWorkerTransportError extends Error {
   public constructor(cause: unknown) {
     super("Managed local model worker transport failed before a trusted response", { cause });
@@ -41,7 +43,7 @@ export class ManagedWorkerResponseError extends Error {
 
 export class ManagedModelWorkerClient {
   private recyclePromise: Promise<void> | undefined;
-  private consecutiveUncertainRecycles = 0;
+  private readonly uncertainRecycleCounts = new Map<ManagedWorkerRecoveryScope, number>();
 
   public constructor(
     private readonly manager: LocalRuntimeManager,
@@ -147,7 +149,7 @@ export class ManagedModelWorkerClient {
           readWorkerErrorCode(parsed)
         );
       }
-      this.consecutiveUncertainRecycles = 0;
+      this.uncertainRecycleCounts.delete(recoveryScopeForPath(pathname));
       return parsed;
     } catch (error) {
       if (controller.signal.reason === timeoutReason) {
@@ -165,7 +167,10 @@ export class ManagedModelWorkerClient {
     }
   }
 
-  public recycleAfterUncertainRequest(expectedWorkerInstance: string): Promise<void> {
+  public recycleAfterUncertainRequest(
+    expectedWorkerInstance: string,
+    scope: ManagedWorkerRecoveryScope
+  ): Promise<void> {
     if (this.lifecycleSignal?.aborted === true) return Promise.resolve();
     let currentWorkerInstance: string;
     try {
@@ -174,17 +179,26 @@ export class ManagedModelWorkerClient {
       return Promise.resolve();
     }
     if (currentWorkerInstance !== expectedWorkerInstance) return Promise.resolve();
-    if (this.recyclePromise !== undefined) return this.recyclePromise;
+
+    const prior = this.uncertainRecycleCounts.get(scope) ?? 0;
+    const exhausted = prior >= MAX_CONSECUTIVE_UNCERTAIN_RECYCLES;
+    if (!exhausted) this.uncertainRecycleCounts.set(scope, prior + 1);
+
+    if (this.recyclePromise !== undefined) {
+      return exhausted
+        ? this.recyclePromise.then(async () => {
+            await this.manager.stop(this.componentId);
+            throw new ManagedWorkerRecoveryExhaustedError();
+          })
+        : this.recyclePromise;
+    }
 
     const operation = (async (): Promise<void> => {
-      const exhausted =
-        this.consecutiveUncertainRecycles >= MAX_CONSECUTIVE_UNCERTAIN_RECYCLES;
       await this.manager.stop(this.componentId);
       if (this.lifecycleSignal?.aborted === true) return;
       if (exhausted) {
         throw new ManagedWorkerRecoveryExhaustedError();
       }
-      this.consecutiveUncertainRecycles += 1;
       await this.manager.start(
         this.componentId,
         this.lifecycleSignal === undefined ? {} : { signal: this.lifecycleSignal }
@@ -208,6 +222,14 @@ export class ManagedModelWorkerClient {
     }
     return status;
   }
+}
+
+function recoveryScopeForPath(
+  pathname: "/v1/vad" | "/v1/stt" | "/v1/tts" | "/v1/tts/cancel"
+): ManagedWorkerRecoveryScope {
+  if (pathname === "/v1/vad") return "vad";
+  if (pathname === "/v1/stt") return "stt";
+  return "tts";
 }
 
 function readWorkerErrorCode(value: unknown): string | undefined {
