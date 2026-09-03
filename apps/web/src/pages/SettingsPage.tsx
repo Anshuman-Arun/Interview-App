@@ -451,7 +451,7 @@ export function SettingsPage({
                   : describeVoiceRuntime(runtimeStatus))}
             </div>
             <div className="expressive-settings__runtime-meta">
-              <span>Python: system CPython 3.12–3.13</span>
+              <span>Python: system CPython 3.12–3.13 (standard install or PATH)</span>
               <span>Typed interviews do not require Python or model files.</span>
             </div>
             <button
