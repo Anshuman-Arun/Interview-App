@@ -57,6 +57,13 @@ export interface ReasoningTurnInput {
 }
 export interface ReasoningSession {
   readonly sendTurn: (input: ReasoningTurnInput) => AsyncIterable<InterviewerProposal>;
+  /**
+   * Optional purpose-specific structured operation for fallible formal
+   * interpretation. Its output is untrusted data and must still pass the
+   * application formal-interpretation schema/admission boundary before any
+   * deterministic verifier is invoked.
+   */
+  readonly interpretFormal?: (input: ReasoningTurnInput) => Promise<unknown>;
   readonly cancelTurn?: (generationId: GenerationId) => Promise<ProviderCancellationResult>;
   readonly close: () => Promise<void>;
 }
