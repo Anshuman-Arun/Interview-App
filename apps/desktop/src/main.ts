@@ -249,6 +249,7 @@ function installLocalRuntimeHandlers(): void {
         throw new Error("Desktop local model setup request was rejected");
       }
       if (modelInstallPromise !== undefined) return modelInstallPromise;
+      if (modelSetupRestartRequired) return localRuntimeStatusForRenderer();
       const runtime = localRuntime;
       if (runtime === undefined || shuttingDown) {
         throw new Error("Desktop local runtime is unavailable");
