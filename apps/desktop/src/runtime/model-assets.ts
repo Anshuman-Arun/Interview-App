@@ -3,7 +3,7 @@ import {
   type AssetManifest
 } from "../../../../packages/model-assets/src/index.js";
 
-export type DesktopVoiceAssetGroup = "speech" | "tts";
+export type DesktopVoiceAssetGroup = "speech" | "tts" | "vision";
 
 export interface DesktopRuntimeAsset {
   readonly group: DesktopVoiceAssetGroup;
@@ -18,6 +18,11 @@ export const SPEECH_WORKER_MODEL_IDENTITY =
   `moonshine-tiny-en@${MOONSHINE_ASSET_REVISION}+silero-v6.2.1@${SILERO_SOURCE_REVISION}`;
 export const TTS_WORKER_MODEL_IDENTITY =
   `kokoro-af-heart+${MOONSHINE_ASSET_REVISION}`;
+
+export const RAPID_LATEX_RELEASE_TAG = "v0.0.0";
+export const RAPID_LATEX_SOURCE_REVISION = "68680550355330b4ac68acdb947e776bc11f46d7";
+export const VISION_WORKER_MODEL_IDENTITY =
+  `rapidlatex-${RAPID_LATEX_RELEASE_TAG}@${RAPID_LATEX_SOURCE_REVISION}+geometry-v1`;
 
 const MOONSHINE_ASSET_REPOSITORY =
   "https://huggingface.co/moonshine-ai/moonshine-voice-assets";
@@ -74,6 +79,47 @@ function moonshineAsset(input: {
   });
 }
 
+const RAPID_LATEX_RELEASE_BASE =
+  "https://github.com/RapidAI/RapidLaTeXOCR/releases/download/v0.0.0";
+const RAPID_LATEX_LICENSE = Object.freeze({
+  name: "MIT",
+  url: "https://github.com/RapidAI/RapidLaTeXOCR/blob/v0.0.0/LICENSE"
+});
+
+function rapidLatexAsset(input: {
+  readonly artifactId: string;
+  readonly type: AssetManifest["type"];
+  readonly filename: string;
+  readonly sizeBytes: number;
+  readonly sha256: string;
+  readonly runtimeRelativePath: string;
+}): DesktopRuntimeAsset {
+  return Object.freeze({
+    group: "vision",
+    manifest: parseAssetManifest({
+      schemaVersion: 1,
+      familyId: "rapid-latex-ocr",
+      artifactId: input.artifactId,
+      version: "0.0.0",
+      type: input.type,
+      platform: "win32",
+      architecture: "x64",
+      filename: input.filename,
+      sizeBytes: input.sizeBytes,
+      sha256: input.sha256,
+      sourceUrl: `${RAPID_LATEX_RELEASE_BASE}/${input.filename}`,
+      modelVersion: VISION_WORKER_MODEL_IDENTITY,
+      license: RAPID_LATEX_LICENSE,
+      sourceMetadata: {
+        publisher: "RapidAI",
+        repository: "https://github.com/RapidAI/RapidLaTeXOCR",
+        revision: RAPID_LATEX_SOURCE_REVISION
+      }
+    }),
+    runtimeRelativePath: input.runtimeRelativePath
+  });
+}
+
 const SILERO_VAD: DesktopRuntimeAsset = Object.freeze({
   group: "speech",
   manifest: parseAssetManifest({
@@ -103,6 +149,38 @@ const SILERO_VAD: DesktopRuntimeAsset = Object.freeze({
 
 export const DESKTOP_LOCAL_MODEL_ASSETS: readonly DesktopRuntimeAsset[] = Object.freeze([
   SILERO_VAD,
+  rapidLatexAsset({
+    artifactId: "rapidlatex-image-resizer",
+    type: "MODEL",
+    filename: "image_resizer.onnx",
+    sizeBytes: 38_967_751,
+    sha256: "e0b075c39700f64d50400f39c8fc186bbb3b5d84d31864008313f376603aca9d",
+    runtimeRelativePath: "vision/rapidlatex/image_resizer.onnx"
+  }),
+  rapidLatexAsset({
+    artifactId: "rapidlatex-encoder",
+    type: "MODEL",
+    filename: "encoder.onnx",
+    sizeBytes: 89_008_136,
+    sha256: "01bf5dc25539ca0cd5b1bd29296ea495977a6ba5f629dc4178277809d26e5e7d",
+    runtimeRelativePath: "vision/rapidlatex/encoder.onnx"
+  }),
+  rapidLatexAsset({
+    artifactId: "rapidlatex-decoder",
+    type: "MODEL",
+    filename: "decoder.onnx",
+    sizeBytes: 50_952_726,
+    sha256: "bd695497bf1b22279b7626f5916c79226e1e244c84355f8da7edfd2d921d0072",
+    runtimeRelativePath: "vision/rapidlatex/decoder.onnx"
+  }),
+  rapidLatexAsset({
+    artifactId: "rapidlatex-tokenizer",
+    type: "TOKENIZER",
+    filename: "tokenizer.json",
+    sizeBytes: 24_174,
+    sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+    runtimeRelativePath: "vision/rapidlatex/tokenizer.json"
+  }),
   moonshineAsset({
     group: "speech",
     familyId: "moonshine-tiny-en",
@@ -230,4 +308,7 @@ export const SPEECH_ASSETS = Object.freeze(
 );
 export const TTS_ASSETS = Object.freeze(
   DESKTOP_LOCAL_MODEL_ASSETS.filter((asset) => asset.group === "tts")
+);
+export const VISION_ASSETS = Object.freeze(
+  DESKTOP_LOCAL_MODEL_ASSETS.filter((asset) => asset.group === "vision")
 );
