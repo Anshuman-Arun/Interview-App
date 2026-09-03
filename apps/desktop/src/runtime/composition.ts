@@ -1,6 +1,6 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
-import { access, lstat, realpath } from "node:fs/promises";
+import { access, lstat, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import {
   KokoroSpeechSynthesizer,
@@ -35,6 +35,7 @@ import {
   ManagedSileroVadRuntime,
   moonshineRecognizerVersion
 } from "./runtime-adapters.js";
+import { PACKAGED_LOCAL_MODEL_WORKER_SHA256 } from "./packaged-resource-integrity.js";
 import {
   cleanupStaleRuntimeAssetViews,
   materializeRuntimeAssetView,
@@ -84,6 +85,7 @@ export class DesktopLocalRuntimeComposition {
   private readonly runtimeViewsRoot: string;
   private readonly workerScriptPath: string;
   private readonly pythonExecutableCandidate: string;
+  private readonly enforcePackagedWorkerIntegrity: boolean;
   private pythonExecutable: string | undefined;
   private speechStatus: DesktopRuntimeCapabilityStatus = unavailable("NOT_STARTED");
   private ttsStatus: DesktopRuntimeCapabilityStatus = unavailable("NOT_STARTED");
@@ -121,6 +123,7 @@ export class DesktopLocalRuntimeComposition {
     );
     this.pythonExecutableCandidate = options.pythonExecutable
       ?? (process.platform === "win32" ? "python" : "python3");
+    this.enforcePackagedWorkerIntegrity = options.isPackaged;
   }
 
   public start(options: { readonly signal?: AbortSignal } = {}): Promise<void> {
@@ -691,7 +694,13 @@ export class DesktopLocalRuntimeComposition {
   private async workerScriptIsSafe(): Promise<boolean> {
     try {
       const metadata = await lstat(this.workerScriptPath);
-      return metadata.isFile() && !metadata.isSymbolicLink();
+      if (!metadata.isFile() || metadata.isSymbolicLink()) return false;
+      if (!this.enforcePackagedWorkerIntegrity) return true;
+
+      const digest = createHash("sha256")
+        .update(await readFile(this.workerScriptPath))
+        .digest("hex");
+      return digest === PACKAGED_LOCAL_MODEL_WORKER_SHA256;
     } catch {
       return false;
     }
