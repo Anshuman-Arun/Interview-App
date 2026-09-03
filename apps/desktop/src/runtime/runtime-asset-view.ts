@@ -3,7 +3,6 @@ import {
   lstat,
   mkdir,
   mkdtemp,
-  open,
   readdir,
   rm,
   statfs
@@ -12,6 +11,8 @@ import path from "node:path";
 import process from "node:process";
 import {
   copyLocalArtifactBounded,
+  createStableStagingFile,
+  ensureSafeDirectory,
   verifyArtifactFile
 } from "../../../../packages/model-assets/src/index.js";
 import type { ModelAssetManager } from "../../../../packages/model-assets/src/index.js";
@@ -88,16 +89,39 @@ export async function materializeRuntimeAssetView(input: {
     `run-${String(process.pid)}-${RUNTIME_VIEW_OWNER_TOKEN}-`
   ));
   const resolvedRoot = path.resolve(root);
+  const rootMetadata = await lstat(root, { bigint: true });
+  if (!rootMetadata.isDirectory() || rootMetadata.isSymbolicLink()) {
+    throw new Error("Local runtime asset-view root changed after creation");
+  }
+  const rootIdentity = Object.freeze({
+    device: rootMetadata.dev,
+    inode: rootMetadata.ino
+  });
   ACTIVE_RUNTIME_VIEW_ROOTS.add(resolvedRoot);
   const paths = new Map<string, string>();
   try {
     for (const asset of input.assets) {
       if (abortRequested(input.signal)) throw abortError();
+      await assertRuntimeViewRootIdentity(root, rootIdentity);
       const source = await input.manager.getInstalledPath(asset.manifest, input.signal);
       const destination = resolveWithinRoot(root, asset.runtimeRelativePath);
-      await mkdir(path.dirname(destination), { recursive: true });
+      const parent = path.dirname(destination);
+      await ensureSafeDirectory(root, parent);
+      await assertRuntimeViewRootIdentity(root, rootIdentity);
       if (abortRequested(input.signal)) throw abortError();
-      const destinationHandle = await open(destination, "wx", 0o600);
+
+      const parentMetadata = await lstat(parent, { bigint: true });
+      if (!parentMetadata.isDirectory() || parentMetadata.isSymbolicLink()) {
+        throw new Error("Local runtime asset destination parent is unsafe");
+      }
+      const destinationHandle = await createStableStagingFile(
+        parent,
+        path.basename(destination),
+        {
+          device: parentMetadata.dev,
+          inode: parentMetadata.ino
+        }
+      );
       try {
         await copyLocalArtifactBounded(
           source,
@@ -109,12 +133,14 @@ export async function materializeRuntimeAssetView(input: {
       } finally {
         await destinationHandle.close();
       }
+      await assertRuntimeViewRootIdentity(root, rootIdentity);
       if (abortRequested(input.signal)) throw abortError();
       const verification = await verifyArtifactFile(destination, {
         sizeBytes: asset.manifest.sizeBytes,
         sha256: asset.manifest.sha256,
         maxBytes: asset.manifest.sizeBytes
       }, input.signal);
+      await assertRuntimeViewRootIdentity(root, rootIdentity);
       if (!verification.ok) {
         throw new Error("Copied local runtime asset failed digest verification");
       }
@@ -143,6 +169,19 @@ export async function materializeRuntimeAssetView(input: {
       );
     }
     throw error;
+  }
+}
+
+async function assertRuntimeViewRootIdentity(
+  root: string,
+  expected: { readonly device: bigint; readonly inode: bigint }
+): Promise<void> {
+  const metadata = await lstat(root, { bigint: true });
+  if (!metadata.isDirectory()
+      || metadata.isSymbolicLink()
+      || metadata.dev !== expected.device
+      || metadata.ino !== expected.inode) {
+    throw new Error("Local runtime asset-view root identity changed during materialization");
   }
 }
 
