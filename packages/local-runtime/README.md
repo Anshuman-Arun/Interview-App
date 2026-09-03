@@ -14,7 +14,7 @@ Readiness strategies are pluggable and bounded by `startupTimeoutMs`:
 - `HTTP_LOOPBACK`: polling is restricted to loopback HTTP, `localhost` is canonicalized to literal `127.0.0.1`, redirects are rejected, and injected fetch results are branded/inspected through intrinsic `Response` accessors before readiness logic uses them;
 - `CUSTOM_LOCAL`: a trusted backend callback/probe can report readiness without giving the browser process access to spawning; callers remain responsible for keeping custom probe behavior local.
 
-Readiness decisions may also carry a version handshake containing component, protocol, model/hash, and capability metadata. Definitions can require expected component/protocol versions; mismatches fail startup.
+Readiness decisions may also carry a bounded handshake containing component version, protocol version, worker type, runtime version, model/hash identity, capabilities, and diagnostic metadata. Definitions may bind the trusted component/protocol/worker/runtime/model values and exact capability set; any mismatch fails startup closed. Duplicate or malformed reported capabilities are rejected before comparison.
 
 `DEGRADED` is observational only. `markDegraded()`/`markReady()` let a future local health monitor reflect process health without creating authoritative interview state.
 
@@ -95,4 +95,4 @@ state, or decide billing/data-use policy.
 
 `packages/local-compute` keeps its existing bounded NDJSON protocol and admission behavior unchanged in this PR. A later integration can use `LocalRuntimeManager` to own the Python worker process while retaining the existing protocol client, without changing the worker schema or interview semantics.
 
-No Ollama, Moonshine, Kokoro, Silero, GPU discovery, downloads, remote execution, or model-specific startup behavior is implemented here.
+This package remains model-agnostic. The desktop composition under `apps/desktop/src/runtime/**` now uses it to supervise Silero/Moonshine/Kokoro workers, but model discovery, downloads, execution, and session semantics remain outside `packages/local-runtime`.
