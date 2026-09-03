@@ -1,5 +1,7 @@
 import {
   InterpretationProviderResultSchema,
+  evidenceKeysEqual,
+  generationBasesEqual,
   type FormalInterpretationCandidate,
   type FormalInterpretationRequest,
   type InterpretationProviderResult
@@ -258,6 +260,15 @@ export function createOxfordFormalAdmissionProvider(
       }
       if (
         parsed.data.candidates.some((candidate) =>
+          !candidateIdentityMatchesRequest(request, candidate)
+        )
+      ) {
+        // Preserve identity attacks so Liam's generic admission emits the
+        // precise source/target/protocol rejection rather than hiding them.
+        return raw;
+      }
+      if (
+        parsed.data.candidates.some((candidate) =>
           !isOxfordFormalCandidateTargetAdmissible({
             profile,
             request,
@@ -270,6 +281,33 @@ export function createOxfordFormalAdmissionProvider(
       return parsed.data;
     }
   });
+}
+
+function candidateIdentityMatchesRequest(
+  request: FormalInterpretationRequest,
+  candidate: FormalInterpretationCandidate
+): boolean {
+  return candidate.source.requestId === request.requestId
+    && candidate.source.generationId === request.generationId
+    && generationBasesEqual(candidate.source.basis, request.basis)
+    && candidate.source.sourceRevision === request.source.sourceRevision
+    && candidate.source.inputEpisodeId === request.source.inputEpisodeId
+    && candidate.source.turnId === request.source.turnId
+    && candidate.source.eventIds.length === request.source.eventIds.length
+    && candidate.source.eventIds.every(
+      (eventId, index) => eventId === request.source.eventIds[index]
+    )
+    && candidate.source.span.start === request.source.span.start
+    && candidate.source.span.end === request.source.span.end
+    && candidate.source.span.text === request.source.span.text
+    && candidate.source.problem.id === request.problem.id
+    && candidate.source.problem.version === request.problem.version
+    && evidenceKeysEqual(candidate.target, request.target)
+    && request.allowedProtocols.some(
+      (protocol) =>
+        protocol.protocol === candidate.protocol.protocol
+        && protocol.version === candidate.protocol.version
+    );
 }
 
 function abstention(
