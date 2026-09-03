@@ -630,7 +630,7 @@ describe("Quant Research client admission boundaries", () => {
     document.body.append(container);
     const root = createRoot(container);
 
-    const allocationSubmit = vi.fn(async () => allocationState);
+    const allocationSubmit = vi.fn(async (_action: unknown) => allocationState);
     await act(async () => {
       root.render(
         <QuantResearchWorkspace
@@ -646,9 +646,14 @@ describe("Quant Research client admission boundaries", () => {
     });
     let inputs = [...container.querySelectorAll("input")];
     if (inputs.length !== 2) throw new Error("Expected paired allocation inputs");
+    const allocationA = inputs[0];
+    const allocationB = inputs[1];
+    if (allocationA === undefined || allocationB === undefined) {
+      throw new Error("Expected paired allocation inputs");
+    }
     await act(async () => {
-      setInputValue(inputs[0], "1");
-      setInputValue(inputs[1], "1");
+      setInputValue(allocationA, "1");
+      setInputValue(allocationB, "1");
     });
     const allocationForm = container.querySelector("form");
     if (allocationForm === null) throw new Error("Expected allocation form");
@@ -658,7 +663,7 @@ describe("Quant Research client admission boundaries", () => {
     expect(allocationSubmit).not.toHaveBeenCalled();
     expect(container.textContent).toContain("public budget of 10");
 
-    const optimizationSubmit = vi.fn(async () => optimizationState);
+    const optimizationSubmit = vi.fn(async (_action: unknown) => optimizationState);
     await act(async () => {
       root.render(
         <QuantResearchWorkspace
@@ -674,9 +679,14 @@ describe("Quant Research client admission boundaries", () => {
     });
     inputs = [...container.querySelectorAll("input")];
     if (inputs.length !== 2) throw new Error("Expected paired optimization inputs");
+    const optimizationX = inputs[0];
+    const optimizationY = inputs[1];
+    if (optimizationX === undefined || optimizationY === undefined) {
+      throw new Error("Expected paired optimization inputs");
+    }
     await act(async () => {
-      setInputValue(inputs[0], "10");
-      setInputValue(inputs[1], "10");
+      setInputValue(optimizationX, "10");
+      setInputValue(optimizationY, "10");
     });
     const optimizationForm = container.querySelector("form");
     if (optimizationForm === null) throw new Error("Expected optimization form");
