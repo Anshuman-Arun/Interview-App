@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createHash } from "node:crypto";
-import { appendFileSync, createReadStream, lstatSync, realpathSync, rmSync } from "node:fs";
+import { createReadStream, lstatSync, realpathSync, rmSync } from "node:fs";
 import { chmod, lstat, mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path, { win32 as win32Path } from "node:path";
@@ -668,14 +668,6 @@ export class SupervisedProcessRunner {
     });
     child.stderr.on("data", (value: Buffer) => {
       if (!Buffer.isBuffer(value) || settled) return;
-      const debugFile = process.env["INTERVIEW_SUPERVISED_DEBUG_FILE"];
-      if (
-        process.platform === "win32"
-        && debugFile !== undefined
-        && debugFile.length > 0
-      ) {
-        appendFileSync(debugFile, value);
-      }
       if (stderrBytes + value.length > request.maxStderrBytes) {
         requestCleanup("OUTPUT_LIMIT_EXCEEDED");
         return;
