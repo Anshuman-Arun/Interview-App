@@ -298,7 +298,7 @@ export class ManagedKokoroRuntime implements KokoroRuntime {
           state.cancelled = true;
           return;
         }
-        const result = await runWithWorkerRecycleOnTimeout(this.client, "tts", () =>
+        const result = await runWithWorkerRecycleOnTimeout(this.client, "tts-cancel", () =>
           this.client.postJson("/v1/tts/cancel", {
             requestId
           }, {
@@ -366,7 +366,7 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
 
 async function runWithWorkerRecycleOnTimeout<T>(
   client: ManagedModelWorkerClient,
-  scope: "vad" | "stt" | "tts",
+  scope: "vad" | "stt" | "tts" | "tts-cancel",
   operation: () => Promise<T>
 ): Promise<T> {
   const workerInstance = client.workerInstanceIdentity();
