@@ -511,6 +511,31 @@ describe("Moonshine-compatible adapter seam", () => {
     expect(input.pcmBytes[0]).toBe(0);
   });
 
+  it("forwards pre-start cancellation without overstating native abort capability", async () => {
+    let signalWasProvided = false;
+    const runtime = {
+      runtimeVersion: "test-runtime",
+      supportsAbort: false,
+      observesPreStartAbort: true,
+      async transcribe(value: { readonly signal?: AbortSignal }) {
+        signalWasProvided = value.signal !== undefined;
+        return { text: "queued moonshine transcript" };
+      }
+    };
+    const recognizer = new MoonshineSpeechRecognizer({
+      runtime,
+      modelPath: "models/moonshine/model.bin",
+      modelVersion: "model-v1"
+    });
+    const input = recognizerInput();
+
+    await expect(
+      recognizer.recognize(input, new AbortController().signal)
+    ).resolves.toMatchObject({ text: "queued moonshine transcript" });
+    expect(recognizer.cancellationCapability).toBe("NONE");
+    expect(signalWasProvided).toBe(true);
+  });
+
   it("reports honest cancellation capability and exposes model identity", async () => {
     let signalWasProvided = false;
     const runtime = {

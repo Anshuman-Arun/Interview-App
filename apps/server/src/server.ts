@@ -1,7 +1,10 @@
 import path from "node:path";
 import process from "node:process";
 import { SqliteEventStore } from "../../../packages/persistence/src/index.js";
-import { SessionRuntimeRegistry } from "../../../packages/interview-engine/src/index.js";
+import {
+  SessionRuntimeRegistry,
+  type VisionInferenceBackend
+} from "../../../packages/interview-engine/src/index.js";
 import type { LocalTransportSecurity } from "../../../packages/domain/src/index.js";
 import { LocalInterviewTransportRuntime } from "./local-interview-transport-runtime.js";
 import type { ProviderRuntimeResolver } from "./provider-runtime.js";
@@ -26,6 +29,7 @@ export interface ServerConfig {
   readonly allowedOrigins?: readonly string[];
   readonly databasePath?: string;
   readonly providerRuntimeResolver?: ProviderRuntimeResolver;
+  readonly visionBackend?: VisionInferenceBackend;
 }
 
 export async function createAndStartServer(config: ServerConfig = {}) {
@@ -65,7 +69,8 @@ export async function createAndStartServer(config: ServerConfig = {}) {
       ...(config.voiceRuntime === undefined ? {} : { voiceRuntime: config.voiceRuntime }),
       ...(config.providerRuntimeResolver === undefined
         ? {}
-        : { providerRuntimeResolver: config.providerRuntimeResolver })
+        : { providerRuntimeResolver: config.providerRuntimeResolver }),
+      ...(config.visionBackend === undefined ? {} : { visionBackend: config.visionBackend })
     });
     bound = await runtime.start();
   } catch (error) {

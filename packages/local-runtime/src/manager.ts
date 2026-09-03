@@ -1487,12 +1487,28 @@ function inspectDefinition(definition: LocalComponentDefinition): LocalComponent
         "backoffMs",
         "maxBackoffMs"
       ]));
-  const expectedHandshake = top.expectedHandshake === undefined
+  const inspectedExpectedHandshake = top.expectedHandshake === undefined
     ? undefined
     : inspectKnownDataObject(top.expectedHandshake, "expectedHandshake", new Set([
         "componentVersion",
-        "protocolVersion"
+        "protocolVersion",
+        "workerType",
+        "runtimeVersion",
+        "modelVersionOrHash",
+        "capabilities"
       ]));
+  const expectedHandshake = inspectedExpectedHandshake === undefined
+    ? undefined
+    : Object.freeze({
+        ...inspectedExpectedHandshake,
+        ...(inspectedExpectedHandshake.capabilities === undefined
+          ? {}
+          : {
+              capabilities: inspectExpectedHandshakeCapabilities(
+                inspectedExpectedHandshake.capabilities
+              )
+            })
+      });
   const output = top.output === undefined
     ? undefined
     : inspectKnownDataObject(top.output, "output", new Set([
@@ -1554,6 +1570,48 @@ function inspectKnownDataObject(
   return Object.freeze(copy);
 }
 
+function inspectExpectedHandshakeCapabilities(value: unknown): readonly string[] {
+  if (typeof value === "object" && value !== null && utilTypes.isProxy(value)) {
+    invalid("expectedHandshake.capabilities could not be inspected");
+  }
+  if (!safelyIsArray(value, "expectedHandshake.capabilities")) {
+    invalid("expectedHandshake.capabilities must be an array");
+  }
+
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(value);
+  } catch {
+    invalid("expectedHandshake.capabilities could not be inspected");
+  }
+  const rawLength = descriptors.length?.value as unknown;
+  if (typeof rawLength !== "number"
+      || !Number.isSafeInteger(rawLength)
+      || rawLength < 0
+      || rawLength > MAX_CAPABILITIES) {
+    invalid(`expectedHandshake.capabilities must contain at most ${String(MAX_CAPABILITIES)} items`);
+  }
+
+  const output: string[] = [];
+  for (let index = 0; index < rawLength; index += 1) {
+    const descriptor = descriptors[String(index)];
+    if (descriptor === undefined || !("value" in descriptor)) {
+      invalid("expectedHandshake.capabilities must be a dense data-only array");
+    }
+    if (typeof descriptor.value !== "string") {
+      invalid("expectedHandshake.capabilities must contain strings");
+    }
+    output.push(descriptor.value);
+  }
+  for (const [key, descriptor] of Object.entries(descriptors)) {
+    if (key === "length" || descriptor.enumerable !== true) continue;
+    if (!/^(?:0|[1-9][0-9]*)$/u.test(key)) {
+      invalid("expectedHandshake.capabilities may not contain extra enumerable properties");
+    }
+  }
+  return Object.freeze(output);
+}
+
 function inspectDefinitionArguments(value: unknown): readonly string[] {
   if (typeof value === "object" && value !== null && utilTypes.isProxy(value)) {
     invalid("args could not be inspected");
@@ -1603,7 +1661,12 @@ function freezeDefinition(definition: LocalComponentDefinition): LocalComponentD
     : Object.freeze({ ...definition.restartPolicy }) as LocalRestartPolicy;
   const expectedHandshake = definition.expectedHandshake === undefined
     ? undefined
-    : Object.freeze({ ...definition.expectedHandshake });
+    : Object.freeze({
+        ...definition.expectedHandshake,
+        ...(definition.expectedHandshake.capabilities === undefined
+          ? {}
+          : { capabilities: Object.freeze([...definition.expectedHandshake.capabilities]) })
+      });
   const output = definition.output === undefined
     ? undefined
     : Object.freeze({ ...definition.output });
@@ -1755,6 +1818,43 @@ function validateExpectedHandshakeDefinition(expected: LocalExpectedHandshake | 
   if (expected.protocolVersion !== undefined) {
     validateVersionValue(expected.protocolVersion, "expectedHandshake.protocolVersion", invalid);
   }
+  for (const [value, label] of [
+    [expected.workerType, "expectedHandshake.workerType"],
+    [expected.runtimeVersion, "expectedHandshake.runtimeVersion"]
+  ] as const) {
+    if (value !== undefined
+        && (typeof value !== "string"
+          || value.length === 0
+          || value.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength)) {
+      invalid(`${label} must be a non-empty bounded string`);
+    }
+  }
+  if (expected.modelVersionOrHash !== undefined) {
+    if (typeof expected.modelVersionOrHash !== "string"
+        || expected.modelVersionOrHash.length === 0
+        || expected.modelVersionOrHash.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
+      invalid("expectedHandshake.modelVersionOrHash must be a non-empty bounded string");
+    }
+  }
+  if (expected.capabilities !== undefined) {
+    const capabilitiesValue: unknown = expected.capabilities;
+    if (!Array.isArray(capabilitiesValue)
+        || capabilitiesValue.length > MAX_CAPABILITIES) {
+      invalid("expectedHandshake.capabilities must be a bounded array");
+    }
+    const seen = new Set<string>();
+    for (const capability of capabilitiesValue) {
+      if (typeof capability !== "string"
+          || capability.length === 0
+          || capability.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
+        invalid("expectedHandshake.capabilities must contain non-empty bounded strings");
+      }
+      if (seen.has(capability)) {
+        invalid("expectedHandshake.capabilities must not contain duplicates");
+      }
+      seen.add(capability);
+    }
+  }
 }
 
 function validateOutputLimits(output: LocalComponentDefinition["output"]): void {
@@ -1901,6 +2001,12 @@ function sanitizeHandshake(
   return Object.freeze({
     ...(handshake.componentVersion === undefined ? {} : { componentVersion: sanitizeDiagnosticText(redactKnownSecrets(handshake.componentVersion, secretValues)) }),
     ...(protocolVersion === undefined ? {} : { protocolVersion }),
+    ...(handshake.workerType === undefined
+      ? {}
+      : { workerType: sanitizeDiagnosticText(redactKnownSecrets(handshake.workerType, secretValues)) }),
+    ...(handshake.runtimeVersion === undefined
+      ? {}
+      : { runtimeVersion: sanitizeDiagnosticText(redactKnownSecrets(handshake.runtimeVersion, secretValues)) }),
     ...(handshake.modelVersionOrHash === undefined ? {} : { modelVersionOrHash: sanitizeDiagnosticText(redactKnownSecrets(handshake.modelVersionOrHash, secretValues)) }),
     ...(capabilities === undefined ? {} : { capabilities: Object.freeze(capabilities) }),
     ...(handshake.metadata === undefined ? {} : { metadata: handshake.metadata })
@@ -1919,6 +2025,8 @@ function cloneHandshake(handshake: LocalComponentHandshake): LocalComponentHands
   return Object.freeze({
     ...(handshake.componentVersion === undefined ? {} : { componentVersion: handshake.componentVersion }),
     ...(handshake.protocolVersion === undefined ? {} : { protocolVersion: handshake.protocolVersion }),
+    ...(handshake.workerType === undefined ? {} : { workerType: handshake.workerType }),
+    ...(handshake.runtimeVersion === undefined ? {} : { runtimeVersion: handshake.runtimeVersion }),
     ...(handshake.modelVersionOrHash === undefined ? {} : { modelVersionOrHash: handshake.modelVersionOrHash }),
     ...(handshake.capabilities === undefined ? {} : { capabilities: Object.freeze([...handshake.capabilities]) }),
     ...(handshake.metadata === undefined ? {} : { metadata: Object.freeze({ ...handshake.metadata }) })
@@ -1954,7 +2062,7 @@ function normalizeReportedHandshake(
   const descriptors = inspectReadinessObject(handshake, "handshake must be an object", fail);
   validateReadinessObjectFields(
     descriptors,
-    new Set(["componentVersion", "protocolVersion", "modelVersionOrHash", "capabilities", "metadata"]),
+    new Set(["componentVersion", "protocolVersion", "workerType", "runtimeVersion", "modelVersionOrHash", "capabilities", "metadata"]),
     fail
   );
 
@@ -1979,6 +2087,34 @@ function normalizeReportedHandshake(
   if (rawProtocolVersion !== undefined) {
     validateVersionValue(rawProtocolVersion, "protocolVersion", fail);
     protocolVersion = rawProtocolVersion as string | number;
+  }
+
+  const rawWorkerType = dataDescriptorValue(descriptors, "workerType", fail);
+  let workerType: string | undefined;
+  if (rawWorkerType !== undefined) {
+    if (typeof rawWorkerType === "string") {
+      if (rawWorkerType.length === 0
+          || rawWorkerType.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
+        fail("workerType must be a non-empty bounded string");
+      }
+      workerType = rawWorkerType;
+    } else {
+      fail("workerType must be a non-empty bounded string");
+    }
+  }
+
+  const rawRuntimeVersion = dataDescriptorValue(descriptors, "runtimeVersion", fail);
+  let runtimeVersion: string | undefined;
+  if (rawRuntimeVersion !== undefined) {
+    if (typeof rawRuntimeVersion === "string") {
+      if (rawRuntimeVersion.length === 0
+          || rawRuntimeVersion.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
+        fail("runtimeVersion must be a non-empty bounded string");
+      }
+      runtimeVersion = rawRuntimeVersion;
+    } else {
+      fail("runtimeVersion must be a non-empty bounded string");
+    }
   }
 
   const rawModelVersionOrHash = dataDescriptorValue(descriptors, "modelVersionOrHash", fail);
@@ -2017,6 +2153,8 @@ function normalizeReportedHandshake(
   return Object.freeze({
     ...(componentVersion === undefined ? {} : { componentVersion }),
     ...(protocolVersion === undefined ? {} : { protocolVersion }),
+    ...(workerType === undefined ? {} : { workerType }),
+    ...(runtimeVersion === undefined ? {} : { runtimeVersion }),
     ...(modelVersionOrHash === undefined ? {} : { modelVersionOrHash }),
     ...(capabilities === undefined ? {} : { capabilities }),
     ...(metadata === undefined ? {} : { metadata })
@@ -2045,6 +2183,7 @@ function inspectHandshakeCapabilities(
     fail(`capabilities must contain at most ${String(MAX_CAPABILITIES)} items`);
   }
   const output: string[] = [];
+  const seen = new Set<string>();
   for (let index = 0; index < rawLength; index += 1) {
     const descriptor = descriptors[String(index)];
     if (descriptor === undefined || !("value" in descriptor)) {
@@ -2058,6 +2197,8 @@ function inspectHandshakeCapabilities(
       ) {
         fail("capabilities must contain only non-empty bounded strings");
       }
+      if (seen.has(capability)) fail("capabilities must not contain duplicates");
+      seen.add(capability);
       output.push(capability);
     } else {
       fail("capabilities must contain only non-empty bounded strings");
@@ -2141,6 +2282,31 @@ function validateExpectedHandshake(
   }
   if (expected.protocolVersion !== undefined && actual.protocolVersion !== expected.protocolVersion) {
     throw new LocalRuntimeError("HANDSHAKE_MISMATCH", `Component ${componentId} reported an unexpected protocol version`);
+  }
+  if (expected.workerType !== undefined && actual.workerType !== expected.workerType) {
+    throw new LocalRuntimeError("HANDSHAKE_MISMATCH", `Component ${componentId} reported an unexpected worker type`);
+  }
+  if (expected.runtimeVersion !== undefined && actual.runtimeVersion !== expected.runtimeVersion) {
+    throw new LocalRuntimeError("HANDSHAKE_MISMATCH", `Component ${componentId} reported an unexpected runtime version`);
+  }
+  if (expected.modelVersionOrHash !== undefined
+      && actual.modelVersionOrHash !== expected.modelVersionOrHash) {
+    throw new LocalRuntimeError(
+      "HANDSHAKE_MISMATCH",
+      `Component ${componentId} reported an unexpected model version or hash`
+    );
+  }
+  if (expected.capabilities !== undefined) {
+    const actualCapabilities = actual.capabilities;
+    const expectedSet = new Set(expected.capabilities);
+    if (actualCapabilities === undefined
+        || actualCapabilities.length !== expected.capabilities.length
+        || actualCapabilities.some((capability) => !expectedSet.has(capability))) {
+      throw new LocalRuntimeError(
+        "HANDSHAKE_MISMATCH",
+        `Component ${componentId} reported unexpected capabilities`
+      );
+    }
   }
 }
 
