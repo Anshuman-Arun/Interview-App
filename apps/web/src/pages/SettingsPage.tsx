@@ -110,15 +110,24 @@ function parseCapability(value: unknown): DesktopRuntimeStatus["speech"] | undef
   };
 }
 
+function modelSetupBlockReason(
+  status: DesktopRuntimeStatus | undefined
+): "PYTHON" | "PLATFORM" | "APP_REPAIR" | undefined {
+  if (status === undefined) return undefined;
+  const reasons = [status.speech.reasonCode, status.tts.reasonCode];
+  if (
+    reasons.includes("PYTHON_RUNTIME_UNAVAILABLE")
+    || reasons.includes("PYTHON_RUNTIME_INCOMPATIBLE")
+  ) {
+    return "PYTHON";
+  }
+  if (reasons.includes("UNSUPPORTED_RUNTIME_PLATFORM")) return "PLATFORM";
+  if (reasons.includes("WORKER_EXECUTABLE_UNAVAILABLE")) return "APP_REPAIR";
+  return undefined;
+}
+
 function modelSetupBlocked(status: DesktopRuntimeStatus | undefined): boolean {
-  if (status === undefined) return false;
-  return [
-    status.speech.reasonCode,
-    status.tts.reasonCode
-  ].some((reason) =>
-    reason === "WORKER_EXECUTABLE_UNAVAILABLE"
-    || reason === "UNSUPPORTED_RUNTIME_PLATFORM"
-  );
+  return modelSetupBlockReason(status) !== undefined;
 }
 
 function describeVoiceRuntime(status: DesktopRuntimeStatus): string {
@@ -144,7 +153,13 @@ function describeVoiceRuntime(status: DesktopRuntimeStatus): string {
     status.speech.reasonCode === "PYTHON_RUNTIME_UNAVAILABLE"
     || status.tts.reasonCode === "PYTHON_RUNTIME_UNAVAILABLE"
   ) {
-    return "Voice needs a compatible system CPython 3.12 or 3.13 runtime.";
+    return "Voice needs a compatible 64-bit system CPython 3.12 or 3.13 runtime.";
+  }
+  if (
+    status.speech.reasonCode === "PYTHON_RUNTIME_INCOMPATIBLE"
+    || status.tts.reasonCode === "PYTHON_RUNTIME_INCOMPATIBLE"
+  ) {
+    return "Voice needs 64-bit CPython 3.12 or 3.13 with the pinned runtime requirements installed.";
   }
   if (status.speech.state === "MISSING_ASSET" || status.tts.state === "MISSING_ASSET") {
     return "Voice models are not installed yet.";
@@ -515,9 +530,13 @@ export function SettingsPage({
                 ? "Installing verified models…"
                 : runtimeStatus?.modelSetup.restartRequired
                   ? "Restart to activate voice"
-                  : modelSetupBlocked(runtimeStatus)
-                    ? "Reinstall app to repair voice"
-                    : runtimeStatus?.speech.state === "READY" && runtimeStatus.tts.state === "READY"
+                  : modelSetupBlockReason(runtimeStatus) === "PYTHON"
+                    ? "Python prerequisite required"
+                    : modelSetupBlockReason(runtimeStatus) === "PLATFORM"
+                      ? "Voice unavailable on this device"
+                      : modelSetupBlockReason(runtimeStatus) === "APP_REPAIR"
+                        ? "Reinstall app to repair voice"
+                        : runtimeStatus?.speech.state === "READY" && runtimeStatus.tts.state === "READY"
                       ? "Voice ready"
                       : "Install / verify voice models"}
             </button>
