@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -254,6 +254,35 @@ describe("desktop local model runtime", () => {
       vision: {
         state: "UNAVAILABLE",
         reasonCode: "NO_PRODUCTION_BACKEND_CONFIGURED"
+      }
+    });
+  });
+
+  it("rejects a tampered packaged Python worker before interpreter execution", async () => {
+    const workerRoot = temporaryRoot("desktop-packaged-worker-tamper-");
+    const workerPath = join(workerRoot, "local_model_worker.py");
+    writeFileSync(workerPath, "print('tampered worker')\n", "utf8");
+
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-packaged-worker-appdata-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: true,
+      workerScriptPath: workerPath,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+
+    await expect(composition.start()).resolves.toBeUndefined();
+    expect(composition.voiceRuntime).toBeUndefined();
+    expect(composition.getCapabilityStatus()).toMatchObject({
+      speech: {
+        state: "UNAVAILABLE",
+        reasonCode: "WORKER_EXECUTABLE_UNAVAILABLE"
+      },
+      tts: {
+        state: "UNAVAILABLE",
+        reasonCode: "WORKER_EXECUTABLE_UNAVAILABLE"
       }
     });
   });
