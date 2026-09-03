@@ -279,6 +279,17 @@ describe("production quant runtime integration", () => {
       expect(store.eventCount(legacy.sessionId)).toBe(countBeforeRejectedWrites);
     }
 
+    const partialResearch = newSessionId();
+    injectLegacyUninitializedQuant(
+      store,
+      partialResearch,
+      researchConfiguration(),
+      {
+        problemId: "MODEL_COMPARISON",
+        problemVersion: QUANT_RESEARCH_VERSION,
+        prompt: "Legacy partial Quant Research prompt"
+      }
+    );
     const completedTrading = injectLegacyTerminalQuant(
       tradingConfiguration(),
       "COMPLETED"
@@ -290,6 +301,7 @@ describe("production quant runtime integration", () => {
     const legacySessions = [
       { sessionId: activeTrading, status: "ACTIVE", configuration: tradingConfiguration() },
       { sessionId: activeResearch, status: "ACTIVE", configuration: researchConfiguration() },
+      { sessionId: partialResearch, status: "ACTIVE", configuration: researchConfiguration() },
       { sessionId: completedTrading, status: "COMPLETED", configuration: tradingConfiguration() },
       { sessionId: archivedResearch, status: "ARCHIVED", configuration: researchConfiguration() }
     ] as const;
@@ -2707,7 +2719,12 @@ function overwriteProcessedResult(
 function injectLegacyUninitializedQuant(
   store: SqliteEventStore,
   sessionId: SessionId,
-  configuration: InterviewSessionConfiguration
+  configuration: InterviewSessionConfiguration,
+  syntheticProblem?: {
+    readonly problemId: string;
+    readonly problemVersion: string;
+    readonly prompt: string;
+  }
 ): void {
   const requestId = newRequestId();
   store.appendIdempotent({
@@ -2725,7 +2742,13 @@ function injectLegacyUninitializedQuant(
         startedAt: new Date().toISOString(),
         configuration
       }
-    }],
+    }, ...(syntheticProblem === undefined
+      ? []
+      : [{
+          source: "APPLICATION" as const,
+          type: "PROBLEM_PRESENTED" as const,
+          payload: syntheticProblem
+        }])],
     result: { injected: true }
   });
 }
