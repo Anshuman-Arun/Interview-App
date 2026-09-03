@@ -452,6 +452,30 @@ describe("formal protocol routing and ambiguity", () => {
       sourceHarness.store.close();
     }
 
+    const spanHarness = await createCoreHarness();
+    try {
+      const request = formalRequest(spanHarness);
+      const wrong = candidate(request);
+      const forgedSpan = {
+        start: request.source.span.start,
+        end: request.source.span.start + 1,
+        text: request.source.span.text.slice(0, 1)
+      };
+      const provider = new DeterministicFormalInterpretationProvider(providerResultFor(request, [{
+        ...wrong,
+        source: { ...wrong.source, span: forgedSpan }
+      }]));
+      const result = await new InterpretationCoordinator(spanHarness.writer, provider, routingScopes)
+        .interpretAndVerify(request);
+      expect(result).toMatchObject({
+        status: "SOURCE_MISMATCH",
+        reason: "CANDIDATE_SOURCE_MISMATCH"
+      });
+      expect(Object.values(spanHarness.writer.getState().verificationRequests)).toHaveLength(0);
+    } finally {
+      spanHarness.store.close();
+    }
+
     const targetHarness = await createCoreHarness();
     try {
       const request = formalRequest(targetHarness);
