@@ -40,6 +40,10 @@ export type StudentReasoningAnalysisOutcome =
         | "ANALYSIS_FAILURE";
     };
 
+interface CancellableFormalInterpretationProvider extends FormalInterpretationProvider {
+  readonly cancel?: (requestId: RequestId) => Promise<void> | void;
+}
+
 export class UnavailableFormalInterpretationProvider implements FormalInterpretationProvider {
   public interpret(request: Parameters<FormalInterpretationProvider["interpret"]>[0]): Promise<unknown> {
     return Promise.resolve({
@@ -139,7 +143,7 @@ export class StudentReasoningAnalysisCoordinator {
     let timeout: ReturnType<typeof setTimeout> | undefined;
     const timeLimit = new Promise<StudentReasoningAnalysisOutcome>((resolve) => {
       timeout = setTimeout(() => {
-        context.coordinator.abandon(request.requestId);
+        this.abandon(context, request.requestId);
         resolve({ status: "SKIPPED", reason: "TIME_LIMIT" });
       }, this.timeoutMs);
     });
@@ -176,7 +180,7 @@ export class StudentReasoningAnalysisCoordinator {
         || latest === undefined
         || turn.committedSequence !== latest
       ) {
-        context.coordinator.abandon(requestId);
+        this.abandon(context, requestId);
       }
     }
   }
@@ -185,13 +189,21 @@ export class StudentReasoningAnalysisCoordinator {
     this.shuttingDown = true;
     for (const context of this.contexts.values()) {
       for (const requestId of context.active.keys()) {
-        context.coordinator.abandon(requestId);
+        this.abandon(context, requestId);
       }
     }
   }
 
   public resume(): void {
     this.shuttingDown = false;
+  }
+
+  private abandon(context: SessionAnalysisContext, requestId: RequestId): void {
+    context.coordinator.abandon(requestId);
+    const cancellable = this.provider as CancellableFormalInterpretationProvider;
+    if (typeof cancellable.cancel === "function") {
+      void Promise.resolve(cancellable.cancel(requestId)).catch(() => undefined);
+    }
   }
 
   private contextFor(
