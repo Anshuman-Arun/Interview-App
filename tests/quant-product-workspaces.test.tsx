@@ -8,6 +8,7 @@ import {
   QuantResearchPublicStateSchema,
   QuantTradingPublicStateSchema,
   newSessionId,
+  type QuantResearchCandidateAction,
   type QuantTradingCandidateAction,
   type SessionId
 } from "../packages/domain/src/index.js";
@@ -639,7 +640,10 @@ describe("Quant Research client admission boundaries", () => {
           actionPending={false}
           disabled={false}
           onRefresh={async () => undefined}
-          onSubmit={allocationSubmit}
+          onSubmit={(action) => {
+            allocationSubmissions.push(action);
+            return Promise.resolve(allocationState);
+          }}
           onReview={() => undefined}
         />
       );
@@ -660,7 +664,7 @@ describe("Quant Research client admission boundaries", () => {
     await act(async () => {
       allocationForm.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
-    expect(allocationSubmit).not.toHaveBeenCalled();
+    expect(allocationSubmissions).toHaveLength(0);
     expect(container.textContent).toContain("public budget of 10");
 
     const optimizationSubmit = vi.fn(async (_action: unknown) => optimizationState);
@@ -672,7 +676,10 @@ describe("Quant Research client admission boundaries", () => {
           actionPending={false}
           disabled={false}
           onRefresh={async () => undefined}
-          onSubmit={optimizationSubmit}
+          onSubmit={(action) => {
+            optimizationSubmissions.push(action);
+            return Promise.resolve(optimizationState);
+          }}
           onReview={() => undefined}
         />
       );
@@ -695,8 +702,8 @@ describe("Quant Research client admission boundaries", () => {
       await Promise.resolve();
     });
 
-    expect(optimizationSubmit).toHaveBeenCalledTimes(1);
-    expect(optimizationSubmit.mock.calls[0]?.[0]).toMatchObject({
+    expect(optimizationSubmissions).toHaveLength(1);
+    expect(optimizationSubmissions[0]).toMatchObject({
       kind: "SUBMIT_PARAMETERS",
       values: [10, 10]
     });
@@ -711,10 +718,10 @@ describe("Quant Trading client admission boundaries", () => {
     state: ReturnType<typeof activeTradingState>,
     values: readonly [string, string, string, string]
   ): Promise<{
-    readonly submit: ReturnType<typeof vi.fn>;
+    readonly submissions: readonly QuantTradingCandidateAction[];
     readonly text: string;
   }> {
-    const submit = vi.fn(async () => activeTradingState(2));
+    const submissions: QuantTradingCandidateAction[] = [];
     const container = document.createElement("div");
     document.body.append(container);
     const root = createRoot(container);
@@ -727,7 +734,10 @@ describe("Quant Trading client admission boundaries", () => {
           actionPending={false}
           disabled={false}
           onRefresh={async () => undefined}
-          onSubmit={submit}
+          onSubmit={(action) => {
+            submissions.push(action);
+            return Promise.resolve(activeTradingState(2));
+          }}
           onReview={() => undefined}
         />
       );
@@ -756,7 +766,7 @@ describe("Quant Trading client admission boundaries", () => {
 
     await act(async () => root.unmount());
     container.remove();
-    return { submit, text };
+    return { submissions, text };
   }
 
   it("matches deterministic tick admission and public hard-position limits", async () => {
@@ -764,7 +774,7 @@ describe("Quant Trading client admission boundaries", () => {
       activeTradingState(1),
       ["99.50000001", "1", "100.5", "1"]
     );
-    expect(offTick.submit).not.toHaveBeenCalled();
+    expect(offTick.submissions).toHaveLength(0);
     expect(offTick.text).toContain("public tick size");
 
     const base = activeTradingState(1);
@@ -781,15 +791,15 @@ describe("Quant Trading client admission boundaries", () => {
       hardLimitState,
       ["99.5", "1", "100.5", "1"]
     );
-    expect(hardLimit.submit).not.toHaveBeenCalled();
+    expect(hardLimit.submissions).toHaveLength(0);
     expect(hardLimit.text).toContain("hard position limit");
 
     const valid = await submitQuoteThroughDom(
       activeTradingState(1),
       ["99.5", "1", "100.5", "1"]
     );
-    expect(valid.submit).toHaveBeenCalledTimes(1);
-    expect(valid.submit.mock.calls[0]?.[0]).toEqual({
+    expect(valid.submissions).toHaveLength(1);
+    expect(valid.submissions[0]).toEqual({
       type: "QUOTE",
       quote: {
         bidPrice: 99.5,
