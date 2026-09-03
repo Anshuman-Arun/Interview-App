@@ -422,6 +422,10 @@ describe("Antigravity CLI one-turn protocol", () => {
       }) + "\n",
       antigravityStream() + "hostile trailing terminal text\n",
       antigravityStream().replace(
+        '"event":"init"',
+        '"event":"init","__proto__":{"polluted":true}'
+      ),
+      antigravityStream().replace(
         '"permission_mode":"request-review"',
         '"permission_mode":"always-proceed"'
       ),
