@@ -146,7 +146,7 @@ function resultFor(
 }
 
 function executorReturning(
-  request: FormalInterpretationRequest,
+  _request: FormalInterpretationRequest,
   outputFactory: () => unknown,
   inspect?: (input: SupervisedCliExecutionRequest) => void,
   responseSuffix = ""
@@ -461,15 +461,15 @@ describe("provider-backed Oxford formal interpretation", () => {
   it("physically aborts the supervised formal subprocess when the interpretation request is cancelled", async () => {
     const test = await fixture("2 divides 4.");
     try {
-      let started: (() => void) | undefined;
+      let markStarted: () => void = () => undefined;
       const didStart = new Promise<void>((resolve) => {
-        started = resolve;
+        markStarted = resolve;
       });
       let sawAbort = false;
       const executor: SupervisedCliExecutor = Object.freeze({
         execute(input: SupervisedCliExecutionRequest) {
-          started?.();
-          return new Promise((resolve, reject) => {
+          markStarted();
+          return new Promise<never>((_resolve, reject) => {
             if (input.signal.aborted) {
               sawAbort = true;
               reject(new Error("aborted"));
