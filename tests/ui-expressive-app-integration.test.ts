@@ -148,8 +148,10 @@ describe("expressive product integration invariants", () => {
     expect(app.indexOf('navigate({ page: "interview" })'))
       .toBeLessThan(app.indexOf("session.resumePausedSession()"));
     expect(app).toContain("session.isPaused && !resumeMountPending");
-    expect(adapter).toContain("detachedPageShapes");
-    expect(adapter).toContain("globalThis.structuredClone(shape)");
+    expect(adapter).toContain("detachedEditorState");
+    expect(adapter).toContain('kind: "SNAPSHOT"');
+    expect(adapter).toContain("captureEditorSnapshot");
+    expect(adapter).toContain("restoreEditorSnapshot");
   });
 
   it("drops a prior canvas before attaching a different recovered ACTIVE session", () => {
