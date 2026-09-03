@@ -150,6 +150,9 @@ clean Windows x64 machine:
 - Install into the default path and launch from Start Menu and the desktop shortcut.
 - Repeat with a Windows username containing non-ASCII characters.
 - Confirm typed interview creation/input/history work while offline.
+- Open the interview whiteboard while offline and exercise tldraw drawing tools,
+  icons, fonts and canvas interactions; confirm packaged assets resolve without
+  network access.
 - Confirm missing Python and an unsupported Python version leave typed mode
   usable and clearly report voice unavailable.
 - Install CPython 3.12 or 3.13 plus pinned requirements, use Settings to install
