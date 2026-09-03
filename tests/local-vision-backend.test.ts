@@ -199,6 +199,10 @@ describe("managed production local vision backend", () => {
       signal: new AbortController().signal,
       imagePayload: image.payload
     })).rejects.toThrow();
+    expect(stub.recycleAfterUncertainRequest).toHaveBeenCalledWith(
+      "101:0:started:ready",
+      "vision"
+    );
   });
 
   it("rejects an execution payload whose digest does not match the request basis", async () => {
