@@ -24,9 +24,11 @@ $database = Join-Path $userData "data\interview-session.sqlite"
 $modelMarker = Join-Path $userData "data\model-assets\packaging-preserve.marker"
 $desktopShortcut = Join-Path ([Environment]::GetFolderPath("Desktop")) "Interview App.lnk"
 $startMenuShortcut = Join-Path ([Environment]::GetFolderPath("Programs")) "Interview App.lnk"
+$smokeProof = Join-Path $env:RUNNER_TEMP "InterviewApp-Prior-Smoke-Proof.json"
 
 Remove-Item -Recurse -Force $installRoot -ErrorAction SilentlyContinue
 Remove-Item -Recurse -Force $userData -ErrorAction SilentlyContinue
+Remove-Item -Force $smokeProof -ErrorAction SilentlyContinue
 
 function Run-Installer {
   param([string]$Path = $installerPath)
@@ -55,8 +57,12 @@ try {
   $priorProductVersion = (Get-Item $installedExe).VersionInfo.ProductVersion
 
   $oldPython = $env:INTERVIEW_LOCAL_PYTHON
+  $oldSmokeReport = $env:INTERVIEW_PACKAGED_SMOKE_REPORT
+  $oldSmokeExpectation = $env:INTERVIEW_PACKAGED_SMOKE_EXPECT_REPORT
   try {
     $env:INTERVIEW_LOCAL_PYTHON = Join-Path $installRoot "missing-python.exe"
+    $env:INTERVIEW_PACKAGED_SMOKE_REPORT = $smokeProof
+    Remove-Item -Force Env:INTERVIEW_PACKAGED_SMOKE_EXPECT_REPORT -ErrorAction SilentlyContinue
     $smoke = Start-Process -FilePath $installedExe -ArgumentList "--packaged-smoke-test" -PassThru
     if (-not $smoke.WaitForExit(60000)) {
       Stop-Process -Id $smoke.Id -Force -ErrorAction SilentlyContinue
@@ -67,8 +73,13 @@ try {
     }
   } finally {
     $env:INTERVIEW_LOCAL_PYTHON = $oldPython
+    $env:INTERVIEW_PACKAGED_SMOKE_REPORT = $oldSmokeReport
+    $env:INTERVIEW_PACKAGED_SMOKE_EXPECT_REPORT = $oldSmokeExpectation
   }
 
+  if (-not (Test-Path $smokeProof)) {
+    throw "Prior packaged smoke did not emit the upgrade proof"
+  }
   if (-not (Test-Path $database)) {
     throw "Installed application did not create its durable SQLite database"
   }
@@ -98,6 +109,8 @@ try {
 
   try {
     $env:INTERVIEW_LOCAL_PYTHON = Join-Path $installRoot "missing-python.exe"
+    Remove-Item -Force Env:INTERVIEW_PACKAGED_SMOKE_REPORT -ErrorAction SilentlyContinue
+    $env:INTERVIEW_PACKAGED_SMOKE_EXPECT_REPORT = $smokeProof
     $upgradedSmoke = Start-Process -FilePath $installedExe -ArgumentList "--packaged-smoke-test" -PassThru
     if (-not $upgradedSmoke.WaitForExit(60000)) {
       Stop-Process -Id $upgradedSmoke.Id -Force -ErrorAction SilentlyContinue
@@ -108,6 +121,8 @@ try {
     }
   } finally {
     $env:INTERVIEW_LOCAL_PYTHON = $oldPython
+    $env:INTERVIEW_PACKAGED_SMOKE_REPORT = $oldSmokeReport
+    $env:INTERVIEW_PACKAGED_SMOKE_EXPECT_REPORT = $oldSmokeExpectation
   }
   $databaseHashAfterUpgradeLaunch = (Get-FileHash -Algorithm SHA256 $database).Hash
 
@@ -148,4 +163,5 @@ try {
 } finally {
   Remove-Item -Recurse -Force $installRoot -ErrorAction SilentlyContinue
   Remove-Item -Recurse -Force $userData -ErrorAction SilentlyContinue
+  Remove-Item -Force $smokeProof -ErrorAction SilentlyContinue
 }
