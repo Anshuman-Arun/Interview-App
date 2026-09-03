@@ -49,13 +49,6 @@ export const QuantSessionWorkspace: React.FC<QuantSessionWorkspaceProps> = ({
 }) => {
   useEffect(() => {
     if (productHidden || paused || sessionStatus !== "ACTIVE") return;
-    if (quantState === null) {
-      void onRefresh().catch(() => undefined);
-    }
-  }, [onRefresh, paused, productHidden, quantState, sessionStatus]);
-
-  useEffect(() => {
-    if (productHidden || paused || sessionStatus !== "ACTIVE") return;
     void onRefresh().catch(() => undefined);
   }, [onRefresh, paused, productHidden, sessionStatus]);
 
