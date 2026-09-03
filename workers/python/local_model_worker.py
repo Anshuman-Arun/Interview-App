@@ -248,6 +248,9 @@ def require_runtime_environment() -> None:
         raise RuntimeError("desktop local model runtime requires CPython 3.12 or 3.13")
     if sys.maxsize <= 2**32:
         raise RuntimeError("desktop local model runtime requires 64-bit CPython")
+    machine = platform.machine().lower()
+    if machine not in {"amd64", "x86_64"}:
+        raise RuntimeError("desktop local model runtime requires x86-64 CPython")
     for distribution, expected in EXPECTED_DISTRIBUTIONS.items():
         if version(distribution) != expected:
             raise RuntimeError(f"{distribution} package version mismatch")
