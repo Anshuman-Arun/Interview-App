@@ -1,6 +1,7 @@
 import {
   MAX_SPEECH_CONCURRENT_STREAMS,
   parseMoonshineRuntimeResult,
+  snapshotAndValidatePcm,
   SPEECH_RECOGNIZER_TIMEOUT_ABORT_REASON,
   SPEECH_VAD_TIMEOUT_ABORT_REASON,
   TTS_LIMITS,
@@ -411,18 +412,36 @@ function parseTtsResult(value: unknown): KokoroRuntimeSynthesisResult {
   for (let index = 0; index < samples.length; index += 1) {
     samples[index] = view.getFloat32(index * Float32Array.BYTES_PER_ELEMENT, true);
   }
-  return {
+  return snapshotAndValidatePcm({
     samples,
     sampleRate,
     channels,
     durationMs
-  };
+  }, 24_000);
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+
+async function recycleAfterProtocolFailure(
+  client: ManagedModelWorkerClient,
+  scope: ManagedWorkerRecoveryScope,
+  expectedWorkerInstance: string,
+  protocolError: unknown,
+  message: string
+): Promise<void> {
+  try {
+    await client.recycleAfterUncertainRequest(expectedWorkerInstance, scope);
+  } catch (recycleError) {
+    throw new AggregateError(
+      [protocolError, recycleError],
+      message,
+      { cause: recycleError }
+    );
+  }
+}
 
 async function runWithWorkerRecycleOnTimeout<T>(
   client: ManagedModelWorkerClient,
