@@ -960,7 +960,144 @@ describe("interpretation cancellation linearization", () => {
     } finally {
       harness.store.close();
     }
+  })
+
+  it("abandons a persisted pending verification during the first deterministic verifier pass", async () => {
+    const harness = await createCoreHarness();
+    let releaseVerifier: (() => void) | undefined;
+    try {
+      const request = formalRequest(harness);
+      const provider = new DeterministicFormalInterpretationProvider(providerResultFor(request, [
+        candidate(request)
+      ]));
+      let signalVerifierStarted: (() => void) | undefined;
+      const verifierStarted = new Promise<void>((resolve) => {
+        signalVerifierStarted = resolve;
+      });
+      const verifierGate = new Promise<void>((resolve) => {
+        releaseVerifier = resolve;
+      });
+      const realVerifier = new ModularArithmeticVerifier();
+      let firstCall = true;
+      const gatedDescriptors = DETERMINISTIC_MATH_VERIFIERS.map((descriptor) =>
+        descriptor.verifier === MODULAR_ARITHMETIC_VERIFIER_NAME
+          ? {
+              ...descriptor,
+              create: () => ({
+                verify: async (statement: string, interpretationConfidence: number) => {
+                  if (firstCall) {
+                    firstCall = false;
+                    signalVerifierStarted?.();
+                    await verifierGate;
+                  }
+                  return realVerifier.verify(statement, interpretationConfidence);
+                }
+              })
+            }
+          : descriptor
+      );
+      const coordinator = new InterpretationCoordinator(
+        harness.writer,
+        provider,
+        routingScopes,
+        {
+          router: new FormalProtocolRoutingRegistry(
+            routingScopes,
+            FORMAL_PROTOCOL_ROUTES,
+            gatedDescriptors
+          )
+        }
+      );
+
+      const execution = coordinator.interpretAndVerify(request);
+      await verifierStarted;
+      expect(Object.values(harness.writer.getState().verificationRequests)[0]?.status).toBe("PENDING");
+
+      expect(coordinator.abandon(request.requestId)).toBe(true);
+      await harness.writer.waitForIdle();
+      expect(Object.values(harness.writer.getState().verificationRequests)[0]).toMatchObject({
+        status: "DISCARDED",
+        discardReason: "FORMAL_INTERPRETATION_ABANDONED"
+      });
+
+      releaseVerifier?.();
+      releaseVerifier = undefined;
+      expect(await execution).toMatchObject({ status: "STALE", reason: "CANCELLED" });
+      expect(Object.values(harness.writer.getState().studentEvidence)).toHaveLength(0);
+    } finally {
+      releaseVerifier?.();
+      harness.store.close();
+    }
   });
+
+  it("abandons verification while deterministic recomputation is waiting and cannot commit late evidence", async () => {
+    const harness = await createCoreHarness();
+    let releaseRecompute: (() => void) | undefined;
+    try {
+      const request = formalRequest(harness);
+      const provider = new DeterministicFormalInterpretationProvider(providerResultFor(request, [
+        candidate(request)
+      ]));
+      let signalRecomputeStarted: (() => void) | undefined;
+      const recomputeStarted = new Promise<void>((resolve) => {
+        signalRecomputeStarted = resolve;
+      });
+      const recomputeGate = new Promise<void>((resolve) => {
+        releaseRecompute = resolve;
+      });
+      const realVerifier = new ModularArithmeticVerifier();
+      let verifierCalls = 0;
+      const gatedDescriptors = DETERMINISTIC_MATH_VERIFIERS.map((descriptor) =>
+        descriptor.verifier === MODULAR_ARITHMETIC_VERIFIER_NAME
+          ? {
+              ...descriptor,
+              create: () => ({
+                verify: async (statement: string, interpretationConfidence: number) => {
+                  verifierCalls += 1;
+                  if (verifierCalls === 2) {
+                    signalRecomputeStarted?.();
+                    await recomputeGate;
+                  }
+                  return realVerifier.verify(statement, interpretationConfidence);
+                }
+              })
+            }
+          : descriptor
+      );
+      const coordinator = new InterpretationCoordinator(
+        harness.writer,
+        provider,
+        routingScopes,
+        {
+          router: new FormalProtocolRoutingRegistry(
+            routingScopes,
+            FORMAL_PROTOCOL_ROUTES,
+            gatedDescriptors
+          )
+        }
+      );
+
+      const execution = coordinator.interpretAndVerify(request);
+      await recomputeStarted;
+      expect(Object.values(harness.writer.getState().verificationRequests)[0]?.status).toBe("PENDING");
+
+      expect(coordinator.abandon(request.requestId)).toBe(true);
+      await harness.writer.waitForIdle();
+      expect(Object.values(harness.writer.getState().verificationRequests)[0]).toMatchObject({
+        status: "DISCARDED",
+        discardReason: "FORMAL_INTERPRETATION_ABANDONED"
+      });
+
+      releaseRecompute?.();
+      releaseRecompute = undefined;
+      expect(await execution).toMatchObject({ status: "STALE", reason: "CANCELLED" });
+      expect(Object.values(harness.writer.getState().studentEvidence)).toHaveLength(0);
+    } finally {
+      releaseRecompute?.();
+      harness.store.close();
+    }
+  });
+;
 });
 
 
