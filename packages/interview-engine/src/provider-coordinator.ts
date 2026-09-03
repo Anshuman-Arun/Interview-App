@@ -22,6 +22,7 @@ import {
   ProviderExecutionError,
   ProviderPolicyError,
   openProviderExecutionSession,
+  snapshotReasoningProviderName,
   type ProviderExecutionSession
 } from "../../providers/src/index.js";
 import { ContextCoordinator } from "./context-coordinator.js";
@@ -29,8 +30,6 @@ import type { DisclosureValidator } from "./disclosure-validator.js";
 import { createCommandEnvelope } from "./envelopes.js";
 import type { SessionWriter } from "./session-writer.js";
 import { TurnCoordinator } from "./turn-coordinator.js";
-
-const ProviderNameSchema = z.string().trim().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._:/-]*$/u);
 
 export const ProviderGenerationOutcomeSchema = z.discriminatedUnion("status", [
   z.object({
@@ -69,6 +68,7 @@ interface ExecutionRecord {
   readonly proposalRequestId: RequestId;
   readonly cancellationSignal: Promise<void>;
   readonly signalCancellation: () => void;
+  readonly providerName: string;
   session?: ProviderExecutionSession;
   cancellation?: Promise<ProviderCancellationReport | undefined>;
 }
@@ -96,7 +96,7 @@ export class ProviderCoordinator {
     readonly proposalRequestId?: RequestId;
     readonly now?: Date;
   }): Promise<ProviderGenerationExecution> {
-    const providerName = ProviderNameSchema.parse(input.provider.name);
+    const providerName = snapshotReasoningProviderName(input.provider);
     const proposalRequestId = RequestIdSchema.parse(input.proposalRequestId ?? newRequestId());
     const started = await this.turns.startGeneration(input.inputEpisodeId, input.turnId, providerName);
     let signalCancellation: (() => void) | undefined;
@@ -110,7 +110,8 @@ export class ProviderCoordinator {
       generationId: started.generationId,
       proposalRequestId,
       cancellationSignal,
-      signalCancellation
+      signalCancellation,
+      providerName
     };
     this.executions.set(started.generationId, record);
     const completion = this.run(record, input).finally(() => {
@@ -203,6 +204,18 @@ export class ProviderCoordinator {
     }
 
     const session = admission.session;
+    if (session.providerName !== record.providerName) {
+      void session.close().catch(() => undefined);
+      await this.supersedeIfPossible(
+        record.generationId,
+        "Provider identity changed during admission"
+      );
+      return failed(
+        record.generationId,
+        "PROVIDER_ADMISSION",
+        "INVALID_PROVIDER_IDENTITY"
+      );
+    }
     record.session = session;
 
     let outcome: ProviderGenerationOutcome;

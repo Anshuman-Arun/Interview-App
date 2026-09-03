@@ -10,7 +10,8 @@ import {
 import {
   MockModelAdapter,
   ProviderExecutionError,
-  openProviderExecutionSession
+  openProviderExecutionSession,
+  snapshotReasoningProviderName
 } from "../packages/providers/src/index.js";
 
 const NOW = new Date("2026-08-30T00:00:00.000Z");
@@ -277,6 +278,78 @@ describe("provider execution admission", () => {
     await session.close();
   });
 
+  it("rejects accessor- and Proxy-backed provider names without invoking user code", () => {
+    let getterCalls = 0;
+    const accessorProvider = testProvider();
+    Object.defineProperty(accessorProvider, "name", {
+      configurable: true,
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return "must-not-run";
+      }
+    });
+
+    expect(() => snapshotReasoningProviderName(accessorProvider))
+      .toThrow(ProviderExecutionError);
+    expect(getterCalls).toBe(0);
+
+    let proxyTrapCalls = 0;
+    const proxyProvider = new Proxy(testProvider(), {
+      getOwnPropertyDescriptor() {
+        proxyTrapCalls += 1;
+        throw new Error("must-not-run");
+      },
+      getPrototypeOf() {
+        proxyTrapCalls += 1;
+        throw new Error("must-not-run");
+      }
+    });
+    expect(() => snapshotReasoningProviderName(proxyProvider))
+      .toThrow(ProviderExecutionError);
+    expect(proxyTrapCalls).toBe(0);
+
+    const malformed = testProvider();
+    Reflect.set(malformed, "name", " name with spaces ");
+    expect(() => snapshotReasoningProviderName(malformed))
+      .toThrow(ProviderExecutionError);
+  });
+
+  it("snapshots guarded turn input before async iteration begins", async () => {
+    let observedGenerationId: unknown;
+    let observedContext: unknown;
+    const provider = testProvider({
+      async createSession() {
+        return {
+          async *sendTurn(input) {
+            observedGenerationId = input.generationId;
+            observedContext = input.context;
+            yield PROPOSAL;
+          },
+          async close() {}
+        };
+      }
+    });
+    const session = await openProviderExecutionSession({
+      provider,
+      policy: NO_METERED_POLICY,
+      now: NOW
+    });
+
+    const generationId = newGenerationId();
+    const mutable = {
+      generationId,
+      context: { marker: "original" }
+    };
+    const stream = session.sendTurn(mutable);
+    mutable.context = { marker: "mutated" };
+
+    await expect(collect(stream)).resolves.toEqual([PROPOSAL]);
+    expect(observedGenerationId).toBe(generationId);
+    expect(observedContext).toEqual({ marker: "original" });
+    await session.close();
+  });
+
   it("rejects accessor-backed provider operations without invoking them", async () => {
     let getterCalls = 0;
     const provider = testProvider();
@@ -327,6 +400,90 @@ describe("provider execution admission", () => {
       now: NOW
     })).rejects.toMatchObject({ code: "INVALID_PROVIDER_CAPABILITIES" });
     expect(getterCalls).toBe(0);
+  });
+
+  it("rejects Proxy prototype chains without invoking prototype traps", async () => {
+    let providerPrototypeTrapCalls = 0;
+    const providerPrototype = new Proxy({}, {
+      getOwnPropertyDescriptor() {
+        providerPrototypeTrapCalls += 1;
+        throw new Error("must-not-run");
+      },
+      getPrototypeOf() {
+        providerPrototypeTrapCalls += 1;
+        throw new Error("must-not-run");
+      }
+    });
+    const provider = Object.create(providerPrototype) as ReasoningProvider;
+
+    await expect(openProviderExecutionSession({
+      provider,
+      policy: NO_METERED_POLICY,
+      now: NOW
+    })).rejects.toMatchObject({ code: "INVALID_PROVIDER_IDENTITY" });
+    expect(providerPrototypeTrapCalls).toBe(0);
+
+    let sessionPrototypeTrapCalls = 0;
+    const sessionPrototype = new Proxy({}, {
+      getOwnPropertyDescriptor() {
+        sessionPrototypeTrapCalls += 1;
+        throw new Error("must-not-run");
+      },
+      getPrototypeOf() {
+        sessionPrototypeTrapCalls += 1;
+        throw new Error("must-not-run");
+      }
+    });
+    const rawSession = Object.create(sessionPrototype) as ReasoningSession;
+
+    await expect(openProviderExecutionSession({
+      provider: testProvider({
+        createSession: async () => rawSession
+      }),
+      policy: NO_METERED_POLICY,
+      now: NOW
+    })).rejects.toMatchObject({ code: "SESSION_CREATION_FAILED" });
+    expect(sessionPrototypeTrapCalls).toBe(0);
+  });
+
+  it("rejects Proxy-backed providers and sessions without invoking traps", async () => {
+    let providerTrapCalls = 0;
+    const providerProxy = new Proxy(testProvider(), {
+      getOwnPropertyDescriptor() {
+        providerTrapCalls += 1;
+        throw new Error("must-not-run");
+      },
+      getPrototypeOf() {
+        providerTrapCalls += 1;
+        throw new Error("must-not-run");
+      }
+    });
+    await expect(openProviderExecutionSession({
+      provider: providerProxy,
+      policy: NO_METERED_POLICY,
+      now: NOW
+    })).rejects.toMatchObject({ code: "INVALID_PROVIDER_IDENTITY" });
+    expect(providerTrapCalls).toBe(0);
+
+    let sessionTrapCalls = 0;
+    const sessionProxy = new Proxy(proposalSession(), {
+      getOwnPropertyDescriptor() {
+        sessionTrapCalls += 1;
+        throw new Error("must-not-run");
+      },
+      getPrototypeOf() {
+        sessionTrapCalls += 1;
+        throw new Error("must-not-run");
+      }
+    });
+    await expect(openProviderExecutionSession({
+      provider: testProvider({
+        createSession: async () => sessionProxy
+      }),
+      policy: NO_METERED_POLICY,
+      now: NOW
+    })).rejects.toMatchObject({ code: "SESSION_CREATION_FAILED" });
+    expect(sessionTrapCalls).toBe(0);
   });
 
   it("drops a provider result released after cancellation even when the provider ignores cancellation", async () => {
@@ -440,6 +597,72 @@ describe("provider execution admission", () => {
       now: NOW
     })).rejects.toMatchObject({ code: "SESSION_CREATION_FAILED" });
     expect(getterCalls).toBe(0);
+  });
+
+  it("rejects Proxy/accessor provider data before schema validation invokes traps", async () => {
+    let proposalGetterCalls = 0;
+    const accessorProposal = Object.defineProperty({
+      realizedAction: "WAIT",
+      claimedDisclosureLevel: 0,
+      claimedDisclosureIds: []
+    }, "speechText", {
+      enumerable: true,
+      get() {
+        proposalGetterCalls += 1;
+        return "must-not-run";
+      }
+    }) as unknown as InterviewerProposal;
+    const proposalProvider = testProvider({
+      createSession: async () => ({
+        async *sendTurn() {
+          yield accessorProposal;
+        },
+        async close() {}
+      })
+    });
+    const proposalSessionGuard = await openProviderExecutionSession({
+      provider: proposalProvider,
+      policy: NO_METERED_POLICY,
+      now: NOW
+    });
+    await expect(collect(proposalSessionGuard.sendTurn({
+      context: {},
+      generationId: newGenerationId()
+    }))).rejects.toMatchObject({ code: "INVALID_PROVIDER_OUTPUT" });
+    expect(proposalGetterCalls).toBe(0);
+    await proposalSessionGuard.close();
+
+    let cancellationTrapCalls = 0;
+    const cancellationProxy = new Proxy({}, {
+      ownKeys() {
+        cancellationTrapCalls += 1;
+        throw new Error("must-not-run");
+      },
+      getOwnPropertyDescriptor() {
+        cancellationTrapCalls += 1;
+        throw new Error("must-not-run");
+      }
+    }) as unknown as ProviderCancellationResult;
+    const cancellationProvider = testProvider({
+      createSession: async () => ({
+        async *sendTurn() {
+          yield PROPOSAL;
+        },
+        async cancelTurn() {
+          return cancellationProxy;
+        },
+        async close() {}
+      })
+    });
+    const cancellationSession = await openProviderExecutionSession({
+      provider: cancellationProvider,
+      policy: NO_METERED_POLICY,
+      now: NOW
+    });
+    await expect(cancellationSession.cancelTurn(newGenerationId()))
+      .rejects.toMatchObject({ code: "INVALID_CANCELLATION_RESULT" });
+    expect(cancellationTrapCalls).toBe(0);
+    await cancellationSession.close();
   });
 
   it("runtime-validates provider output and suppresses provider error secrets", async () => {

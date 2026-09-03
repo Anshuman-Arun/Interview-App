@@ -268,6 +268,11 @@ export class LocalInterviewTransportRuntime {
       failures.push(error);
     }
     try {
+      await this.orchestrator.drainProviderRuntime();
+    } catch (error) {
+      failures.push(error);
+    }
+    try {
       await Promise.all([...this.voiceDeliveryOperations]);
     } catch (error) {
       failures.push(error);

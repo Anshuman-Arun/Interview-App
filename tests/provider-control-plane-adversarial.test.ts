@@ -791,7 +791,7 @@ describe("provider Reflect.apply intrinsic hardening", () => {
 
     expect(secretError).toMatchObject({ code: "SECRET_IN_CONFIGURATION" });
     expect(duplicateError).toMatchObject({ code: "DUPLICATE_PROVIDER" });
-    expect(builtInIds).toEqual(["gemini-api", "mock-model"]);
+    expect(builtInIds).toEqual(["antigravity-cli", "gemini-api", "mock-model"]);
   });
 });
 
