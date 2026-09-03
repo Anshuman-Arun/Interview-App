@@ -626,7 +626,7 @@ try {
   Write-InterviewSupervisorStage "PS_HASH_MATCH"
 
   $stream.Position = 0
-  $bytes = New-Object byte[] ([int]$stream.Length)
+  $bytes = [byte[]]::new([int]$stream.Length)
   $offset = 0
   while ($offset -lt $bytes.Length) {
     $read = $stream.Read($bytes, $offset, $bytes.Length - $offset)
