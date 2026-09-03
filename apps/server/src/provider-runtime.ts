@@ -236,11 +236,11 @@ export class ProviderRuntimeResolver {
           ...(this.secretResolver === undefined ? {} : { secretResolver: this.secretResolver }),
           ...(runtime === undefined ? {} : { runtime })
         });
-      } catch {
+      } catch (error) {
         return ProviderLaunchOptionSchema.parse({
           ...base,
           availability: "UNAVAILABLE",
-          reason: "RUNTIME_DEPENDENCY_UNAVAILABLE"
+          reason: launchReasonForAdapterFailure(error)
         });
       }
     }
@@ -330,6 +330,26 @@ export class ProviderRuntimeResolver {
       provider,
       policy
     });
+  }
+}
+
+function launchReasonForAdapterFailure(
+  error: unknown
+): ProviderLaunchAvailabilityReason {
+  if (!ProviderControlPlaneError.isControlPlaneError(error)) {
+    return "RUNTIME_DEPENDENCY_UNAVAILABLE";
+  }
+  switch (error.code) {
+    case "CREDENTIALS_REQUIRED":
+    case "CREDENTIAL_RESOLUTION_FAILED":
+      return "CREDENTIALS_REQUIRED";
+    case "INCOMPATIBLE_CAPABILITY":
+    case "CAPABILITY_STATUS_UNKNOWN":
+      return "CAPABILITY_UNAVAILABLE";
+    case "DISABLED":
+      return "DISABLED";
+    default:
+      return "RUNTIME_DEPENDENCY_UNAVAILABLE";
   }
 }
 
