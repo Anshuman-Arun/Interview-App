@@ -237,10 +237,7 @@ export class VerificationCoordinator {
       ) {
         return reject("PROBLEM_SCOPE_MISMATCH", false);
       }
-      if (
-        (evidenceKey.subject.kind !== "CLAIM" && evidenceKey.subject.kind !== "MILESTONE")
-        || evidenceKey.dimension !== "CORRECTNESS"
-      ) {
+      if (evidenceKey.subject.kind !== "CLAIM" || evidenceKey.dimension !== "CORRECTNESS") {
         return reject("EVIDENCE_SCOPE_UNSUPPORTED", false);
       }
       if (!this.isScopeAuthorized(verifier, evidenceKey)) {
@@ -362,11 +359,8 @@ export class VerificationCoordinator {
       ) {
         throw new Error("Verification evidence is scoped to a different problem");
       }
-      if (
-        (evidenceKey.subject.kind !== "CLAIM" && evidenceKey.subject.kind !== "MILESTONE")
-        || evidenceKey.dimension !== "CORRECTNESS"
-      ) {
-        throw new Error("Deterministic verification may commit only authorized claim or milestone correctness evidence");
+      if (evidenceKey.subject.kind !== "CLAIM" || evidenceKey.dimension !== "CORRECTNESS") {
+        throw new Error("Phase 0 deterministic verification may commit only claim correctness evidence");
       }
       if (!this.isScopeAuthorized(verifier, evidenceKey)) {
         throw new Error("Verifier is not authorized for the requested evidence scope");
