@@ -42,7 +42,12 @@ afterEach(() => {
     }
   }
   for (const root of temporaryRoots.splice(0)) {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, {
+      recursive: true,
+      force: true,
+      maxRetries: process.platform === "win32" ? 10 : 0,
+      retryDelay: 100
+    });
   }
 });
 

@@ -26,6 +26,7 @@ import {
   getDesktopRuntimeBridge,
   parseDesktopRuntimeStatus,
   readDesktopRuntimeStatus,
+  readDesktopAppVersion,
   type DesktopModelSetupStatus,
   type DesktopRuntimeCapabilityStatus,
   type DesktopRuntimeStatus
@@ -156,6 +157,7 @@ export function SettingsPage({
 }: SettingsPageProps) {
   const [draftBaseUrl, setDraftBaseUrl] = useState(connection?.baseUrl ?? "");
   const desktopRuntime = useMemo(() => getDesktopRuntimeBridge(), []);
+  const desktopAppVersion = useMemo(() => readDesktopAppVersion(), []);
   const [runtimeStatus, setRuntimeStatus] = useState<DesktopRuntimeStatus | undefined>();
   const [runtimeStatusError, setRuntimeStatusError] = useState<string | undefined>();
   const [runtimeChecking, setRuntimeChecking] = useState(false);
@@ -637,6 +639,9 @@ export function SettingsPage({
         <div>
           <span>ROOM TUNING</span>
           <h2>Make the interface disappear in the right way.</h2>
+          {desktopAppVersion !== undefined && (
+            <p>Interview App {desktopAppVersion}</p>
+          )}
         </div>
         <button type="button" onClick={reset}>Reset appearance</button>
       </section>
