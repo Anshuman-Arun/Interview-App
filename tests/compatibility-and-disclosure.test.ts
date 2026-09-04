@@ -10,6 +10,7 @@ import { DeliveryCoordinator } from "../packages/delivery/src/index.js";
 import { initialSessionState } from "../packages/events/src/index.js";
 import {
   ClosedWorldDisclosureAnalyzer,
+  ContextCoordinator,
   DisclosureValidator,
   assessVisionFreshness,
   createCommandEnvelope,
@@ -76,6 +77,43 @@ describe("compatibility and disclosure gates", () => {
       expect(harness.writer.getState().generations[harness.generationId]?.status)
         .toBe("SUPERSEDED");
       expect(Object.keys(harness.writer.getState().deliveries)).toHaveLength(0);
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("admits the expanded bounded geometry DSL through the application preflight", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const compilation = await new ContextCoordinator(harness.writer).compileForGeneration({
+        generationId: harness.generationId,
+        problem: sixPeopleProblem
+      });
+      expect(compilation.value.compiled).toBe(true);
+
+      const result = await harness.turns.processProposal({
+        envelope: providerEnvelope(harness),
+        problem: sixPeopleProblem,
+        proposal: {
+          realizedAction: "PROBE_JUSTIFICATION",
+          claimedDisclosureLevel: 0,
+          claimedDisclosureIds: [],
+          boardActions: [{
+            operation: "draw_segment",
+            layer: "AI_ANNOTATION",
+            points: [{ x: 20, y: 30 }, { x: 120, y: 80 }],
+            annotationPurpose: harness.safeProbe
+          }]
+        },
+        validator: harness.validator
+      });
+
+      expect(result.accepted).toBe(true);
+      expect(result.deliveryAtoms).toHaveLength(1);
+      expect(result.deliveryAtoms[0]?.content).toMatchObject({
+        medium: "WHITEBOARD",
+        action: { operation: "draw_segment" }
+      });
     } finally {
       harness.store.close();
     }
