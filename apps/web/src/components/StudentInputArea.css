@@ -160,3 +160,6 @@
     display: none;
   }
 }
+
+/* Editorial v10 reasoning composer */
+.reasoning-composer{border-color:var(--border-default);border-radius:2px;background:var(--surface-panel)}.reasoning-composer__head{min-height:28px;padding:5px 8px}.reasoning-composer__head label{font:600 7px/1 var(--font-mono);letter-spacing:.04em;text-transform:uppercase}.reasoning-composer__head label small{font:400 7px/1 var(--font-ui);letter-spacing:0;text-transform:none}.reasoning-composer__textarea{min-height:58px;max-height:150px;padding:9px 10px;font:400 10.5px/1.5 var(--font-ui)}.reasoning-composer__preview{border-radius:2px}.reasoning-composer__foot{min-height:34px;padding:5px 6px 5px 9px;background:color-mix(in srgb,var(--surface-app) 55%,var(--surface-panel))}.reasoning-composer__meta{font:400 7px/1 var(--font-mono)}.reasoning-composer__submit{min-width:30px;min-height:27px;padding:0 8px;border-color:var(--text-primary);border-radius:2px;background:var(--text-primary);color:var(--surface-panel);font:600 8px/1 var(--font-ui)}.reasoning-composer__submit:hover:not(:disabled){border-color:var(--accent);background:var(--accent)}
