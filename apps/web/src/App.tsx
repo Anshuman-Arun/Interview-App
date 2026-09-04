@@ -66,6 +66,11 @@ export const App: React.FC = () => {
   const [recoverySessionInput, setRecoverySessionInput] = useState("");
   const [compactPane, setCompactPane] =
     useState<"interview" | "whiteboard">("interview");
+  const [splitPercent, setSplitPercent] = useState(38);
+  const [paneFocus, setPaneFocus] =
+    useState<"split" | "transcript" | "whiteboard">("split");
+  const [endConfirmOpen, setEndConfirmOpen] = useState(false);
+  const liveWorkspaceRef = useRef<HTMLElement | null>(null);
   const [historyRead, setHistoryRead] = useState<SessionHistoryReadResponse | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -76,6 +81,15 @@ export const App: React.FC = () => {
   const [sessionTerminalPending, setSessionTerminalPending] = useState(false);
   const [reloadQuantSessionId] = useState<SessionId | null>(() => readQuantReattachSessionId());
   const reloadQuantRecoveryAttemptedRef = useRef(false);
+
+  const setSplitFromClientX = useCallback((clientX: number): void => {
+    const workspace = liveWorkspaceRef.current;
+    if (workspace === null) return;
+    const rect = workspace.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const next = ((clientX - rect.left) / rect.width) * 100;
+    setSplitPercent(Math.min(68, Math.max(26, next)));
+  }, []);
 
   const whiteboardAdapter = useMemo(() => {
     return new TldrawWhiteboardAdapter();
@@ -694,14 +708,38 @@ export const App: React.FC = () => {
               >
                 Home
               </button>
-              <button
-                type="button"
-                onClick={() => void handleCompleteSession()}
-                disabled={sessionTerminalPending || sessionEntryPending}
-                className="app-header__end"
-              >
-                {sessionTerminalPending ? "Ending…" : "End interview"}
-              </button>
+              <div className="live-end-control" data-open={String(endConfirmOpen)}>
+                <button
+                  type="button"
+                  onClick={() => setEndConfirmOpen((open) => !open)}
+                  disabled={sessionTerminalPending || sessionEntryPending}
+                  className="app-header__end"
+                  aria-expanded={endConfirmOpen}
+                >
+                  {sessionTerminalPending ? "Ending…" : "End interview"}
+                </button>
+                {endConfirmOpen && (
+                  <div className="live-end-popover" role="dialog" aria-label="Confirm end interview">
+                    <strong>End this interview?</strong>
+                    <p>The session will be completed and the current room will close.</p>
+                    <div>
+                      <button type="button" onClick={() => setEndConfirmOpen(false)}>
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className="live-end-popover__confirm"
+                        onClick={() => {
+                          setEndConfirmOpen(false);
+                          void handleCompleteSession();
+                        }}
+                      >
+                        End interview
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => void handleArchiveSession()}
@@ -782,43 +820,48 @@ export const App: React.FC = () => {
 
       {/* Main Split-Pane Workspace */}
       <main
-        className="flex-1 flex overflow-hidden"
+        ref={liveWorkspaceRef}
+        className="live-main"
         data-compact-pane={compactPane}
+        data-focus={paneFocus}
+        style={
+          paneFocus === "split"
+            ? {
+                gridTemplateColumns:
+                  `minmax(360px, ${String(splitPercent)}%) 7px minmax(0, 1fr)`
+              }
+            : undefined
+        }
       >
-        {/* Left Panel: Problem, Transcript, Input */}
-        <section className="left-panel w-1/2 flex flex-col border-r border-slate-200 bg-white overflow-hidden">
-          {/* Top Session Actions if not started */}
+        <section className="left-panel reasoning-pane">
           {!session.isSessionStarted && (
-            <div className="p-4 bg-indigo-50/70 border-b border-indigo-100 flex items-center justify-between shrink-0">
+            <div className="live-session-entry">
               <div>
-                <p className="text-xs font-semibold text-indigo-950">Ready to begin your interview?</p>
-                <p className="text-[11px] text-indigo-700">Start an interview session or recover an existing one.</p>
+                <strong>Ready to begin?</strong>
+                <span>Start a configured interview or recover a local session.</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="live-session-entry__actions">
                 <button
                   type="button"
                   onClick={handleOpenNewInterview}
                   disabled={sessionEntryPending}
-                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md shadow-sm transition-colors cursor-pointer"
                   data-testid="start-session-btn"
                 >
                   {sessionEntryPending ? "Opening…" : "New interview"}
                 </button>
                 <form
-                  onSubmit={(e) => {
-                    void handleManualRecover(e);
+                  onSubmit={(event) => {
+                    void handleManualRecover(event);
                   }}
-                  className="flex items-center gap-1"
                 >
                   <input
                     type="text"
                     value={recoverySessionInput}
                     disabled={sessionEntryPending || sessionTerminalPending}
-                    onChange={(e) => setRecoverySessionInput(e.target.value)}
+                    onChange={(event) => setRecoverySessionInput(event.target.value)}
                     aria-invalid={recoverySessionInputInvalid}
                     title={recoverySessionInputInvalid ? "Enter a valid session ID" : undefined}
                     placeholder="session_..."
-                    className="w-28 px-2 py-1 text-xs border border-indigo-200 rounded bg-white font-mono"
                   />
                   <button
                     type="submit"
@@ -827,7 +870,6 @@ export const App: React.FC = () => {
                       || sessionTerminalPending
                       || recoverySessionId === null
                     }
-                    className="px-2.5 py-1 bg-white hover:bg-slate-50 text-indigo-700 border border-indigo-200 text-xs font-medium rounded"
                   >
                     {sessionEntryPending ? "Opening…" : "Recover"}
                   </button>
@@ -836,27 +878,51 @@ export const App: React.FC = () => {
             </div>
           )}
 
-          {/* Scrollable Problem & Transcript Section */}
-          <div className="flex-1 flex flex-col p-4 gap-4 overflow-y-auto min-h-0">
-            <ProblemCard problem={session.problem} className="shrink-0" />
-            <div className="flex-1 min-h-[220px]">
-              <TranscriptFeed
-                items={session.transcript}
-                onRetry={(itemId) => {
-                  if (
-                    sessionEntryPendingRef.current
-                    || sessionTerminalPendingRef.current
-                  ) return;
-                  void session.retrySubmission(itemId);
-                }}
-                retryDisabled={sessionEntryPending || sessionTerminalPending}
-                className="h-full"
-              />
+          <div className="problem-block">
+            <div className="live-problem-meta">
+              <span>Problem</span>
+              <b>Oxford Mathematics</b>
             </div>
+            <ProblemCard problem={session.problem} />
           </div>
 
-          {/* Bottom Reasoning Input Area */}
-          <div className="p-4 border-t border-slate-200 bg-slate-50/50 shrink-0">
+          <div className="live-transcript-region">
+            <div className="live-pane-heading">
+              <span>Transcript</span>
+              <div>
+                {paneFocus !== "split" && (
+                  <button type="button" onClick={() => setPaneFocus("split")}>
+                    Restore split
+                  </button>
+                )}
+                <button
+                  type="button"
+                  aria-pressed={paneFocus === "transcript"}
+                  onClick={() =>
+                    setPaneFocus((focus) =>
+                      focus === "transcript" ? "split" : "transcript"
+                    )
+                  }
+                >
+                  Focus transcript
+                </button>
+              </div>
+            </div>
+            <TranscriptFeed
+              items={session.transcript}
+              onRetry={(itemId) => {
+                if (
+                  sessionEntryPendingRef.current
+                  || sessionTerminalPendingRef.current
+                ) return;
+                void session.retrySubmission(itemId);
+              }}
+              retryDisabled={sessionEntryPending || sessionTerminalPending}
+              className="h-full"
+            />
+          </div>
+
+          <div className="input-dock">
             <VoiceControls
               state={session.voice}
               controls={session.voiceControls}
@@ -889,70 +955,115 @@ export const App: React.FC = () => {
                 session.sessionStatus === "COMPLETED" || session.sessionStatus === "ARCHIVED"
                   ? `Session is ${session.sessionStatus.toLowerCase()}. Reasoning input is closed.`
                   : session.isSessionStarted
-                  ? "Enter your proof step (e.g. Choose $v_1 \\in V$. Since $\\deg(v_1) = 5$, by PHP...)"
-                  : "Start or recover a session above to submit reasoning."
+                    ? "Type the next step in your reasoning…"
+                    : "Start or recover a session above to submit reasoning."
               }
             />
           </div>
         </section>
 
-        {/* Right Panel: Whiteboard */}
-        <section className="right-panel w-1/2 flex flex-col bg-slate-50 overflow-hidden">
-          {session.whiteboardSync.status !== "SYNCED" && (
-            <div className="panel-tabs bg-white border-b border-slate-200 px-4 py-2 flex items-center justify-between shrink-0">
-              <strong className="text-xs text-slate-700" data-testid="tab-whiteboard">
-                Whiteboard
-              </strong>
-              <div className="text-[11px] text-slate-500 flex items-center gap-2">
-                <span
-                  className="w-2 h-2 rounded-full"
-                  data-sync={session.whiteboardSync.status}
-                />
-                <span>
-                  {session.whiteboardSync.status === "PENDING"
+        <div
+          className="split-divider"
+          role="separator"
+          aria-label="Resize transcript and whiteboard"
+          aria-orientation="vertical"
+          aria-valuemin={26}
+          aria-valuemax={68}
+          aria-valuenow={Math.round(splitPercent)}
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+            event.preventDefault();
+            setPaneFocus("split");
+            setSplitPercent((current) =>
+              Math.min(68, Math.max(26, current + (event.key === "ArrowRight" ? 2 : -2)))
+            );
+          }}
+          onDoubleClick={() => {
+            setPaneFocus("split");
+            setSplitPercent(38);
+          }}
+          onPointerDown={(event) => {
+            setPaneFocus("split");
+            event.currentTarget.setPointerCapture(event.pointerId);
+            setSplitFromClientX(event.clientX);
+          }}
+          onPointerMove={(event) => {
+            if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+            setSplitFromClientX(event.clientX);
+          }}
+          onPointerUp={(event) => {
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+              event.currentTarget.releasePointerCapture(event.pointerId);
+            }
+          }}
+        >
+          <span aria-hidden="true" />
+        </div>
+
+        <section className="right-panel board-pane">
+          <div className="board-appbar">
+            <div className="board-appbar__left">
+              <strong data-testid="tab-whiteboard">Whiteboard</strong>
+              <span className="board-sync">
+                <i data-sync={session.whiteboardSync.status} aria-hidden="true" />
+                {session.whiteboardSync.status === "SYNCED"
+                  ? "Synced"
+                  : session.whiteboardSync.status === "PENDING"
                     ? "Saving…"
                     : session.whiteboardSync.status === "UNSYNCHRONIZED"
                       ? "Board unavailable"
                       : "Preparing…"}
-                </span>
-              </div>
+              </span>
             </div>
-          )}
-
-          <div className="flex-1 p-4 overflow-hidden flex flex-col">
-            <div className="whiteboard-wrapper flex-1 bg-white border border-slate-200 rounded-lg shadow-xs overflow-hidden flex flex-col">
-              <div className="whiteboard-toolbar px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs text-slate-600">
-                <span className="font-semibold">Whiteboard</span>
-                <button
-                  type="button"
-                  onClick={() => void whiteboardAdapter.clearAiOverlay()}
-                  className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-[11px] font-medium"
-                >
-                  Clear AI marks
+            <div className="board-appbar__actions">
+              {paneFocus !== "split" && (
+                <button type="button" onClick={() => setPaneFocus("split")}>
+                  Restore split
                 </button>
-              </div>
-              <div className="flex-1 relative bg-slate-100/50">
-                <WhiteboardCanvas
-                  adapter={whiteboardAdapter}
-                  colorScheme={resolvedTheme}
-                  readOnly={
-                    !session.isSessionStarted
-                    || session.sessionStatus !== "ACTIVE"
-                    || session.isPaused
-                    || sessionEntryPending
-                    || sessionTerminalPending
-                    || session.whiteboardSync.status === "UNINITIALIZED"
-                    || session.whiteboardSync.status === "UNSYNCHRONIZED"
-                  }
-                  onEditorMount={handleWhiteboardEditorMount}
-                  onNormalizedBoardChange={(change) => {
-                    void session.submitWhiteboardMutation(change).catch(() => {
-                      // The hook retains the fail-closed synchronization state.
-                    });
-                  }}
-                  className="w-full h-full min-h-[380px]"
-                />
-              </div>
+              )}
+              <button
+                type="button"
+                aria-pressed={paneFocus === "whiteboard"}
+                onClick={() =>
+                  setPaneFocus((focus) =>
+                    focus === "whiteboard" ? "split" : "whiteboard"
+                  )
+                }
+              >
+                Focus whiteboard
+              </button>
+              <button
+                type="button"
+                onClick={() => void whiteboardAdapter.clearAiOverlay()}
+              >
+                Clear AI marks
+              </button>
+            </div>
+          </div>
+
+          <div className="tldraw-wrap">
+            <div className="whiteboard-wrapper tldraw-frame">
+              <WhiteboardCanvas
+                adapter={whiteboardAdapter}
+                colorScheme={resolvedTheme}
+                readOnly={
+                  !session.isSessionStarted
+                  || session.sessionStatus !== "ACTIVE"
+                  || session.isPaused
+                  || sessionEntryPending
+                  || sessionTerminalPending
+                  || session.whiteboardSync.status === "UNINITIALIZED"
+                  || session.whiteboardSync.status === "UNSYNCHRONIZED"
+                }
+                onEditorMount={handleWhiteboardEditorMount}
+                onNormalizedBoardChange={(change) => {
+                  void session.submitWhiteboardMutation(change).catch(() => {
+                    // The hook retains the fail-closed synchronization state.
+                  });
+                }}
+                className="w-full h-full min-h-[380px]"
+              />
             </div>
           </div>
         </section>
