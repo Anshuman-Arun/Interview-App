@@ -193,7 +193,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          git fetch --force origin "refs/tags/$env:RELEASE_TAG:refs/tags/$env:RELEASE_TAG"
+          $tagRef = "refs/tags/$env:RELEASE_TAG"
+          git fetch --force origin "$($tagRef):$($tagRef)"
           if ($LASTEXITCODE -ne 0) {
             throw "Release tag $env:RELEASE_TAG disappeared before publication"
           }
