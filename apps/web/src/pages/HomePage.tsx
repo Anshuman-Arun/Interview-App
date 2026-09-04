@@ -13,7 +13,6 @@ export function HomePage({
   onStartInterview,
   onResumeInterview,
   onOpenSessions,
-  onOpenSettings,
   canReview,
   onReview,
   sessionEntryPending
