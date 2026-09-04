@@ -192,24 +192,48 @@ function absoluteBoardActionDisclosureBounds(
   }
 
   const placement = action.placement;
-  if (placement?.x === undefined || placement.y === undefined) return undefined;
-  switch (action.operation) {
-    case "write_text":
-      return { x: placement.x, y: placement.y, width: 220, height: 96 };
-    case "write_equation":
-      return { x: placement.x, y: placement.y, width: 220, height: 56 };
-    case "draw_rectangle":
-    case "draw_ellipse":
-      if (action.width === undefined || action.height === undefined) return undefined;
-      return {
-        x: placement.x,
-        y: placement.y,
-        width: action.width,
-        height: action.height
-      };
-    default:
-      return undefined;
+  if (placement?.x !== undefined && placement.y !== undefined) {
+    switch (action.operation) {
+      case "write_text":
+        return { x: placement.x, y: placement.y, width: 220, height: 96 };
+      case "write_equation":
+        return { x: placement.x, y: placement.y, width: 220, height: 56 };
+      case "draw_rectangle":
+      case "draw_ellipse":
+        if (action.width === undefined || action.height === undefined) return undefined;
+        return {
+          x: placement.x,
+          y: placement.y,
+          width: action.width,
+          height: action.height
+        };
+      default:
+        return undefined;
+    }
   }
+
+  if (
+    action.targetShapeId === undefined
+    && placement?.anchorShapeId === undefined
+  ) {
+    switch (action.operation) {
+      case "write_text":
+        return { x: 320, y: 120, width: 220, height: 96 };
+      case "write_equation":
+        return { x: 320, y: 220, width: 220, height: 56 };
+      case "circle":
+      case "highlight":
+      case "draw_arrow":
+      case "point_at":
+        // These legacy targetless overlays resolve around the adapter's
+        // fixed 200,200,120x120 fallback target. Use one conservative envelope
+        // rather than relying on operation-specific stroke geometry.
+        return { x: 128, y: 128, width: 224, height: 224 };
+      default:
+        return undefined;
+    }
+  }
+  return undefined;
 }
 
 function boardBoundsAreAssociated(
