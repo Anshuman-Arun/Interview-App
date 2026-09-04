@@ -172,7 +172,9 @@ export function SettingsPage({
     setDraftBaseUrl(connection?.baseUrl ?? "");
   }, [connection?.baseUrl]);
 
-  const refreshRuntime = useCallback(async (): Promise<void> => {
+  const refreshRuntime = useCallback(async (
+    refreshPrerequisites = false
+  ): Promise<void> => {
     if (desktopRuntime === undefined) {
       setRuntimeStatus(undefined);
       setRuntimeStatusError(undefined);
@@ -180,7 +182,10 @@ export function SettingsPage({
     }
     setRuntimeChecking(true);
     try {
-      setRuntimeStatus(await readDesktopRuntimeStatus(desktopRuntime));
+      setRuntimeStatus(await readDesktopRuntimeStatus(
+        desktopRuntime,
+        { refreshPrerequisites }
+      ));
       setRuntimeStatusError(undefined);
     } catch {
       setRuntimeStatus(undefined);
@@ -323,7 +328,7 @@ export function SettingsPage({
     if (setupOperationInFlightRef.current) return;
     const providerCheck = onRefreshProviderOptions?.().catch(() => undefined);
     await Promise.all([
-      refreshRuntime(),
+      refreshRuntime(true),
       providerCheck ?? Promise.resolve()
     ]);
   }, [onRefreshProviderOptions, refreshRuntime]);
