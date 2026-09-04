@@ -1022,6 +1022,12 @@ export class VoiceInputCoordinator {
         throw error;
       }
 
+      if (context.sttTiming === undefined) {
+        this.observability?.recordSttFailure(context.sessionId);
+      } else {
+        context.sttTiming.finish("FAILURE");
+        context.sttTiming = undefined;
+      }
       await this.discardCapturingUtterance(
         context,
         "Speech worker emitted an inconsistent callback after admitted onset"
