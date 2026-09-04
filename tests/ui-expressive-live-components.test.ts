@@ -55,4 +55,31 @@ describe("expressive live interview components", () => {
     expect(source).not.toContain("animate-ping");
     expect(source).toContain("POSSIBLY_EXPOSED");
   });
+
+  it("keeps compact transcript recovery and live split edge states explicit", () => {
+    const transcriptCss = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/components/TranscriptFeed.css"),
+      "utf8"
+    );
+    const transcript = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/components/TranscriptFeed.tsx"),
+      "utf8"
+    );
+    const app = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+
+    expect(transcriptCss).not.toMatch(
+      /transcript-feed__count\s*,\s*\.transcript-feed__jump/u
+    );
+    expect(transcript).toContain("new ResizeObserver");
+    expect(app).toContain('data-sync-status={session.whiteboardSync.status}');
+    expect(app).toContain('"Board unavailable"');
+    expect(app).toContain('event.key !== "Home"');
+    expect(app).toContain('event.key !== "End"');
+    expect(app).toContain("onPointerCancel");
+    expect(app).toContain("minmax(0, ${String(splitPercent)}%)");
+  });
+
 });
