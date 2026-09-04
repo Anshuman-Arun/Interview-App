@@ -1,5 +1,7 @@
 import {
   DisclosureAnalysisSchema,
+  type BoardAction,
+  type BoardSceneContext,
   type DisclosureAnalysis,
   type DisclosureId,
   type DisclosureLevel,
@@ -161,6 +163,34 @@ function protectedMetadataFormulationCount(
   );
 }
 
+function boardTargetDisclosureTexts(
+  action: BoardAction,
+  boardScene: BoardSceneContext | undefined
+): readonly string[] {
+  if (boardScene === undefined) return [];
+  const shapeIds = new Set<string>();
+  if (action.targetShapeId !== undefined) shapeIds.add(action.targetShapeId);
+  if (action.placement?.anchorShapeId !== undefined) {
+    shapeIds.add(action.placement.anchorShapeId);
+  }
+  if (action.operation === "draw_arrow_between") {
+    if (action.fromShapeId !== undefined) shapeIds.add(action.fromShapeId);
+    if (action.toShapeId !== undefined) shapeIds.add(action.toShapeId);
+  }
+
+  const texts: string[] = [];
+  for (const shapeId of shapeIds) {
+    const shape = boardScene.shapes.find((item) => item.shapeId === shapeId);
+    if (shape === undefined) continue;
+    if (shape.text !== undefined && shape.text.length > 0) texts.push(shape.text);
+    const interpretation = shape.semanticObservation?.interpretation;
+    if (interpretation !== undefined && interpretation.length > 0) {
+      texts.push(interpretation);
+    }
+  }
+  return texts;
+}
+
 function combineSafeAnalyses(
   analyses: readonly DisclosureAnalysis[],
   deterministicIds: readonly DisclosureId[],
@@ -291,6 +321,7 @@ export class DisclosureValidator {
     readonly proposal: InterviewerProposal;
     readonly request: RealizationRequest;
     readonly protectedDisclosures: readonly ProtectedDisclosure[];
+    readonly boardScene?: BoardSceneContext;
   }): ProposalValidation {
     if (input.proposal.realizedAction !== input.request.requiredAction) {
       return { accepted: false, reason: "Model realized an action that application policy did not select" };
@@ -331,6 +362,7 @@ export class DisclosureValidator {
         actionTexts.push(action.content);
       }
       actionTexts.push(action.annotationPurpose);
+      actionTexts.push(...boardTargetDisclosureTexts(action, input.boardScene));
       realizationTexts.push(actionTexts);
     }
     const texts = realizationTexts.flat();
