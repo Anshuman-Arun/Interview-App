@@ -510,6 +510,9 @@ describe("editorial v10 adversarial UI states", () => {
       /route\.page === "home"[\s\S]{0,120}route\.page === "new"[\s\S]{0,120}route\.page === "settings"[\s\S]{0,180}fetchAvailableSessions/u
     );
     expect(app).toMatch(
+      /route\.page !== "home"[\s\S]{0,140}route\.page !== "sessions"[\s\S]{0,140}route\.page !== "review"[\s\S]{0,220}refreshProviderOptions\(\)\.catch/u
+    );
+    expect(app).toMatch(
       /storedSession\.status === "ACTIVE"[\s\S]{0,180}storedSession\.sessionId === session\.sessionId[\s\S]{0,180}session\.sessionStatus === "COMPLETED"[\s\S]{0,100}session\.sessionStatus === "ARCHIVED"/u
     );
     expect(app).toMatch(
