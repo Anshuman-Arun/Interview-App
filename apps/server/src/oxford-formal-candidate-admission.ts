@@ -179,13 +179,10 @@ export function isOxfordFormalCandidateTargetAdmissible(input: {
         return statementNumbers.has("2")
           && statementNumbers.has("30")
           && statementNumbers.has("32")
-          && containsRationalOperator(parsed.data.claim.left)
-            || (
-              statementNumbers.has("2")
-              && statementNumbers.has("30")
-              && statementNumbers.has("32")
-              && containsRationalOperator(parsed.data.claim.right)
-            );
+          && (
+            containsRationalOperator(parsed.data.claim.left)
+            || containsRationalOperator(parsed.data.claim.right)
+          );
       case "median-ratio-arithmetic": {
         if (
           [...statementNumbers].some((value) =>
@@ -282,31 +279,6 @@ function isRationalLiteral(
   return expression.kind === "RATIONAL"
     && expression.value.numerator === numerator
     && expression.value.denominator === denominator;
-}
-
-function containsRationalLiteral(
-  expression: RationalExpression,
-  numerator: string,
-  denominator: string
-): boolean {
-  switch (expression.kind) {
-    case "RATIONAL":
-      return expression.value.numerator === numerator
-        && expression.value.denominator === denominator;
-    case "ADD":
-    case "SUBTRACT":
-    case "MULTIPLY":
-    case "DIVIDE":
-      return containsRationalLiteral(expression.left, numerator, denominator)
-        || containsRationalLiteral(expression.right, numerator, denominator);
-    case "NEGATE":
-      return containsRationalLiteral(expression.operand, numerator, denominator);
-    case "SUM":
-    case "PRODUCT":
-      return expression.terms.some((term) =>
-        containsRationalLiteral(term, numerator, denominator)
-      );
-  }
 }
 
 function isIntegerLiteral(
