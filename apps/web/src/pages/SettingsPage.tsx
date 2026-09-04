@@ -43,12 +43,16 @@ function readDesktopAppVersion(): string | undefined {
     readonly interviewDesktop?: DesktopRuntimeBridge;
   }).interviewDesktop;
   if (bridge === undefined || typeof bridge.getBootstrap !== "function") return undefined;
-  const bootstrap = bridge.getBootstrap();
-  if (typeof bootstrap !== "object" || bootstrap === null) return undefined;
-  const appVersion = (bootstrap as Record<string, unknown>)["appVersion"];
-  return typeof appVersion === "string" && appVersion.trim().length > 0
-    ? appVersion
-    : undefined;
+  try {
+    const bootstrap = bridge.getBootstrap();
+    if (typeof bootstrap !== "object" || bootstrap === null) return undefined;
+    const appVersion = (bootstrap as Record<string, unknown>)["appVersion"];
+    return typeof appVersion === "string" && appVersion.trim().length > 0
+      ? appVersion
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function getDesktopRuntimeBridge(): DesktopRuntimeOperations | undefined {
@@ -252,6 +256,9 @@ export function SettingsPage({
         <div>
           <span>ROOM TUNING</span>
           <h2>Make the interface disappear in the right way.</h2>
+          {desktopAppVersion !== undefined && (
+            <p>Interview App {desktopAppVersion}</p>
+          )}
         </div>
         <button type="button" onClick={reset}>Reset appearance</button>
       </section>
@@ -507,9 +514,6 @@ export function SettingsPage({
                   : describeVoiceRuntime(runtimeStatus))}
             </div>
             <div className="expressive-settings__runtime-meta">
-              {desktopAppVersion !== undefined && (
-                <span>Interview App {desktopAppVersion}</span>
-              )}
               <span>Python: system CPython 3.12–3.13 (standard install or PATH)</span>
               <span>Typed interviews do not require Python or model files.</span>
             </div>
