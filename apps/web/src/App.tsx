@@ -692,6 +692,7 @@ export const App: React.FC = () => {
           quantState={session.quantState}
           quantStateLoading={session.quantStateLoading}
           quantActionPending={session.quantActionPending}
+          connected={session.isConnected}
           sessionStatus={session.sessionStatus}
           paused={session.isPaused}
           productHidden={displayRoute.page !== "interview"}
