@@ -193,7 +193,7 @@ describe("live Oxford formal reasoning analysis", () => {
         const selectedProblem = problem(problemId);
         await turns.startSession(selectedProblem);
         const committed = await turns.commitInput(
-          "I am making an exact arithmetic subclaim that can be checked deterministically."
+          sourceTextFor(problemId, "CORRECT")
         );
         const sessions = new SessionRecoveryCoordinator(registry, store);
         const analysis = new StudentReasoningAnalysisCoordinator(
@@ -252,7 +252,9 @@ describe("live Oxford formal reasoning analysis", () => {
       const turns = new TurnCoordinator(writer);
       const selectedProblem = problem("oxford-prefix-sums-mod-n");
       await turns.startSession(selectedProblem);
-      const committed = await turns.commitInput("I claim 3 divides 4.");
+      const committed = await turns.commitInput(
+        sourceTextFor("oxford-prefix-sums-mod-n", "FALSE")
+      );
 
       const outcome = await new StudentReasoningAnalysisCoordinator(
         new SessionRecoveryCoordinator(registry, store),
@@ -295,7 +297,9 @@ describe("live Oxford formal reasoning analysis", () => {
       const turns = new TurnCoordinator(writer);
       const selectedProblem = problem("oxford-domino-chessboard");
       await turns.startSession(selectedProblem);
-      const committed = await turns.commitInput("I think symmetry might help, but I am not sure.");
+      const committed = await turns.commitInput(
+        "The black and white color counts matter, but I cannot yet state the arithmetic."
+      );
 
       const provider = new DeterministicFormalInterpretationProvider((request: FormalInterpretationRequest) =>
         providerResultFor(request, [])
@@ -337,7 +341,9 @@ describe("live Oxford formal reasoning analysis", () => {
       const turns = new TurnCoordinator(writer);
       const selectedProblem = problem("oxford-prefix-sums-mod-n");
       await turns.startSession(selectedProblem);
-      const committed = await turns.commitInput("I have an exact arithmetic claim.");
+      const committed = await turns.commitInput(
+        "The prefix sums have the same residue modulo n, and I want to subtract them."
+      );
 
       const provider = Object.defineProperty(
         {
@@ -439,7 +445,9 @@ describe("live Oxford formal reasoning analysis", () => {
       const turns = new TurnCoordinator(writer);
       const selectedProblem = problem("oxford-triangle-medians");
       await turns.startSession(selectedProblem);
-      const committed = await turns.commitInput("The arithmetic ratio check is exact.");
+      const committed = await turns.commitInput(
+        sourceTextFor("oxford-triangle-medians", "CORRECT")
+      );
 
       let releaseProvider: ((value: unknown) => void) | undefined;
       let capturedRequest: FormalInterpretationRequest | undefined;
@@ -511,7 +519,9 @@ describe("live Oxford formal reasoning analysis", () => {
       const turns = new TurnCoordinator(writer);
       const selectedProblem = problem("oxford-domino-chessboard");
       await turns.startSession(selectedProblem);
-      const committed = await turns.commitInput("Removing two same-colored corners leaves the exact color-count mismatch.");
+      const committed = await turns.commitInput(
+        sourceTextFor("oxford-domino-chessboard", "CORRECT")
+      );
 
       const sessions = new SessionRecoveryCoordinator(registry, store);
       const orchestrator = new ServerTurnOrchestrator(
@@ -628,7 +638,9 @@ describe("live Oxford formal reasoning analysis", () => {
       const turns = new TurnCoordinator(writer);
       const selectedProblem = problem("oxford-divisibility-chain");
       await turns.startSession(selectedProblem);
-      const committed = await turns.commitInput("I have a numerical divisibility claim.");
+      const committed = await turns.commitInput(
+        sourceTextFor("oxford-divisibility-chain", "CORRECT")
+      );
 
       const malicious: FormalInterpretationProvider = {
         interpret(request) {
@@ -814,7 +826,9 @@ describe("live Oxford formal reasoning analysis", () => {
       const turns = new TurnCoordinator(writer);
       const selectedProblem = problem("oxford-triangle-medians");
       await turns.startSession(selectedProblem);
-      const committed = await turns.commitInput("The exact ratio arithmetic is 1/2 = 2/4.");
+      const committed = await turns.commitInput(
+        sourceTextFor("oxford-triangle-medians", "CORRECT")
+      );
       const sessions = new SessionRecoveryCoordinator(registry, store);
       const provider = deterministicProvider("CORRECT");
 
