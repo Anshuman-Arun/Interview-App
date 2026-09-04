@@ -17,6 +17,7 @@ import { DesktopLocalRuntimeComposition } from "./runtime/index.js";
 import { PACKAGED_DESKTOP_PRELOAD_SHA256 } from "./runtime/packaged-resource-integrity.js";
 import {
   DESKTOP_BOOTSTRAP_CHANNEL,
+  DESKTOP_INSTALL_PYTHON_RUNTIME_CHANNEL,
   DESKTOP_INSTALL_VISION_MODEL_CHANNEL,
   DESKTOP_INSTALL_VOICE_MODELS_CHANNEL,
   DESKTOP_LOCAL_RUNTIME_STATUS_CHANNEL,
@@ -79,6 +80,8 @@ let removePermissionCapability: (() => void) | undefined;
 let shuttingDown = false;
 let shutdownComplete = false;
 let shutdownPromise: Promise<void> | undefined;
+let pythonSetupState: DesktopRendererModelSetupState = "IDLE";
+let pythonSetupRestartRequired = false;
 let voiceSetupState: DesktopRendererModelSetupState = "IDLE";
 let voiceSetupRestartRequired = false;
 let visionSetupState: DesktopRendererModelSetupState = "IDLE";
@@ -86,7 +89,7 @@ let visionSetupRestartRequired = false;
 let activeModelInstall:
   | Promise<DesktopRendererLocalRuntimeStatus>
   | undefined;
-let activeModelInstallKind: "VOICE" | "VISION" | undefined;
+let activeModelInstallKind: "PYTHON" | "VOICE" | "VISION" | undefined;
 const packagedSingleInstanceSmokeHost = process.argv.includes(
   "--packaged-single-instance-smoke-host"
 );
@@ -262,6 +265,7 @@ async function startDesktop(): Promise<void> {
 
 function installLocalRuntimeHandlers(): void {
   ipcMain.removeHandler(DESKTOP_LOCAL_RUNTIME_STATUS_CHANNEL);
+  ipcMain.removeHandler(DESKTOP_INSTALL_PYTHON_RUNTIME_CHANNEL);
   ipcMain.removeHandler(DESKTOP_INSTALL_VOICE_MODELS_CHANNEL);
   ipcMain.removeHandler(DESKTOP_INSTALL_VISION_MODEL_CHANNEL);
   ipcMain.removeHandler(DESKTOP_RESTART_APP_CHANNEL);
@@ -273,6 +277,16 @@ function installLocalRuntimeHandlers(): void {
         throw new Error("Desktop local runtime request was rejected");
       }
       return localRuntimeStatusForRenderer();
+    }
+  );
+
+  ipcMain.handle(
+    DESKTOP_INSTALL_PYTHON_RUNTIME_CHANNEL,
+    (event: IpcMainInvokeEvent): Promise<DesktopRendererLocalRuntimeStatus> => {
+      if (!isAuthorizedDesktopInvoke(event)) {
+        throw new Error("Desktop Python runtime setup request was rejected");
+      }
+      return beginLocalModelInstall("PYTHON");
     }
   );
 
@@ -316,16 +330,18 @@ function installLocalRuntimeHandlers(): void {
 }
 
 function beginLocalModelInstall(
-  kind: "VOICE" | "VISION"
+  kind: "PYTHON" | "VOICE" | "VISION"
 ): Promise<DesktopRendererLocalRuntimeStatus> {
   if (activeModelInstall !== undefined) {
     if (activeModelInstallKind === kind) return activeModelInstall;
     return Promise.reject(new Error("Another local model installation is already running"));
   }
 
-  const restartRequired = kind === "VOICE"
-    ? voiceSetupRestartRequired
-    : visionSetupRestartRequired;
+  const restartRequired = kind === "PYTHON"
+    ? pythonSetupRestartRequired
+    : kind === "VOICE"
+      ? voiceSetupRestartRequired
+      : visionSetupRestartRequired;
   if (restartRequired) return Promise.resolve(localRuntimeStatusForRenderer());
 
   const runtime = localRuntime;
@@ -347,10 +363,15 @@ function beginLocalModelInstall(
 }
 
 function setSetupState(
-  kind: "VOICE" | "VISION",
+  kind: "PYTHON" | "VOICE" | "VISION",
   state: DesktopRendererModelSetupState,
   restartRequired: boolean
 ): void {
+  if (kind === "PYTHON") {
+    pythonSetupState = state;
+    pythonSetupRestartRequired = restartRequired;
+    return;
+  }
   if (kind === "VOICE") {
     voiceSetupState = state;
     voiceSetupRestartRequired = restartRequired;
@@ -377,11 +398,13 @@ function isAuthorizedDesktopInvoke(event: IpcMainInvokeEvent): boolean {
 }
 
 async function installLocalModelAssets(
-  kind: "VOICE" | "VISION",
+  kind: "PYTHON" | "VOICE" | "VISION",
   runtime: DesktopLocalRuntimeComposition
 ): Promise<DesktopRendererLocalRuntimeStatus> {
   try {
-    if (kind === "VOICE") {
+    if (kind === "PYTHON") {
+      await runtime.installPythonRuntimeDependencies(startupAbort.signal);
+    } else if (kind === "VOICE") {
       await runtime.installVoiceAssets(startupAbort.signal);
     } else {
       await runtime.installVisionAssets(startupAbort.signal);
@@ -408,6 +431,10 @@ function localRuntimeStatusForRenderer(): DesktopRendererLocalRuntimeStatus {
     tts: rendererCapability(snapshot?.tts),
     vision: rendererCapability(snapshot?.vision),
     python: rendererPythonStatus(snapshot),
+    pythonSetup: Object.freeze({
+      state: pythonSetupState,
+      restartRequired: pythonSetupRestartRequired
+    }),
     voiceSetup: Object.freeze({
       state: voiceSetupState,
       restartRequired: voiceSetupRestartRequired
@@ -434,6 +461,7 @@ function rendererPythonStatus(
   for (const reasonCode of [
     "PYTHON_RUNTIME_UNAVAILABLE",
     "PYTHON_RUNTIME_INCOMPATIBLE",
+    "PYTHON_RUNTIME_DEPENDENCIES_MISSING",
     "UNSUPPORTED_RUNTIME_PLATFORM",
     "WORKER_EXECUTABLE_UNAVAILABLE"
   ] as const) {
@@ -651,6 +679,7 @@ async function runPackagedSmoke(
           && root.childElementCount > 0
           && typeof globalThis.interviewDesktop?.getBootstrap === "function"
           && typeof globalThis.interviewDesktop?.getLocalRuntimeStatus === "function"
+          && typeof globalThis.interviewDesktop?.installPythonRuntime === "function"
           && typeof globalThis.interviewDesktop?.installVoiceModels === "function"
           && typeof globalThis.interviewDesktop?.installVisionModel === "function"
           && typeof globalThis.interviewDesktop?.restartApp === "function";
@@ -959,6 +988,7 @@ function shutdownDesktop(): Promise<void> {
   ipcMain.removeAllListeners(DESKTOP_BOOTSTRAP_CHANNEL);
   ipcMain.removeAllListeners(DESKTOP_ZOOM_CHANNEL);
   ipcMain.removeHandler(DESKTOP_LOCAL_RUNTIME_STATUS_CHANNEL);
+  ipcMain.removeHandler(DESKTOP_INSTALL_PYTHON_RUNTIME_CHANNEL);
   ipcMain.removeHandler(DESKTOP_INSTALL_VOICE_MODELS_CHANNEL);
   ipcMain.removeHandler(DESKTOP_INSTALL_VISION_MODEL_CHANNEL);
   ipcMain.removeHandler(DESKTOP_RESTART_APP_CHANNEL);
