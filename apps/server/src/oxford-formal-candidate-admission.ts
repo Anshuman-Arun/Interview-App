@@ -190,10 +190,15 @@ export function isOxfordFormalCandidateTargetAdmissible(input: {
         ) {
           return false;
         }
-        return new Set(
-          [...statementNumbers].map(unsignedInteger)
-            .filter((value) => TRIANGLE_RATIO_NUMBERS.has(value))
-        ).size >= 2;
+        return containsRationalLiteral(
+          parsed.data.claim.left,
+          "2",
+          "3"
+        ) || containsRationalLiteral(
+          parsed.data.claim.right,
+          "2",
+          "3"
+        );
       }
       default:
         return false;
@@ -222,7 +227,11 @@ export function isOxfordFormalCandidateTargetAdmissible(input: {
 
     switch (profile.target.subject.claimId) {
       case "listed-prime-remainder":
-        return claim.kind === "CONGRUENCE";
+        return claim.kind === "CONGRUENCE"
+          && (
+            isIntegerLiteral(claim.left, "1")
+            || isIntegerLiteral(claim.right, "1")
+          );
       case "prefix-residue-arithmetic":
         return claim.kind === "CONGRUENCE" || claim.kind === "DIVISIBILITY";
       case "divisibility-step":
@@ -245,6 +254,38 @@ function normalizeText(value: string): string {
     .replace(/[‐‑‒–—−]/gu, "-")
     .replace(/\s+/gu, " ")
     .trim();
+}
+
+function containsRationalLiteral(
+  expression: RationalExpression,
+  numerator: string,
+  denominator: string
+): boolean {
+  switch (expression.kind) {
+    case "RATIONAL":
+      return expression.value.numerator === numerator
+        && expression.value.denominator === denominator;
+    case "ADD":
+    case "SUBTRACT":
+    case "MULTIPLY":
+    case "DIVIDE":
+      return containsRationalLiteral(expression.left, numerator, denominator)
+        || containsRationalLiteral(expression.right, numerator, denominator);
+    case "NEGATE":
+      return containsRationalLiteral(expression.operand, numerator, denominator);
+    case "SUM":
+    case "PRODUCT":
+      return expression.terms.some((term) =>
+        containsRationalLiteral(term, numerator, denominator)
+      );
+  }
+}
+
+function isIntegerLiteral(
+  expression: IntegerExpression,
+  value: string
+): boolean {
+  return expression.kind === "INTEGER" && expression.value === value;
 }
 
 function collectRationalNumbers(
