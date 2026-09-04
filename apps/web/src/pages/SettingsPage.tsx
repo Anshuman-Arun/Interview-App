@@ -427,7 +427,7 @@ export function SettingsPage({
                 {desktopRuntime === undefined
                   ? "DESKTOP ONLY"
                   : runtimeStatus?.python.reasonCode === "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
-                    && runtimeStatus.pythonSetup.restartRequired !== true
+                    && !runtimeStatus.pythonSetup.restartRequired
                     ? "SETUP REQUIRED"
                     : capabilityLabel(runtimeStatus?.python, runtimeStatus?.pythonSetup)}
               </b>
@@ -452,7 +452,7 @@ export function SettingsPage({
                 <div>
                   <strong>Python components</strong>
                   <small>
-                    {runtimeStatus?.pythonSetup.restartRequired === true
+                    {runtimeStatus.pythonSetup.restartRequired
                       ? "Pinned Python components installed. You can install models now; restart once setup is complete."
                       : "Install the verified local AI dependency lock into the supported Python runtime."}
                   </small>
@@ -465,16 +465,15 @@ export function SettingsPage({
                   onClick={() => void installPythonRuntime()}
                   disabled={
                     anyInstallActive
-                    || runtimeStatus === undefined
                     || runtimeStatus.python.reasonCode !== "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
                     || runtimeStatus.pythonSetup.restartRequired
                   }
                 >
                   {installingPython
                     ? "INSTALLING…"
-                    : runtimeStatus?.pythonSetup.restartRequired
+                    : runtimeStatus.pythonSetup.restartRequired
                       ? "Installed — restart required"
-                      : runtimeStatus?.pythonSetup.state === "FAILED"
+                      : runtimeStatus.pythonSetup.state === "FAILED"
                         ? "Retry Python components"
                         : "Install Python components"}
                 </button>
