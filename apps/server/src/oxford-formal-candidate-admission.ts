@@ -1,0 +1,951 @@
+import type {
+  FormalInterpretationCandidate,
+  FormalInterpretationRequest
+} from "../../../packages/domain/src/index.js";
+import { parseStrictJson } from "../../../packages/providers/src/index.js";
+import {
+  ModularArithmeticInterpretationSchema,
+  RationalArithmeticInterpretationSchema,
+  type IntegerExpression,
+  type RationalExpression
+} from "../../../packages/verification/src/index.js";
+import type { OxfordFormalAnalysisProfile } from "./oxford-formal-analysis-catalog.js";
+
+const TRIANGLE_RATIO_NUMBERS = new Set(["1", "2", "3"]);
+
+export function isOxfordFormalAnalysisSourceRelevant(
+  profile: OxfordFormalAnalysisProfile,
+  sourceText: string
+): boolean {
+  const text = normalizeText(sourceText);
+  switch (profile.target.subject.claimId) {
+    case "color-count-arithmetic":
+      return containsAny(text, [
+        "black",
+        "white",
+        "color",
+        "colour",
+        "checker",
+        "square",
+        "corner",
+        "domino"
+      ]);
+    case "listed-prime-remainder": {
+      const constructionLanguage = containsAny(text, [
+        "product plus one",
+        "product-plus-one",
+        "multiply all",
+        "product of"
+      ]);
+      const residueLanguage = containsAny(text, [
+        "remainder",
+        "modulo",
+        " mod ",
+        "mod "
+      ]);
+      const primeContext = containsAny(text, [
+        "prime",
+        "listed",
+        "list",
+        "product",
+        "constructed",
+        "new number",
+        "each p",
+        "p_"
+      ]);
+      return constructionLanguage
+        || (containsAny(text, ["plus one"]) && primeContext)
+        || (residueLanguage && primeContext)
+        || (
+          containsAny(text, ["listed", "list", "prime"])
+          && containsAny(text, ["divide", "divides", "divisor"])
+        );
+    }
+    case "prefix-residue-arithmetic": {
+      const structuralContext = containsAny(text, [
+        "prefix",
+        "partial sum",
+        "consecutive block",
+        "block sum",
+        "s_i",
+        "s_j"
+      ]);
+      const arithmeticContext = containsAny(text, [
+        "residue",
+        "remainder",
+        "modulo",
+        " mod ",
+        "mod ",
+        "divisible",
+        "divides",
+        "difference",
+        "subtract",
+        "minus"
+      ]);
+      return structuralContext && arithmeticContext;
+    }
+    case "median-ratio-arithmetic": {
+      const geometryContext = containsAny(text, [
+        "median",
+        "centroid",
+        "midpoint",
+        "m_a",
+        "m_b",
+        "m_c"
+      ]);
+      const ratioLanguage = containsAny(text, [
+        "ratio",
+        "two third",
+        "two-third",
+        "2/3",
+        "2:1",
+        "1:2",
+        "two to one",
+        "one to two"
+      ]);
+      return geometryContext
+        || (ratioLanguage && containsAny(text, ["vertex", "along", "segment", "point g"]));
+    }
+    case "divisibility-step": {
+      const decompositionContext = containsAny(text, [
+        "odd part",
+        "same odd",
+        "power of two",
+        "power of 2",
+        "2^",
+        " times "
+      ]);
+      const divisibilityLanguage = containsAny(text, [
+        "divide",
+        "divides",
+        "divisible",
+        "divisor",
+        "multiple",
+        "smaller",
+        "larger",
+        "bigger"
+      ]);
+      return decompositionContext && divisibilityLanguage;
+    }
+    default:
+      return false;
+  }
+}
+
+export function isOxfordFormalCandidateTargetAdmissible(input: {
+  readonly profile: OxfordFormalAnalysisProfile;
+  readonly request: FormalInterpretationRequest;
+  readonly candidate: FormalInterpretationCandidate;
+}): boolean {
+  const { profile, request, candidate } = input;
+  if (
+    request.problem.id !== profile.problemId
+    || request.problem.version !== profile.problemVersion
+    || request.target.problemId !== profile.target.problemId
+    || request.target.subject.claimId !== profile.target.subject.claimId
+    || candidate.target.problemId !== profile.target.problemId
+    || candidate.target.subject.claimId !== profile.target.subject.claimId
+    || !isOxfordFormalAnalysisSourceRelevant(profile, request.source.span.text)
+  ) {
+    return false;
+  }
+
+  let rawStatement: unknown;
+  try {
+    rawStatement = parseStrictJson(candidate.formalStatement);
+  } catch {
+    return false;
+  }
+
+  const sourceNumbers = extractMentionedIntegers(request.source.span.text);
+
+  if (candidate.protocol.protocol === "RATIONAL_ARITHMETIC") {
+    const parsed = RationalArithmeticInterpretationSchema.safeParse(rawStatement);
+    if (!parsed.success) return false;
+    const statementNumbers = new Set<string>();
+    const includeUnitDenominator =
+      profile.target.subject.claimId === "median-ratio-arithmetic";
+    collectRationalNumbers(
+      parsed.data.claim.left,
+      statementNumbers,
+      includeUnitDenominator
+    );
+    collectRationalNumbers(
+      parsed.data.claim.right,
+      statementNumbers,
+      includeUnitDenominator
+    );
+    if (!numbersAreGrounded(statementNumbers, sourceNumbers)) {
+      return false;
+    }
+
+    switch (profile.target.subject.claimId) {
+      case "color-count-arithmetic":
+        return isDominoColorCountEquality(
+          parsed.data.claim.left,
+          parsed.data.claim.right
+        ) || isDominoColorCountEquality(
+          parsed.data.claim.right,
+          parsed.data.claim.left
+        );
+      case "median-ratio-arithmetic": {
+        if (
+          [...statementNumbers].some((value) =>
+            !TRIANGLE_RATIO_NUMBERS.has(unsignedInteger(value))
+          )
+        ) {
+          return false;
+        }
+        return isTwoToOneRatioEquality(
+          parsed.data.claim.left,
+          parsed.data.claim.right
+        ) || isTwoToOneRatioEquality(
+          parsed.data.claim.right,
+          parsed.data.claim.left
+        );
+      }
+      default:
+        return false;
+    }
+  }
+
+  if (candidate.protocol.protocol === "MODULAR_ARITHMETIC") {
+    const parsed = ModularArithmeticInterpretationSchema.safeParse(rawStatement);
+    if (!parsed.success) return false;
+    const statementNumbers = new Set<string>();
+    const claim = parsed.data.claim;
+    if (claim.kind === "CONGRUENCE") {
+      collectIntegerNumbers(claim.left, statementNumbers);
+      collectIntegerNumbers(claim.right, statementNumbers);
+      statementNumbers.add(claim.modulus);
+    } else {
+      statementNumbers.add(claim.divisor);
+      collectIntegerNumbers(claim.dividend, statementNumbers);
+    }
+    if (!numbersAreGrounded(statementNumbers, sourceNumbers)) {
+      return false;
+    }
+    if (new Set([...statementNumbers].map(unsignedInteger)).size < 2) {
+      return false;
+    }
+
+    switch (profile.target.subject.claimId) {
+      case "listed-prime-remainder":
+        return isEuclidRemainderOneClaim(
+          claim,
+          request.source.span.text
+        );
+      case "prefix-residue-arithmetic":
+        return isPrefixResidueArithmeticClaim(
+          claim,
+          request.source.span.text
+        );
+      case "divisibility-step":
+        return claim.kind === "DIVISIBILITY"
+          && claim.dividend.kind === "INTEGER"
+          && maximumPositiveInteger(sourceNumbers) === claim.dividend.value
+          && sourceExpressesTargetDivisibility(
+            request.source.span.text,
+            claim.divisor,
+            claim.dividend.value
+          );
+      default:
+        return false;
+    }
+  }
+
+  return false;
+}
+
+function containsAny(text: string, needles: readonly string[]): boolean {
+  return needles.some((needle) => text.includes(needle));
+}
+
+function normalizeText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[‐‑‒–—−]/gu, "-")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
+function isTwoToOneRatioEquality(
+  ratioExpression: RationalExpression,
+  resultExpression: RationalExpression
+): boolean {
+  return ratioExpression.kind === "DIVIDE"
+    && isRationalLiteral(ratioExpression.left, "2", "3")
+    && isRationalLiteral(ratioExpression.right, "1", "3")
+    && resultExpression.kind === "RATIONAL"
+    && resultExpression.value.denominator === "1";
+}
+
+function isDominoColorCountEquality(
+  countExpression: RationalExpression,
+  resultExpression: RationalExpression
+): boolean {
+  return countExpression.kind === "SUBTRACT"
+    && isRationalLiteral(countExpression.left, "32", "1")
+    && isRationalLiteral(countExpression.right, "2", "1")
+    && resultExpression.kind === "RATIONAL"
+    && resultExpression.value.denominator === "1";
+}
+
+function isRationalLiteral(
+  expression: RationalExpression,
+  numerator: string,
+  denominator: string
+): boolean {
+  return expression.kind === "RATIONAL"
+    && expression.value.numerator === numerator
+    && expression.value.denominator === denominator;
+}
+
+function isIntegerLiteral(
+  expression: IntegerExpression,
+  value: string
+): boolean {
+  return expression.kind === "INTEGER" && expression.value === value;
+}
+
+function collectRationalNumbers(
+  expression: RationalExpression,
+  output: Set<string>,
+  includeUnitDenominator: boolean
+): void {
+  switch (expression.kind) {
+    case "RATIONAL":
+      output.add(expression.value.numerator);
+      if (
+        includeUnitDenominator
+        || expression.value.denominator !== "1"
+      ) {
+        output.add(expression.value.denominator);
+      }
+      return;
+    case "ADD":
+    case "SUBTRACT":
+    case "MULTIPLY":
+    case "DIVIDE":
+      collectRationalNumbers(expression.left, output, includeUnitDenominator);
+      collectRationalNumbers(expression.right, output, includeUnitDenominator);
+      return;
+    case "NEGATE":
+      collectRationalNumbers(expression.operand, output, includeUnitDenominator);
+      return;
+    case "SUM":
+    case "PRODUCT":
+      for (const term of expression.terms) {
+        collectRationalNumbers(term, output, includeUnitDenominator);
+      }
+      return;
+  }
+}
+
+function isEuclidRemainderOneClaim(
+  claim: ReturnType<typeof ModularArithmeticInterpretationSchema.parse>["claim"],
+  sourceText: string
+): boolean {
+  if (claim.kind !== "CONGRUENCE") return false;
+  let constructedValue: string | undefined;
+  if (isIntegerLiteral(claim.left, "1") && claim.right.kind === "INTEGER") {
+    constructedValue = claim.right.value;
+  } else if (
+    isIntegerLiteral(claim.right, "1")
+    && claim.left.kind === "INTEGER"
+  ) {
+    constructedValue = claim.left.value;
+  }
+  if (constructedValue === undefined || constructedValue === claim.modulus) {
+    return false;
+  }
+  return findExplicitEuclidConstructedValue(sourceText) === constructedValue;
+}
+
+function findExplicitEuclidConstructedValue(
+  sourceText: string
+): string | undefined {
+  const tokens = normalizeIntegerWords(sourceText)
+    .match(/[-+]?\d+|[a-z]+/gu) ?? [];
+
+  for (let index = 0; index < tokens.length - 2; index += 1) {
+    if (
+      tokens[index] !== "plus"
+      || (tokens[index + 1] !== "one" && tokens[index + 1] !== "1")
+    ) continue;
+    const preceding = tokens.slice(Math.max(0, index - 12), index);
+    if (!preceding.includes("product")) continue;
+    const value = integerAfterAssignment(tokens, index + 2);
+    if (value !== undefined) return value;
+  }
+
+  for (let index = 0; index < tokens.length - 1; index += 1) {
+    const first = tokens[index];
+    const second = tokens[index + 1];
+    if (
+      !(
+        (first === "constructed" && second === "number")
+        || (first === "new" && second === "number")
+        || (first === "euclid" && second === "number")
+      )
+    ) {
+      continue;
+    }
+    const value = integerAfterAssignment(tokens, index + 2);
+    if (value !== undefined) return value;
+  }
+  return undefined;
+}
+
+function integerAfterAssignment(
+  tokens: readonly string[],
+  startIndex: number
+): string | undefined {
+  let sawAssignment = false;
+  for (
+    let index = startIndex;
+    index < tokens.length && index < startIndex + 6;
+    index += 1
+  ) {
+    const token = tokens[index];
+    if (token === undefined) return undefined;
+    if (/^[-+]?\d+$/u.test(token)) {
+      return sawAssignment ? token : undefined;
+    }
+    if (
+      token === "is"
+      || token === "equals"
+      || token === "equal"
+      || token === "gives"
+      || token === "becomes"
+      || token === "namely"
+    ) {
+      sawAssignment = true;
+      continue;
+    }
+    if (
+      token === "the"
+      || token === "number"
+      || token === "to"
+      || token === "which"
+    ) {
+      continue;
+    }
+    if (sawAssignment) return undefined;
+  }
+  return undefined;
+}
+
+function maximumPositiveInteger(
+  values: ReadonlySet<string>
+): string | undefined {
+  let maximum: bigint | undefined;
+  for (const value of values) {
+    try {
+      const parsed = BigInt(value);
+      if (parsed <= 0n || (maximum !== undefined && parsed <= maximum)) continue;
+      maximum = parsed;
+    } catch {
+      return undefined;
+    }
+  }
+  return maximum?.toString();
+}
+
+function isPrefixResidueArithmeticClaim(
+  claim: ReturnType<typeof ModularArithmeticInterpretationSchema.parse>["claim"],
+  sourceText: string
+): boolean {
+  const pair = findExplicitPrefixSumPair(sourceText);
+  if (pair === undefined) return false;
+
+  if (claim.kind === "CONGRUENCE") {
+    if (claim.left.kind !== "INTEGER" || claim.right.kind !== "INTEGER") {
+      return false;
+    }
+    const samePair =
+      (claim.left.value === pair[0] && claim.right.value === pair[1])
+      || (claim.left.value === pair[1] && claim.right.value === pair[0]);
+    return samePair && sourceExpressesModulo(sourceText, claim.modulus);
+  }
+
+  if (
+    claim.dividend.kind !== "SUBTRACT"
+    || claim.dividend.left.kind !== "INTEGER"
+    || claim.dividend.right.kind !== "INTEGER"
+  ) {
+    return false;
+  }
+  const samePair =
+    (claim.dividend.left.value === pair[0]
+      && claim.dividend.right.value === pair[1])
+    || (claim.dividend.left.value === pair[1]
+      && claim.dividend.right.value === pair[0]);
+  return samePair && sourceExpressesDivisibleBy(sourceText, claim.divisor);
+}
+
+function findExplicitPrefixSumPair(
+  sourceText: string
+): readonly [string, string] | undefined {
+  const tokens = normalizeIntegerWords(sourceText)
+    .match(/[-+]?\d+|[a-z]+/gu) ?? [];
+
+  for (let index = 0; index < tokens.length - 1; index += 1) {
+    const isPrefix =
+      tokens[index] === "prefix"
+      && (tokens[index + 1] === "sum" || tokens[index + 1] === "sums");
+    const isPartial =
+      tokens[index] === "partial"
+      && (tokens[index + 1] === "sum" || tokens[index + 1] === "sums");
+    if (!isPrefix && !isPartial) continue;
+
+    const scanStart = index + 2;
+    const scanEnd = Math.min(tokens.length, scanStart + 10);
+    for (let cursor = scanStart; cursor < scanEnd - 2; cursor += 1) {
+      const left = tokens[cursor];
+      if (left === undefined || !/^[-+]?\d+$/u.test(left)) continue;
+      if (tokens[cursor + 1] !== "and") continue;
+      const right = tokens[cursor + 2];
+      if (right !== undefined && /^[-+]?\d+$/u.test(right)) {
+        return [left, right];
+      }
+    }
+  }
+  return undefined;
+}
+
+function sourceExpressesModulo(
+  sourceText: string,
+  modulus: string
+): boolean {
+  const tokens = normalizeIntegerWords(sourceText)
+    .match(/[-+]?\d+|[a-z]+/gu) ?? [];
+  return tokens.some(
+    (token, index) =>
+      (token === "mod" || token === "modulo")
+      && tokens[index + 1] === modulus
+  );
+}
+
+function sourceExpressesDivisibleBy(
+  sourceText: string,
+  divisor: string
+): boolean {
+  const tokens = normalizeIntegerWords(sourceText)
+    .match(/[-+]?\d+|[a-z]+/gu) ?? [];
+  return tokens.some(
+    (token, index) =>
+      token === "divisible"
+      && tokens[index + 1] === "by"
+      && tokens[index + 2] === divisor
+  );
+}
+
+function sourceExpressesTargetDivisibility(
+  sourceText: string,
+  divisor: string,
+  dividend: string
+): boolean {
+  const tokens = normalizeIntegerWords(sourceText)
+    .match(/[-+]?\d+|[a-z]+/gu) ?? [];
+  const directlyStated = tokens.some(
+    (token, index) =>
+      token === divisor
+      && tokens[index + 1] === "divides"
+      && tokens[index + 2] === dividend
+  );
+  if (!directlyStated) return false;
+
+  const chosenPair = findExplicitChosenNumberPair(tokens);
+  if (chosenPair !== undefined) {
+    return pairMatchesDivisibility(chosenPair, divisor, dividend);
+  }
+
+  const oddPartPair = findSameOddPartNumberPair(tokens);
+  if (oddPartPair !== undefined) {
+    return pairMatchesDivisibility(oddPartPair, divisor, dividend);
+  }
+  if (
+    tokens.some(
+      (token, index) =>
+        token === "same"
+        && tokens[index + 1] === "odd"
+        && tokens[index + 2] === "part"
+    )
+  ) {
+    return false;
+  }
+
+  return sourceFactorizationsMatchDivisibility(tokens, divisor, dividend);
+}
+
+function sourceFactorizationsMatchDivisibility(
+  tokens: readonly string[],
+  divisor: string,
+  dividend: string
+): boolean {
+  const factorizations: Array<{
+    readonly value: string;
+    readonly factors: readonly [string, string];
+  }> = [];
+  for (let index = 0; index < tokens.length - 4; index += 1) {
+    const value = tokens[index];
+    const relation = tokens[index + 1];
+    const leftFactor = tokens[index + 2];
+    const operator = tokens[index + 3];
+    const rightFactor = tokens[index + 4];
+    if (
+      value === undefined
+      || leftFactor === undefined
+      || rightFactor === undefined
+      || !/^[-+]?\d+$/u.test(value)
+      || (relation !== "equals" && relation !== "is")
+      || !/^[-+]?\d+$/u.test(leftFactor)
+      || operator !== "times"
+      || !/^[-+]?\d+$/u.test(rightFactor)
+    ) {
+      continue;
+    }
+    factorizations.push({
+      value,
+      factors: [leftFactor, rightFactor]
+    });
+  }
+
+  for (let leftIndex = 0; leftIndex < factorizations.length; leftIndex += 1) {
+    const left = factorizations[leftIndex];
+    if (left === undefined) continue;
+    for (
+      let rightIndex = leftIndex + 1;
+      rightIndex < factorizations.length;
+      rightIndex += 1
+    ) {
+      const right = factorizations[rightIndex];
+      if (right === undefined) continue;
+      const pair: readonly [string, string] = [left.value, right.value];
+      if (!pairMatchesDivisibility(pair, divisor, dividend)) continue;
+      if (hasSharedOddFactor(left.factors, right.factors)) return true;
+    }
+  }
+  return false;
+}
+
+function hasSharedOddFactor(
+  left: readonly [string, string],
+  right: readonly [string, string]
+): boolean {
+  for (const candidate of left) {
+    if (!right.includes(candidate)) continue;
+    try {
+      const value = BigInt(candidate);
+      if (value > 1n && value % 2n !== 0n) return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+function pairMatchesDivisibility(
+  pair: readonly [string, string],
+  divisor: string,
+  dividend: string
+): boolean {
+  try {
+    const left = BigInt(pair[0]);
+    const right = BigInt(pair[1]);
+    const smaller = left <= right ? left : right;
+    const larger = left <= right ? right : left;
+    return divisor === smaller.toString() && dividend === larger.toString();
+  } catch {
+    return false;
+  }
+}
+
+function findSameOddPartNumberPair(
+  tokens: readonly string[]
+): readonly [string, string] | undefined {
+  for (let index = 0; index < tokens.length - 5; index += 1) {
+    const left = tokens[index];
+    const separator = tokens[index + 1];
+    const right = tokens[index + 2];
+    if (
+      left === undefined
+      || right === undefined
+      || !/^[-+]?\d+$/u.test(left)
+      || separator !== "and"
+      || !/^[-+]?\d+$/u.test(right)
+    ) {
+      continue;
+    }
+    const suffix = tokens.slice(index + 3, Math.min(tokens.length, index + 10));
+    const sameIndex = suffix.indexOf("same");
+    if (
+      sameIndex >= 0
+      && suffix[sameIndex + 1] === "odd"
+      && suffix[sameIndex + 2] === "part"
+    ) {
+      return [left, right];
+    }
+  }
+  return undefined;
+}
+
+function findExplicitChosenNumberPair(
+  tokens: readonly string[]
+): readonly [string, string] | undefined {
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (
+      tokens[index] !== "numbers"
+      || (tokens[index - 1] !== "chosen" && tokens[index - 1] !== "two")
+    ) {
+      continue;
+    }
+    const left = tokens[index + 1];
+    const separator = tokens[index + 2];
+    const right = tokens[index + 3];
+    if (
+      left !== undefined
+      && right !== undefined
+      && /^[-+]?\d+$/u.test(left)
+      && separator === "and"
+      && /^[-+]?\d+$/u.test(right)
+    ) {
+      return [left, right];
+    }
+  }
+  return undefined;
+}
+
+function normalizeIntegerWords(value: string): string {
+  const normalized = normalizeText(value).replace(/-/gu, " ");
+  const tokens = normalized.match(/[-+]?\d+|[a-z]+|[^\s]/gu) ?? [];
+  const output: string[] = [];
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token === undefined) continue;
+    if (/^[a-z]+$/u.test(token)) {
+      const wordRun: string[] = [];
+      let cursor = index;
+      while (cursor < tokens.length) {
+        const candidate = tokens[cursor];
+        if (candidate === undefined || !/^[a-z]+$/u.test(candidate)) break;
+        wordRun.push(candidate);
+        cursor += 1;
+      }
+      const parsed = parseEnglishInteger(wordRun, 0);
+      if (parsed !== undefined) {
+        output.push(String(parsed.value));
+        index += parsed.endIndex;
+        continue;
+      }
+    }
+    output.push(token);
+  }
+  return output.join(" ").replace(/\s+([.,;:!?])/gu, "$1");
+}
+
+function collectIntegerNumbers(
+  expression: IntegerExpression,
+  output: Set<string>
+): void {
+  switch (expression.kind) {
+    case "INTEGER":
+      output.add(expression.value);
+      return;
+    case "ADD":
+    case "SUBTRACT":
+    case "MULTIPLY":
+      collectIntegerNumbers(expression.left, output);
+      collectIntegerNumbers(expression.right, output);
+      return;
+    case "NEGATE":
+      collectIntegerNumbers(expression.operand, output);
+      return;
+    case "POWER":
+      collectIntegerNumbers(expression.base, output);
+      output.add(String(expression.exponent));
+      return;
+    case "SUM":
+    case "PRODUCT":
+      for (const term of expression.terms) collectIntegerNumbers(term, output);
+      return;
+  }
+}
+
+function numbersAreGrounded(
+  statementNumbers: ReadonlySet<string>,
+  sourceNumbers: ReadonlySet<string>
+): boolean {
+  return statementNumbers.size > 0
+    && [...statementNumbers].every((value) => sourceNumbers.has(value));
+}
+
+function unsignedInteger(value: string): string {
+  return value.startsWith("-") ? value.slice(1) : value;
+}
+
+function extractMentionedIntegers(value: string): ReadonlySet<string> {
+  const output = new Set<string>();
+  const normalized = normalizeText(value);
+
+  for (const match of normalized.matchAll(/[-+]?\d+/gu)) {
+    const raw = match[0];
+    if (raw.length > 128) continue;
+    try {
+      output.add(BigInt(raw).toString());
+    } catch {
+      // Ignore malformed or unbounded textual numerals.
+    }
+  }
+
+  const wordText = normalized.replace(/-/gu, " ");
+  const tokens = wordText.match(/[a-z]+/gu) ?? [];
+  for (let index = 0; index < tokens.length; index += 1) {
+    const parsed = parseEnglishInteger(tokens, index);
+    if (parsed !== undefined) {
+      output.add(String(parsed.value));
+      index = parsed.endIndex;
+      continue;
+    }
+
+    const token = tokens[index];
+    if (token === undefined) continue;
+    const denominator = FRACTION_DENOMINATORS[token];
+    if (denominator !== undefined) {
+      const previous = index > 0 ? tokens[index - 1] : undefined;
+      if (previous === undefined || !isEnglishNumberToken(previous)) {
+        output.add("1");
+      }
+      output.add(String(denominator));
+      continue;
+    }
+    const implied = IMPLIED_NUMBERS[token];
+    if (implied !== undefined) output.add(String(implied));
+  }
+  return output;
+}
+
+function isEnglishNumberToken(token: string): boolean {
+  return SMALL_NUMBERS[token] !== undefined
+    || TENS_NUMBERS[token] !== undefined
+    || token === "hundred"
+    || token === "thousand";
+}
+
+function parseEnglishInteger(
+  tokens: readonly string[],
+  startIndex: number
+): { readonly value: number; readonly endIndex: number } | undefined {
+  let index = startIndex;
+  let sign = 1;
+  if (tokens[index] === "negative") {
+    sign = -1;
+    index += 1;
+  }
+
+  let current = 0;
+  let total = 0;
+  let seen = false;
+  let lastIndex = index - 1;
+  for (; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token === undefined) break;
+    const small = SMALL_NUMBERS[token];
+    if (small !== undefined) {
+      current += small;
+      seen = true;
+      lastIndex = index;
+      continue;
+    }
+    const tens = TENS_NUMBERS[token];
+    if (tens !== undefined) {
+      current += tens;
+      seen = true;
+      lastIndex = index;
+      continue;
+    }
+    if (token === "hundred" && seen) {
+      current *= 100;
+      lastIndex = index;
+      continue;
+    }
+    if (token === "thousand" && seen) {
+      total += current * 1_000;
+      current = 0;
+      lastIndex = index;
+      continue;
+    }
+    break;
+  }
+  if (!seen) return undefined;
+  return {
+    value: sign * (total + current),
+    endIndex: lastIndex
+  };
+}
+
+const SMALL_NUMBERS: Readonly<Record<string, number>> = Object.freeze({
+  zero: 0,
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+  thirteen: 13,
+  fourteen: 14,
+  fifteen: 15,
+  sixteen: 16,
+  seventeen: 17,
+  eighteen: 18,
+  nineteen: 19
+});
+
+const TENS_NUMBERS: Readonly<Record<string, number>> = Object.freeze({
+  twenty: 20,
+  thirty: 30,
+  forty: 40,
+  fifty: 50,
+  sixty: 60,
+  seventy: 70,
+  eighty: 80,
+  ninety: 90
+});
+
+const FRACTION_DENOMINATORS: Readonly<Record<string, number>> = Object.freeze({
+  half: 2,
+  halves: 2,
+  third: 3,
+  thirds: 3,
+  quarter: 4,
+  quarters: 4,
+  fourth: 4,
+  fourths: 4,
+  fifth: 5,
+  fifths: 5,
+  sixth: 6,
+  sixths: 6,
+  seventh: 7,
+  sevenths: 7,
+  eighth: 8,
+  eighths: 8,
+  ninth: 9,
+  ninths: 9,
+  tenth: 10,
+  tenths: 10
+});
+
+const IMPLIED_NUMBERS: Readonly<Record<string, number>> = Object.freeze({
+  twice: 2,
+  double: 2,
+  squared: 2,
+  cubed: 3,
+  dozen: 12
+});

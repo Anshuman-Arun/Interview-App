@@ -18,6 +18,7 @@ import type {
 import type { RendererStreamServer } from "./renderer-stream-server.js";
 import { resolveSessionStateComposition } from "./interview-session-composition.js";
 import { ProviderRuntimeResolver } from "./provider-runtime.js";
+import { ProviderBackedFormalInterpretationProvider } from "./formal-interpretation-provider.js";
 import { StudentReasoningAnalysisCoordinator } from "./student-reasoning-analysis-coordinator.js";
 import {
   getReviewedProblemRealizationTexts,
@@ -80,6 +81,10 @@ export class ServerTurnOrchestrator {
     this.reasoningAnalysis = new StudentReasoningAnalysisCoordinator(
       sessions,
       formalInterpretationProvider
+        ?? new ProviderBackedFormalInterpretationProvider(
+          sessions,
+          this.providerRuntime
+        )
     );
   }
 

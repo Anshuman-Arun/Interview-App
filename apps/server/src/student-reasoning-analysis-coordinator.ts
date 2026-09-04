@@ -18,6 +18,10 @@ import {
   resolveOxfordFormalAnalysisProfile,
   type OxfordFormalAnalysisProfile
 } from "./oxford-formal-analysis-catalog.js";
+import {
+  isOxfordFormalAnalysisSourceRelevant,
+  isOxfordFormalCandidateTargetAdmissible
+} from "./oxford-formal-candidate-admission.js";
 
 export const DEFAULT_STUDENT_REASONING_ANALYSIS_TIMEOUT_MS = 1_500 as const;
 export const MAX_STUDENT_REASONING_ANALYSIS_IN_FLIGHT = 2 as const;
@@ -239,7 +243,20 @@ export class StudentReasoningAnalysisCoordinator {
         this.sessions.getWriter(sessionId),
         this.provider,
         profile.scopes,
-        { maxInFlight: MAX_STUDENT_REASONING_ANALYSIS_IN_FLIGHT }
+        {
+          maxInFlight: MAX_STUDENT_REASONING_ANALYSIS_IN_FLIGHT,
+          requestAdmission: (request) =>
+            isOxfordFormalAnalysisSourceRelevant(
+              profile,
+              request.source.span.text
+            ),
+          candidateAdmission: (request, candidate) =>
+            isOxfordFormalCandidateTargetAdmissible({
+              profile,
+              request,
+              candidate
+            })
+        }
       ),
       active: new Map()
     };
@@ -266,11 +283,7 @@ function analysisRequestId(
     state.policyRevision,
     profile.problemId,
     profile.problemVersion,
-    profile.target.subject.kind === "CLAIM"
-      ? "CLAIM:" + profile.target.subject.claimId
-      : profile.target.subject.kind === "MILESTONE"
-        ? "MILESTONE:" + profile.target.subject.milestoneId
-        : profile.target.subject.kind,
+    "CLAIM:" + profile.target.subject.claimId,
     ...profile.allowedProtocols.flatMap((protocol) => [protocol.protocol, protocol.version])
   ];
   const digest = createHash("sha256").update(JSON.stringify(basis)).digest("hex");

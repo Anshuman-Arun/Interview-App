@@ -153,7 +153,10 @@ export const InterpretationDiagnosticSchema = z.object({
 export type InterpretationDiagnostic = z.infer<typeof InterpretationDiagnosticSchema>;
 
 export interface FormalInterpretationProvider {
-  readonly interpret: (request: FormalInterpretationRequest) => Promise<unknown>;
+  readonly interpret: (
+    request: FormalInterpretationRequest,
+    runtime?: { readonly signal: AbortSignal }
+  ) => Promise<unknown>;
 }
 
 export type DeterministicInterpretationResponder =
@@ -191,6 +194,7 @@ interface RequestRecord {
   settled: boolean;
   readonly cancelSignal: Promise<void>;
   readonly resolveCancel: () => void;
+  readonly providerAbortController: AbortController;
   promise: Promise<InterpretationExecutionOutcome>;
 }
 
@@ -347,10 +351,29 @@ function mapStatementFailure(
   return failed("INVALID_PROPOSAL", reason, candidateCount, requestId);
 }
 
+function invokeApplicationAdmission(
+  operation: () => boolean
+): boolean {
+  try {
+    return operation();
+  } catch {
+    return false;
+  }
+}
+
 export class InterpretationCoordinator {
   private readonly verification: VerificationCoordinator;
   private readonly router: FormalProtocolRoutingRegistry;
   private readonly maxInFlight: number;
+  private readonly requestAdmission:
+    | ((request: FormalInterpretationRequest) => boolean)
+    | undefined;
+  private readonly candidateAdmission:
+    | ((
+        request: FormalInterpretationRequest,
+        candidate: FormalInterpretationCandidate
+      ) => boolean)
+    | undefined;
   private readonly maxCachedRequests: number;
   private readonly records = new Map<RequestId, RequestRecord>();
   private readonly diagnostics: InterpretationDiagnostic[] = [];
@@ -364,6 +387,13 @@ export class InterpretationCoordinator {
       readonly router?: FormalProtocolRoutingRegistry;
       readonly maxInFlight?: number;
       readonly maxCachedRequests?: number;
+      readonly requestAdmission?: (
+        request: FormalInterpretationRequest
+      ) => boolean;
+      readonly candidateAdmission?: (
+        request: FormalInterpretationRequest,
+        candidate: FormalInterpretationCandidate
+      ) => boolean;
     }
   ) {
     const options = InterpretationCoordinatorOptionsSchema.parse({
@@ -372,6 +402,8 @@ export class InterpretationCoordinator {
     });
     this.maxInFlight = options.maxInFlight;
     this.maxCachedRequests = options.maxCachedRequests;
+    this.requestAdmission = input?.requestAdmission;
+    this.candidateAdmission = input?.candidateAdmission;
     this.router = input?.router ?? new FormalProtocolRoutingRegistry(scopes);
     this.verification = new VerificationCoordinator(writer, scopes);
   }
@@ -392,6 +424,7 @@ export class InterpretationCoordinator {
     if (record === undefined || record.settled || record.dispatchStarted) return false;
     record.cancelled = true;
     record.resolveCancel();
+    record.providerAbortController.abort();
     return true;
   }
 
@@ -406,6 +439,7 @@ export class InterpretationCoordinator {
     if (record === undefined || record.settled) return false;
     record.cancelled = true;
     record.resolveCancel();
+    record.providerAbortController.abort();
     if (record.verificationRequestId !== undefined) {
       void this.verification.discardPendingVerification({
         verificationRequestId: record.verificationRequestId,
@@ -467,6 +501,7 @@ export class InterpretationCoordinator {
       settled: false,
       cancelSignal,
       resolveCancel,
+      providerAbortController: new AbortController(),
       promise: Promise.resolve(failed("INVALID_REQUEST", "MALFORMED_REQUEST", 0, request.requestId))
     };
     this.records.set(request.requestId, record);
@@ -495,6 +530,22 @@ export class InterpretationCoordinator {
       if (!route.ok) return this.finishFailure(mapRouteFailure(route.reason, request.requestId, 0, true));
     }
 
+    if (this.requestAdmission !== undefined) {
+      const admitted = invokeApplicationAdmission(() =>
+        this.requestAdmission?.(
+          deepFreeze(structuredClone(request))
+        ) === true
+      );
+      if (!admitted) {
+        return this.finishFailure(failed(
+          "NO_SUPPORTED_INTERPRETATION",
+          "NO_INTERPRETATION",
+          0,
+          request.requestId
+        ));
+      }
+    }
+
     if (this.isCancelled(record)) {
       return this.finishFailure(failed("STALE", "CANCELLED", 0, request.requestId));
     }
@@ -515,7 +566,10 @@ export class InterpretationCoordinator {
     });
 
     const providerWork = Promise.resolve()
-      .then(() => this.provider.interpret(deepFreeze(structuredClone(request))))
+      .then(() => this.provider.interpret(
+        deepFreeze(structuredClone(request)),
+        { signal: record.providerAbortController.signal }
+      ))
       .then(
         (value) => ({ kind: "RESULT" as const, value }),
         () => ({ kind: "ERROR" as const })
@@ -641,6 +695,23 @@ export class InterpretationCoordinator {
         return this.finishFailure(mapStatementFailure(statement.reason, request.requestId, candidateCount));
       }
 
+      if (this.candidateAdmission !== undefined) {
+        const candidateAdmitted = invokeApplicationAdmission(() =>
+          this.candidateAdmission?.(
+            deepFreeze(structuredClone(request)),
+            deepFreeze(structuredClone(candidate))
+          ) === true
+        );
+        if (!candidateAdmitted) {
+          return this.finishFailure(failed(
+            "NO_SUPPORTED_INTERPRETATION",
+            "NO_INTERPRETATION",
+            candidateCount,
+            request.requestId
+          ));
+        }
+      }
+
       const normalizedKey = `[${JSON.stringify(protocolKey(candidate.protocol))},${evidenceKeyIdentity(candidate.target)},${JSON.stringify(statement.canonicalStatement)}]`;
       const existing = admitted.get(normalizedKey);
       if (existing === undefined) {
@@ -660,6 +731,14 @@ export class InterpretationCoordinator {
       }
     }
 
+    if (admitted.size === 0) {
+      return this.finishFailure(failed(
+        "NO_SUPPORTED_INTERPRETATION",
+        "NO_INTERPRETATION",
+        0,
+        request.requestId
+      ));
+    }
     if (admitted.size !== 1) {
       return this.finishFailure(failed(
         "AMBIGUOUS",

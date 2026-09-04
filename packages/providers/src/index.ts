@@ -6,4 +6,5 @@ export * from "./mock-model-adapter.js";
 export * from "./policy.js";
 
 export * from "./antigravity-cli-adapter.js";
+export * from "./antigravity-cli-formal-interpretation-adapter.js";
 export * from "./supervised-cli-provider.js";

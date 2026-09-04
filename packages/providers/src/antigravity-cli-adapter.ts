@@ -1097,6 +1097,20 @@ function firstNonBlankLineIndex(lines: readonly string[]): number {
   return -1;
 }
 
+export function serializeAntigravityBoundedJson(
+  value: unknown,
+  maximumBytes: number
+): string {
+  if (
+    !Number.isSafeInteger(maximumBytes)
+    || maximumBytes < 1
+    || maximumBytes > 2 * 1024 * 1024
+  ) {
+    throw new AntigravityCliAdapterError("INVALID_CONTEXT");
+  }
+  return serializeBoundedPlainJson(value, maximumBytes);
+}
+
 function antigravityCliAdapterErrorMessage(
   code: AntigravityCliAdapterErrorCode
 ): string {

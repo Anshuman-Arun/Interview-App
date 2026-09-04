@@ -43,36 +43,111 @@ function rationalLiteral(numerator: string, denominator = "1") {
   return { kind: "RATIONAL" as const, value: { numerator, denominator } };
 }
 
+function integerLiteral(value: string) {
+  return { kind: "INTEGER" as const, value };
+}
+
+function sourceTextFor(
+  problemId: string,
+  truth: "CORRECT" | "FALSE" = "CORRECT"
+): string {
+  switch (problemId) {
+    case "oxford-domino-chessboard":
+      return truth === "CORRECT"
+        ? "Thirty-two black squares minus two removed black corners leaves thirty black squares."
+        : "Thirty-two black squares minus two removed black corners leaves thirty-one black squares.";
+    case "oxford-euclid-primes":
+      return truth === "CORRECT"
+        ? "For listed primes including 2, the product plus one is 31 and leaves remainder 1 modulo 2."
+        : "For listed primes including 2, the product plus one is 30 and leaves remainder 1 modulo 2.";
+    case "oxford-prefix-sums-mod-n":
+      return truth === "CORRECT"
+        ? "For n 5, two prefix sums are 12 and 7, so their difference 5 is divisible by 5."
+        : "For n 5, two prefix sums are 12 and 8, so their difference 4 is divisible by 5.";
+    case "oxford-triangle-medians":
+      return truth === "CORRECT"
+        ? "Along the median the centroid is two thirds from the vertex, leaving one third; two thirds divided by one third is two."
+        : "Along the median the centroid is two thirds from the vertex, leaving one third; two thirds divided by one third is one.";
+    case "oxford-divisibility-chain":
+      return truth === "CORRECT"
+        ? "The chosen numbers 6 and 24 have the same odd part, and 6 divides 24."
+        : "The chosen numbers 6 and 25 have the same odd part, and 6 divides 25.";
+    default:
+      throw new Error("Missing target-shaped Oxford test source " + problemId);
+  }
+}
+
 function statementFor(
   request: FormalInterpretationRequest,
   truth: "CORRECT" | "FALSE"
 ): string {
-  const protocol = request.allowedProtocols[0]?.protocol;
-  if (protocol === "RATIONAL_ARITHMETIC") {
-    return JSON.stringify({
-      protocol: RATIONAL_ARITHMETIC_PROTOCOL,
-      protocolVersion: 1,
-      claim: {
-        kind: "EQUALITY",
-        left: rationalLiteral("1", "2"),
-        right: truth === "CORRECT"
-          ? rationalLiteral("2", "4")
-          : rationalLiteral("3", "4")
-      }
-    });
+  switch (request.problem.id) {
+    case "oxford-domino-chessboard":
+      return JSON.stringify({
+        protocol: RATIONAL_ARITHMETIC_PROTOCOL,
+        protocolVersion: 1,
+        claim: {
+          kind: "EQUALITY",
+          left: {
+            kind: "SUBTRACT",
+            left: rationalLiteral("32"),
+            right: rationalLiteral("2")
+          },
+          right: rationalLiteral(truth === "CORRECT" ? "30" : "31")
+        }
+      });
+    case "oxford-euclid-primes":
+      return JSON.stringify({
+        protocol: MODULAR_ARITHMETIC_PROTOCOL,
+        protocolVersion: 1,
+        claim: {
+          kind: "CONGRUENCE",
+          left: integerLiteral(truth === "CORRECT" ? "31" : "30"),
+          right: integerLiteral("1"),
+          modulus: "2"
+        }
+      });
+    case "oxford-prefix-sums-mod-n":
+      return JSON.stringify({
+        protocol: MODULAR_ARITHMETIC_PROTOCOL,
+        protocolVersion: 1,
+        claim: {
+          kind: "DIVISIBILITY",
+          divisor: "5",
+          dividend: {
+            kind: "SUBTRACT",
+            left: integerLiteral("12"),
+            right: integerLiteral(truth === "CORRECT" ? "7" : "8")
+          }
+        }
+      });
+    case "oxford-triangle-medians":
+      return JSON.stringify({
+        protocol: RATIONAL_ARITHMETIC_PROTOCOL,
+        protocolVersion: 1,
+        claim: {
+          kind: "EQUALITY",
+          left: {
+            kind: "DIVIDE",
+            left: rationalLiteral("2", "3"),
+            right: rationalLiteral("1", "3")
+          },
+          right: rationalLiteral(truth === "CORRECT" ? "2" : "1")
+        }
+      });
+    case "oxford-divisibility-chain":
+      return JSON.stringify({
+        protocol: MODULAR_ARITHMETIC_PROTOCOL,
+        protocolVersion: 1,
+        claim: {
+          kind: "DIVISIBILITY",
+          divisor: "6",
+          dividend: integerLiteral(truth === "CORRECT" ? "24" : "25")
+        }
+      });
+    default:
+      throw new Error("Unexpected Oxford problem in analysis test");
   }
-  if (protocol === "MODULAR_ARITHMETIC") {
-    return JSON.stringify({
-      protocol: MODULAR_ARITHMETIC_PROTOCOL,
-      protocolVersion: 1,
-      claim: {
-        kind: "DIVISIBILITY",
-        divisor: truth === "CORRECT" ? "2" : "3",
-        dividend: { kind: "INTEGER", value: "4" }
-      }
-    });
-  }
-  throw new Error("Unexpected protocol in Oxford analysis test");
 }
 
 function interpretationResult(
@@ -118,7 +193,7 @@ describe("live Oxford formal reasoning analysis", () => {
         const selectedProblem = problem(problemId);
         await turns.startSession(selectedProblem);
         const committed = await turns.commitInput(
-          "I am making an exact arithmetic subclaim that can be checked deterministically."
+          sourceTextFor(problemId, "CORRECT")
         );
         const sessions = new SessionRecoveryCoordinator(registry, store);
         const analysis = new StudentReasoningAnalysisCoordinator(
@@ -168,6 +243,78 @@ describe("live Oxford formal reasoning analysis", () => {
     }
   });
 
+  it("fails closed when one of multiple provider candidates is target-inadmissible", async () => {
+    const store = new SqliteEventStore(":memory:");
+    try {
+      const registry = new SessionRuntimeRegistry(store);
+      const sessionId = newSessionId();
+      const writer = registry.get(sessionId);
+      const turns = new TurnCoordinator(writer);
+      const selectedProblem = problem("oxford-domino-chessboard");
+      await turns.startSession(selectedProblem);
+      const committed = await turns.commitInput(
+        sourceTextFor(selectedProblem.id, "CORRECT")
+      );
+
+      const provider = new DeterministicFormalInterpretationProvider(
+        (request: FormalInterpretationRequest) => {
+          const protocol = request.allowedProtocols[0];
+          if (protocol === undefined) throw new Error("Expected protocol");
+          return providerResultFor(request, [
+            {
+              protocolVersion: 1,
+              candidateId: "candidate-valid",
+              protocol,
+              formalStatement: statementFor(request, "CORRECT"),
+              confidence: 1,
+              target: request.target,
+              source: echoInterpretationCandidateSource(request)
+            },
+            {
+              protocolVersion: 1,
+              candidateId: "candidate-unrelated",
+              protocol,
+              formalStatement: JSON.stringify({
+                protocol: RATIONAL_ARITHMETIC_PROTOCOL,
+                protocolVersion: 1,
+                claim: {
+                  kind: "EQUALITY",
+                  left: rationalLiteral("2"),
+                  right: rationalLiteral("2")
+                }
+              }),
+              confidence: 1,
+              target: request.target,
+              source: echoInterpretationCandidateSource(request)
+            }
+          ]);
+        }
+      );
+
+      const outcome = await new StudentReasoningAnalysisCoordinator(
+        new SessionRecoveryCoordinator(registry, store),
+        provider
+      ).analyze({
+        sessionId,
+        turnId: committed.turnId,
+        inputEpisodeId: committed.inputEpisodeId
+      });
+
+      expect(outcome).toMatchObject({
+        status: "ANALYZED",
+        interpretation: {
+          status: "NO_SUPPORTED_INTERPRETATION",
+          reason: "NO_INTERPRETATION",
+          candidateCount: 2
+        }
+      });
+      expect(Object.values(writer.getState().verificationRequests)).toHaveLength(0);
+      expect(Object.values(writer.getState().studentEvidence)).toHaveLength(0);
+    } finally {
+      store.close();
+    }
+  });
+
   it("preserves a deterministic contradiction as a local-error policy signal without creating false correctness evidence", async () => {
     const store = new SqliteEventStore(":memory:");
     try {
@@ -177,7 +324,9 @@ describe("live Oxford formal reasoning analysis", () => {
       const turns = new TurnCoordinator(writer);
       const selectedProblem = problem("oxford-prefix-sums-mod-n");
       await turns.startSession(selectedProblem);
-      const committed = await turns.commitInput("I claim 3 divides 4.");
+      const committed = await turns.commitInput(
+        sourceTextFor("oxford-prefix-sums-mod-n", "FALSE")
+      );
 
       const outcome = await new StudentReasoningAnalysisCoordinator(
         new SessionRecoveryCoordinator(registry, store),
@@ -220,7 +369,9 @@ describe("live Oxford formal reasoning analysis", () => {
       const turns = new TurnCoordinator(writer);
       const selectedProblem = problem("oxford-domino-chessboard");
       await turns.startSession(selectedProblem);
-      const committed = await turns.commitInput("I think symmetry might help, but I am not sure.");
+      const committed = await turns.commitInput(
+        "The black and white color counts matter, but I cannot yet state the arithmetic."
+      );
 
       const provider = new DeterministicFormalInterpretationProvider((request: FormalInterpretationRequest) =>
         providerResultFor(request, [])
@@ -262,7 +413,9 @@ describe("live Oxford formal reasoning analysis", () => {
       const turns = new TurnCoordinator(writer);
       const selectedProblem = problem("oxford-prefix-sums-mod-n");
       await turns.startSession(selectedProblem);
-      const committed = await turns.commitInput("I have an exact arithmetic claim.");
+      const committed = await turns.commitInput(
+        "The prefix sums have the same residue modulo n, and I want to subtract them."
+      );
 
       const provider = Object.defineProperty(
         {
@@ -364,7 +517,9 @@ describe("live Oxford formal reasoning analysis", () => {
       const turns = new TurnCoordinator(writer);
       const selectedProblem = problem("oxford-triangle-medians");
       await turns.startSession(selectedProblem);
-      const committed = await turns.commitInput("The arithmetic ratio check is exact.");
+      const committed = await turns.commitInput(
+        sourceTextFor("oxford-triangle-medians", "CORRECT")
+      );
 
       let releaseProvider: ((value: unknown) => void) | undefined;
       let capturedRequest: FormalInterpretationRequest | undefined;
@@ -436,7 +591,9 @@ describe("live Oxford formal reasoning analysis", () => {
       const turns = new TurnCoordinator(writer);
       const selectedProblem = problem("oxford-domino-chessboard");
       await turns.startSession(selectedProblem);
-      const committed = await turns.commitInput("Removing two same-colored corners leaves the exact color-count mismatch.");
+      const committed = await turns.commitInput(
+        sourceTextFor("oxford-domino-chessboard", "CORRECT")
+      );
 
       const sessions = new SessionRecoveryCoordinator(registry, store);
       const orchestrator = new ServerTurnOrchestrator(
@@ -553,7 +710,9 @@ describe("live Oxford formal reasoning analysis", () => {
       const turns = new TurnCoordinator(writer);
       const selectedProblem = problem("oxford-divisibility-chain");
       await turns.startSession(selectedProblem);
-      const committed = await turns.commitInput("I have a numerical divisibility claim.");
+      const committed = await turns.commitInput(
+        sourceTextFor("oxford-divisibility-chain", "CORRECT")
+      );
 
       const malicious: FormalInterpretationProvider = {
         interpret(request) {
@@ -739,7 +898,9 @@ describe("live Oxford formal reasoning analysis", () => {
       const turns = new TurnCoordinator(writer);
       const selectedProblem = problem("oxford-triangle-medians");
       await turns.startSession(selectedProblem);
-      const committed = await turns.commitInput("The exact ratio arithmetic is 1/2 = 2/4.");
+      const committed = await turns.commitInput(
+        sourceTextFor("oxford-triangle-medians", "CORRECT")
+      );
       const sessions = new SessionRecoveryCoordinator(registry, store);
       const provider = deterministicProvider("CORRECT");
 

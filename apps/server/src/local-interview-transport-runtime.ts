@@ -23,9 +23,6 @@ import {
   createApplicationProviderAdapterRuntimeSource
 } from "./antigravity-cli-runtime.js";
 import {
-  ProviderBackedFormalInterpretationProvider
-} from "./provider-backed-formal-interpretation.js";
-import {
   EphemeralAudioAssetStore,
   VoiceInputCoordinator,
   VoiceSynthesisCoordinator,
@@ -109,8 +106,9 @@ export class LocalInterviewTransportRuntime {
     // runtime source. Both interviewer generation and formal interpretation
     // resolve the selected Antigravity executor through this same source, so
     // formal analysis never creates a parallel raw CLI supervisor. When a
-    // caller injects a custom resolver, it must explicitly inject a matching
-    // formal provider too; otherwise formal analysis remains fail-closed.
+    // caller injects a custom resolver, the default formal provider derives
+    // from that same resolver and abstains unless it exposes the exact supported
+    // supervised runtime; callers may still inject a purpose-specific provider.
     const defaultAdapterRuntimeSource =
       options.orchestrator === undefined
       && options.providerRuntimeResolver === undefined
@@ -135,17 +133,6 @@ export class LocalInterviewTransportRuntime {
         this.audioAssets,
         ttsRuntime
       );
-    const formalInterpretationProvider =
-      options.formalInterpretationProvider
-      ?? (
-        defaultAdapterRuntimeSource === undefined
-          ? undefined
-          : new ProviderBackedFormalInterpretationProvider(
-            this.sessions,
-            providerRuntimeResolver,
-            defaultAdapterRuntimeSource
-          )
-      );
     this.orchestrator =
       options.orchestrator ??
       new ServerTurnOrchestrator(
@@ -153,7 +140,7 @@ export class LocalInterviewTransportRuntime {
         () => this.rendererStreamServer,
         undefined,
         providerRuntimeResolver,
-        formalInterpretationProvider
+        options.formalInterpretationProvider
       );
     this.sessions.setTurnRecoveryDelegate(this.orchestrator);
     this.readService = options.readService ?? new SessionReadService({
