@@ -78,6 +78,7 @@ That is the current production interview path. The broader backend map below mus
 | Synthetic interview | `synthetic-interview.ts`, `apps/server/src/run-synthetic.ts` | `TEST/HARNESS_ONLY` | Deterministic smoke/demo path used by validation. |
 | Public-release + architecture checks | `scripts/check-public-release.mjs`, `check-architecture-boundaries.mjs` | `TEST/HARNESS_ONLY` | Required repository validation/invariant gates; they are not part of the product runtime. |
 | GitHub Actions CI | `.github/workflows/ci.yml` | `TEST/HARNESS_ONLY` | Repository validation harness for pull-request and main-push events on Ubuntu and Windows. |
+| Versioned Windows release publishing | `.github/workflows/windows-release.yml`, `scripts/check-release-version.mjs`, `scripts/create-release-checksum.mjs` | `TEST/HARNESS_ONLY` | Stable semantic-version tags build the immutable tagged commit, rerun release/package/upgrade gates, create a versioned installer/checksum, record source SHA provenance, and create a draft GitHub Release. |
 
 ## Current integration gap
 
@@ -158,3 +159,8 @@ The workflow executes:
 - the synthetic interview demo.
 
 Superseded first-attempt PR runs may be cancelled. Main pushes and reruns use SHA/attempt-scoped concurrency groups, so newly queued validation does not replace unrelated pending or running validation. The repository currently has no branch protection/ruleset requiring successful CI, and GitHub-level skip/manual-cancel behavior remains outside the workflow guarantee.
+
+Versioned Windows distribution is intentionally separate from branch CI:
+`vMAJOR.MINOR.PATCH` tags must exactly match the root package version, build
+the immutable tag-event source commit, and pass package/install/upgrade/checksum
+gates before a draft GitHub Release is created.
