@@ -5,6 +5,8 @@ on:
     paths:
       - ".gitattributes"
       - ".github/workflows/windows-installer.yml"
+      - ".github/workflows/windows-release.yml"
+      - ".github/RELEASE_TEMPLATE.md"
       - "package.json"
       - "pnpm-lock.yaml"
       - "electron-builder.yml"
@@ -19,9 +21,12 @@ on:
       - "scripts/check-packaged-desktop.mjs"
       - "scripts/clean-windows-package.mjs"
       - "scripts/check-public-release.mjs"
+      - "scripts/check-release-version.mjs"
+      - "scripts/create-release-checksum.mjs"
       - "scripts/run-packaged-desktop-smoke.ps1"
       - "scripts/test-windows-installer.ps1"
       - "tests/desktop-packaging.test.ts"
+      - "tests/release-publishing.test.ts"
   workflow_dispatch:
 
 permissions:
