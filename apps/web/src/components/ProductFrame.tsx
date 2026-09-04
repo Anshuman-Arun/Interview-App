@@ -82,7 +82,7 @@ export function ProductFrame({
 
         <div className="product-frame__rail-note" aria-label="Local readiness">
           <span className="product-frame__readiness-title">
-            <i aria-hidden="true" />
+            <i data-ready={String(reasoningReady)} aria-hidden="true" />
             {reasoningReady ? "Ready" : "Setup needed"}
           </span>
           <span className="product-frame__readiness-row"><span>Voice</span><b>LOCAL</b></span>
@@ -104,7 +104,10 @@ export function ProductFrame({
           </div>
           <div className="product-frame__header-actions">
             {aside}
-            <span className="product-frame__status-chip">
+            <span
+              className="product-frame__status-chip"
+              data-ready={String(reasoningReady)}
+            >
               <i aria-hidden="true" />
               {reasoningReady ? "READY" : "CHECK SETUP"}
             </span>
