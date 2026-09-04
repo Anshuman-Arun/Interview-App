@@ -67,7 +67,11 @@ import {
 import type { EventDraft, SessionState } from "../../events/src/index.js";
 import { z } from "zod";
 import { createCommandEnvelope } from "./envelopes.js";
-import { canonicalJson, createProviderContextSpecFingerprintSync } from "./context-compiler.js";
+import {
+  buildBoardSceneContext,
+  canonicalJson,
+  createProviderContextSpecFingerprintSync
+} from "./context-compiler.js";
 import { isGenerationBasisStillCompatible } from "./compatibility.js";
 import { assessVisionFreshness } from "./vision-freshness.js";
 import { selectPedagogicalAction } from "./pedagogical-policy.js";
@@ -117,6 +121,72 @@ export const ProcessProposalResultSchema = z.object({
   reason: z.string().min(1).optional()
 }).strict();
 export type ProcessProposalResult = z.infer<typeof ProcessProposalResultSchema>;
+
+function validateProposalBoardReferences(
+  proposal: InterviewerProposal,
+  scene: ReturnType<typeof buildBoardSceneContext>
+): string | undefined {
+  const actions = proposal.boardActions ?? [];
+  if (actions.length === 0) return undefined;
+
+  const shapes = new Map(
+    (scene?.shapes ?? []).map((shape) => [shape.shapeId, shape] as const)
+  );
+  const requireSceneShape = (
+    shapeId: string,
+    revision: number | undefined,
+    label: string
+  ): string | undefined => {
+    const shape = shapes.get(shapeId);
+    if (shape === undefined) {
+      return `${label} "${shapeId}" was not present in the compiled board scene`;
+    }
+    if (revision === undefined) {
+      return `${label} "${shapeId}" omitted its exact shape revision`;
+    }
+    if (revision !== shape.shapeRevision) {
+      return `${label} "${shapeId}" revision does not match the compiled board scene`;
+    }
+    return undefined;
+  };
+
+  for (const action of actions) {
+    if (action.operation === "erase_ai_annotation" && action.targetShapeId !== undefined) {
+      return "Provider cannot address an AI annotation by an untrusted canvas shape ID";
+    }
+    if (action.targetShapeId !== undefined) {
+      const failure = requireSceneShape(
+        action.targetShapeId,
+        action.expectedShapeRevision,
+        "Board target"
+      );
+      if (failure !== undefined) return failure;
+    }
+    if (action.placement?.anchorShapeId !== undefined) {
+      const failure = requireSceneShape(
+        action.placement.anchorShapeId,
+        action.placement.anchorRevision,
+        "Board placement anchor"
+      );
+      if (failure !== undefined) return failure;
+    }
+    if (action.operation === "draw_arrow_between") {
+      const fromFailure = requireSceneShape(
+        action.fromShapeId,
+        action.fromShapeRevision,
+        "Arrow source"
+      );
+      if (fromFailure !== undefined) return fromFailure;
+      const toFailure = requireSceneShape(
+        action.toShapeId,
+        action.toShapeRevision,
+        "Arrow destination"
+      );
+      if (toFailure !== undefined) return toFailure;
+    }
+  }
+  return undefined;
+}
 
 function commandIdentityValue(value: unknown): CommandIdentityValue {
   return CommandIdentityValueSchema.parse(JSON.parse(JSON.stringify(value)));
@@ -1336,6 +1406,21 @@ export class TurnCoordinator {
       if (compatibility !== "COMPATIBLE") {
         return rejectAndSupersedeDrafts(generationId, proposal, `Generation compatibility is ${compatibility}`);
       }
+      let boardScene: ReturnType<typeof buildBoardSceneContext>;
+      try {
+        boardScene = buildBoardSceneContext(state, generation.basis.boardRevision);
+      } catch {
+        return rejectAndSupersedeDrafts(
+          generationId,
+          proposal,
+          "Authoritative board scene could not be reconstructed for proposal admission"
+        );
+      }
+      const boardReferenceFailure = validateProposalBoardReferences(proposal, boardScene);
+      if (boardReferenceFailure !== undefined) {
+        return rejectDrafts(generationId, proposal, boardReferenceFailure);
+      }
+
       const parsedRequest = RealizationRequestSchema.safeParse(
         state.pedagogicalActions[generation.basis.turnId]
       );
