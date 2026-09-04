@@ -795,7 +795,7 @@ describe("Antigravity CLI one-turn protocol", () => {
           points: Array.from({ length: 9 }, (_, index) => ({ x: index, y: index })),
           annotationPurpose: "too many points"
         }]
-      } as InterviewerProposal),
+      }),
       antigravityStream({
         ...PROPOSAL,
         speechText: undefined,
@@ -805,7 +805,7 @@ describe("Antigravity CLI one-turn protocol", () => {
           points: [{ x: 0, y: 0 }, { x: 1_000_001, y: 0 }],
           annotationPurpose: "huge coordinate"
         }]
-      } as InterviewerProposal),
+      }),
       antigravityStream({
         ...PROPOSAL,
         speechText: undefined,
@@ -817,7 +817,7 @@ describe("Antigravity CLI one-turn protocol", () => {
           height: Number.POSITIVE_INFINITY,
           annotationPurpose: "non-finite dimension"
         }]
-      } as InterviewerProposal)
+      })
     ];
 
     for (const stdout of invalidStreams) {
