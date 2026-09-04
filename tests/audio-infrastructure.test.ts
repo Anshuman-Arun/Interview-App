@@ -5,8 +5,7 @@ import {
 } from "../packages/domain/src/index.js";
 import { RendererStreamMessageSchema } from "../packages/delivery/src/index.js";
 import {
-  RendererClient,
-  RendererPresentationNotExposedError
+  RendererClient
 } from "../apps/web/src/renderer-client.js";
 import {
   AudioCancellationController,
