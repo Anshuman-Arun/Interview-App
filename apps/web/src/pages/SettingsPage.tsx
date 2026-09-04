@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties
 } from "react";
@@ -165,6 +166,7 @@ export function SettingsPage({
   const [visionInstallError, setVisionInstallError] = useState<string | undefined>();
   const [pythonInstallError, setPythonInstallError] = useState<string | undefined>();
   const [restarting, setRestarting] = useState(false);
+  const setupOperationInFlightRef = useRef(false);
 
   useEffect(() => {
     setDraftBaseUrl(connection?.baseUrl ?? "");
@@ -235,7 +237,11 @@ export function SettingsPage({
     || runtimeStatus?.visionSetup.restartRequired === true;
 
   const installPythonRuntime = useCallback(async (): Promise<void> => {
-    if (desktopRuntime?.installPythonRuntime === undefined) return;
+    if (
+      desktopRuntime?.installPythonRuntime === undefined
+      || setupOperationInFlightRef.current
+    ) return;
+    setupOperationInFlightRef.current = true;
     setInstallingPython(true);
     setPythonInstallError(undefined);
     try {
@@ -251,6 +257,7 @@ export function SettingsPage({
       );
       await refreshRuntime();
     } finally {
+      setupOperationInFlightRef.current = false;
       setInstallingPython(false);
     }
   }, [desktopRuntime, refreshRuntime]);
@@ -258,7 +265,7 @@ export function SettingsPage({
   const runInstall = useCallback(async (
     kind: "VOICE" | "VISION"
   ): Promise<void> => {
-    if (desktopRuntime === undefined) return;
+    if (desktopRuntime === undefined || setupOperationInFlightRef.current) return;
     const operation = kind === "VOICE"
       ? desktopRuntime.installVoiceModels
       : desktopRuntime.installVisionModel;
@@ -271,6 +278,7 @@ export function SettingsPage({
       return;
     }
 
+    setupOperationInFlightRef.current = true;
     if (kind === "VOICE") {
       setInstallingVoice(true);
       setVoiceInstallError(undefined);
@@ -295,12 +303,14 @@ export function SettingsPage({
       }
       await refreshRuntime();
     } finally {
+      setupOperationInFlightRef.current = false;
       if (kind === "VOICE") setInstallingVoice(false);
       else setInstallingVision(false);
     }
   }, [desktopRuntime, refreshRuntime]);
 
   const recheckAll = useCallback(async (): Promise<void> => {
+    if (setupOperationInFlightRef.current) return;
     const providerCheck = onRefreshProviderOptions?.().catch(() => undefined);
     await Promise.all([
       refreshRuntime(),
@@ -560,7 +570,10 @@ export function SettingsPage({
               <button
                 type="button"
                 onClick={() => {
-                  if (desktopRuntime?.restartApp === undefined) return;
+                  if (
+                    desktopRuntime?.restartApp === undefined
+                    || setupOperationInFlightRef.current
+                  ) return;
                   setRestarting(true);
                   void desktopRuntime.restartApp().catch(() => {
                     setRestarting(false);
