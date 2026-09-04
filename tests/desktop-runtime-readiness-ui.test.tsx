@@ -594,12 +594,12 @@ describe("desktop local AI readiness UX", () => {
       ...AUTH_REQUIRED_PROVIDER,
       modelId: "gemini-3.7-flash-low",
       modelDisplayName: "Gemini 3.7 Flash Low"
-    } as ProviderLaunchOption;
+    };
     const readySecond = {
       ...READY_PROVIDER,
       modelId: "gemini-3.7-flash-medium",
       modelDisplayName: "Gemini 3.7 Flash Medium"
-    } as ProviderLaunchOption;
+    };
 
     const markup = renderToStaticMarkup(
       React.createElement(
