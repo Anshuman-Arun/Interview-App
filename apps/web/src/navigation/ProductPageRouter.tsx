@@ -179,7 +179,7 @@ export function ProductPageRouter({
     case "review":
       title = "Review";
       kicker = "Post-interview";
-      activePage = null;
+      activePage = "sessions";
       content = (
         <ReviewPageShell
           view={route.view}
@@ -204,6 +204,7 @@ export function ProductPageRouter({
       reasoningReady={providerOptions.some((option) => option.availability === "AVAILABLE")}
       notice={notice}
       onDismissNotice={onDismissNotice}
+      reasoningReady={providerOptions.some((option) => option.availability === "AVAILABLE")}
     >
       {content}
     </ProductFrame>
