@@ -632,6 +632,11 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     }
 
     if (action.operation === "draw_arrow_between") {
+      if (action.fromShapeId === undefined || action.toShapeId === undefined) {
+        throw new UnsupportedBoardActionError(
+          "draw_arrow_between requires two target shapes"
+        );
+      }
       this.validateShapeRevisionBinding(
         editor,
         action.fromShapeId,
@@ -845,11 +850,16 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     if (points === undefined || points.length !== 2) {
       throw new UnsupportedBoardActionError("draw_segment requires exactly two points");
     }
+    const start = points[0];
+    const end = points[1];
+    if (start === undefined || end === undefined) {
+      throw new UnsupportedBoardActionError("draw_segment requires exactly two points");
+    }
     this.renderStraightAnnotationSegment(
       editor,
       action,
-      points[0],
-      points[1],
+      start,
+      end,
       false,
       "ai_segment",
       options
