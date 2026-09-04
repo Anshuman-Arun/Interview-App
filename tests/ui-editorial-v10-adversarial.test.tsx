@@ -456,6 +456,9 @@ describe("editorial v10 adversarial UI states", () => {
       /route\.page === "home"[\s\S]{0,120}route\.page === "new"[\s\S]{0,120}route\.page === "settings"[\s\S]{0,180}fetchAvailableSessions/u
     );
     expect(app).toMatch(
+      /storedSession\.status === "ACTIVE"[\s\S]{0,180}storedSession\.sessionId === session\.sessionId[\s\S]{0,180}session\.sessionStatus === "COMPLETED"[\s\S]{0,100}session\.sessionStatus === "ARCHIVED"/u
+    );
+    expect(app).toMatch(
       /setCompactPane\("interview"\);[\s\S]{0,100}setPaneFocus\("split"\);[\s\S]{0,100}\}, \[session\.sessionId\]\);/u
     );
     expect(app).toMatch(
