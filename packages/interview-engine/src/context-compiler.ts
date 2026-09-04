@@ -232,14 +232,44 @@ export function buildBoardSceneContext(
   const deliveryReplayOrder = new Map(
     Object.keys(state.deliveries).map((deliveryId, index) => [deliveryId, index] as const)
   );
-  const annotations = Object.values(state.deliveries)
+  const exposedWhiteboardReplay = Object.values(state.deliveries)
     .filter((atom) =>
       atom.content.medium === "WHITEBOARD"
       && BOARD_SCENE_VISIBLE_DELIVERY_STATUSES.has(
         atom.status as "EXPOSED" | "COMPLETED"
       )
-      && atom.content.action.operation !== "erase_ai_annotation"
     )
+    .sort((left, right) => {
+      const leftReplayOrder = deliveryReplayOrder.get(left.deliveryId) ?? -1;
+      const rightReplayOrder = deliveryReplayOrder.get(right.deliveryId) ?? -1;
+      if (leftReplayOrder !== rightReplayOrder) {
+        return leftReplayOrder - rightReplayOrder;
+      }
+      return left.deliveryId < right.deliveryId
+        ? -1
+        : left.deliveryId > right.deliveryId
+          ? 1
+          : 0;
+    });
+
+  const logicallyVisibleAnnotations: typeof exposedWhiteboardReplay[number][] = [];
+  for (const atom of exposedWhiteboardReplay) {
+    if (atom.content.medium !== "WHITEBOARD") continue;
+    if (atom.content.action.operation !== "erase_ai_annotation") {
+      logicallyVisibleAnnotations.push(atom);
+      continue;
+    }
+    if (atom.content.action.targetShapeId === undefined) {
+      logicallyVisibleAnnotations.pop();
+    } else {
+      // Application state does not own the renderer's AI canvas-shape ID mapping.
+      // A targeted legacy erase therefore makes exact annotation identity unknown;
+      // omit prior annotations rather than claim erased visual state is still present.
+      logicallyVisibleAnnotations.length = 0;
+    }
+  }
+
+  const annotations = logicallyVisibleAnnotations
     .sort((left, right) => {
       const leftGenerationSequence =
         state.generations[left.generationId]?.basis.committedInputSequence ?? -1;
