@@ -374,7 +374,11 @@ export const App: React.FC = () => {
     if (session.isSessionStarted && session.sessionStatus === "ACTIVE") {
       return;
     }
-    if (route.page === "home" || route.page === "new") {
+    if (
+      route.page === "home"
+      || route.page === "new"
+      || route.page === "settings"
+    ) {
       void session.fetchAvailableSessions();
       return;
     }
