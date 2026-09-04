@@ -1,4 +1,6 @@
-import React from "react";
+// @vitest-environment happy-dom
+import React, { act } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ProviderLaunchOption } from "../packages/domain/src/index.js";
@@ -65,6 +67,7 @@ function clearDesktopBridge(): void {
 
 afterEach(() => {
   clearDesktopBridge();
+  document.body.replaceChildren();
 });
 
 describe("desktop local AI readiness UX", () => {
@@ -222,6 +225,119 @@ describe("desktop local AI readiness UX", () => {
     expect(markup).toContain("A live AI interview needs a ready reasoning provider.");
     expect(markup).toContain("Provider readiness could not be refreshed.");
     expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Start interview<\/button>/u);
+  });
+
+  it("walks Python, voice, vision, and restart setup through live renderer state", async () => {
+    Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
+    const baseUnavailable = runtimeStatus({
+      speech: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+      },
+      tts: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+      },
+      vision: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+      },
+      python: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING",
+        strategy: "SYSTEM_CPYTHON",
+        supportedVersions: ["3.12", "3.13"]
+      }
+    });
+    let current: DesktopRuntimeStatus = baseUnavailable;
+    const getLocalRuntimeStatus = vi.fn(async () => current);
+    const installPythonRuntime = vi.fn(async () => {
+      current = {
+        ...current,
+        pythonSetup: { state: "INSTALLED", restartRequired: true }
+      };
+      return current;
+    });
+    const installVoiceModels = vi.fn(async () => {
+      current = {
+        ...current,
+        voiceSetup: { state: "INSTALLED", restartRequired: true }
+      };
+      return current;
+    });
+    const installVisionModel = vi.fn(async () => {
+      current = {
+        ...current,
+        visionSetup: { state: "INSTALLED", restartRequired: true }
+      };
+      return current;
+    });
+    const restartApp = vi.fn(async () => undefined);
+    vi.stubGlobal("interviewDesktop", {
+      getLocalRuntimeStatus,
+      installPythonRuntime,
+      installVoiceModels,
+      installVisionModel,
+      restartApp
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const findButton = (label: string): HTMLButtonElement => {
+      const match = Array.from(container.querySelectorAll("button"))
+        .find((button) => button.textContent?.trim() === label);
+      if (!(match instanceof HTMLButtonElement)) {
+        throw new Error(`Missing button: ${label}`);
+      }
+      return match;
+    };
+
+    await act(async () => {
+      root.render(
+        <AppearanceProvider>
+          <SettingsPage
+            providerOptions={[READY_PROVIDER]}
+            providerOptionsLoading={false}
+            providerOptionsError={null}
+            onRefreshProviderOptions={vi.fn(async () => [READY_PROVIDER])}
+            onStartInterview={vi.fn()}
+          />
+        </AppearanceProvider>
+      );
+    });
+    expect(getLocalRuntimeStatus).toHaveBeenCalled();
+    expect(findButton("Install voice models").disabled).toBe(true);
+    expect(findButton("Install vision model").disabled).toBe(true);
+
+    await act(async () => {
+      findButton("Install Python components").click();
+    });
+    expect(installPythonRuntime).toHaveBeenCalledTimes(1);
+    expect(findButton("Install voice models").disabled).toBe(false);
+    expect(findButton("Install vision model").disabled).toBe(false);
+    expect(findButton("Restart Interview App").disabled).toBe(false);
+
+    await act(async () => {
+      findButton("Install voice models").click();
+    });
+    expect(installVoiceModels).toHaveBeenCalledTimes(1);
+    expect(findButton("Installed — restart required")).toBeTruthy();
+
+    await act(async () => {
+      findButton("Install vision model").click();
+    });
+    expect(installVisionModel).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      findButton("Restart Interview App").click();
+    });
+    expect(restartApp).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+    Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT");
   });
 
   it("uses authoritative provider readiness language for Antigravity authentication", () => {
