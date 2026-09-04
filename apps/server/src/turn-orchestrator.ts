@@ -24,10 +24,7 @@ import {
   getReviewedProblemRealizationTexts,
   realizeProblemInterviewerProposal
 } from "./problem-realization.js";
-import {
-  instrumentReasoningProvider,
-  type SessionObservability
-} from "./session-observability.js";
+import type { SessionObservability } from "./session-observability.js";
 
 export interface TurnOrchestrationInput {
   readonly sessionId: SessionId;
@@ -319,7 +316,7 @@ export class ServerTurnOrchestrator {
     if (composition.mode !== "OXFORD_MATHEMATICS") {
       return "COMPLETE";
     }
-    this.observability?.recordCandidateSubstantiveTurn(input.sessionId);
+    this.observability?.recordCandidateSubstantiveTurn(input.sessionId, input.turnId);
     const problem = composition.problem;
     const turns = new TurnCoordinator(writer);
 
@@ -386,21 +383,20 @@ export class ServerTurnOrchestrator {
 
     // 5. ProviderCoordinator owns policy/billing admission, context compilation,
     // provider execution, proposal admission, and delivery validation.
-    const coordinator = new ProviderCoordinator(writer);
+    const coordinator = new ProviderCoordinator(
+      writer,
+      this.observability?.createInterviewerObserver({
+        sessionId: input.sessionId,
+        providerId: runtimeResolution.providerId,
+        modelId: runtimeResolution.modelId
+      })
+    );
     let execution: Awaited<ReturnType<ProviderCoordinator["start"]>>;
     try {
       execution = await coordinator.start({
         inputEpisodeId: authoritativeTurn.inputEpisodeId,
         turnId: authoritativeTurn.turnId,
-        provider: this.observability === undefined
-          ? runtimeResolution.provider
-          : instrumentReasoningProvider({
-              provider: runtimeResolution.provider,
-              observability: this.observability,
-              sessionId: input.sessionId,
-              providerId: runtimeResolution.providerId,
-              modelId: runtimeResolution.modelId
-            }),
+        provider: runtimeResolution.provider,
         policy: runtimeResolution.policy,
         problem,
         validator: this.validator
