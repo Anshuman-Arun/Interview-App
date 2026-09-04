@@ -215,12 +215,12 @@ export class DesktopLocalRuntimeComposition {
     if (executable === undefined) {
       throw new Error("Python runtime setup requires 64-bit CPython 3.12 or 3.13");
     }
-    if (!probePythonInterpreter(executable, signal)) {
-      throw new Error("Python runtime setup requires supported 64-bit CPython 3.12 or 3.13");
-    }
     if (this.pythonRuntimeCompatible(executable, signal)) {
       this.pythonExecutable = executable;
       return;
+    }
+    if (!probePythonInterpreter(executable, signal)) {
+      throw new Error("Python runtime setup requires supported 64-bit CPython 3.12 or 3.13");
     }
 
     await installPinnedPythonRequirements(executable, this.requirementsPath, signal);
@@ -434,24 +434,22 @@ export class DesktopLocalRuntimeComposition {
       return;
     }
     this.pythonExecutable = pythonExecutable;
-    if (!probePythonInterpreter(pythonExecutable, signal)) {
-      if (abortRequested(signal)) {
-        this.markPendingCapabilitiesCancelled();
-        return;
-      }
-      this.speechStatus = unavailable("PYTHON_RUNTIME_INCOMPATIBLE");
-      this.ttsStatus = unavailable("PYTHON_RUNTIME_INCOMPATIBLE");
-      this.visionStatus = unavailable("PYTHON_RUNTIME_INCOMPATIBLE");
-      return;
-    }
     if (!this.pythonRuntimeCompatible(pythonExecutable, signal)) {
       if (abortRequested(signal)) {
         this.markPendingCapabilitiesCancelled();
         return;
       }
-      this.speechStatus = unavailable("PYTHON_RUNTIME_DEPENDENCIES_MISSING");
-      this.ttsStatus = unavailable("PYTHON_RUNTIME_DEPENDENCIES_MISSING");
-      this.visionStatus = unavailable("PYTHON_RUNTIME_DEPENDENCIES_MISSING");
+      const interpreterCompatible = probePythonInterpreter(pythonExecutable, signal);
+      if (abortRequested(signal)) {
+        this.markPendingCapabilitiesCancelled();
+        return;
+      }
+      const reasonCode = interpreterCompatible
+        ? "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+        : "PYTHON_RUNTIME_INCOMPATIBLE";
+      this.speechStatus = unavailable(reasonCode);
+      this.ttsStatus = unavailable(reasonCode);
+      this.visionStatus = unavailable(reasonCode);
       return;
     }
 
@@ -1215,15 +1213,19 @@ async function installPinnedPythonRequirements(
       if (error === undefined) resolve();
       else reject(error);
     };
+    let terminationError: Error | undefined;
     const onAbort = (): void => {
+      if (terminationError !== undefined) return;
+      terminationError = abortError();
       child.kill();
-      finish(abortError());
     };
     const timeout = setTimeout(() => {
+      if (terminationError !== undefined) return;
+      terminationError = new Error("Python runtime dependency installation timed out");
       child.kill();
-      finish(new Error("Python runtime dependency installation timed out"));
     }, 300_000);
     signal?.addEventListener("abort", onAbort, { once: true });
+    if (signal?.aborted === true) onAbort();
     child.stderr?.on("data", (chunk: Buffer | string) => {
       if (stderr.length >= 16 * 1024) return;
       stderr += String(chunk).slice(0, 16 * 1024 - stderr.length);
@@ -1235,6 +1237,10 @@ async function installPinnedPythonRequirements(
     });
     child.once("exit", (code, exitSignal) => {
       if (settled) return;
+      if (terminationError !== undefined) {
+        finish(terminationError);
+        return;
+      }
       if (code === 0 && exitSignal === null) {
         finish();
         return;
