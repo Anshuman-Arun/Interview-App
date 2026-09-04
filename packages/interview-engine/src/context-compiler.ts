@@ -301,6 +301,9 @@ export function buildBoardSceneContext(
         action.annotationPurpose,
         MAX_BOARD_SCENE_ANNOTATION_PURPOSE_CHARACTERS
       ),
+      ...(action.content === undefined
+        ? {}
+        : { content: truncateBoardSceneText(action.content, MAX_BOARD_SCENE_TEXT_CHARACTERS) }),
       ...(action.targetShapeId === undefined ? {} : { targetShapeId: action.targetShapeId }),
       ...(action.expectedShapeRevision === undefined
         ? {}
