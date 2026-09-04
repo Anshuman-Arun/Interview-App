@@ -541,6 +541,91 @@ describe("bounded provider board scene", () => {
     expect(targetedScene?.aiAnnotations.map((item) => item.annotationId)).not.toContain(firstId);
   });
 
+  it("suppresses prior AI annotation history when physical whiteboard visibility is uncertain", () => {
+    const revision = BoardRevisionSchema.parse(1);
+    const sessionId = newSessionId();
+    const generationId = GenerationIdSchema.parse("generation:uncertain:1");
+    const eraseGenerationId = GenerationIdSchema.parse("generation:uncertain:2");
+    const annotationId = DeliveryIdSchema.parse("delivery:uncertain:annotation");
+    const uncertainEraseId = DeliveryIdSchema.parse("delivery:uncertain:erase");
+    const generations: Record<string, SessionState["generations"][string]> = {
+      [generationId]: {
+        generationId,
+        basis: GenerationBasisSchema.parse({
+          contextEpoch: 0,
+          committedInputSequence: 1,
+          transcriptRevision: 0,
+          boardRevision: revision,
+          problemStateRevision: 0,
+          policyRevision: 0,
+          turnId: TurnIdSchema.parse("turn:uncertain:1")
+        }),
+        provider: "mock",
+        status: "VALIDATED"
+      },
+      [eraseGenerationId]: {
+        generationId: eraseGenerationId,
+        basis: GenerationBasisSchema.parse({
+          contextEpoch: 0,
+          committedInputSequence: 2,
+          transcriptRevision: 0,
+          boardRevision: revision,
+          problemStateRevision: 0,
+          policyRevision: 0,
+          turnId: TurnIdSchema.parse("turn:uncertain:2")
+        }),
+        provider: "mock",
+        status: "VALIDATED"
+      }
+    };
+    const deliveries: Record<string, SessionState["deliveries"][string]> = {
+      [annotationId]: DeliveryAtomSchema.parse({
+        deliveryId: annotationId,
+        generationId,
+        content: {
+          medium: "WHITEBOARD",
+          action: {
+            operation: "write_text",
+            layer: "AI_ANNOTATION",
+            content: "visible hint",
+            annotationPurpose: "prior visible annotation"
+          }
+        },
+        disclosureIds: [],
+        effectiveDisclosureLevel: 0,
+        status: "COMPLETED"
+      }),
+      [uncertainEraseId]: DeliveryAtomSchema.parse({
+        deliveryId: uncertainEraseId,
+        generationId: eraseGenerationId,
+        content: {
+          medium: "WHITEBOARD",
+          action: {
+            operation: "erase_ai_annotation",
+            layer: "AI_ANNOTATION",
+            targetAnnotationId: annotationId,
+            annotationPurpose: "ambiguous physical erase"
+          }
+        },
+        disclosureIds: [],
+        effectiveDisclosureLevel: 0,
+        status: "POSSIBLY_EXPOSED"
+      })
+    };
+    const state: SessionState = {
+      ...initialSessionState(sessionId),
+      boardRevision: revision,
+      deliveries,
+      generations
+    };
+
+    const scene = buildBoardSceneContext(state, revision);
+    expect(scene?.aiAnnotationStateUncertain).toBe(true);
+    expect(scene?.aiAnnotationCount).toBe(0);
+    expect(scene?.includedAiAnnotationCount).toBe(0);
+    expect(scene?.aiAnnotations).toEqual([]);
+  });
+
   it("drops narrow-freshness semantics after any later board revision without a new region proof", () => {
     const sessionId = newSessionId();
     const sourceRevision = BoardRevisionSchema.parse(1);
