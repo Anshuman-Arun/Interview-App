@@ -19,7 +19,8 @@ import {
   type OxfordFormalAnalysisProfile
 } from "./oxford-formal-analysis-catalog.js";
 import {
-  createOxfordFormalAdmissionProvider
+  isOxfordFormalAnalysisSourceRelevant,
+  isOxfordFormalCandidateTargetAdmissible
 } from "./oxford-formal-candidate-admission.js";
 
 export const DEFAULT_STUDENT_REASONING_ANALYSIS_TIMEOUT_MS = 1_500 as const;
@@ -240,9 +241,22 @@ export class StudentReasoningAnalysisCoordinator {
       profileKey,
       coordinator: new InterpretationCoordinator(
         this.sessions.getWriter(sessionId),
-        createOxfordFormalAdmissionProvider(profile, this.provider),
+        this.provider,
         profile.scopes,
-        { maxInFlight: MAX_STUDENT_REASONING_ANALYSIS_IN_FLIGHT }
+        {
+          maxInFlight: MAX_STUDENT_REASONING_ANALYSIS_IN_FLIGHT,
+          requestAdmission: (request) =>
+            isOxfordFormalAnalysisSourceRelevant(
+              profile,
+              request.source.span.text
+            ),
+          candidateAdmission: (request, candidate) =>
+            isOxfordFormalCandidateTargetAdmissible({
+              profile,
+              request,
+              candidate
+            })
+        }
       ),
       active: new Map()
     };
