@@ -391,18 +391,19 @@ function sourceExpressesDirectDivisibility(
   divisor: string,
   dividend: string
 ): boolean {
-  const normalized = normalizeIntegerWords(sourceText);
-  const escapedDivisor = escapeRegExp(divisor);
-  const escapedDividend = escapeRegExp(dividend);
-  return new RegExp(
-    "(?:^|\\s)" + escapedDivisor + "\\s+divides\\s+" + escapedDividend + "(?:$|\\s|[.,;:!?])",
-    "u"
-  ).test(normalized);
+  const tokens = normalizeIntegerWords(sourceText)
+    .match(/[-+]?\d+|[a-z]+/gu) ?? [];
+  return tokens.some(
+    (token, index) =>
+      token === divisor
+      && tokens[index + 1] === "divides"
+      && tokens[index + 2] === dividend
+  );
 }
 
 function normalizeIntegerWords(value: string): string {
   const normalized = normalizeText(value);
-  const tokens = normalized.match(/[-+]?\\d+|[a-z]+|[^\\s]/gu) ?? [];
+  const tokens = normalized.match(/[-+]?\d+|[a-z]+|[^\s]/gu) ?? [];
   const output: string[] = [];
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index];
@@ -425,11 +426,7 @@ function normalizeIntegerWords(value: string): string {
     }
     output.push(token);
   }
-  return output.join(" ").replace(/\\s+([.,;:!?])/gu, "$1");
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^$\\{}()|[\\]\\]/gu, "\\$&");
+  return output.join(" ").replace(/\s+([.,;:!?])/gu, "$1");
 }
 
 function collectIntegerNumbers(
