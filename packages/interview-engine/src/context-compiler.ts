@@ -227,6 +227,8 @@ export function buildBoardSceneContext(
     }
   }
 
+  // DELIVERY_QUEUED is reduced into this record in event order; object spread
+  // preserves existing non-index string-key insertion order across later status updates.
   const deliveryReplayOrder = new Map(
     Object.keys(state.deliveries).map((deliveryId, index) => [deliveryId, index] as const)
   );
