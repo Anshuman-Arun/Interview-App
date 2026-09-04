@@ -41,52 +41,57 @@ export function HomePage({
     const hero = heroRef.current;
     const copy = heroCopyRef.current;
     const folio = folioRef.current;
-    const sidebar = document.querySelector<HTMLElement>(".product-frame__rail");
-    if (hero === null || copy === null || folio === null || sidebar === null) return;
+    const rail = hero?.closest(".product-frame")?.querySelector<HTMLElement>("[data-product-rail]");
+    if (hero === null || copy === null || folio === null || rail === null) return;
 
-    let firstFrame = 0;
-    let secondFrame = 0;
-
-    const correctMidpoint = (): void => {
-      cancelAnimationFrame(firstFrame);
-      cancelAnimationFrame(secondFrame);
-      firstFrame = requestAnimationFrame(() => {
+    let frame = 0;
+    const measure = (): void => {
+      if (typeof window === "undefined") return;
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
         if (window.matchMedia("(max-width: 1060px)").matches) {
-          hero.style.setProperty("--home-midpoint-shift", "0px");
+          copy.style.setProperty("--home-midpoint-shift", "0px");
           return;
         }
 
-        hero.style.setProperty("--home-midpoint-shift", "0px");
-        secondFrame = requestAnimationFrame(() => {
-          const sidebarRect = sidebar.getBoundingClientRect();
+        copy.style.setProperty("--home-midpoint-shift", "0px");
+        frame = window.requestAnimationFrame(() => {
+          const railRect = rail.getBoundingClientRect();
           const folioRect = folio.getBoundingClientRect();
           const copyRect = copy.getBoundingClientRect();
-          const target = (sidebarRect.right + folioRect.left) / 2;
+          const target = (railRect.right + folioRect.left) / 2;
           const center = (copyRect.left + copyRect.right) / 2;
-          hero.style.setProperty("--home-midpoint-shift", `${(target - center).toFixed(3)}px`);
+          copy.style.setProperty(
+            "--home-midpoint-shift",
+            `${(target - center).toFixed(3)}px`
+          );
         });
       });
     };
 
-    const observer = new ResizeObserver(correctMidpoint);
-    observer.observe(hero);
-    observer.observe(copy);
-    observer.observe(folio);
-    observer.observe(sidebar);
-    window.addEventListener("resize", correctMidpoint, { passive: true });
-    void document.fonts?.ready.then(correctMidpoint).catch(() => undefined);
-    correctMidpoint();
+    const observer = typeof ResizeObserver === "undefined"
+      ? null
+      : new ResizeObserver(measure);
+    observer?.observe(hero);
+    observer?.observe(copy);
+    observer?.observe(folio);
+    observer?.observe(rail);
+    window.addEventListener("resize", measure, { passive: true });
+    void document.fonts?.ready.then(measure).catch(() => undefined);
+    measure();
 
     return () => {
-      cancelAnimationFrame(firstFrame);
-      cancelAnimationFrame(secondFrame);
-      observer.disconnect();
-      window.removeEventListener("resize", correctMidpoint);
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+      window.cancelAnimationFrame(frame);
     };
   }, []);
 
   return (
-    <div className="expressive-home">
+    <div
+      className="expressive-home"
+      data-has-settings-action={String(onOpenSettings !== undefined)}
+    >
       <section className="expressive-home__hero" ref={heroRef}>
         <div className="expressive-home__marginalia" aria-hidden="true">
           <svg viewBox="0 0 1500 650" preserveAspectRatio="none">
@@ -113,6 +118,7 @@ export function HomePage({
           <p className="expressive-home__dek">
             Voice, whiteboard, and a demanding interviewer.
           </p>
+
           <div className="expressive-home__hero-actions">
             {activeSessionId === null ? (
               <button
@@ -142,7 +148,12 @@ export function HomePage({
                 <i aria-hidden="true">→</i>
               </button>
             )}
-            <button type="button" className="expressive-home__secondary" onClick={onOpenSessions}>
+
+            <button
+              type="button"
+              className="expressive-home__secondary"
+              onClick={onOpenSessions}
+            >
               Sessions
             </button>
           </div>
@@ -156,22 +167,22 @@ export function HomePage({
           <article className="expressive-home__folio-sheet">
             <div className="expressive-home__folio-head">
               <span>Oxford Mathematics</span>
-              <span>Interview folio</span>
+              <span>Worked on paper</span>
             </div>
             <div className="expressive-home__folio-board">
               <svg viewBox="0 0 520 470" aria-hidden="true">
                 <defs>
-                  <linearGradient id="home-sub-tri-a" x1="0" y1="0" x2="1" y2="1">
+                  <linearGradient id="homeSubTriA" x1="0" y1="0" x2="1" y2="1">
                     <stop offset="0" stopColor="var(--accent)" stopOpacity=".075" />
                     <stop offset="1" stopColor="var(--accent)" stopOpacity=".02" />
                   </linearGradient>
-                  <linearGradient id="home-sub-tri-b" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0" stopColor="var(--info)" stopOpacity=".065" />
-                    <stop offset="1" stopColor="var(--info)" stopOpacity=".018" />
+                  <linearGradient id="homeSubTriB" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stopColor="var(--editorial-blue)" stopOpacity=".055" />
+                    <stop offset="1" stopColor="var(--editorial-blue)" stopOpacity=".015" />
                   </linearGradient>
                 </defs>
-                <polygon points="260,70 100,390 275,255" fill="url(#home-sub-tri-a)" />
-                <polygon points="260,70 420,390 275,255" fill="url(#home-sub-tri-b)" />
+                <polygon points="260,70 100,390 275,255" fill="url(#homeSubTriA)" />
+                <polygon points="260,70 420,390 275,255" fill="url(#homeSubTriB)" />
                 <polygon points="100,390 420,390 275,255" fill="var(--accent)" opacity=".025" />
                 <path className="expressive-home__sketch" d="M260 70 L100 390 L420 390 Z" />
                 <path className="expressive-home__sketch expressive-home__sketch--accent" d="M275 255 L189 212" />
@@ -192,7 +203,7 @@ export function HomePage({
             </div>
             <div className="expressive-home__folio-cap">
               <strong>Triangle distances</strong>
-              <span>THINK · DRAW<br />EXPLAIN</span>
+              <span>VOICE + BOARD<br />OXFORD STYLE</span>
             </div>
           </article>
         </div>
@@ -200,13 +211,13 @@ export function HomePage({
 
       {activeSessionId !== null && (
         <section className="expressive-home__active">
-          <span>NOW</span>
+          <span className="expressive-home__active-index">NOW</span>
           <div>
             <strong>{activeProblemTitle ?? "Interview in progress"}</strong>
             <p>
               {activeSessionPaused
-                ? "Paused without ending the authoritative session."
-                : "An active room already exists."}
+                ? "Paused. Resume when you are ready; nothing was ended or archived."
+                : "An active room already exists. Resume it before starting anything else."}
             </p>
           </div>
           <button
@@ -214,29 +225,29 @@ export function HomePage({
             disabled={sessionEntryPending}
             onClick={() => onResumeInterview(activeSessionId)}
           >
-            {sessionEntryPending ? "Opening…" : "Resume →"}
+            {sessionEntryPending ? "Opening…" : "Resume"}
           </button>
         </section>
       )}
 
       <section className="expressive-home__modes">
-        <header>
+        <div className="expressive-home__section-head">
           <h3>Practice rooms</h3>
-        </header>
+        </div>
         <div className="expressive-home__mode-grid">
-          <article>
+          <article className="expressive-home__mode-card">
             <span>01 · SOCRATIC + BOARD</span>
             <h4>Oxford Mathematics</h4>
             <p>Proofs, exploration, and explanation with voice and tldraw.</p>
             <footer><span>VOICE · BOARD</span><span>45–60 MIN</span></footer>
           </article>
-          <article>
+          <article className="expressive-home__mode-card">
             <span>02 · MARKET MAKING</span>
             <h4>Quant Trading</h4>
             <p>Quotes, fills, inventory, P&amp;L, and risk.</p>
             <footer><span>STRUCTURED</span><span>ROUNDS</span></footer>
           </article>
-          <article>
+          <article className="expressive-home__mode-card">
             <span>03 · RESEARCH</span>
             <h4>Quant Research</h4>
             <p>Bayes, sampling, estimation, and experimental design.</p>
@@ -246,17 +257,17 @@ export function HomePage({
       </section>
 
       <section className="expressive-home__recent">
-        <header>
+        <div className="expressive-home__section-head">
           <h3>Recent sessions</h3>
           <button type="button" onClick={onOpenSessions}>See all →</button>
-        </header>
+        </div>
 
         {recent.length === 0 ? (
           <div className="expressive-home__empty">
             Your first completed interview will leave a trail here.
           </div>
         ) : (
-          <div className="expressive-home__rows">
+          <div className="expressive-home__recent-list">
             {recent.map((session, index) => {
               const reviewable = canReview(session);
               return (
@@ -272,13 +283,16 @@ export function HomePage({
                     </strong>
                     <code>{session.sessionId}</code>
                   </div>
-                  <span className="expressive-home__row-status" data-status={session.status}>
-                    {session.status.toLowerCase()}
+                  <span
+                    className="expressive-home__row-status"
+                    data-status={session.status}
+                  >
+                    {session.status}
                   </span>
                   <time dateTime={session.updatedAt}>
                     {new Date(session.updatedAt).toLocaleDateString([], {
                       month: "short",
-                      day: "numeric"
+                      day: "2-digit"
                     })}
                   </time>
                   <button
@@ -299,10 +313,6 @@ export function HomePage({
             })}
           </div>
         )}
-
-        <button type="button" className="expressive-home__settings-link" onClick={onOpenSettings}>
-          Tune the room
-        </button>
       </section>
     </div>
   );
