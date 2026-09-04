@@ -377,6 +377,63 @@ describe("desktop local model runtime", () => {
     });
   });
 
+  it("re-probes a previously missing Python prerequisite without restarting the app", async () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-python-recheck-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+
+    let pythonNowInstalled = false;
+    const mutable = composition as unknown as {
+      workerScriptIsSafe(): Promise<boolean>;
+      resolveCompatiblePythonExecutable(signal?: AbortSignal): Promise<string | undefined>;
+      diagnosePythonRuntime(signal?: AbortSignal): Promise<
+        | "PYTHON_RUNTIME_UNAVAILABLE"
+        | "PYTHON_RUNTIME_INCOMPATIBLE"
+        | "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+      >;
+    };
+    mutable.workerScriptIsSafe = async () => true;
+    mutable.resolveCompatiblePythonExecutable = async () => undefined;
+    mutable.diagnosePythonRuntime = async () => pythonNowInstalled
+      ? "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+      : "PYTHON_RUNTIME_UNAVAILABLE";
+
+    await expect(composition.start()).resolves.toBeUndefined();
+    expect(composition.getPythonRuntimeStatus()).toEqual({
+      state: "UNAVAILABLE",
+      reasonCode: "PYTHON_RUNTIME_UNAVAILABLE"
+    });
+
+    pythonNowInstalled = true;
+    await expect(
+      composition.refreshPythonRuntimePrerequisite()
+    ).resolves.toBeUndefined();
+
+    expect(composition.getPythonRuntimeStatus()).toEqual({
+      state: "UNAVAILABLE",
+      reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+    });
+    expect(composition.getCapabilityStatus()).toEqual({
+      speech: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+      },
+      tts: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+      },
+      vision: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+      }
+    });
+  });
+
   it("does not use a compatible global Python as the packaged worker runtime", async () => {
     const composition = new DesktopLocalRuntimeComposition({
       appDataRoot: temporaryRoot("desktop-python-packaged-managed-only-"),
