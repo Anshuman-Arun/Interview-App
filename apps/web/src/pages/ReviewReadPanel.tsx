@@ -249,6 +249,7 @@ function PerformancePanel({
             label="Formal median"
             value={formatLatency(summary.remote.formalInterpretationLatency.medianMs)}
           />
+          <Metric label="Remote issues" value={failures} />
         </MetricGroup>
 
         <MetricGroup title="Formal interpretation">
@@ -258,15 +259,29 @@ function PerformancePanel({
           <Metric label="Timed out" value={summary.formalInterpretation.timeouts} />
           <Metric label="Cancelled" value={summary.formalInterpretation.cancelled} />
           <Metric label="Failed / malformed" value={summary.formalInterpretation.failedOrMalformed} />
+          <Metric label="Verified" value={summary.formalInterpretation.verification.VERIFIED} />
+          <Metric label="Contradicted" value={summary.formalInterpretation.verification.CONTRADICTED} />
+          <Metric label="Unresolved" value={summary.formalInterpretation.verification.UNRESOLVED} />
         </MetricGroup>
 
         <MetricGroup title="Local compute">
           <Metric label="STT finalizations" value={summary.local.stt.finalizations} />
+          <Metric label="STT failures" value={summary.local.stt.failures} />
+          <Metric label="STT cancelled" value={summary.local.stt.cancellations} />
+          <Metric label="STT median" value={formatLatency(summary.local.stt.latency.medianMs)} />
+          <Metric label="TTS requests" value={summary.local.tts.requests} />
           <Metric label="TTS syntheses" value={summary.local.tts.successes} />
-          <Metric label="Vision inferences" value={summary.local.vision.inferenceCompletions} />
+          <Metric label="TTS failures" value={summary.local.tts.failures} />
+          <Metric label="TTS cancelled" value={summary.local.tts.cancellations} />
+          <Metric label="TTS median" value={formatLatency(summary.local.tts.latency.medianMs)} />
           <Metric label="TTS barge-in interrupts" value={summary.local.tts.bargeInInterruptions} />
+          <Metric label="Vision requests" value={summary.local.vision.requests} />
+          <Metric label="Vision inferences" value={summary.local.vision.inferenceCompletions} />
+          <Metric label="Vision accepted" value={summary.local.vision.acceptedObservations} />
+          <Metric label="Vision failures" value={summary.local.vision.inferenceFailures} />
           <Metric label="Stale vision rejected" value={summary.local.vision.staleRejections} />
-          <Metric label="Remote issues" value={failures} />
+          <Metric label="Other vision rejected" value={summary.local.vision.otherRejections} />
+          <Metric label="Vision median" value={formatLatency(summary.local.vision.latency.medianMs)} />
         </MetricGroup>
 
         <MetricGroup title="Application-measured size">
