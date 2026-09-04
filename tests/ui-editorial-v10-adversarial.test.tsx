@@ -269,6 +269,35 @@ describe("editorial v10 adversarial UI states", () => {
     );
   });
 
+  it("does not offer Settings start while stored active authority exists", () => {
+    const markup = renderToStaticMarkup(
+      <AppearanceProvider>
+        <SettingsPage
+          providerOptions={[{
+            providerId: "ready-provider",
+            providerDisplayName: "Ready Provider",
+            providerKind: "REMOTE_API",
+            modelId: "ready-model",
+            modelDisplayName: "Ready Model",
+            availability: "AVAILABLE"
+          }]}
+          providerOptionsLoading={false}
+          providerOptionsError={null}
+          activeSessionCount={1}
+          onRefreshProviderOptions={async () => []}
+          onStartInterview={vi.fn()}
+        />
+      </AppearanceProvider>
+    );
+
+    expect(markup).toContain(
+      "An active interview already exists. Resume or resolve it before starting another."
+    );
+    expect(markup).toMatch(
+      /<button[^>]*disabled=""[^>]*>Start interview<\/button>/u
+    );
+  });
+
   it("shows provider rechecks as checking rather than ready", () => {
     const markup = renderToStaticMarkup(
       <AppearanceProvider>
