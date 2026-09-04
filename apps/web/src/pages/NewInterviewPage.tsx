@@ -59,6 +59,21 @@ function providerReason(reason: ProviderLaunchAvailabilityReason | undefined): s
   }
 }
 
+function providerRouteLabel(option: ProviderLaunchOption | null): string {
+  switch (option?.providerKind) {
+    case "LOCAL_PROCESS":
+      return "LOCAL";
+    case "REMOTE_API":
+      return "REMOTE";
+    case "MOCK":
+      return "MOCK";
+    case "OTHER":
+      return "RUNTIME";
+    case undefined:
+      return "—";
+  }
+}
+
 export function NewInterviewPage({
   catalog,
   catalogLoading,
@@ -381,7 +396,7 @@ export function NewInterviewPage({
         </div>
 
         <aside className="new-interview__slip">
-          <div className="new-interview__slip-kicker"><span data-ready={String(!launchBlocked)}>{launchBlocked ? "CHECK" : "READY"}</span><span>LOCAL</span></div>
+          <div className="new-interview__slip-kicker"><span data-ready={String(!launchBlocked)}>{launchBlocked ? "CHECK" : "READY"}</span><span>{providerRouteLabel(selectedProvider)}</span></div>
           <h3>{selectedTarget === null ? "Interview" : MODE_LABELS[selectedTarget.mode]}</h3>
           <p>{selectedTarget?.title ?? "Choose an available target"}</p>
           <div className="new-interview__slip-list">
