@@ -106,6 +106,7 @@ export class DesktopLocalRuntimeComposition {
   private readonly requirementsPath: string;
   private readonly managedPythonRoot: string;
   private readonly pythonExecutableCandidate: string;
+  private readonly requireManagedPythonRuntime: boolean;
   private readonly enforcePackagedWorkerIntegrity: boolean;
   private pythonExecutable: string | undefined;
   private pythonStatus: DesktopRuntimeCapabilityStatus = unavailable("NOT_STARTED");
@@ -178,6 +179,7 @@ export class DesktopLocalRuntimeComposition {
       ?? path.join(options.appDataRoot, "python-runtime");
     this.pythonExecutableCandidate = options.pythonExecutable
       ?? (process.platform === "win32" ? "python" : "python3");
+    this.requireManagedPythonRuntime = options.isPackaged;
     this.enforcePackagedWorkerIntegrity = options.isPackaged;
   }
 
@@ -624,11 +626,14 @@ export class DesktopLocalRuntimeComposition {
   private async resolveCompatiblePythonExecutable(
     signal?: AbortSignal
   ): Promise<string | undefined> {
-    const candidates = [
-      this.pythonExecutable,
-      await this.resolveManagedPythonExecutable(),
-      await this.resolveBootstrapPythonExecutable()
-    ];
+    const managedExecutable = await this.resolveManagedPythonExecutable();
+    const candidates = this.requireManagedPythonRuntime
+      ? [this.pythonExecutable, managedExecutable]
+      : [
+          this.pythonExecutable,
+          managedExecutable,
+          await this.resolveBootstrapPythonExecutable()
+        ];
     const seen = new Set<string>();
     for (const executable of candidates) {
       if (executable === undefined || seen.has(executable)) continue;
