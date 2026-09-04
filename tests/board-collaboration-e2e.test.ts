@@ -68,6 +68,14 @@ describe("stateful collaborative board interaction", () => {
         deleted: []
       });
       expect(firstMutation.committed).toBe(true);
+      adapter.createStudentShape({
+        id: "shape:eq",
+        type: "text",
+        x: 100,
+        y: 100,
+        props: { w: 220, h: 48, text: "x^2 + y^2 = 1" },
+        shapeRevision: 1
+      });
 
       const turnA = await startTurn(
         turns,
@@ -123,6 +131,14 @@ describe("stateful collaborative board interaction", () => {
         deleted: []
       });
       expect(secondMutation.committed).toBe(true);
+      adapter.createStudentShape({
+        id: "shape:reasoning",
+        type: "text",
+        x: 100,
+        y: 180,
+        props: { w: 220, h: 48, text: "I can isolate y^2" },
+        shapeRevision: 1
+      });
 
       const turnB = await startTurn(
         turns,
