@@ -7,6 +7,7 @@ import "./HomePage.css";
 
 export function HomePage({
   activeSessionId,
+  activeSessionCount,
   activeProblemTitle,
   activeSessionPaused,
   sessions,
@@ -18,6 +19,7 @@ export function HomePage({
   sessionEntryPending
 }: {
   readonly activeSessionId: SessionId | null;
+  readonly activeSessionCount: number;
   readonly activeProblemTitle?: string | null;
   readonly activeSessionPaused?: boolean;
   readonly sessions: readonly StoredSessionSummary[];
@@ -109,7 +111,17 @@ export function HomePage({
           </p>
 
           <div className="expressive-home__hero-actions">
-            {activeSessionId === null ? (
+            {activeSessionCount > 1 ? (
+              <button
+                type="button"
+                className="expressive-home__primary"
+                onClick={onOpenSessions}
+                disabled={sessionEntryPending}
+              >
+                <span>Resolve active sessions</span>
+                <i aria-hidden="true">→</i>
+              </button>
+            ) : activeSessionId === null ? (
               <button
                 type="button"
                 className="expressive-home__primary"
@@ -198,7 +210,16 @@ export function HomePage({
         </div>
       </section>
 
-      {activeSessionId !== null && (
+      {activeSessionCount > 1 ? (
+        <section className="expressive-home__active" role="alert">
+          <span className="expressive-home__active-index">CHECK</span>
+          <div>
+            <strong>{activeSessionCount} active sessions need resolution</strong>
+            <p>Interview App will not choose an authoritative room for you. Open Sessions and resolve the conflict first.</p>
+          </div>
+          <button type="button" onClick={onOpenSessions}>Open Sessions</button>
+        </section>
+      ) : activeSessionId !== null && (
         <section className="expressive-home__active">
           <span className="expressive-home__active-index">NOW</span>
           <div>
