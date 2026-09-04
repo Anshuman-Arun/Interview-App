@@ -3244,3 +3244,54 @@ summary:focus-visible,
   cursor: not-allowed;
   opacity: .45;
 }
+
+
+/* Extreme-zoom Quant fallback: preserve structured actions at phone-sized
+   effective widths without hiding authoritative public state. */
+@media (max-width: 520px) {
+  .quant-workspace {
+    padding: 18px 12px 40px;
+  }
+
+  .quant-market-head,
+  .quant-research-head,
+  .quant-terminal > div:first-child {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .quant-market-head h1,
+  .quant-research-head h1 {
+    max-width: 100%;
+    font-size: 34px;
+    overflow-wrap: anywhere;
+  }
+
+  .quant-fair-value {
+    text-align: left;
+  }
+
+  .quant-stat-grid,
+  .quant-terminal dl,
+  .quant-metric-list,
+  .quant-quote-inputs,
+  .quant-paired-inputs,
+  .quant-choice-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .quant-stat-grid > div,
+  .quant-stat-grid > div:not(:first-child) {
+    padding-right: 0;
+    padding-left: 0;
+    border-right: 0;
+  }
+
+  .quant-action-row {
+    flex-wrap: wrap;
+  }
+
+  .quant-action-row > button {
+    flex: 1 1 140px;
+  }
+}
