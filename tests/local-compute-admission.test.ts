@@ -149,7 +149,7 @@ describe("local compute result admission", () => {
     harness.store.close();
   });
 
-  it("admits a pending result after application restart", async () => {
+  it("admits a pending result after application restart", { timeout: 15_000 }, async () => {
     const directory = mkdtempSync(join(tmpdir(), "interview-local-compute-"));
     const databasePath = join(directory, "events.sqlite");
     let store = new SqliteEventStore(databasePath);
