@@ -1,14 +1,7 @@
-import {
-  InterpretationProviderResultSchema,
-  evidenceKeysEqual,
-  generationBasesEqual,
-  type FormalInterpretationCandidate,
-  type FormalInterpretationRequest,
-  type InterpretationProviderResult
-} from "../../../packages/domain/src/index.js";
 import type {
-  FormalInterpretationProvider
-} from "../../../packages/interview-engine/src/index.js";
+  FormalInterpretationCandidate,
+  FormalInterpretationRequest
+} from "../../../packages/domain/src/index.js";
 import { parseStrictJson } from "../../../packages/providers/src/index.js";
 import {
   ModularArithmeticInterpretationSchema,
@@ -239,95 +232,6 @@ export function isOxfordFormalCandidateTargetAdmissible(input: {
   }
 
   return false;
-}
-
-export function createOxfordFormalAdmissionProvider(
-  profile: OxfordFormalAnalysisProfile,
-  provider: FormalInterpretationProvider
-): FormalInterpretationProvider {
-  return Object.freeze({
-    async interpret(
-      request: FormalInterpretationRequest,
-      runtime?: { readonly signal: AbortSignal }
-    ): Promise<unknown> {
-      if (
-        request.problem.id !== profile.problemId
-        || request.problem.version !== profile.problemVersion
-        || request.target.problemId !== profile.target.problemId
-        || request.target.subject.claimId !== profile.target.subject.claimId
-        || !isOxfordFormalAnalysisSourceRelevant(profile, request.source.span.text)
-      ) {
-        return abstention(request);
-      }
-
-      const raw = await provider.interpret(request, runtime);
-      const parsed = InterpretationProviderResultSchema.safeParse(raw);
-      if (!parsed.success || parsed.data.requestId !== request.requestId) {
-        // Preserve malformed/mismatched provider output for the generic
-        // coordinator to diagnose and reject rather than laundering it into an
-        // ordinary abstention.
-        return raw;
-      }
-      if (
-        parsed.data.candidates.some((candidate) =>
-          !candidateIdentityMatchesRequest(request, candidate)
-        )
-      ) {
-        // Preserve identity attacks so Liam's generic admission emits the
-        // precise source/target/protocol rejection rather than hiding them.
-        return raw;
-      }
-      if (
-        parsed.data.candidates.some((candidate) =>
-          !isOxfordFormalCandidateTargetAdmissible({
-            profile,
-            request,
-            candidate
-          })
-        )
-      ) {
-        return abstention(request);
-      }
-      return parsed.data;
-    }
-  });
-}
-
-function candidateIdentityMatchesRequest(
-  request: FormalInterpretationRequest,
-  candidate: FormalInterpretationCandidate
-): boolean {
-  return candidate.source.requestId === request.requestId
-    && candidate.source.generationId === request.generationId
-    && generationBasesEqual(candidate.source.basis, request.basis)
-    && candidate.source.sourceRevision === request.source.sourceRevision
-    && candidate.source.inputEpisodeId === request.source.inputEpisodeId
-    && candidate.source.turnId === request.source.turnId
-    && candidate.source.eventIds.length === request.source.eventIds.length
-    && candidate.source.eventIds.every(
-      (eventId, index) => eventId === request.source.eventIds[index]
-    )
-    && candidate.source.span.start === request.source.span.start
-    && candidate.source.span.end === request.source.span.end
-    && candidate.source.span.text === request.source.span.text
-    && candidate.source.problem.id === request.problem.id
-    && candidate.source.problem.version === request.problem.version
-    && evidenceKeysEqual(candidate.target, request.target)
-    && request.allowedProtocols.some(
-      (protocol) =>
-        protocol.protocol === candidate.protocol.protocol
-        && protocol.version === candidate.protocol.version
-    );
-}
-
-function abstention(
-  request: FormalInterpretationRequest
-): InterpretationProviderResult {
-  return InterpretationProviderResultSchema.parse({
-    protocolVersion: 1,
-    requestId: request.requestId,
-    candidates: []
-  });
 }
 
 function containsAny(text: string, needles: readonly string[]): boolean {
