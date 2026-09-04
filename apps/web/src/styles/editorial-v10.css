@@ -105,20 +105,12 @@ body,
 }
 
 body {
-  background:
-    radial-gradient(circle at 18% 4%, rgba(255,255,255,.30), transparent 27%),
-    radial-gradient(circle at 82% 78%, rgba(104,85,55,.035), transparent 33%),
-    repeating-linear-gradient(0deg, rgba(72,57,35,.01) 0, rgba(72,57,35,.01) 1px, transparent 1px, transparent 4px),
-    var(--surface-app);
+  background: var(--surface-app);
   color: var(--text-primary);
 }
 
 :root[data-theme="dark"] body {
-  background:
-    radial-gradient(circle at 16% 4%, rgba(255,255,255,.02), transparent 28%),
-    radial-gradient(circle at 82% 78%, rgba(194,160,102,.02), transparent 33%),
-    repeating-linear-gradient(0deg, rgba(255,255,255,.006) 0, rgba(255,255,255,.006) 1px, transparent 1px, transparent 4px),
-    var(--surface-app);
+  background: var(--surface-app);
 }
 
 button,
@@ -148,11 +140,7 @@ summary:focus-visible,
 .product-frame__rail {
   padding: 18px 14px 16px;
   border-right: 1px solid var(--rule-soft);
-  background: linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--paper-hi) 78%, var(--paper)) 0%,
-    color-mix(in srgb, var(--paper-hi) 68%, var(--paper)) 100%
-  );
+  background: color-mix(in srgb, var(--paper-hi) 73%, var(--paper));
 }
 
 .product-frame__brand {
