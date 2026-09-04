@@ -484,6 +484,10 @@ export const App: React.FC = () => {
   );
   const storedActiveSession =
     storedActiveSessions.length === 1 ? storedActiveSessions[0] ?? null : null;
+  const knownActiveSessionCount = Math.max(
+    storedActiveSessions.length,
+    hasActiveInterview ? 1 : 0
+  );
   const resumableActiveSessionId =
     hasActiveInterview && session.sessionId !== null
       ? session.sessionId
@@ -587,7 +591,7 @@ export const App: React.FC = () => {
         route={displayRoute}
         sessions={session.availableSessions}
         activeSessionId={resumableActiveSessionId}
-        activeSessionCount={storedActiveSessions.length}
+        activeSessionCount={knownActiveSessionCount}
         currentSessionId={hasActiveInterview ? session.sessionId : null}
         activeProblemTitle={
           hasActiveInterview
