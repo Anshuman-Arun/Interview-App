@@ -558,10 +558,70 @@ function sourceExpressesTargetDivisibility(
 
   const chosenPair = findExplicitChosenNumberPair(tokens);
   if (chosenPair !== undefined) {
-    return chosenPair[0] === divisor && chosenPair[1] === dividend;
+    return pairMatchesDivisibility(chosenPair, divisor, dividend);
+  }
+
+  const oddPartPair = findSameOddPartNumberPair(tokens);
+  if (oddPartPair !== undefined) {
+    return pairMatchesDivisibility(oddPartPair, divisor, dividend);
+  }
+  if (
+    tokens.some(
+      (token, index) =>
+        token === "same"
+        && tokens[index + 1] === "odd"
+        && tokens[index + 2] === "part"
+    )
+  ) {
+    return false;
   }
 
   return tokens.find((token) => /^[-+]?\d+$/u.test(token)) === divisor;
+}
+
+function pairMatchesDivisibility(
+  pair: readonly [string, string],
+  divisor: string,
+  dividend: string
+): boolean {
+  try {
+    const left = BigInt(pair[0]);
+    const right = BigInt(pair[1]);
+    const smaller = left <= right ? left : right;
+    const larger = left <= right ? right : left;
+    return divisor === smaller.toString() && dividend === larger.toString();
+  } catch {
+    return false;
+  }
+}
+
+function findSameOddPartNumberPair(
+  tokens: readonly string[]
+): readonly [string, string] | undefined {
+  for (let index = 0; index < tokens.length - 5; index += 1) {
+    const left = tokens[index];
+    const separator = tokens[index + 1];
+    const right = tokens[index + 2];
+    if (
+      left === undefined
+      || right === undefined
+      || !/^[-+]?\d+$/u.test(left)
+      || separator !== "and"
+      || !/^[-+]?\d+$/u.test(right)
+    ) {
+      continue;
+    }
+    const suffix = tokens.slice(index + 3, Math.min(tokens.length, index + 10));
+    const sameIndex = suffix.indexOf("same");
+    if (
+      sameIndex >= 0
+      && suffix[sameIndex + 1] === "odd"
+      && suffix[sameIndex + 2] === "part"
+    ) {
+      return [left, right];
+    }
+  }
+  return undefined;
 }
 
 function findExplicitChosenNumberPair(
