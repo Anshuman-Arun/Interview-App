@@ -2177,7 +2177,7 @@ summary:focus-visible,
   }
 
   .live-pane-heading button,
-  .board-appbar__actions button {
+  .board-appbar__layout-action {
     display: none;
   }
 }
