@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
   BoardSceneContextSchema,
+  BoardSceneSemanticObservationSchema,
   ContextCompilationManifestSchema,
   DisclosureIdSchema,
   MAX_BOARD_SCENE_AI_ANNOTATIONS,
@@ -116,7 +117,7 @@ function semanticObservationByShape(
   for (const request of requests) {
     const accepted = request.acceptedObservation;
     if (accepted === undefined) continue;
-    const value = BoardSceneContextSchema.shape.shapes.element.shape.semanticObservation.parse({
+    const value = BoardSceneSemanticObservationSchema.parse({
       kind: accepted.observationKind,
       interpretation: truncateBoardSceneText(
         accepted.observation.interpretation,
@@ -158,7 +159,10 @@ export function buildBoardSceneContext(
   }
 
   const authoritativeShapes = Object.values(state.boardShapes);
-  if (!state.boardShapeAuthorityKnown && authoritativeShapes.length > 0) {
+  if (
+    !state.boardShapeAuthorityKnown
+    && (state.boardRevision > 0 || authoritativeShapes.length > 0)
+  ) {
     throw new Error("Authoritative board shape state is unavailable");
   }
 
