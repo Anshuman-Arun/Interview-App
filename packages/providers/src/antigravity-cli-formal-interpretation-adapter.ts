@@ -521,7 +521,7 @@ function parseFormalInterpretationStream(
   stdout: string,
   expectedModelId: string,
   expectedSchemaArgument: string,
-  expectedRequestId: string
+  request: FormalInterpretationRequest
 ): InterpretationProviderResult {
   let expectedSchema: unknown;
   try {
@@ -619,17 +619,23 @@ function parseFormalInterpretationStream(
     if (!sameJson(responsePayload, result.data.result.structured_output)) {
       throw new AntigravityCliFormalInterpretationError("INVALID_PROTOCOL");
     }
-    const parsed = InterpretationProviderResultSchema.safeParse(
+    const modelResult = ModelFormalInterpretationResultSchema.safeParse(
       result.data.result.structured_output
     );
+    if (!modelResult.success) {
+      throw new AntigravityCliFormalInterpretationError("INVALID_PROVIDER_RESULT");
+    }
+    const attached = attachApplicationOwnedProvenance(
+      request,
+      modelResult.data
+    );
     if (
-      !parsed.success
-      || parsed.data.requestId !== expectedRequestId
-      || !providerResultWithinBounds(parsed.data)
+      attached === undefined
+      || !providerResultWithinBounds(attached)
     ) {
       throw new AntigravityCliFormalInterpretationError("INVALID_PROVIDER_RESULT");
     }
-    providerResult = parsed.data;
+    providerResult = attached;
     sawResult = true;
   }
 
@@ -637,6 +643,50 @@ function parseFormalInterpretationStream(
     throw new AntigravityCliFormalInterpretationError("INVALID_PROTOCOL");
   }
   return providerResult;
+}
+
+function attachApplicationOwnedProvenance(
+  request: FormalInterpretationRequest,
+  modelResult: ModelFormalInterpretationResult
+): InterpretationProviderResult | undefined {
+  for (const candidate of modelResult.candidates) {
+    if (
+      !request.allowedProtocols.some(
+        (allowed) =>
+          allowed.protocol === candidate.protocol.protocol
+          && allowed.version === candidate.protocol.version
+      )
+    ) {
+      return undefined;
+    }
+  }
+
+  const result = InterpretationProviderResultSchema.safeParse({
+    protocolVersion: 1,
+    requestId: request.requestId,
+    candidates: modelResult.candidates.map((candidate) => ({
+      protocolVersion: 1,
+      candidateId: candidate.candidateId,
+      protocol: candidate.protocol,
+      formalStatement: candidate.formalStatement,
+      confidence: candidate.confidence,
+      target: request.target,
+      source: {
+        requestId: request.requestId,
+        ...(request.generationId === undefined
+          ? {}
+          : { generationId: request.generationId }),
+        basis: request.basis,
+        sourceRevision: request.source.sourceRevision,
+        inputEpisodeId: request.source.inputEpisodeId,
+        turnId: request.source.turnId,
+        eventIds: request.source.eventIds,
+        span: request.source.span,
+        problem: request.problem
+      }
+    }))
+  });
+  return result.success ? result.data : undefined;
 }
 
 function sameJson(left: unknown, right: unknown): boolean {
