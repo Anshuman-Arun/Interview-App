@@ -321,6 +321,66 @@ describe("bounded provider board scene", () => {
     ]);
   });
 
+  it("drops narrow-freshness semantics after any later board revision without a new region proof", () => {
+    const sessionId = newSessionId();
+    const sourceRevision = BoardRevisionSchema.parse(1);
+    const admittedRevision = BoardRevisionSchema.parse(2);
+    const currentRevision = BoardRevisionSchema.parse(3);
+    const requestId = newRequestId();
+    const target = shape("shape:eq", 10, "", 2, "formula");
+    const accepted = AcceptedBoardObservationSchema.parse({
+      requestId,
+      sessionId,
+      proposalId: "proposal:narrow",
+      observationKind: "EQUATION",
+      observation: {
+        regionId: "region:eq",
+        sourceBoardRevision: sourceRevision,
+        relevantShapeIds: [target.id],
+        bounds: target.bounds,
+        interpretation: "x^2 + y^2 = 1",
+        confidence: 0.95
+      },
+      snapshotBasis: {
+        snapshotId: "snapshot:narrow",
+        snapshotHash: "c".repeat(64),
+        preprocessingVersion: "vision-v1",
+        sourceBoardRevision: sourceRevision
+      },
+      sourceRelevantShapeIds: [target.id],
+      shapeRevisionBindings: [{ shapeId: target.id, expectedRevision: target.revision }],
+      backend: {
+        backendId: "local-vision",
+        backendVersion: "1",
+        providerId: "local",
+        modelId: "formula-ocr",
+        modelVersion: "1",
+        visionCapabilityVersion: "1"
+      },
+      admittedAtBoardRevision: admittedRevision,
+      freshnessProof: "SHAPE_AND_REGION_COMPATIBLE"
+    });
+    const state: SessionState = {
+      ...initialSessionState(sessionId),
+      boardRevision: currentRevision,
+      boardShapes: { [target.id]: target },
+      visionRequests: {
+        [requestId]: {
+          visionRequestId: requestId,
+          sourceBoardRevision: sourceRevision,
+          regionId: "region:eq",
+          relevantShapeIds: [target.id],
+          status: "ACCEPTED",
+          acceptedObservation: accepted,
+          resultSequence: 12
+        }
+      }
+    };
+
+    expect(buildBoardSceneContext(state, currentRevision)?.shapes[0]?.semanticObservation)
+      .toBeUndefined();
+  });
+
   it("hard-bounds shape count, per-shape text, and aggregate serialized bytes", () => {
     const shapes = Array.from({ length: 80 }, (_, index) =>
       shape(
@@ -412,6 +472,14 @@ describe("controlled BoardAction DSL", () => {
       width: Number.POSITIVE_INFINITY,
       height: 10,
       annotationPurpose: "non-finite"
+    }).success).toBe(false);
+
+    expect(BoardActionSchema.safeParse({
+      operation: "write_text",
+      layer: "AI_ANNOTATION",
+      content: "misplaced",
+      placement: { x: 0, y: 0, position: "RIGHT" },
+      annotationPurpose: "absolute placement cannot carry relative direction"
     }).success).toBe(false);
 
     expect(BoardActionSchema.safeParse({
