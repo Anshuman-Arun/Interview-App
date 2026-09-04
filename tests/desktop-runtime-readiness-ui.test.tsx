@@ -673,7 +673,7 @@ describe("desktop local AI readiness UX", () => {
       )
     );
 
-    expect(markup).toContain("Ready to interview.");
+    expect(markup).toContain("Typed interviews are ready.");
     expect(markup).toContain("Gemini 3.7 Flash Medium");
     expect(markup).not.toMatch(/<button[^>]*disabled=""[^>]*>Start interview<\/button>/u);
   });
