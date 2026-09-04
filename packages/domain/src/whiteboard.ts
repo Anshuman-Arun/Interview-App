@@ -4,33 +4,195 @@ import { BoardRevisionSchema } from "./revisions.js";
 export const WhiteboardLayerSchema = z.enum(["STUDENT", "AI_ANNOTATION", "SYSTEM_DECORATION"]);
 export type WhiteboardLayer = z.infer<typeof WhiteboardLayerSchema>;
 
+export const MAX_INTERVIEWER_BOARD_ACTIONS = 12;
+export const MAX_BOARD_ACTION_POINTS = 8;
+export const MAX_BOARD_ACTION_CONTENT_CHARACTERS = 2_000;
+export const MAX_BOARD_ACTION_PURPOSE_CHARACTERS = 512;
+export const MAX_BOARD_ACTION_SHAPE_ID_CHARACTERS = 160;
+export const MAX_BOARD_ACTION_COORDINATE_MAGNITUDE = 1_000_000;
+export const MAX_BOARD_ACTION_OFFSET_MAGNITUDE = 2_000;
+export const MAX_BOARD_ACTION_GEOMETRY_DIMENSION = 100_000;
+
 const PositiveSafeShapeRevisionSchema = z.number().refine(
   (value) => Number.isSafeInteger(value) && value >= 1,
-  { message: "expectedShapeRevision must be a positive safe integer" }
+  { message: "Shape revision must be a positive safe integer" }
 );
+const BoardActionShapeIdSchema = z.string()
+  .min(1)
+  .max(MAX_BOARD_ACTION_SHAPE_ID_CHARACTERS)
+  .refine((value) => value === value.trim(), {
+    message: "Board action shape IDs must not contain surrounding whitespace"
+  });
+const BoardActionCoordinateSchema = z.number()
+  .refine(Number.isFinite, { message: "Board action coordinates must be finite" })
+  .min(-MAX_BOARD_ACTION_COORDINATE_MAGNITUDE)
+  .max(MAX_BOARD_ACTION_COORDINATE_MAGNITUDE);
+const BoardActionOffsetSchema = z.number()
+  .refine(Number.isFinite, { message: "Board action offsets must be finite" })
+  .min(-MAX_BOARD_ACTION_OFFSET_MAGNITUDE)
+  .max(MAX_BOARD_ACTION_OFFSET_MAGNITUDE);
+const BoardActionDimensionSchema = z.number()
+  .refine(Number.isFinite, { message: "Board action dimensions must be finite" })
+  .positive()
+  .max(MAX_BOARD_ACTION_GEOMETRY_DIMENSION);
 
-export const BoardActionSchema = z.object({
-  operation: z.enum([
-    "write_text", "write_equation", "draw_arrow", "circle", "highlight", "point_at", "erase_ai_annotation"
-  ]),
-  layer: z.literal("AI_ANNOTATION"),
-  content: z.string().optional(),
-  targetShapeId: z.string().refine(
-    (value) => value.trim().length > 0,
-    { message: "targetShapeId must be non-blank" }
-  ).optional(),
-  expectedShapeRevision: PositiveSafeShapeRevisionSchema.optional(),
-  annotationPurpose: z.string().refine(
-    (value) => value.trim().length > 0,
-    { message: "annotationPurpose must be non-blank" }
-  )
-}).strict().superRefine((action, context) => {
-  if (action.expectedShapeRevision !== undefined && action.targetShapeId === undefined) {
+export const BoardActionPointSchema = z.object({
+  x: BoardActionCoordinateSchema,
+  y: BoardActionCoordinateSchema
+}).strict();
+export type BoardActionPoint = z.infer<typeof BoardActionPointSchema>;
+
+export const BoardActionPlacementSchema = z.object({
+  anchorShapeId: BoardActionShapeIdSchema.optional(),
+  anchorRevision: PositiveSafeShapeRevisionSchema.optional(),
+  position: z.enum(["LEFT", "RIGHT", "ABOVE", "BELOW", "CENTER"]).optional(),
+  x: BoardActionCoordinateSchema.optional(),
+  y: BoardActionCoordinateSchema.optional(),
+  offsetX: BoardActionOffsetSchema.optional(),
+  offsetY: BoardActionOffsetSchema.optional()
+}).strict().superRefine((placement, context) => {
+  const anchored = placement.anchorShapeId !== undefined;
+  const hasX = placement.x !== undefined;
+  const hasY = placement.y !== undefined;
+  if (hasX !== hasY) {
     context.addIssue({
       code: "custom",
-      path: ["expectedShapeRevision"],
-      message: "expectedShapeRevision requires targetShapeId"
+      message: "Absolute board placement requires both x and y"
     });
+  }
+  if (anchored && (hasX || hasY)) {
+    context.addIssue({
+      code: "custom",
+      message: "Board placement must be either shape-relative or absolute, not both"
+    });
+  }
+  if (!anchored && !hasX) {
+    context.addIssue({
+      code: "custom",
+      message: "Board placement requires an anchor shape or absolute coordinates"
+    });
+  }
+  if (placement.anchorRevision !== undefined && !anchored) {
+    context.addIssue({
+      code: "custom",
+      path: ["anchorRevision"],
+      message: "anchorRevision requires anchorShapeId"
+    });
+  }
+  if (anchored && placement.anchorRevision === undefined) {
+    context.addIssue({
+      code: "custom",
+      path: ["anchorRevision"],
+      message: "Shape-relative placement requires the exact anchor revision"
+    });
+  }
+  if (anchored && placement.position === undefined) {
+    context.addIssue({
+      code: "custom",
+      path: ["position"],
+      message: "Shape-relative placement requires an explicit relative position"
+    });
+  }
+});
+export type BoardActionPlacement = z.infer<typeof BoardActionPlacementSchema>;
+
+const BoardActionBaseSchema = z.object({
+  operation: z.enum([
+    "write_text",
+    "write_equation",
+    "draw_arrow",
+    "circle",
+    "highlight",
+    "point_at",
+    "erase_ai_annotation",
+    "draw_segment",
+    "draw_arrow_between",
+    "draw_polyline",
+    "draw_rectangle",
+    "draw_ellipse"
+  ]),
+  layer: z.literal("AI_ANNOTATION"),
+  content: z.string().max(MAX_BOARD_ACTION_CONTENT_CHARACTERS).optional(),
+  targetShapeId: BoardActionShapeIdSchema.optional(),
+  expectedShapeRevision: PositiveSafeShapeRevisionSchema.optional(),
+  placement: BoardActionPlacementSchema.optional(),
+  points: z.array(BoardActionPointSchema).max(MAX_BOARD_ACTION_POINTS).optional(),
+  fromShapeId: BoardActionShapeIdSchema.optional(),
+  fromShapeRevision: PositiveSafeShapeRevisionSchema.optional(),
+  toShapeId: BoardActionShapeIdSchema.optional(),
+  toShapeRevision: PositiveSafeShapeRevisionSchema.optional(),
+  width: BoardActionDimensionSchema.optional(),
+  height: BoardActionDimensionSchema.optional(),
+  annotationPurpose: z.string()
+    .min(1)
+    .max(MAX_BOARD_ACTION_PURPOSE_CHARACTERS)
+    .refine((value) => value.trim().length > 0, {
+      message: "annotationPurpose must be non-blank"
+    })
+}).strict();
+
+export const BoardActionSchema = BoardActionBaseSchema.superRefine((action, context) => {
+  const issue = (path: string[], message: string): void => {
+    context.addIssue({ code: "custom", path, message });
+  };
+
+  if (action.expectedShapeRevision !== undefined && action.targetShapeId === undefined) {
+    issue(["expectedShapeRevision"], "expectedShapeRevision requires targetShapeId");
+  }
+  if (action.fromShapeRevision !== undefined && action.fromShapeId === undefined) {
+    issue(["fromShapeRevision"], "fromShapeRevision requires fromShapeId");
+  }
+  if (action.toShapeRevision !== undefined && action.toShapeId === undefined) {
+    issue(["toShapeRevision"], "toShapeRevision requires toShapeId");
+  }
+
+  const forbid = (field: keyof typeof action, allowed: boolean): void => {
+    if (!allowed && action[field] !== undefined) {
+      issue([String(field)], `${String(field)} is not valid for ${action.operation}`);
+    }
+  };
+
+  const isWrite = action.operation === "write_text" || action.operation === "write_equation";
+  const isTargetOverlay =
+    action.operation === "draw_arrow"
+    || action.operation === "circle"
+    || action.operation === "highlight"
+    || action.operation === "point_at"
+    || action.operation === "erase_ai_annotation";
+  const isPointGeometry = action.operation === "draw_segment" || action.operation === "draw_polyline";
+  const isBoxGeometry = action.operation === "draw_rectangle" || action.operation === "draw_ellipse";
+  const isArrowBetween = action.operation === "draw_arrow_between";
+
+  forbid("placement", isWrite || isBoxGeometry);
+  forbid("points", isPointGeometry);
+  forbid("fromShapeId", isArrowBetween);
+  forbid("fromShapeRevision", isArrowBetween);
+  forbid("toShapeId", isArrowBetween);
+  forbid("toShapeRevision", isArrowBetween);
+  forbid("width", isBoxGeometry);
+  forbid("height", isBoxGeometry);
+  forbid("targetShapeId", isWrite || isTargetOverlay);
+  forbid("expectedShapeRevision", isWrite || isTargetOverlay);
+
+  if (isPointGeometry) {
+    const length = action.points?.length ?? 0;
+    if (action.operation === "draw_segment" && length !== 2) {
+      issue(["points"], "draw_segment requires exactly two bounded points");
+    }
+    if (action.operation === "draw_polyline" && (length < 2 || length > MAX_BOARD_ACTION_POINTS)) {
+      issue(["points"], "draw_polyline requires between two and eight bounded points");
+    }
+  }
+  if (isBoxGeometry) {
+    if (action.placement === undefined) issue(["placement"], `${action.operation} requires placement`);
+    if (action.width === undefined) issue(["width"], `${action.operation} requires width`);
+    if (action.height === undefined) issue(["height"], `${action.operation} requires height`);
+  }
+  if (isArrowBetween) {
+    if (action.fromShapeId === undefined) issue(["fromShapeId"], "draw_arrow_between requires fromShapeId");
+    if (action.fromShapeRevision === undefined) issue(["fromShapeRevision"], "draw_arrow_between requires fromShapeRevision");
+    if (action.toShapeId === undefined) issue(["toShapeId"], "draw_arrow_between requires toShapeId");
+    if (action.toShapeRevision === undefined) issue(["toShapeRevision"], "draw_arrow_between requires toShapeRevision");
   }
 });
 export type BoardAction = z.infer<typeof BoardActionSchema>;
@@ -202,3 +364,66 @@ export const NormalizedBoardMutationSchema = z.object({
   }
 });
 export type NormalizedBoardMutation = z.infer<typeof NormalizedBoardMutationSchema>;
+
+export const MAX_BOARD_SCENE_SHAPES = 24;
+export const MAX_BOARD_SCENE_AI_ANNOTATIONS = 6;
+export const MAX_BOARD_SCENE_TEXT_CHARACTERS = 384;
+export const MAX_BOARD_SCENE_OBSERVATION_CHARACTERS = 384;
+export const MAX_BOARD_SCENE_ANNOTATION_PURPOSE_CHARACTERS = 160;
+export const MAX_BOARD_SCENE_BYTES = 12 * 1024;
+export const MIN_BOARD_SCENE_SEMANTIC_CONFIDENCE = 0.6;
+
+const BoardSceneTextSchema = z.string().max(MAX_BOARD_SCENE_TEXT_CHARACTERS);
+const BoardSceneObservationTextSchema = z.string()
+  .min(1)
+  .max(MAX_BOARD_SCENE_OBSERVATION_CHARACTERS);
+
+export const BoardSceneSemanticObservationSchema = z.object({
+  kind: z.enum([
+    "TEXT",
+    "EQUATION",
+    "DIAGRAM_RELATION",
+    "ARROW",
+    "LABEL",
+    "GENERAL_BOARD_DESCRIPTION"
+  ]),
+  interpretation: BoardSceneObservationTextSchema,
+  confidence: z.number().min(0).max(1),
+  sourceBoardRevision: BoardRevisionSchema
+}).strict();
+export type BoardSceneSemanticObservation = z.infer<typeof BoardSceneSemanticObservationSchema>;
+
+export const BoardSceneShapeSchema = z.object({
+  shapeId: BoardShapeIdSchema,
+  shapeRevision: PositiveSafeBoardShapeRevisionSchema,
+  type: AuthoritativeBoardShapeTypeSchema,
+  bounds: AuthoritativeBoardBoundsSchema,
+  text: BoardSceneTextSchema.optional(),
+  semanticObservation: BoardSceneSemanticObservationSchema.optional()
+}).strict();
+export type BoardSceneShape = z.infer<typeof BoardSceneShapeSchema>;
+
+export const BoardSceneAiAnnotationSchema = z.object({
+  deliveryId: z.string().min(1).max(MAX_BOARD_ACTION_SHAPE_ID_CHARACTERS),
+  operation: z.string().min(1).max(64),
+  purpose: z.string().min(1).max(MAX_BOARD_SCENE_ANNOTATION_PURPOSE_CHARACTERS),
+  targetShapeId: BoardShapeIdSchema.optional(),
+  targetShapeRevision: PositiveSafeBoardShapeRevisionSchema.optional()
+}).strict().superRefine((annotation, context) => {
+  if (annotation.targetShapeRevision !== undefined && annotation.targetShapeId === undefined) {
+    context.addIssue({
+      code: "custom",
+      path: ["targetShapeRevision"],
+      message: "AI annotation target revision requires targetShapeId"
+    });
+  }
+});
+export type BoardSceneAiAnnotation = z.infer<typeof BoardSceneAiAnnotationSchema>;
+
+export const BoardSceneContextSchema = z.object({
+  boardRevision: BoardRevisionSchema,
+  shapes: z.array(BoardSceneShapeSchema).max(MAX_BOARD_SCENE_SHAPES),
+  aiAnnotations: z.array(BoardSceneAiAnnotationSchema).max(MAX_BOARD_SCENE_AI_ANNOTATIONS)
+}).strict();
+export type BoardSceneContext = z.infer<typeof BoardSceneContextSchema>;
+
