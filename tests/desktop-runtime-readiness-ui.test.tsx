@@ -251,8 +251,13 @@ describe("desktop local AI readiness UX", () => {
 
   it("keeps New Interview usable when desktop local readiness is malformed", async () => {
     Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
+    const getLocalRuntimeStatus = vi.fn(async () => ({ protocolVersion: 999 }));
+    const refreshLocalRuntimeStatus = vi.fn(async () => {
+      throw new Error("New Interview must not live-reprobe local prerequisites");
+    });
     vi.stubGlobal("interviewDesktop", {
-      getLocalRuntimeStatus: vi.fn(async () => ({ protocolVersion: 999 }))
+      getLocalRuntimeStatus,
+      refreshLocalRuntimeStatus
     });
 
     const container = document.createElement("div");
@@ -302,6 +307,8 @@ describe("desktop local AI readiness UX", () => {
     );
     expect(startButton).not.toBeNull();
     expect(startButton?.disabled).toBe(false);
+    expect(getLocalRuntimeStatus).toHaveBeenCalledTimes(1);
+    expect(refreshLocalRuntimeStatus).not.toHaveBeenCalled();
 
     await act(async () => {
       root.unmount();
@@ -322,7 +329,11 @@ describe("desktop local AI readiness UX", () => {
       }
     });
     const getLocalRuntimeStatus = vi.fn(async () => current);
-    vi.stubGlobal("interviewDesktop", { getLocalRuntimeStatus });
+    const refreshLocalRuntimeStatus = vi.fn(async () => current);
+    vi.stubGlobal("interviewDesktop", {
+      getLocalRuntimeStatus,
+      refreshLocalRuntimeStatus
+    });
 
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -368,13 +379,16 @@ describe("desktop local AI readiness UX", () => {
       }
     });
 
+    refreshLocalRuntimeStatus.mockImplementationOnce(async () => current);
+
     await act(async () => {
       findButton("Re-check").click();
       await Promise.resolve();
       await Promise.resolve();
     });
 
-    expect(getLocalRuntimeStatus).toHaveBeenCalledTimes(2);
+    expect(getLocalRuntimeStatus).toHaveBeenCalledTimes(1);
+    expect(refreshLocalRuntimeStatus).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain("SETUP REQUIRED");
     expect(findButton("Install Python components").disabled).toBe(false);
 
