@@ -23,6 +23,7 @@ $installRoot = $null
 $userData = Join-Path $env:APPDATA "Interview App"
 $database = Join-Path $userData "data\interview-session.sqlite"
 $modelMarker = Join-Path $userData "data\model-assets\packaging-preserve.marker"
+$preferenceMarker = Join-Path $userData "packaging-preference-preserve.marker"
 $desktopShortcut = Join-Path ([Environment]::GetFolderPath("Desktop")) "Interview App.lnk"
 $startMenuShortcut = Join-Path ([Environment]::GetFolderPath("Programs")) "Interview App.lnk"
 $smokeProof = Join-Path $env:RUNNER_TEMP "InterviewApp-Prior-Smoke-Proof.json"
@@ -143,20 +144,30 @@ try {
   New-Item -ItemType Directory -Force (Split-Path $modelMarker) | Out-Null
   Set-Content -NoNewline -Path $modelMarker -Value "preserve-across-upgrade-and-uninstall"
   $markerHashBefore = (Get-FileHash -Algorithm SHA256 $modelMarker).Hash
+  Set-Content -NoNewline -Path $preferenceMarker -Value "preserve-user-preferences-across-upgrade-and-uninstall"
+  $preferenceHashBefore = (Get-FileHash -Algorithm SHA256 $preferenceMarker).Hash
 
   Run-Installer -Path $installerPath
   $upgradedExe = Resolve-InstalledExecutable
   if (-not $upgradedExe.Equals($installedExe, [StringComparison]::OrdinalIgnoreCase)) {
     throw "Versioned upgrade changed the stable per-user installation target"
   }
-  if (-not (Test-Path $database) -or -not (Test-Path $modelMarker)) {
-    throw "Upgrade/reinstall destroyed durable session/model-cache data"
+  if (
+    -not (Test-Path $database)
+    -or -not (Test-Path $modelMarker)
+    -or -not (Test-Path $preferenceMarker)
+  ) {
+    throw "Upgrade/reinstall destroyed durable session/model-cache/preference data"
   }
   if ((Get-FileHash -Algorithm SHA256 $database).Hash -ne $databaseHashBefore) {
     throw "Upgrade/reinstall modified the durable SQLite database"
   }
   if ((Get-FileHash -Algorithm SHA256 $modelMarker).Hash -ne $markerHashBefore) {
     throw "Upgrade/reinstall modified the model cache"
+  }
+
+  if ((Get-FileHash -Algorithm SHA256 $preferenceMarker).Hash -ne $preferenceHashBefore) {
+    throw "Upgrade/reinstall modified the per-user preference marker"
   }
 
   $currentProductVersion = (Get-Item $installedExe).VersionInfo.ProductVersion
@@ -196,14 +207,21 @@ try {
     throw "NSIS uninstaller failed with exit code $($uninstall.ExitCode)"
   }
   Wait-ForUninstallCleanup
-  if (-not (Test-Path $database) -or -not (Test-Path $modelMarker)) {
-    throw "Default uninstall deleted interview history/model-cache data"
+  if (
+    -not (Test-Path $database)
+    -or -not (Test-Path $modelMarker)
+    -or -not (Test-Path $preferenceMarker)
+  ) {
+    throw "Default uninstall deleted interview history/model-cache/preference data"
   }
   if ((Get-FileHash -Algorithm SHA256 $database).Hash -ne $databaseHashAfterUpgradeLaunch) {
     throw "Uninstall modified the durable SQLite database"
   }
   if ((Get-FileHash -Algorithm SHA256 $modelMarker).Hash -ne $markerHashBefore) {
     throw "Uninstall modified the model cache"
+  }
+  if ((Get-FileHash -Algorithm SHA256 $preferenceMarker).Hash -ne $preferenceHashBefore) {
+    throw "Uninstall modified the per-user preference marker"
   }
   $leftoverProcesses = @(Get-Process -Name "Interview App" -ErrorAction SilentlyContinue)
   if ($leftoverProcesses.Count -gt 0) {
