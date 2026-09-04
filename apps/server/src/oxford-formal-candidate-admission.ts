@@ -369,7 +369,10 @@ function findExplicitEuclidConstructedValue(
     .match(/[-+]?\d+|[a-z]+/gu) ?? [];
 
   for (let index = 0; index < tokens.length - 2; index += 1) {
-    if (tokens[index] !== "plus" || tokens[index + 1] !== "one") continue;
+    if (
+      tokens[index] !== "plus"
+      || (tokens[index + 1] !== "one" && tokens[index + 1] !== "1")
+    ) continue;
     const preceding = tokens.slice(Math.max(0, index - 12), index);
     if (!preceding.includes("product")) continue;
     const value = integerAfterAssignment(tokens, index + 2);
