@@ -892,8 +892,8 @@ describe("Real tldraw mounted browser integration", () => {
         expectedShapeRevision: 1
       });
     });
-    const aiId = adapter.getCanvasSnapshot().aiAnnotations.at(-1)?.id;
-    if (aiId === undefined) throw new Error("AI annotation was not created");
+    const aiId = adapter.getCanvasSnapshot().aiAnnotations.at(-1)?.physicalShapeIds[0];
+    if (aiId === undefined) throw new Error("AI annotation renderer shape was not created");
     expect(bridge.getShape(aiId)?.isLocked).toBe(true);
 
     const revisionBeforeProtectedPartial = adapter.getBoardRevision();
