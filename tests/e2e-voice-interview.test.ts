@@ -21,7 +21,9 @@ import {
   type SpeechRecognizer,
   type SpeechWorkerEvent,
   type SynthesizedPcm,
+  type TtsOutgoingMessage,
   type TtsSegmentSynthesisRequest,
+  type TtsWorkerOutputSink,
   type VadBackend
 } from "../packages/local-compute/src/index.js";
 import {
@@ -363,6 +365,24 @@ class BlockingIgnoringRecognizer implements SpeechRecognizer {
 
   public release(): void {
     this.releaseGate();
+  }
+}
+
+class TamperingTtsWorker extends TtsWorkerCore {
+  public override async handle(
+    input: unknown,
+    sink: TtsWorkerOutputSink
+  ) {
+    return super.handle(input, async (message: TtsOutgoingMessage) => {
+      if (message.type === "AUDIO_END") {
+        await sink({
+          ...message,
+          audioHash: "0".repeat(64)
+        });
+        return;
+      }
+      await sink(message);
+    });
   }
 }
 
@@ -847,6 +867,83 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
     synthesizer.release();
     controller.abort();
     await rendererPromise;
+  });
+
+  it("counts a schema-valid but aggregate-invalid completed TTS stream as failure", async () => {
+    server = await createAndStartServer({
+      host: "127.0.0.1",
+      commandPort: 0,
+      rendererStreamPort: 0,
+      voicePort: 0,
+      clientToken: TEST_CLIENT_TOKEN,
+      allowedOrigins: [TEST_ORIGIN],
+      databasePath: ":memory:",
+      voiceRuntime: {
+        speechWorker: new SpeechWorkerCore({
+          vadBackend: new ScriptedVadBackend([0]),
+          recognizer: new DeterministicFakeRecognizer()
+        }),
+        tts: {
+          worker: new TamperingTtsWorker(new DeterministicFakeSpeechSynthesizer()),
+          voice: "fake-neutral",
+          language: "en-US",
+          sampleRate: 24_000,
+          speed: 1
+        }
+      }
+    });
+
+    const sessionId = newSessionId();
+    const writer = server.registry.get(sessionId);
+    const turns = new TurnCoordinator(writer);
+    await turns.startSession(sixPeopleProblem);
+    await server.runtime.sessions.ensureRecovered(sessionId);
+    const { inputEpisodeId, turnId } = await turns.commitInput(
+      "I have a claim, but I have not justified it yet."
+    );
+    await turns.selectAction(turnId, sixPeopleProblem);
+    const { generationId } = await turns.startGeneration(
+      inputEpisodeId,
+      turnId,
+      "mock-model"
+    );
+    const safeProbe = "Why must that step be true?";
+    const validator = new DisclosureValidator(
+      new ClosedWorldDisclosureAnalyzer([safeProbe])
+    );
+    const source = await authorizeSafeProbe({
+      store: server.store,
+      sessionId,
+      writer,
+      turns,
+      inputEpisodeId,
+      turnId,
+      generationId,
+      safeProbe,
+      validator
+    });
+    await new DeliveryCoordinator(writer).markStarted(source.deliveryId);
+
+    const synthesis = server.runtime.voiceSynthesis;
+    if (synthesis === undefined) throw new Error("Expected voice synthesis coordinator");
+
+    await expect(
+      synthesis.synthesizeSentTextDelivery(sessionId, source.deliveryId)
+    ).resolves.toBeUndefined();
+
+    expect(Object.values(writer.getState().deliveries).filter(
+      (delivery) => delivery.content.medium === "AUDIO"
+    )).toHaveLength(0);
+    expect(server.runtime.audioAssets.inspect()).toEqual({ count: 0, bytes: 0 });
+
+    const performance = server.observability.read(sessionId);
+    expect(performance.summary?.local.tts).toMatchObject({
+      requests: 1,
+      successes: 0,
+      failures: 1,
+      cancellations: 0
+    });
+    expect(performance.summary?.local.tts.latency.count).toBe(1);
   });
 
   it("rejects late TTS output even when no cancellation reaches the synthesizer", async () => {
