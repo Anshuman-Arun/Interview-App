@@ -1046,7 +1046,7 @@ describe("Real tldraw mounted browser integration", () => {
       annotationPurpose: "must not erase student work",
       targetShapeId: studentId,
       expectedShapeRevision: 1
-    })).rejects.toThrow(/Refusing to erase shape/u);
+    })).rejects.toThrow(/targetShapeId is not valid for erase_ai_annotation/u);
     expect(bridge.getShape(studentId)).toBeDefined();
     expect(adapter.getBoardRevision()).toBe(beforeProtectedDelete);
 
