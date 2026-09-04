@@ -355,6 +355,15 @@ export class InterpretationCoordinator {
   private readonly verification: VerificationCoordinator;
   private readonly router: FormalProtocolRoutingRegistry;
   private readonly maxInFlight: number;
+  private readonly requestAdmission:
+    | ((request: FormalInterpretationRequest) => boolean)
+    | undefined;
+  private readonly candidateAdmission:
+    | ((
+        request: FormalInterpretationRequest,
+        candidate: FormalInterpretationCandidate
+      ) => boolean)
+    | undefined;
   private readonly maxCachedRequests: number;
   private readonly records = new Map<RequestId, RequestRecord>();
   private readonly diagnostics: InterpretationDiagnostic[] = [];
@@ -368,6 +377,13 @@ export class InterpretationCoordinator {
       readonly router?: FormalProtocolRoutingRegistry;
       readonly maxInFlight?: number;
       readonly maxCachedRequests?: number;
+      readonly requestAdmission?: (
+        request: FormalInterpretationRequest
+      ) => boolean;
+      readonly candidateAdmission?: (
+        request: FormalInterpretationRequest,
+        candidate: FormalInterpretationCandidate
+      ) => boolean;
     }
   ) {
     const options = InterpretationCoordinatorOptionsSchema.parse({
@@ -376,6 +392,20 @@ export class InterpretationCoordinator {
     });
     this.maxInFlight = options.maxInFlight;
     this.maxCachedRequests = options.maxCachedRequests;
+    if (
+      input?.requestAdmission !== undefined
+      && typeof input.requestAdmission !== "function"
+    ) {
+      throw new Error("Interpretation request admission must be a function");
+    }
+    if (
+      input?.candidateAdmission !== undefined
+      && typeof input.candidateAdmission !== "function"
+    ) {
+      throw new Error("Interpretation candidate admission must be a function");
+    }
+    this.requestAdmission = input?.requestAdmission;
+    this.candidateAdmission = input?.candidateAdmission;
     this.router = input?.router ?? new FormalProtocolRoutingRegistry(scopes);
     this.verification = new VerificationCoordinator(writer, scopes);
   }
@@ -500,6 +530,25 @@ export class InterpretationCoordinator {
     for (const protocol of request.allowedProtocols) {
       const route = this.router.resolve(protocol, request.target);
       if (!route.ok) return this.finishFailure(mapRouteFailure(route.reason, request.requestId, 0, true));
+    }
+
+    if (this.requestAdmission !== undefined) {
+      let admitted = false;
+      try {
+        admitted = this.requestAdmission(
+          deepFreeze(structuredClone(request))
+        );
+      } catch {
+        admitted = false;
+      }
+      if (!admitted) {
+        return this.finishFailure(failed(
+          "NO_SUPPORTED_INTERPRETATION",
+          "NO_INTERPRETATION",
+          0,
+          request.requestId
+        ));
+      }
     }
 
     if (this.isCancelled(record)) {
@@ -651,6 +700,19 @@ export class InterpretationCoordinator {
         return this.finishFailure(mapStatementFailure(statement.reason, request.requestId, candidateCount));
       }
 
+      if (this.candidateAdmission !== undefined) {
+        let candidateAdmitted = false;
+        try {
+          candidateAdmitted = this.candidateAdmission(
+            deepFreeze(structuredClone(request)),
+            deepFreeze(structuredClone(candidate))
+          );
+        } catch {
+          candidateAdmitted = false;
+        }
+        if (!candidateAdmitted) continue;
+      }
+
       const normalizedKey = `[${JSON.stringify(protocolKey(candidate.protocol))},${evidenceKeyIdentity(candidate.target)},${JSON.stringify(statement.canonicalStatement)}]`;
       const existing = admitted.get(normalizedKey);
       if (existing === undefined) {
@@ -670,6 +732,14 @@ export class InterpretationCoordinator {
       }
     }
 
+    if (admitted.size === 0) {
+      return this.finishFailure(failed(
+        "NO_SUPPORTED_INTERPRETATION",
+        "NO_INTERPRETATION",
+        0,
+        request.requestId
+      ));
+    }
     if (admitted.size !== 1) {
       return this.finishFailure(failed(
         "AMBIGUOUS",
