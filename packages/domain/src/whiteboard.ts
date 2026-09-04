@@ -27,6 +27,10 @@ const BoardActionShapeIdSchema = z.string()
   .refine((value) => value === value.trim(), {
     message: "Board action shape IDs must not contain surrounding whitespace"
   });
+const BoardActionAnnotationIdSchema = DeliveryIdSchema.refine(
+  (value) => value.length <= MAX_BOARD_ACTION_SHAPE_ID_CHARACTERS,
+  { message: "AI annotation ID exceeds the bounded identifier size" }
+);
 const BoardActionCoordinateSchema = z.number()
   .refine(Number.isFinite, { message: "Board action coordinates must be finite" })
   .min(-MAX_BOARD_ACTION_COORDINATE_MAGNITUDE)
@@ -174,7 +178,7 @@ const BoardActionBaseSchema = z.object({
   content: z.string().max(MAX_BOARD_ACTION_CONTENT_CHARACTERS).optional(),
   targetShapeId: BoardActionShapeIdSchema.optional(),
   expectedShapeRevision: PositiveSafeShapeRevisionSchema.optional(),
-  targetAnnotationId: DeliveryIdSchema.optional(),
+  targetAnnotationId: BoardActionAnnotationIdSchema.optional(),
   targetRegion: BoardActionTargetRegionSchema.optional(),
   placement: BoardActionPlacementSchema.optional(),
   points: z.array(BoardActionPointSchema).max(MAX_BOARD_ACTION_POINTS).optional(),
@@ -488,7 +492,7 @@ export const BoardSceneSemanticRelationSchema = z.object({
 export type BoardSceneSemanticRelation = z.infer<typeof BoardSceneSemanticRelationSchema>;
 
 export const BoardSceneAiAnnotationSchema = z.object({
-  annotationId: DeliveryIdSchema,
+  annotationId: BoardActionAnnotationIdSchema,
   operation: z.string().min(1).max(64),
   purpose: z.string().min(1).max(MAX_BOARD_SCENE_ANNOTATION_PURPOSE_CHARACTERS),
   content: BoardSceneTextSchema.optional(),
