@@ -714,13 +714,20 @@ async function runPackagedSmoke(
         }
         try {
           const status = await globalThis.interviewDesktop.getLocalRuntimeStatus();
+          const refreshedStatus = await globalThis.interviewDesktop.refreshLocalRuntimeStatus();
           resolve({
             mounted: true,
             headingVisible: readiness.textContent?.includes("Interview readiness") === true,
-            status
+            status,
+            refreshedStatus
           });
         } catch {
-          resolve({ mounted: true, headingVisible: true, status: null });
+          resolve({
+            mounted: true,
+            headingVisible: true,
+            status: null,
+            refreshedStatus: null
+          });
         }
       };
       void check();
@@ -735,26 +742,32 @@ async function runPackagedSmoke(
   }
   const readinessProof = firstRunReadiness as Record<string, unknown>;
   const runtimeStatus = readinessProof["status"];
+  const refreshedRuntimeStatus = readinessProof["refreshedStatus"];
   if (
     readinessProof["mounted"] !== true
     || readinessProof["headingVisible"] !== true
     || typeof runtimeStatus !== "object"
     || runtimeStatus === null
     || Array.isArray(runtimeStatus)
+    || typeof refreshedRuntimeStatus !== "object"
+    || refreshedRuntimeStatus === null
+    || Array.isArray(refreshedRuntimeStatus)
   ) {
     throw new Error("Packaged first-run readiness screen did not initialize");
   }
-  const statusRecord = runtimeStatus as Record<string, unknown>;
-  const pythonStatus = statusRecord["python"];
-  if (
-    statusRecord["protocolVersion"] !== 1
-    || typeof pythonStatus !== "object"
-    || pythonStatus === null
-    || Array.isArray(pythonStatus)
-    || (pythonStatus as Record<string, unknown>)["state"] !== "UNAVAILABLE"
-    || (pythonStatus as Record<string, unknown>)["reasonCode"] !== "PYTHON_RUNTIME_UNAVAILABLE"
-  ) {
-    throw new Error("Packaged first-run missing-Python readiness was not fail-closed");
+  for (const candidate of [runtimeStatus, refreshedRuntimeStatus]) {
+    const statusRecord = candidate as Record<string, unknown>;
+    const pythonStatus = statusRecord["python"];
+    if (
+      statusRecord["protocolVersion"] !== 1
+      || typeof pythonStatus !== "object"
+      || pythonStatus === null
+      || Array.isArray(pythonStatus)
+      || (pythonStatus as Record<string, unknown>)["state"] !== "UNAVAILABLE"
+      || (pythonStatus as Record<string, unknown>)["reasonCode"] !== "PYTHON_RUNTIME_UNAVAILABLE"
+    ) {
+      throw new Error("Packaged first-run missing-Python readiness was not fail-closed");
+    }
   }
 
   const token = backendConfig.clientToken;
