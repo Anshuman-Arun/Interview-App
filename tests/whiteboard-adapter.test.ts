@@ -117,7 +117,7 @@ describe("TldrawWhiteboardAdapter & AI Overlay Subsystem", () => {
     });
   });
 
-  describe("2. Non-Destructive AI Overlay Actions (All 7 Operations)", () => {
+  describe("2. Non-Destructive AI Overlay Actions", () => {
     it("renders 'circle' overlay enclosing target bounds with violet dashed stroke", async () => {
       const editor = new InMemoryTldrawEditor();
       const adapter = new TldrawWhiteboardAdapter(editor);
@@ -420,6 +420,145 @@ describe("TldrawWhiteboardAdapter & AI Overlay Subsystem", () => {
       const shapesAfter = editor.getCurrentPageShapes();
       expect(shapesAfter).toHaveLength(1);
       expect(shapesAfter[0]?.props?.["text"]).toBe("First hint");
+    });
+  });
+
+  describe("2b. Collaborative Geometry & Placement", () => {
+    it("places a short equation relative to an exact student shape revision", async () => {
+      const editor = new InMemoryTldrawEditor();
+      const adapter = new TldrawWhiteboardAdapter(editor);
+      const target = adapter.createStudentShape({
+        type: "text",
+        x: 100,
+        y: 100,
+        props: { w: 120, h: 40, text: "x^2 + y^2 = 1" }
+      });
+
+      await adapter.applyAiOverlayAction({
+        operation: "write_equation",
+        layer: "AI_ANNOTATION",
+        content: "y^2 = 1 - x^2",
+        placement: {
+          anchorShapeId: target.id,
+          anchorRevision: 1,
+          position: "RIGHT",
+          offsetX: 10,
+          offsetY: 5
+        },
+        annotationPurpose: "write one auxiliary relation"
+      });
+
+      const annotation = editor.getCurrentPageShapes()
+        .find((item) => item.id.startsWith("shape:ai_equation_"));
+      expect(annotation?.x).toBe(246);
+      expect(annotation?.y).toBe(105);
+      expect(annotation?.props?.["text"]).toBe("y^2 = 1 - x^2");
+      expect(editor.getShape(target.id)?.meta?.["shapeRevision"]).toBe(1);
+    });
+
+    it("renders segment, arrow-between, polyline, rectangle, and ellipse as AI-only shapes", async () => {
+      const editor = new InMemoryTldrawEditor();
+      const adapter = new TldrawWhiteboardAdapter(editor);
+      const left = adapter.createStudentShape({
+        type: "geo",
+        x: 0,
+        y: 0,
+        props: { w: 40, h: 40 }
+      });
+      const right = adapter.createStudentShape({
+        type: "geo",
+        x: 200,
+        y: 100,
+        props: { w: 40, h: 40 },
+        shapeRevision: 3
+      });
+      const studentBefore = editor.getCurrentPageShapes()
+        .filter((item) => item.meta?.["layer"] === "STUDENT")
+        .map((item) => JSON.stringify(item));
+
+      await adapter.applyAiOverlayAction({
+        operation: "draw_segment",
+        layer: "AI_ANNOTATION",
+        points: [{ x: 10, y: 20 }, { x: 80, y: 60 }],
+        annotationPurpose: "mark an auxiliary segment"
+      });
+      await adapter.applyAiOverlayAction({
+        operation: "draw_arrow_between",
+        layer: "AI_ANNOTATION",
+        fromShapeId: left.id,
+        fromShapeRevision: 1,
+        toShapeId: right.id,
+        toShapeRevision: 3,
+        annotationPurpose: "compare these two objects"
+      });
+      await adapter.applyAiOverlayAction({
+        operation: "draw_polyline",
+        layer: "AI_ANNOTATION",
+        points: [{ x: 0, y: 0 }, { x: 20, y: 30 }, { x: 50, y: 10 }],
+        annotationPurpose: "sketch a two-segment path"
+      });
+      await adapter.applyAiOverlayAction({
+        operation: "draw_rectangle",
+        layer: "AI_ANNOTATION",
+        placement: { x: 300, y: 150 },
+        width: 80,
+        height: 40,
+        annotationPurpose: "sketch an auxiliary rectangle"
+      });
+      await adapter.applyAiOverlayAction({
+        operation: "draw_ellipse",
+        layer: "AI_ANNOTATION",
+        placement: {
+          anchorShapeId: right.id,
+          anchorRevision: 3,
+          position: "BELOW"
+        },
+        width: 60,
+        height: 30,
+        annotationPurpose: "sketch an auxiliary ellipse"
+      });
+
+      const all = editor.getCurrentPageShapes();
+      const ai = all.filter((item) => item.meta?.["layer"] === "AI_ANNOTATION");
+      expect(ai).toHaveLength(7);
+      expect(ai.every((item) => item.meta?.["origin"] === "AI")).toBe(true);
+      const studentAfter = all
+        .filter((item) => item.meta?.["layer"] === "STUDENT")
+        .map((item) => JSON.stringify(item));
+      expect(studentAfter).toEqual(studentBefore);
+    });
+
+    it("fails closed when a placement anchor or arrow endpoint revision is stale", async () => {
+      const editor = new InMemoryTldrawEditor();
+      const adapter = new TldrawWhiteboardAdapter(editor);
+      const a = adapter.createStudentShape({ type: "geo", x: 0, y: 0 });
+      const b = adapter.createStudentShape({ type: "geo", x: 100, y: 0 });
+      adapter.updateStudentShape(a.id, { x: 1 });
+
+      await expect(adapter.applyAiOverlayAction({
+        operation: "write_text",
+        layer: "AI_ANNOTATION",
+        content: "stale",
+        placement: {
+          anchorShapeId: a.id,
+          anchorRevision: 1,
+          position: "RIGHT"
+        },
+        annotationPurpose: "stale placement"
+      })).rejects.toThrow(StaleShapeRevisionError);
+
+      await expect(adapter.applyAiOverlayAction({
+        operation: "draw_arrow_between",
+        layer: "AI_ANNOTATION",
+        fromShapeId: a.id,
+        fromShapeRevision: 1,
+        toShapeId: b.id,
+        toShapeRevision: 1,
+        annotationPurpose: "stale arrow"
+      })).rejects.toThrow(StaleShapeRevisionError);
+
+      expect(editor.getCurrentPageShapes()
+        .filter((item) => item.meta?.["layer"] === "AI_ANNOTATION")).toHaveLength(0);
     });
   });
 
