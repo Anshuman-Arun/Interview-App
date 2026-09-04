@@ -486,7 +486,15 @@ export const App: React.FC = () => {
   const hasActiveInterview =
     session.isSessionStarted && session.sessionStatus === "ACTIVE";
   const storedActiveSessions = session.availableSessions.filter(
-    (storedSession) => storedSession.status === "ACTIVE"
+    (storedSession) =>
+      storedSession.status === "ACTIVE"
+      && !(
+        storedSession.sessionId === session.sessionId
+        && (
+          session.sessionStatus === "COMPLETED"
+          || session.sessionStatus === "ARCHIVED"
+        )
+      )
   );
   const storedActiveSession =
     storedActiveSessions.length === 1 ? storedActiveSessions[0] ?? null : null;
