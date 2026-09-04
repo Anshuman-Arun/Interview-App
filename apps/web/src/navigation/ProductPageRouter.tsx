@@ -175,6 +175,7 @@ export function ProductPageRouter({
           providerOptions={providerOptions}
           providerOptionsLoading={providerOptionsLoading}
           providerOptionsError={providerOptionsError}
+          activeSessionCount={activeSessionCount}
           onRefreshProviderOptions={onRefreshProviderOptions}
           onStartInterview={onEnterInterview}
         />
