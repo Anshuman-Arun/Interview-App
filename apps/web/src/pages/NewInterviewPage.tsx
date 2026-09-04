@@ -195,6 +195,14 @@ export function NewInterviewPage({
   const submit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     setFormError(null);
+    if (startPending || catalogLoading || providerOptionsLoading) {
+      setFormError("Launch readiness is still being verified. Try again when checking finishes.");
+      return;
+    }
+    if (catalogError !== null || providerOptionsError !== null) {
+      setFormError("Resolve launch readiness before starting the interview.");
+      return;
+    }
     if (activeSessionCount > 1) {
       setFormError("Multiple interviews are active. Resolve them from Sessions before starting another.");
       return;
