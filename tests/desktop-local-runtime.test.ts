@@ -377,6 +377,44 @@ describe("desktop local model runtime", () => {
     });
   });
 
+  it("revalidates a previously ready Python runtime instead of trusting cached readiness", async () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-python-ready-recheck-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+
+    const mutable = composition as unknown as {
+      pythonStatus: { readonly state: "READY" } | {
+        readonly state: "UNAVAILABLE";
+        readonly reasonCode: string;
+      };
+      workerScriptIsSafe(): Promise<boolean>;
+      resolveCompatiblePythonExecutable(signal?: AbortSignal): Promise<string | undefined>;
+      diagnosePythonRuntime(signal?: AbortSignal): Promise<
+        | "PYTHON_RUNTIME_UNAVAILABLE"
+        | "PYTHON_RUNTIME_INCOMPATIBLE"
+        | "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+      >;
+    };
+    mutable.pythonStatus = { state: "READY" };
+    mutable.workerScriptIsSafe = async () => true;
+    mutable.resolveCompatiblePythonExecutable = async () => undefined;
+    mutable.diagnosePythonRuntime = async () => "PYTHON_RUNTIME_UNAVAILABLE";
+
+    await expect(
+      composition.refreshPythonRuntimePrerequisite()
+    ).resolves.toBeUndefined();
+
+    expect(composition.getPythonRuntimeStatus()).toEqual({
+      state: "UNAVAILABLE",
+      reasonCode: "PYTHON_RUNTIME_UNAVAILABLE"
+    });
+  });
+
   it("re-probes a previously missing Python prerequisite without restarting the app", async () => {
     const composition = new DesktopLocalRuntimeComposition({
       appDataRoot: temporaryRoot("desktop-python-recheck-"),
