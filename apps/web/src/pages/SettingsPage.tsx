@@ -374,7 +374,7 @@ export function SettingsPage({
             <div>
               <span>Reasoning</span>
               <strong>{antigravity?.providerDisplayName ?? "Antigravity CLI"}</strong>
-              <small>{antigravity?.modelDisplayName ?? "Gemini 3.7 Flash Medium"}</small>
+              <small>{antigravity?.modelDisplayName ?? "No server-published model"}</small>
             </div>
             <div>
               <b data-state={reasoningReady ? "ready" : "muted"}>
