@@ -201,11 +201,17 @@ describe("editorial v10 adversarial UI states", () => {
     expect(app).toContain('className="board-appbar__clear-action"');
     expect(app).toContain('aria-haspopup="dialog"');
     expect(app).toMatch(
+      /setCompactPane\("interview"\);[\s\S]{0,100}setPaneFocus\("split"\);[\s\S]{0,100}\}, \[session\.sessionId\]\);/u
+    );
+    expect(app).toMatch(
       /app-header__board-state"[\s\S]{0,100}data-sync=\{session\.whiteboardSync\.status\}/u
     );
 
     expect(frameCss).not.toContain(".product-frame__nav::before");
     expect(editorialCss).toContain(".board-appbar__layout-action");
+    expect(editorialCss).toMatch(
+      /\.expressive-home__hero\s*\{[^}]*overflow:\s*visible;/u
+    );
     expect(editorialCss).not.toContain(
       ".live-pane-heading button,\n  .board-appbar__actions button {\n    display: none;"
     );
@@ -232,5 +238,12 @@ describe("editorial v10 adversarial UI states", () => {
       expect(source).not.toContain("onClick={() => void onRefresh()}");
       expect(source).toContain("onRefresh().catch(() => undefined)");
     }
+
+    const quantShell = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/quant/QuantSessionWorkspace.tsx"),
+      "utf8"
+    );
+    expect(quantShell).toContain("data-connected={String(connected)}");
+    expect(quantShell).toContain('connected ? "Deterministic state" : "Disconnected"');
   });
 });
