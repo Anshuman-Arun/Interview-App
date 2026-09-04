@@ -326,11 +326,8 @@ export function SettingsPage({
 
   const recheckAll = useCallback(async (): Promise<void> => {
     if (setupOperationInFlightRef.current) return;
-    const providerCheck = onRefreshProviderOptions?.().catch(() => undefined);
-    await Promise.all([
-      refreshRuntime(true),
-      providerCheck ?? Promise.resolve()
-    ]);
+    await refreshRuntime(true);
+    await onRefreshProviderOptions?.().catch(() => undefined);
   }, [onRefreshProviderOptions, refreshRuntime]);
 
   const finishSetup = (): void => {
