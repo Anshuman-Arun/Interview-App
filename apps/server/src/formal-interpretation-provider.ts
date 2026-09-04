@@ -18,10 +18,8 @@ import {
 import { resolveSessionStateComposition } from "./interview-session-composition.js";
 import type { ProviderRuntimeResolver } from "./provider-runtime.js";
 import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
-import {
-  SessionObservability,
-  serializedApplicationBytes
-} from "./session-observability.js";
+import { serializedApplicationBytes } from "./session-observability.js";
+import type { SessionObservability } from "./session-observability.js";
 
 export class ProviderBackedFormalInterpretationProvider
 implements FormalInterpretationProvider {
