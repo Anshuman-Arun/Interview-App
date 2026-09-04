@@ -2992,3 +2992,190 @@ summary:focus-visible,
     grid-template-columns: 1fr;
   }
 }
+
+
+/* New Interview class aliases retained by the existing configuration component. */
+.new-interview__choice {
+  min-height: 58px;
+  padding: 14px 14px 6px;
+  border: 1px solid var(--rule-soft);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--paper-hi) 45%, transparent);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.new-interview__choice:hover:not(:disabled) {
+  border-color: var(--rule);
+  background: color-mix(in srgb, var(--paper-hi) 80%, transparent);
+}
+
+.new-interview__choice[aria-pressed="true"] {
+  border-color: var(--ink);
+  background: var(--paper-hi);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.new-interview__choice:disabled {
+  cursor: default;
+  opacity: .38;
+}
+
+.new-interview__choice > span {
+  color: var(--faint);
+  font: 500 7px/1 var(--font-mono);
+  text-transform: uppercase;
+}
+
+.new-interview__choice strong {
+  display: block;
+  margin-top: 12px;
+  font: 500 16px/1.05 var(--font-display);
+}
+
+.new-interview__select-wrap {
+  position: relative;
+  min-width: 0;
+}
+
+.new-interview__select-wrap select {
+  width: 100%;
+  height: 39px;
+  padding: 0 34px 0 11px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  outline: 0;
+  appearance: none;
+  background: var(--paper-hi);
+  color: var(--ink);
+  font: 500 10px/1 var(--font-ui);
+}
+
+.new-interview__select-wrap > i {
+  position: absolute;
+  top: 50%;
+  right: 11px;
+  color: var(--muted);
+  font: 500 11px/1 var(--font-ui);
+  font-style: normal;
+  pointer-events: none;
+  transform: translateY(-55%);
+}
+
+.new-interview__select-wrap select:focus {
+  border-color: var(--accent);
+}
+
+.new-interview__duration small {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  color: var(--faint);
+  font: 500 7px/1 var(--font-mono);
+  transform: translateY(-50%);
+}
+
+.new-interview__provider-card > header > div {
+  display: grid;
+  gap: 3px;
+}
+
+.new-interview__provider-card > header > div strong {
+  color: var(--ink);
+  font: 500 10px/1 var(--font-ui);
+}
+
+.new-interview__provider-card > header > div small {
+  color: var(--faint);
+  font: 400 7px/1 var(--font-mono);
+}
+
+.new-interview__provider-main {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.new-interview__provider-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.new-interview__provider-facts span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  font: 500 8px/1.35 var(--font-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.new-interview__provider-facts b {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--faint);
+  font: 600 6px/1 var(--font-mono);
+  letter-spacing: .06em;
+}
+
+.new-interview__provider-main .new-interview__unavailable {
+  margin: 3px -13px -14px;
+}
+
+.new-interview__session-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, .55fr);
+  gap: 16px;
+  margin: 20px 0 0 46px;
+}
+
+.new-interview__session-fields .new-interview__segments {
+  margin: 0;
+}
+
+.new-interview__input-note {
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule-soft);
+}
+
+.new-interview__input-note span {
+  color: var(--faint);
+  font: 600 7px/1 var(--font-mono);
+  text-transform: uppercase;
+}
+
+.new-interview__input-note strong {
+  color: var(--ink-2);
+  font: 500 9px/1.35 var(--font-ui);
+}
+
+.new-interview__slip > p {
+  min-height: 27px;
+  margin: 0;
+  color: var(--muted);
+  font: 400 9px/1.5 var(--font-ui);
+}
+
+.new-interview__ready-note {
+  align-items: flex-start;
+}
+
+.new-interview__ready-note > span {
+  min-width: 0;
+}
+
+@media (max-width: 760px) {
+  .new-interview__session-fields {
+    grid-template-columns: 1fr;
+    margin-left: 0;
+  }
+
+  .new-interview__input-note {
+    padding: 10px 0 0;
+    border-top: 1px solid var(--rule-soft);
+    border-left: 0;
+  }
+}
