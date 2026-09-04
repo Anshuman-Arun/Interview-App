@@ -135,6 +135,32 @@ function providerReason(reason: ProviderLaunchAvailabilityReason | undefined): s
   }
 }
 
+function reasoningProviderFailure(option: ProviderLaunchOption): string {
+  if (isAntigravity(option)) return providerReason(option.reason);
+  const label = option.providerDisplayName;
+  switch (option.reason) {
+    case "CREDENTIALS_REQUIRED":
+      return `Authenticate ${label}, then re-check.`;
+    case "DISABLED":
+      return `${label} is disabled by runtime configuration.`;
+    case "RUNTIME_CONFIGURATION_UNAVAILABLE":
+      return `${label} runtime configuration is unavailable.`;
+    case "RUNTIME_DEPENDENCY_UNAVAILABLE":
+      return `${label} runtime dependencies are unavailable.`;
+    case "POLICY_UNAVAILABLE":
+      return `${label} safety policy could not be verified.`;
+    case "POLICY_DENIED":
+      return `${label} is denied by the current safety policy.`;
+    case "CAPABILITY_UNAVAILABLE":
+      return `${label} does not expose the required reasoning capability.`;
+    case "PROVIDER_UNAVAILABLE":
+      return `${label} is not currently executable.`;
+    case "UNKNOWN":
+    default:
+      return `${label} readiness could not be verified.`;
+  }
+}
+
 function setupActionLabel(
   noun: "voice models" | "vision model",
   setup: DesktopModelSetupStatus | undefined,
@@ -227,9 +253,14 @@ export function SettingsPage({
   const antigravity = antigravityOptions.find(
     (option) => option.availability === "AVAILABLE"
   ) ?? antigravityOptions[0];
+  const availableReasoningProvider = providerOptions.find(
+    (option) => option.availability === "AVAILABLE"
+  );
+  const reasoningProvider =
+    availableReasoningProvider ?? antigravity ?? providerOptions[0];
   const reasoningReady = !providerOptionsLoading
     && providerOptionsError === null
-    && antigravity?.availability === "AVAILABLE";
+    && availableReasoningProvider !== undefined;
   const voiceReady = runtimeStatus?.speech.state === "READY"
     && runtimeStatus.tts.state === "READY";
   const visionReady = runtimeStatus?.vision.state === "READY";
@@ -383,8 +414,8 @@ export function SettingsPage({
           <div className="expressive-settings__status-row">
             <div>
               <span>Reasoning</span>
-              <strong>{antigravity?.providerDisplayName ?? "Antigravity CLI"}</strong>
-              <small>{antigravity?.modelDisplayName ?? "No server-published model"}</small>
+              <strong>{reasoningProvider?.providerDisplayName ?? "Reasoning provider"}</strong>
+              <small>{reasoningProvider?.modelDisplayName ?? "No server-published model"}</small>
             </div>
             <div>
               <b data-state={reasoningReady ? "ready" : "muted"}>
@@ -397,9 +428,9 @@ export function SettingsPage({
               {!reasoningReady && !providerOptionsLoading && (
                 <small>
                   {providerOptionsError
-                    ?? (antigravity === undefined
-                      ? "Antigravity is not registered in the current server runtime."
-                      : providerReason(antigravity.reason))}
+                    ?? (reasoningProvider === undefined
+                      ? "No reasoning provider is registered in the current server runtime."
+                      : reasoningProviderFailure(reasoningProvider))}
                 </small>
               )}
             </div>
