@@ -3172,3 +3172,50 @@ summary:focus-visible,
     border-left: 0;
   }
 }
+
+
+/* Adversarial compact-state hardening. The app supports extreme Electron zoom,
+   so the live header must remain operable at very small effective widths. */
+@media (max-width: 720px) {
+  .app-header__connection,
+  .app-header__board-state,
+  .app-header__streaming {
+    display: none !important;
+  }
+
+  .app-header__actions {
+    min-width: 0;
+  }
+
+  .app-header__session-actions {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 520px) {
+  .app-header {
+    gap: 6px;
+    padding-right: 9px !important;
+    padding-left: 9px !important;
+  }
+
+  .app-header__identity-copy {
+    display: none;
+  }
+
+  .app-header__session-actions > .app-header__quiet:first-child {
+    display: none;
+  }
+
+  .live-end-popover {
+    position: fixed;
+    top: 66px;
+    right: 10px;
+    left: 10px;
+    width: auto;
+  }
+
+  .product-frame__status-chip {
+    display: none;
+  }
+}
