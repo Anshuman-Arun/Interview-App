@@ -336,7 +336,7 @@ export function NewInterviewPage({
             <span>03</span>
             <div>
               <h2>Session controls</h2>
-              <p>Duration is a planning reminder only; reaching it never ends candidate work automatically.</p>
+              <p>These values are persisted as part of the authoritative session configuration.</p>
             </div>
           </div>
           <div className="new-interview__fields">
