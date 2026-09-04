@@ -18,12 +18,17 @@ import {
 import { resolveSessionStateComposition } from "./interview-session-composition.js";
 import type { ProviderRuntimeResolver } from "./provider-runtime.js";
 import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
+import {
+  SessionObservability,
+  serializedApplicationBytes
+} from "./session-observability.js";
 
 export class ProviderBackedFormalInterpretationProvider
 implements FormalInterpretationProvider {
   public constructor(
     private readonly sessions: SessionRecoveryCoordinator,
-    private readonly providerRuntime: ProviderRuntimeResolver
+    private readonly providerRuntime: ProviderRuntimeResolver,
+    private readonly observability?: SessionObservability
   ) {}
 
   public async interpret(
@@ -126,17 +131,43 @@ implements FormalInterpretationProvider {
       ) {
         return abstain(request);
       }
+      const executionInput = {
+        request,
+        publicProblem: {
+          id: composition.problem.id,
+          version: composition.problem.version,
+          prompt: composition.problem.public.prompt,
+          givenInformation: composition.problem.public.givenInformation
+        },
+        signal
+      };
+      const telemetry = this.observability?.beginRemoteOperation({
+        sessionId: request.sessionId,
+        operation: "FORMAL_INTERPRETATION",
+        providerId: resolved.providerId,
+        modelId: resolved.modelId
+      });
+      telemetry?.setSizes({
+        requestBytes: serializedApplicationBytes({
+          request: executionInput.request,
+          publicProblem: executionInput.publicProblem
+        }),
+        compiledContextBytes: serializedApplicationBytes(executionInput.request)
+      });
       try {
-        return await adapter.interpret({
-          request,
-          publicProblem: {
-            id: composition.problem.id,
-            version: composition.problem.version,
-            prompt: composition.problem.public.prompt,
-            givenInformation: composition.problem.public.givenInformation
-          },
-          signal
-        });
+        const result = await adapter.interpret(executionInput);
+        telemetry?.setSizes({ responseBytes: serializedApplicationBytes(result) });
+        const parsedResult = InterpretationProviderResultSchema.safeParse(result);
+        telemetry?.finish(
+          signal.aborted
+            ? "CANCELLED"
+            : parsedResult.success && parsedResult.data.candidates.length === 0
+              ? "ABSTAINED"
+              : parsedResult.success
+                ? "SUCCESS"
+                : "MALFORMED"
+        );
+        return result;
       } catch (error) {
         if (
           error instanceof AntigravityCliFormalInterpretationError
@@ -145,8 +176,10 @@ implements FormalInterpretationProvider {
             || error.code === "INVALID_RUNTIME"
           )
         ) {
+          telemetry?.finish(signal.aborted ? "CANCELLED" : "PROVIDER_UNAVAILABLE");
           return abstain(request);
         }
+        telemetry?.finish(signal.aborted ? "CANCELLED" : "FAILED");
         throw error;
       }
     } finally {
