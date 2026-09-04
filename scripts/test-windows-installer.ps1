@@ -152,11 +152,7 @@ try {
   if (-not $upgradedExe.Equals($installedExe, [StringComparison]::OrdinalIgnoreCase)) {
     throw "Versioned upgrade changed the stable per-user installation target"
   }
-  if (
-    -not (Test-Path $database)
-    -or -not (Test-Path $modelMarker)
-    -or -not (Test-Path $preferenceMarker)
-  ) {
+  if (-not (Test-Path $database) -or -not (Test-Path $modelMarker) -or -not (Test-Path $preferenceMarker)) {
     throw "Upgrade/reinstall destroyed durable session/model-cache/preference data"
   }
   if ((Get-FileHash -Algorithm SHA256 $database).Hash -ne $databaseHashBefore) {
@@ -207,11 +203,7 @@ try {
     throw "NSIS uninstaller failed with exit code $($uninstall.ExitCode)"
   }
   Wait-ForUninstallCleanup
-  if (
-    -not (Test-Path $database)
-    -or -not (Test-Path $modelMarker)
-    -or -not (Test-Path $preferenceMarker)
-  ) {
+  if (-not (Test-Path $database) -or -not (Test-Path $modelMarker) -or -not (Test-Path $preferenceMarker)) {
     throw "Default uninstall deleted interview history/model-cache/preference data"
   }
   if ((Get-FileHash -Algorithm SHA256 $database).Hash -ne $databaseHashAfterUpgradeLaunch) {
