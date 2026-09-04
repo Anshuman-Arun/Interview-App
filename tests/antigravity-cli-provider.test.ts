@@ -603,6 +603,7 @@ describe("Antigravity CLI one-turn protocol", () => {
     expect(prompt).toContain("fallible observations");
     expect(prompt).toContain("not authoritative correctness evidence");
     expect(prompt).toContain("exact supplied revision");
+    expect(prompt).toContain("do not encode a student target indirectly");
     expect(prompt).toContain("do not dump a solution");
     expect(prompt).toContain('"shapeId":"shape:eq"');
     await session.close();
