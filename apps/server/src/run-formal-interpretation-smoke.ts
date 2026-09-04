@@ -39,7 +39,7 @@ const corpus = Object.freeze([
   },
   {
     problemId: "oxford-triangle-medians",
-    text: "The centroid lies two thirds of the way from a vertex along each median, giving the 2 to 1 ratio."
+    text: "The centroid lies two thirds of the way from a vertex, leaving one third; two thirds divided by one third is two, giving the 2 to 1 ratio."
   },
   {
     problemId: "oxford-divisibility-chain",
