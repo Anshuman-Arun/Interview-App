@@ -231,11 +231,7 @@ export function isOxfordFormalCandidateTargetAdmissible(input: {
 
     switch (profile.target.subject.claimId) {
       case "listed-prime-remainder":
-        return claim.kind === "CONGRUENCE"
-          && (
-            isIntegerLiteral(claim.left, "1")
-            || isIntegerLiteral(claim.right, "1")
-          );
+        return isEuclidRemainderOneClaim(claim, sourceNumbers);
       case "prefix-residue-arithmetic":
         return isPrefixResidueArithmeticClaim(claim);
       case "divisibility-step":
@@ -333,6 +329,43 @@ function collectRationalNumbers(
       }
       return;
   }
+}
+
+function isEuclidRemainderOneClaim(
+  claim: ReturnType<typeof ModularArithmeticInterpretationSchema.parse>["claim"],
+  sourceNumbers: ReadonlySet<string>
+): boolean {
+  if (claim.kind !== "CONGRUENCE") return false;
+  let constructedValue: string | undefined;
+  if (isIntegerLiteral(claim.left, "1") && claim.right.kind === "INTEGER") {
+    constructedValue = claim.right.value;
+  } else if (
+    isIntegerLiteral(claim.right, "1")
+    && claim.left.kind === "INTEGER"
+  ) {
+    constructedValue = claim.left.value;
+  }
+  if (constructedValue === undefined || constructedValue === claim.modulus) {
+    return false;
+  }
+  const maximum = maximumPositiveInteger(sourceNumbers);
+  return maximum !== undefined && constructedValue === maximum;
+}
+
+function maximumPositiveInteger(
+  values: ReadonlySet<string>
+): string | undefined {
+  let maximum: bigint | undefined;
+  for (const value of values) {
+    try {
+      const parsed = BigInt(value);
+      if (parsed <= 0n || (maximum !== undefined && parsed <= maximum)) continue;
+      maximum = parsed;
+    } catch {
+      return undefined;
+    }
+  }
+  return maximum?.toString();
 }
 
 function isPrefixResidueArithmeticClaim(
