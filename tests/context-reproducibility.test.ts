@@ -35,7 +35,7 @@ describe("generation context reproducibility", () => {
     if (!compiled.value.compiled) throw new Error("Expected context compilation");
     expect(compiled.value.manifest).toMatchObject({
       schemaVersion: 1,
-      compilerVersion: "phase0-safe-context@2",
+      compilerVersion: "phase0-safe-context@3",
       hashAlgorithm: "SHA-256",
       generationId: harness.generationId,
       problemId: sixPeopleProblem.id,
