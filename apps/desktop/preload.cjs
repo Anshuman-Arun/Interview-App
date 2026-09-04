@@ -223,6 +223,10 @@ contextBridge.exposeInMainWorld("interviewDesktop", Object.freeze({
   },
   getLocalRuntimeStatus: async () =>
     validateLocalRuntimeStatus(await ipcRenderer.invoke(LOCAL_RUNTIME_STATUS_CHANNEL)),
+  refreshLocalRuntimeStatus: async () =>
+    validateLocalRuntimeStatus(
+      await ipcRenderer.invoke(LOCAL_RUNTIME_STATUS_CHANNEL, "REFRESH_PREREQUISITES")
+    ),
   installPythonRuntime: async () =>
     validateLocalRuntimeStatus(await ipcRenderer.invoke(INSTALL_PYTHON_RUNTIME_CHANNEL)),
   installVoiceModels: async () =>
