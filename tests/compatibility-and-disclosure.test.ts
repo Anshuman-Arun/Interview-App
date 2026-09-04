@@ -310,6 +310,41 @@ describe("compatibility and disclosure gates", () => {
       throw new Error("Expected geometry-associated disclosure rejection");
     }
     expect(indirectResult.analysis?.effectiveDisclosureLevel).toBeGreaterThan(0);
+
+    const fallbackScene = BoardSceneContextSchema.parse({
+      boardRevision: 1,
+      shapes: [{
+        shapeId: "shape:fallback-protected",
+        shapeRevision: 1,
+        type: "formula",
+        bounds: { x: 200, y: 200, width: 120, height: 40 },
+        text: protectedDisclosure.fact
+      }],
+      aiAnnotations: []
+    });
+    const fallbackResult = validator.validate({
+      proposal: {
+        realizedAction: "PROBE_JUSTIFICATION",
+        claimedDisclosureLevel: 0,
+        claimedDisclosureIds: [],
+        boardActions: [{
+          operation: "highlight",
+          layer: "AI_ANNOTATION",
+          annotationPurpose: "focus candidate on current equality"
+        }]
+      },
+      request: {
+        requiredAction: "PROBE_JUSTIFICATION",
+        maximumDisclosure: 0
+      },
+      protectedDisclosures: sixPeopleProblem.interviewer.protectedDisclosures,
+      boardScene: fallbackScene
+    });
+    expect(fallbackResult.accepted).toBe(false);
+    if (fallbackResult.accepted) {
+      throw new Error("Expected fallback-position disclosure rejection");
+    }
+    expect(fallbackResult.analysis?.effectiveDisclosureLevel).toBeGreaterThan(0);
   });
 
   it("fails closed when semantic validation is uncertain", () => {
