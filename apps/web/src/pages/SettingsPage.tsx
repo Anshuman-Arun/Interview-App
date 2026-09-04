@@ -338,6 +338,7 @@ export function SettingsPage({
   }, [onRefreshProviderOptions, refreshRuntime]);
 
   const finishSetup = (): void => {
+    if (setupOperationInFlightRef.current || restarting) return;
     try {
       globalThis.localStorage.setItem(DESKTOP_FIRST_RUN_SETUP_KEY, "complete");
     } catch {
@@ -626,7 +627,13 @@ export function SettingsPage({
                 type="button"
                 className="expressive-settings__start"
                 onClick={finishSetup}
-                disabled={!reasoningReady || restarting}
+                disabled={
+                  !reasoningReady
+                  || restarting
+                  || runtimeChecking
+                  || providerOptionsLoading
+                  || anyInstallActive
+                }
               >
                 Start interview
               </button>
