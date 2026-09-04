@@ -40,9 +40,10 @@ git push origin v0.1.0
 immutable tag-event object, resolves it to the exact source commit, verifies
 that the still-visible tag resolves to the same commit, confirms that commit is
 reachable from authoritative `main`, and fails if the tag does not exactly match
-the canonical package version. Immediately before creating the draft release, it
-fetches the tag again and fails if the tag moved during validation. CI never
-rewrites `package.json` to force agreement.
+the canonical package version. Immediately before creating the draft release, it refreshes authoritative
+`main`, rechecks that the tagged source commit is still reachable, fetches the
+tag again, and fails if either provenance condition changed during validation.
+CI never rewrites `package.json` to force agreement.
 
 After the full validation/build/install/upgrade gates pass, the workflow
 creates a **draft** GitHub Release titled `Interview App v<version>`. The
