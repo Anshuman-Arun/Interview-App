@@ -5,6 +5,7 @@ import {
   type VerificationStatus
 } from "../../../packages/domain/src/index.js";
 import {
+  RemoteReasoningOperationKindSchema,
   RemoteReasoningOutcomeSchema,
   SessionPerformanceReadResponseSchema,
   SessionPerformanceSummarySchema,
@@ -206,14 +207,27 @@ function parsePersistedMetrics(value: unknown): SessionMetrics | undefined {
       if (!Number.isSafeInteger(count) || count < 0) return undefined;
     }
     for (const attempt of metrics.remoteAttempts) {
+      RemoteReasoningOperationKindSchema.parse(attempt.operation);
       RemoteReasoningOutcomeSchema.parse(attempt.outcome);
       if (
         typeof attempt.providerId !== "string"
+        || attempt.providerId.length === 0
+        || attempt.providerId.length > MAX_IDENTIFIER_LENGTH
         || typeof attempt.modelId !== "string"
+        || attempt.modelId.length === 0
+        || attempt.modelId.length > MAX_IDENTIFIER_LENGTH
+        || typeof attempt.startedAt !== "string"
+        || attempt.startedAt.length === 0
         || (
           attempt.elapsedMs !== null
           && (!Number.isFinite(attempt.elapsedMs) || attempt.elapsedMs < 0)
         )
+        || !Number.isSafeInteger(attempt.requestBytes)
+        || attempt.requestBytes < 0
+        || !Number.isSafeInteger(attempt.compiledContextBytes)
+        || attempt.compiledContextBytes < 0
+        || !Number.isSafeInteger(attempt.responseBytes)
+        || attempt.responseBytes < 0
       ) return undefined;
     }
     for (const kind of ["STT", "TTS", "VISION"] as const) {
@@ -579,7 +593,7 @@ export class SessionObservability {
       });
     } catch {
       this.#cache.delete(sessionId);
-      this.#corruptOrUnreadableSessions.add(sessionId);
+      this.rememberCorruptOrUnreadable(sessionId);
       return unavailable();
     }
   }
@@ -600,14 +614,16 @@ export class SessionObservability {
 
   private mutate(sessionId: SessionId, operation: (metrics: SessionMetrics) => void): void {
     try {
-      const metrics = this.load(sessionId) ?? emptyMetrics(this.persistenceUnavailable);
+      const metrics = this.load(sessionId) ?? emptyMetrics(
+        this.persistenceUnavailable || this.#corruptOrUnreadableSessions.has(sessionId)
+      );
       operation(metrics);
       this.rememberInCache(sessionId, metrics);
       try {
         this.#store?.write(sessionId, metrics);
       } catch {
         metrics.partial = true;
-        this.#corruptOrUnreadableSessions.add(sessionId);
+        this.rememberCorruptOrUnreadable(sessionId);
       }
     } catch {
       // Metrics must never be an authority, admission, delivery, or failure gate.
@@ -620,7 +636,7 @@ export class SessionObservability {
     try {
       const persisted = this.#store?.read(sessionId);
       if (persisted?.corrupt === true) {
-        this.#corruptOrUnreadableSessions.add(sessionId);
+        this.rememberCorruptOrUnreadable(sessionId);
         return undefined;
       }
       if (persisted?.metrics !== undefined) {
@@ -628,7 +644,7 @@ export class SessionObservability {
         return persisted.metrics;
       }
     } catch {
-      this.#corruptOrUnreadableSessions.add(sessionId);
+      this.rememberCorruptOrUnreadable(sessionId);
       return undefined;
     }
     return undefined;
@@ -650,6 +666,16 @@ export class SessionObservability {
       const oldest = this.#cache.keys().next().value;
       if (oldest === undefined) break;
       this.#cache.delete(oldest);
+    }
+  }
+
+  private rememberCorruptOrUnreadable(sessionId: SessionId): void {
+    this.#corruptOrUnreadableSessions.delete(sessionId);
+    this.#corruptOrUnreadableSessions.add(sessionId);
+    while (this.#corruptOrUnreadableSessions.size > MAX_PERSISTED_SESSIONS) {
+      const oldest = this.#corruptOrUnreadableSessions.values().next().value;
+      if (oldest === undefined) break;
+      this.#corruptOrUnreadableSessions.delete(oldest);
     }
   }
 
