@@ -543,3 +543,5 @@
     justify-self: start;
   }
 }
+
+.expressive-home__active[data-conflict=true]>span{color:var(--danger)}
