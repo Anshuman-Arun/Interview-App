@@ -340,10 +340,10 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
         this.renderPolylineOverlay(editor, validatedAction, annotationOptions);
         break;
       case "draw_rectangle":
-        this.renderBoxOverlay(editor, validatedAction, "rectangle", options);
+        this.renderBoxOverlay(editor, validatedAction, "rectangle", annotationOptions);
         break;
       case "draw_ellipse":
-        this.renderBoxOverlay(editor, validatedAction, "ellipse", options);
+        this.renderBoxOverlay(editor, validatedAction, "ellipse", annotationOptions);
         break;
       case "erase_ai_annotation":
         this.executeEraseAiAnnotation(editor, validatedAction);
@@ -407,7 +407,19 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     const shapes = editor.getCurrentPageShapes();
 
     const studentShapes: CanvasSnapshot["studentShapes"][number][] = [];
-    const aiAnnotations: CanvasSnapshot["aiAnnotations"][number][] = [];
+    const aiAnnotationGroups = new Map<
+      string,
+      {
+        id: string;
+        annotationId: string;
+        physicalShapeIds: string[];
+        operation: string;
+        deliveryId?: string;
+        purpose: string;
+        targetShapeId?: string;
+        targetShapeRevision?: number;
+      }
+    >();
 
     for (const shape of shapes) {
       const layer = shape.meta?.["layer"];
@@ -428,6 +440,12 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
           shapeRevision
         });
       } else if (layer === "AI_ANNOTATION") {
+        const annotationId = logicalAnnotationId(shape);
+        const existing = aiAnnotationGroups.get(annotationId);
+        if (existing !== undefined) {
+          existing.physicalShapeIds.push(shape.id);
+          continue;
+        }
         const operation = typeof shape.meta?.["operation"] === "string" ? shape.meta["operation"] : shape.type;
         const deliveryId = typeof shape.meta?.["deliveryId"] === "string" ? shape.meta["deliveryId"] : undefined;
         const purpose = typeof shape.meta?.["annotationPurpose"] === "string" ? shape.meta["annotationPurpose"] : "";
@@ -437,8 +455,10 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
           shape.id,
           "targetShapeRevision"
         );
-        aiAnnotations.push({
-          id: shape.id,
+        aiAnnotationGroups.set(annotationId, {
+          id: annotationId,
+          annotationId,
+          physicalShapeIds: [shape.id],
           operation,
           ...(deliveryId !== undefined ? { deliveryId } : {}),
           purpose,
@@ -448,6 +468,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
       }
     }
 
+    const aiAnnotations = Array.from(aiAnnotationGroups.values());
     return {
       boardRevision: this.localBoardRevision,
       studentShapes,
@@ -1158,8 +1179,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     }
     if (presentIds.length === 0) {
       throw new RendererPresentationNotExposedError(
-        "AI annotation batch failed before any shape remained visible",
-        ...(createError === undefined ? [] : [{ cause: createError }])
+        "AI annotation batch failed before any shape remained visible"
       );
     }
 
@@ -1172,8 +1192,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     const survivors = ids.filter((id) => editor.getShape(id) !== undefined);
     if (survivors.length === 0) {
       throw new RendererPresentationNotExposedError(
-        "AI annotation batch partially mutated but was fully rolled back",
-        ...(createError === undefined ? [] : [{ cause: createError }])
+        "AI annotation batch partially mutated but was fully rolled back"
       );
     }
     throw new WhiteboardPresentationPossiblyExposedError(
@@ -1211,8 +1230,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     const missingSnapshots = snapshots.filter((shape) => editor.getShape(shape.id) === undefined);
     if (missingSnapshots.length === 0) {
       throw new RendererPresentationNotExposedError(
-        "AI annotation erase failed before changing the visible group",
-        ...(deletionError === undefined ? [] : [{ cause: deletionError }])
+        "AI annotation erase failed before changing the visible group"
       );
     }
 
@@ -1225,8 +1243,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     const restored = ids.every((id) => editor.getShape(id) !== undefined);
     if (restored) {
       throw new RendererPresentationNotExposedError(
-        "AI annotation erase partially mutated but was fully rolled back",
-        ...(deletionError === undefined ? [] : [{ cause: deletionError }])
+        "AI annotation erase partially mutated but was fully rolled back"
       );
     }
     throw new WhiteboardPresentationPossiblyExposedError(
@@ -1356,6 +1373,14 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     }
     return this.editor;
   }
+}
+
+function logicalAnnotationId(shape: TLShapeRecord): string {
+  const annotationId = shape.meta?.["annotationId"];
+  if (typeof annotationId === "string" && annotationId.length > 0) return annotationId;
+  const deliveryId = shape.meta?.["deliveryId"];
+  if (typeof deliveryId === "string" && deliveryId.length > 0) return deliveryId;
+  return `legacy_renderer_annotation:${shape.id}`;
 }
 
 function annotationCreatedAtMs(shape: TLShapeRecord | undefined): number {
