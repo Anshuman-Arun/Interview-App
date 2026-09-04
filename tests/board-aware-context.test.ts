@@ -161,11 +161,13 @@ describe("bounded provider board scene", () => {
       proposalId: "proposal:low",
       observation: { ...accepted.observation, confidence: 0.4 }
     });
+    const originalRequest = state.visionRequests[requestId];
+    if (originalRequest === undefined) throw new Error("Expected vision request fixture");
     const lowState: SessionState = {
       ...state,
       visionRequests: {
         [requestId]: {
-          ...state.visionRequests[requestId]!,
+          ...originalRequest,
           acceptedObservation: lowConfidence
         }
       }
@@ -485,9 +487,10 @@ describe("bounded provider board scene", () => {
     const state = stateWithShapes(shapes, 9);
     const scene = buildBoardSceneContext(state, state.boardRevision);
     expect(scene).toBeDefined();
-    expect(scene!.shapes.length).toBeLessThanOrEqual(MAX_BOARD_SCENE_SHAPES);
-    expect(boardSceneContextSerializedBytes(scene!)).toBeLessThanOrEqual(MAX_BOARD_SCENE_BYTES);
-    expect(scene!.shapes.every((item) => (item.text?.length ?? 0) <= 384)).toBe(true);
+    if (scene === undefined) throw new Error("Expected bounded board scene");
+    expect(scene.shapes.length).toBeLessThanOrEqual(MAX_BOARD_SCENE_SHAPES);
+    expect(boardSceneContextSerializedBytes(scene)).toBeLessThanOrEqual(MAX_BOARD_SCENE_BYTES);
+    expect(scene.shapes.every((item) => (item.text?.length ?? 0) <= 384)).toBe(true);
   });
 
   it("fails closed when authoritative shape state is unknown", () => {
