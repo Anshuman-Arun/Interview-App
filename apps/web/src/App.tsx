@@ -6,6 +6,7 @@ import {
 } from "../../../packages/domain/src/index.js";
 import { AppearanceDock } from "./components/AppearanceDock.js";
 import { BrandMark } from "./components/BrandMark.js";
+import { SessionDurationNotice } from "./components/SessionDurationNotice.js";
 import { ProblemCard } from "./components/ProblemCard.js";
 import { TranscriptFeed } from "./components/TranscriptFeed.js";
 import { StudentInputArea } from "./components/StudentInputArea.js";
@@ -154,6 +155,7 @@ export const App: React.FC = () => {
         return;
       }
       await session.startConfiguredSession(configuration);
+      void session.fetchAvailableSessions();
       navigate({ page: "interview" });
     } catch {
       // Error handled by the authoritative session hook.
@@ -235,6 +237,7 @@ export const App: React.FC = () => {
     setSessionEntryPending(true);
     try {
       const recoveredStatus = await session.recoverSession(targetSessionId);
+      void session.fetchAvailableSessions();
       if (recoveredStatus === null) return;
       if (recoveredStatus === "ACTIVE") {
         navigate({ page: "interview" });
@@ -282,6 +285,7 @@ export const App: React.FC = () => {
     setSessionEntryPending(true);
     try {
       const recoveredStatus = await session.recoverSession(recoverySessionId);
+      void session.fetchAvailableSessions();
       if (recoveredStatus === null) return;
       if (recoveredStatus === "ACTIVE") {
         navigate({ page: "interview" });
@@ -402,6 +406,7 @@ export const App: React.FC = () => {
     setSessionEntryPending(true);
     void session.recoverSession(reloadQuantSessionId)
       .then((status) => {
+        void session.fetchAvailableSessions();
         if (status === "ACTIVE") {
           navigate({ page: "interview" }, { replace: true });
           return;
@@ -456,6 +461,9 @@ export const App: React.FC = () => {
     session.isPaused
   );
   const interviewBackgrounded = displayRoute.page !== "interview";
+  const activeStoredSession = session.sessionId === null
+    ? null
+    : session.availableSessions.find((storedSession) => storedSession.sessionId === session.sessionId) ?? null;
   const activeModeLabel =
     session.configuration?.mode === "QUANT_TRADING"
       ? "Quant Trading"
@@ -584,6 +592,11 @@ export const App: React.FC = () => {
     return (
       <>
         {productPage}
+        <SessionDurationNotice
+          durationMinutes={session.configuration.durationMinutes}
+          createdAt={activeStoredSession?.createdAt}
+          visible={hasActiveInterview && !interviewBackgrounded}
+        />
         <QuantSessionWorkspace
           configuration={session.configuration}
           quantState={session.quantState}
@@ -617,6 +630,11 @@ export const App: React.FC = () => {
   return (
     <>
       {productPage}
+      <SessionDurationNotice
+        durationMinutes={session.configuration?.durationMinutes}
+        createdAt={activeStoredSession?.createdAt}
+        visible={hasActiveInterview && !interviewBackgrounded}
+      />
       <div
         aria-hidden={interviewBackgrounded}
         data-backgrounded={String(interviewBackgrounded)}
