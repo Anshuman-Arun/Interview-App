@@ -33,6 +33,7 @@ import {
 import { SessionRecoveryCoordinator } from "../apps/server/src/session-recovery-coordinator.js";
 import {
   RendererClient,
+  RendererPresentationNotExposedError,
   consumeAuthenticatedRendererStream,
   createLoopbackAcknowledgementSender,
   type AudioPlayer
@@ -411,6 +412,158 @@ describe("authenticated renderer stream transport", () => {
       "DELIVERY_STARTED",
       "DELIVERY_POSSIBLY_EXPOSED"
     ]);
+
+    replacementController.abort();
+    await replacementConsumer;
+  });
+
+  it("cancels a renderer-proven rolled-back WHITEBOARD delivery without dropping the stream", async () => {
+    const sessionId = newSessionId();
+    await primeCommandServer(commandAddress, sessionId);
+    const writer = registry.get(sessionId);
+    const shownText: DeliveryId[] = [];
+    const renderer = new RendererClient({
+      sessionId,
+      acknowledgementSender: createLoopbackAcknowledgementSender({
+        commandUrl: `${commandAddress.url}/v1/commands`,
+        authenticatedFetch: fetchWithAuth
+      }),
+      textPresenter: {
+        presentText: (_text, deliveryId) => {
+          shownText.push(deliveryId);
+        }
+      },
+      audioPlayer: { playAudio: () => undefined },
+      whiteboardPresenter: {
+        presentWhiteboard: () => {
+          throw new RendererPresentationNotExposedError(
+            "polyline partially mutated but rollback was fully verified"
+          );
+        }
+      }
+    });
+    const controller = new AbortController();
+    const consumer = consumeAuthenticatedRendererStream({
+      streamUrl: streamAddress.streamUrl,
+      sessionId,
+      authenticatedFetch: fetchWithAuth,
+      signal: controller.signal
+    }, renderer);
+
+    await waitFor(() => streamServer.activeConnectionCount() === 1);
+    const boardAtom = await queueDelivery(writer, {
+      medium: "WHITEBOARD",
+      action: {
+        operation: "draw_polyline",
+        layer: "AI_ANNOTATION",
+        points: [
+          { x: 0, y: 0 },
+          { x: 20, y: 20 },
+          { x: 40, y: 0 }
+        ],
+        annotationPurpose: "proven rollback fixture"
+      }
+    });
+    const textAtom = await queueDelivery(writer, {
+      medium: "TEXT",
+      text: "stream remains usable after safe rollback"
+    });
+    await expect(streamServer.publishDelivery(sessionId, boardAtom.deliveryId))
+      .resolves.toMatchObject({ outcome: "SENT", deliveryId: boardAtom.deliveryId });
+    await waitFor(() =>
+      writer.getState().deliveries[boardAtom.deliveryId]?.status === "CANCELLED"
+    );
+    expect(deliveryLifecycle(store.load(sessionId), boardAtom.deliveryId)).toEqual([
+      "DELIVERY_QUEUED",
+      "DELIVERY_STARTED",
+      "DELIVERY_CANCELLED"
+    ]);
+    expect(streamServer.activeConnectionCount()).toBe(1);
+
+    await expect(streamServer.publishDelivery(sessionId, textAtom.deliveryId))
+      .resolves.toMatchObject({ outcome: "SENT", deliveryId: textAtom.deliveryId });
+    await waitFor(() =>
+      writer.getState().deliveries[textAtom.deliveryId]?.status === "COMPLETED"
+    );
+    expect(shownText).toContain(textAtom.deliveryId);
+
+    controller.abort();
+    await consumer;
+  });
+
+  it("classifies an ambiguous WHITEBOARD presenter failure as POSSIBLY_EXPOSED and never replays it", async () => {
+    const sessionId = newSessionId();
+    await primeCommandServer(commandAddress, sessionId);
+    const writer = registry.get(sessionId);
+
+    const renderer = new RendererClient({
+      sessionId,
+      acknowledgementSender: { send: async () => undefined },
+      textPresenter: { presentText: () => undefined },
+      audioPlayer: { playAudio: () => undefined },
+      whiteboardPresenter: {
+        presentWhiteboard: () => {
+          throw new Error("partial whiteboard render outcome unknown");
+        }
+      }
+    });
+    const controller = new AbortController();
+    const consumer = consumeAuthenticatedRendererStream({
+      streamUrl: streamAddress.streamUrl,
+      sessionId,
+      authenticatedFetch: fetchWithAuth,
+      signal: controller.signal
+    }, renderer);
+
+    await waitFor(() => streamServer.activeConnectionCount() === 1);
+    const atom = await queueDelivery(writer, {
+      medium: "WHITEBOARD",
+      action: {
+        operation: "draw_polyline",
+        layer: "AI_ANNOTATION",
+        points: [
+          { x: 0, y: 0 },
+          { x: 20, y: 20 },
+          { x: 40, y: 0 },
+          { x: 60, y: 20 }
+        ],
+        annotationPurpose: "ambiguous partial render fixture"
+      }
+    });
+    await expect(streamServer.publishDelivery(sessionId, atom.deliveryId)).resolves.toMatchObject({
+      outcome: "SENT",
+      deliveryId: atom.deliveryId
+    });
+    await expect(consumer).rejects.toThrow("partial whiteboard render outcome unknown");
+    await waitFor(() =>
+      writer.getState().deliveries[atom.deliveryId]?.status === "POSSIBLY_EXPOSED"
+    );
+    expect(deliveryLifecycle(store.load(sessionId), atom.deliveryId)).toEqual([
+      "DELIVERY_QUEUED",
+      "DELIVERY_STARTED",
+      "DELIVERY_POSSIBLY_EXPOSED"
+    ]);
+
+    const replacement = new RendererClient({
+      sessionId,
+      acknowledgementSender: { send: async () => undefined },
+      textPresenter: { presentText: () => undefined },
+      audioPlayer: { playAudio: () => undefined },
+      whiteboardPresenter: {
+        presentWhiteboard: () => {
+          throw new Error("POSSIBLY_EXPOSED delivery must not replay");
+        }
+      }
+    });
+    const replacementController = new AbortController();
+    const replacementConsumer = consumeAuthenticatedRendererStream({
+      streamUrl: streamAddress.streamUrl,
+      sessionId,
+      authenticatedFetch: fetchWithAuth,
+      signal: replacementController.signal
+    }, replacement);
+    await waitFor(() => streamServer.activeConnectionCount() === 1);
+    expect(writer.getState().deliveries[atom.deliveryId]?.status).toBe("POSSIBLY_EXPOSED");
 
     replacementController.abort();
     await replacementConsumer;

@@ -1,5 +1,7 @@
 import {
   DisclosureAnalysisSchema,
+  type BoardAction,
+  type BoardSceneContext,
   type DisclosureAnalysis,
   type DisclosureId,
   type DisclosureLevel,
@@ -161,6 +163,132 @@ function protectedMetadataFormulationCount(
   );
 }
 
+interface BoardDisclosureBounds {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+const BOARD_DISCLOSURE_ASSOCIATION_MARGIN = 32;
+
+function absoluteBoardActionDisclosureBounds(
+  action: BoardAction
+): BoardDisclosureBounds | undefined {
+  const points = action.points;
+  if (points !== undefined && points.length > 0) {
+    const xs = points.map((point) => point.x);
+    const ys = points.map((point) => point.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    return {
+      x: minX,
+      y: minY,
+      width: Math.max(1, maxX - minX),
+      height: Math.max(1, maxY - minY)
+    };
+  }
+
+  const placement = action.placement;
+  if (placement?.x !== undefined && placement.y !== undefined) {
+    switch (action.operation) {
+      case "write_text":
+        return { x: placement.x, y: placement.y, width: 220, height: 96 };
+      case "write_equation":
+        return { x: placement.x, y: placement.y, width: 220, height: 56 };
+      case "draw_rectangle":
+      case "draw_ellipse":
+        if (action.width === undefined || action.height === undefined) return undefined;
+        return {
+          x: placement.x,
+          y: placement.y,
+          width: action.width,
+          height: action.height
+        };
+      default:
+        return undefined;
+    }
+  }
+
+  if (
+    action.targetShapeId === undefined
+    && placement?.anchorShapeId === undefined
+  ) {
+    switch (action.operation) {
+      case "write_text":
+        return { x: 320, y: 120, width: 220, height: 96 };
+      case "write_equation":
+        return { x: 320, y: 220, width: 220, height: 56 };
+      case "circle":
+      case "highlight":
+      case "draw_arrow":
+      case "point_at":
+        // These legacy targetless overlays resolve around the adapter's
+        // fixed 200,200,120x120 fallback target. Use one conservative envelope
+        // rather than relying on operation-specific stroke geometry.
+        return { x: 128, y: 128, width: 224, height: 224 };
+      default:
+        return undefined;
+    }
+  }
+  return undefined;
+}
+
+function boardBoundsAreAssociated(
+  actionBounds: BoardDisclosureBounds,
+  shapeBounds: BoardDisclosureBounds
+): boolean {
+  const margin = BOARD_DISCLOSURE_ASSOCIATION_MARGIN;
+  return (
+    actionBounds.x <= shapeBounds.x + shapeBounds.width + margin
+    && actionBounds.x + actionBounds.width >= shapeBounds.x - margin
+    && actionBounds.y <= shapeBounds.y + shapeBounds.height + margin
+    && actionBounds.y + actionBounds.height >= shapeBounds.y - margin
+  );
+}
+
+function boardTargetDisclosureTexts(
+  action: BoardAction,
+  boardScene: BoardSceneContext | undefined
+): readonly string[] {
+  if (boardScene === undefined) return [];
+  const shapeIds = new Set<string>();
+  if (action.targetShapeId !== undefined) shapeIds.add(action.targetShapeId);
+  if (action.placement?.anchorShapeId !== undefined) {
+    shapeIds.add(action.placement.anchorShapeId);
+  }
+  if (action.targetRegion !== undefined) {
+    shapeIds.add(action.targetRegion.shapeId);
+  }
+  if (action.operation === "draw_arrow_between") {
+    if (action.fromShapeId !== undefined) shapeIds.add(action.fromShapeId);
+    if (action.toShapeId !== undefined) shapeIds.add(action.toShapeId);
+  }
+
+  const absoluteBounds = absoluteBoardActionDisclosureBounds(action);
+  if (absoluteBounds !== undefined) {
+    for (const shape of boardScene.shapes) {
+      if (boardBoundsAreAssociated(absoluteBounds, shape.bounds)) {
+        shapeIds.add(shape.shapeId);
+      }
+    }
+  }
+
+  const texts: string[] = [];
+  for (const shapeId of shapeIds) {
+    const shape = boardScene.shapes.find((item) => item.shapeId === shapeId);
+    if (shape === undefined) continue;
+    if (shape.text !== undefined && shape.text.length > 0) texts.push(shape.text);
+    const interpretation = shape.semanticObservation?.interpretation;
+    if (interpretation !== undefined && interpretation.length > 0) {
+      texts.push(interpretation);
+    }
+  }
+  return texts;
+}
+
 function combineSafeAnalyses(
   analyses: readonly DisclosureAnalysis[],
   deterministicIds: readonly DisclosureId[],
@@ -291,6 +419,7 @@ export class DisclosureValidator {
     readonly proposal: InterviewerProposal;
     readonly request: RealizationRequest;
     readonly protectedDisclosures: readonly ProtectedDisclosure[];
+    readonly boardScene?: BoardSceneContext;
   }): ProposalValidation {
     if (input.proposal.realizedAction !== input.request.requiredAction) {
       return { accepted: false, reason: "Model realized an action that application policy did not select" };
@@ -325,7 +454,11 @@ export class DisclosureValidator {
     if (input.proposal.speechText !== undefined) {
       realizationTexts.push([input.proposal.speechText]);
     }
-    for (const action of input.proposal.boardActions ?? []) {
+    const boardActions = input.proposal.boardActions ?? [];
+    const boardTargetTexts = boardActions.map((action) =>
+      boardTargetDisclosureTexts(action, input.boardScene)
+    );
+    for (const action of boardActions) {
       const actionTexts: string[] = [];
       if (action.content !== undefined && action.content.length > 0) {
         actionTexts.push(action.content);
@@ -343,17 +476,54 @@ export class DisclosureValidator {
     }
     const metadataCharacters = protectedMetadataCharacterCount(input.protectedDisclosures);
     const formulationCount = protectedMetadataFormulationCount(input.protectedDisclosures);
+    const boardTargetTextCount = boardTargetTexts.reduce(
+      (total, group) => total + group.length,
+      0
+    );
+    const boardTargetTextCharacters = boardTargetTexts.reduce(
+      (total, group) =>
+        total + group.reduce((groupTotal, text) => groupTotal + text.length, 0),
+      0
+    );
     if (
-      texts.length * metadataCharacters > MAX_DISCLOSURE_ANALYSIS_WORK_CHARACTERS
-      || totalProposalTextCharacters * formulationCount > MAX_DISCLOSURE_ANALYSIS_WORK_CHARACTERS
+      (texts.length + boardTargetTextCount) * metadataCharacters
+        > MAX_DISCLOSURE_ANALYSIS_WORK_CHARACTERS
+      || (totalProposalTextCharacters + boardTargetTextCharacters) * formulationCount
+        > MAX_DISCLOSURE_ANALYSIS_WORK_CHARACTERS
     ) {
       return { accepted: false, reason: "Proposal exceeds the bounded disclosure-analysis work budget" };
     }
 
     const analyses: DisclosureAnalysis[] = [];
     const protectedMatches: ProtectedMatch[] = [];
+    const boardTargetMatches: ProtectedMatch[] = [];
     const deterministicIds = new Set<DisclosureId>();
     let deterministicLevel: DisclosureLevel = 0;
+
+    for (const targetTexts of boardTargetTexts) {
+      const targetIds = new Set<DisclosureId>();
+      let targetLevel: DisclosureLevel = 0;
+      for (const text of targetTexts) {
+        const targetMatch = deriveProtectedMatch(text, input.protectedDisclosures);
+        if (!targetMatch.ok) {
+          return {
+            accepted: false,
+            reason: "Protected board-target disclosure metadata cannot be analyzed deterministically"
+          };
+        }
+        for (const disclosureId of targetMatch.ids) {
+          targetIds.add(disclosureId);
+          deterministicIds.add(disclosureId);
+        }
+        if (targetMatch.level > targetLevel) targetLevel = targetMatch.level;
+        if (targetMatch.level > deterministicLevel) deterministicLevel = targetMatch.level;
+      }
+      boardTargetMatches.push({
+        ok: true,
+        ids: [...targetIds],
+        level: targetLevel
+      });
+    }
     let totalAnalyzerReasonCharacters = 0;
     let totalAnalyzerDisclosureIds = 0;
     for (const text of texts) {
@@ -452,18 +622,34 @@ export class DisclosureValidator {
     }
 
     const baseRealizationAnalyses: DisclosureAnalysis[] = [];
+    const speechOffset = input.proposal.speechText === undefined ? 0 : 1;
     let analysisOffset = 0;
-    for (const group of realizationTexts) {
+    for (let realizationIndex = 0; realizationIndex < realizationTexts.length; realizationIndex += 1) {
+      const group = realizationTexts[realizationIndex];
+      if (group === undefined) {
+        return {
+          accepted: false,
+          reason: "Disclosure realization attribution failed closed"
+        };
+      }
       const groupAnalyses = analyses.slice(analysisOffset, analysisOffset + group.length);
       const groupMatches = protectedMatches.slice(analysisOffset, analysisOffset + group.length);
       analysisOffset += group.length;
-      const groupDeterministicIds = Array.from(new Set(
-        groupMatches.flatMap((match) => match.ids)
-      ));
-      const groupDeterministicLevel = groupMatches.reduce<DisclosureLevel>(
+      const targetMatch = realizationIndex < speechOffset
+        ? undefined
+        : boardTargetMatches[realizationIndex - speechOffset];
+      const groupDeterministicIds = Array.from(new Set([
+        ...groupMatches.flatMap((match) => match.ids),
+        ...(targetMatch?.ids ?? [])
+      ]));
+      const emittedLevel = groupMatches.reduce<DisclosureLevel>(
         (maximum, match) => match.level > maximum ? match.level : maximum,
         0
       );
+      const groupDeterministicLevel =
+        targetMatch !== undefined && targetMatch.level > emittedLevel
+          ? targetMatch.level
+          : emittedLevel;
       baseRealizationAnalyses.push(combineSafeAnalyses(
         groupAnalyses,
         groupDeterministicIds,
@@ -562,7 +748,6 @@ export class DisclosureValidator {
       };
     }
 
-    const speechOffset = input.proposal.speechText === undefined ? 0 : 1;
     const speechAnalysis = input.proposal.speechText === undefined
       ? null
       : realizationAnalyses[0] ?? null;

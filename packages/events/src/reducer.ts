@@ -851,9 +851,24 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
     case "DELIVERY_COMPLETED":
       next = withDeliveryStatus(state, event.payload.deliveryId, "COMPLETED");
       break;
-    case "DELIVERY_CANCELLED":
-      next = withDeliveryStatus(state, event.payload.deliveryId, "CANCELLED");
+    case "DELIVERY_CANCELLED": {
+      const current = state.deliveries[event.payload.deliveryId];
+      if (
+        current?.status === "DELIVERING"
+        && event.source === "RENDERER"
+      ) {
+        next = {
+          ...state,
+          deliveries: {
+            ...state.deliveries,
+            [event.payload.deliveryId]: { ...current, status: "CANCELLED" }
+          }
+        };
+      } else {
+        next = withDeliveryStatus(state, event.payload.deliveryId, "CANCELLED");
+      }
       break;
+    }
     case "DELIVERY_POSSIBLY_EXPOSED":
       next = withDeliveryStatus(state, event.payload.deliveryId, "POSSIBLY_EXPOSED");
       break;

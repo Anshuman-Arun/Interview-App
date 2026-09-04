@@ -5,8 +5,7 @@ import {
 } from "../packages/domain/src/index.js";
 import { RendererStreamMessageSchema } from "../packages/delivery/src/index.js";
 import {
-  RendererClient,
-  RendererPresentationNotExposedError
+  RendererClient
 } from "../apps/web/src/renderer-client.js";
 import {
   AudioCancellationController,
@@ -4307,9 +4306,11 @@ describe("queued browser audio playback", () => {
       }
     });
 
-    await expect(client.handleMessage(message)).rejects.toBeInstanceOf(
-      RendererPresentationNotExposedError
-    );
+    await expect(client.handleMessage(message)).resolves.toMatchObject({
+      deliveryId,
+      duplicate: false,
+      phase: "NOT_EXPOSED"
+    });
     expect(client.snapshot()).toEqual([]);
 
     blocker.cancel();

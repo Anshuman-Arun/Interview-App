@@ -177,6 +177,12 @@ export const AcknowledgeDeliveryCompletedCommandSchema = ProtocolCommandBaseSche
   deliveryId: DeliveryIdSchema
 }).strict();
 
+export const AcknowledgeDeliveryNotExposedCommandSchema = ProtocolCommandBaseSchema.extend({
+  type: z.literal("ACK_DELIVERY_NOT_EXPOSED"),
+  deliveryId: DeliveryIdSchema,
+  reason: z.string().min(1).max(512)
+}).strict();
+
 export const ClientCommandSchema = z.discriminatedUnion("type", [
   StartSessionCommandSchema,
   StartConfiguredSessionCommandSchema,
@@ -196,7 +202,8 @@ export const ClientCommandSchema = z.discriminatedUnion("type", [
   SubmitQuantResearchActionCommandSchema,
   ReconnectDeliveryCommandSchema,
   AcknowledgeDeliveryExposedCommandSchema,
-  AcknowledgeDeliveryCompletedCommandSchema
+  AcknowledgeDeliveryCompletedCommandSchema,
+  AcknowledgeDeliveryNotExposedCommandSchema
 ]);
 export type ClientCommand = z.infer<typeof ClientCommandSchema>;
 
@@ -360,7 +367,7 @@ export const DeliveryAcknowledgedResponseSchema = ResponseBaseSchema.extend({
   ok: z.literal(true),
   type: z.literal("DELIVERY_ACKNOWLEDGED"),
   deliveryId: DeliveryIdSchema,
-  acknowledgement: z.enum(["EXPOSED", "COMPLETED"])
+  acknowledgement: z.enum(["EXPOSED", "COMPLETED", "NOT_EXPOSED"])
 }).strict();
 
 export const ProtocolSuccessResponseSchema = z.discriminatedUnion("type", [

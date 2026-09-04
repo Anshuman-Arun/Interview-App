@@ -11,6 +11,9 @@ import {
   VisionShapeRevisionBindingSchema,
   VisionSnapshotBasisSchema,
   MAX_AUTHORITATIVE_BOARD_SHAPES,
+  MAX_BOARD_ACTION_POINTS,
+  MAX_BOARD_ACTION_SHAPE_ID_CHARACTERS,
+  MAX_INTERVIEWER_BOARD_ACTIONS,
   MAX_VISION_REGION_SHAPES,
   CommandEnvelopeSchema,
   CommandIdentityValueSchema,
@@ -41,6 +44,7 @@ import {
   type AuthoritativeStudentShape,
   type BoardObservation,
   type BoardRevision,
+  type BoardSceneContext,
   type NormalizedBoardMutation,
   type VisionBounds,
   type VisionEvidenceInterpreterFingerprint,
@@ -67,7 +71,12 @@ import {
 import type { EventDraft, SessionState } from "../../events/src/index.js";
 import { z } from "zod";
 import { createCommandEnvelope } from "./envelopes.js";
-import { canonicalJson, createProviderContextSpecFingerprintSync } from "./context-compiler.js";
+import {
+  canonicalJson,
+  compileContext,
+  createProviderContextSpecFingerprintSync,
+  sha256CanonicalJsonSync
+} from "./context-compiler.js";
 import { isGenerationBasisStillCompatible } from "./compatibility.js";
 import { assessVisionFreshness } from "./vision-freshness.js";
 import { selectPedagogicalAction } from "./pedagogical-policy.js";
@@ -118,6 +127,127 @@ export const ProcessProposalResultSchema = z.object({
 }).strict();
 export type ProcessProposalResult = z.infer<typeof ProcessProposalResultSchema>;
 
+export function validateProposalBoardReferences(
+  proposal: InterviewerProposal,
+  scene: BoardSceneContext | undefined
+): string | undefined {
+  const actions = proposal.boardActions ?? [];
+  if (actions.length === 0) return undefined;
+
+  const shapes = new Map(
+    (scene?.shapes ?? []).map((shape) => [shape.shapeId, shape] as const)
+  );
+  const requireSceneShape = (
+    shapeId: string,
+    revision: number | undefined,
+    label: string
+  ): string | undefined => {
+    const shape = shapes.get(shapeId);
+    if (shape === undefined) {
+      return `${label} "${shapeId}" was not present in the compiled board scene`;
+    }
+    if (revision === undefined) {
+      return `${label} "${shapeId}" omitted its exact shape revision`;
+    }
+    if (revision !== shape.shapeRevision) {
+      return `${label} "${shapeId}" revision does not match the compiled board scene`;
+    }
+    return undefined;
+  };
+
+  const remainingAnnotationIds = (scene?.aiAnnotations ?? [])
+    .map((annotation) => annotation.annotationId);
+
+  for (const action of actions) {
+    if (action.operation === "erase_ai_annotation") {
+      if (action.targetShapeId !== undefined) {
+        return "Provider cannot address an AI annotation by an untrusted canvas shape ID";
+      }
+      if (action.targetAnnotationId !== undefined) {
+        const annotationIndex = remainingAnnotationIds.indexOf(action.targetAnnotationId);
+        if (annotationIndex < 0) {
+          return `AI annotation "${action.targetAnnotationId}" was not present in the remaining compiled board scene`;
+        }
+        remainingAnnotationIds.splice(annotationIndex, 1);
+      } else {
+        if (remainingAnnotationIds.length === 0) {
+          return "No provider-visible AI annotation is available for targetless erase";
+        }
+        remainingAnnotationIds.shift();
+      }
+    }
+    if (action.targetShapeId !== undefined) {
+      const failure = requireSceneShape(
+        action.targetShapeId,
+        action.expectedShapeRevision,
+        "Board target"
+      );
+      if (failure !== undefined) return failure;
+    }
+    if (action.placement?.anchorShapeId !== undefined) {
+      const failure = requireSceneShape(
+        action.placement.anchorShapeId,
+        action.placement.anchorRevision,
+        "Board placement anchor"
+      );
+      if (failure !== undefined) return failure;
+    }
+    if (action.targetRegion !== undefined) {
+      const failure = requireSceneShape(
+        action.targetRegion.shapeId,
+        action.targetRegion.shapeRevision,
+        "Board target region"
+      );
+      if (failure !== undefined) return failure;
+    }
+    if (action.operation === "draw_arrow_between") {
+      if (action.fromShapeId === undefined || action.toShapeId === undefined) {
+        return "draw_arrow_between omitted a required scene shape reference";
+      }
+      const fromFailure = requireSceneShape(
+        action.fromShapeId,
+        action.fromShapeRevision,
+        "Arrow source"
+      );
+      if (fromFailure !== undefined) return fromFailure;
+      const toFailure = requireSceneShape(
+        action.toShapeId,
+        action.toShapeRevision,
+        "Arrow destination"
+      );
+      if (toFailure !== undefined) return toFailure;
+    }
+  }
+  return undefined;
+}
+
+export function bindTargetlessAiAnnotationErases(
+  proposal: InterviewerProposal,
+  scene: BoardSceneContext | undefined
+): InterviewerProposal {
+  if ((proposal.boardActions?.length ?? 0) === 0) return proposal;
+  const remainingAnnotationIds = (scene?.aiAnnotations ?? [])
+    .map((annotation) => annotation.annotationId);
+  const boardActions = proposal.boardActions?.map((action) => {
+    if (action.operation !== "erase_ai_annotation") return action;
+    if (action.targetAnnotationId !== undefined) {
+      const existingIndex = remainingAnnotationIds.indexOf(action.targetAnnotationId);
+      if (existingIndex >= 0) remainingAnnotationIds.splice(existingIndex, 1);
+      return action;
+    }
+    const latestAnnotationId = remainingAnnotationIds.shift();
+    if (latestAnnotationId === undefined) return action;
+    return {
+      ...action,
+      targetAnnotationId: latestAnnotationId
+    };
+  });
+  return InterviewerProposalSchema.parse({
+    ...proposal,
+    ...(boardActions === undefined ? {} : { boardActions })
+  });
+}
+
 function commandIdentityValue(value: unknown): CommandIdentityValue {
   return CommandIdentityValueSchema.parse(JSON.parse(JSON.stringify(value)));
 }
@@ -131,7 +261,7 @@ function assertSessionActive(state: Readonly<SessionState>, operation: string): 
 const MAX_INTERVIEWER_PROPOSAL_TEXT_CHARACTERS = 100_000;
 const MAX_INTERVIEWER_PROPOSAL_TOTAL_TEXT_CHARACTERS = 1_000_000;
 const MAX_INTERVIEWER_PROPOSAL_DISCLOSURE_IDS = 256;
-const MAX_INTERVIEWER_PROPOSAL_BOARD_ACTIONS = 256;
+const MAX_INTERVIEWER_PROPOSAL_BOARD_ACTIONS = MAX_INTERVIEWER_BOARD_ACTIONS;
 const MAX_RUNTIME_ID_CHARACTERS = 512;
 const MAX_EVIDENCE_PROPOSAL_EVENT_IDS = 4_096;
 
@@ -193,6 +323,16 @@ function proposalWithinAdmissionBounds(value: unknown): boolean {
         "content",
         "targetShapeId",
         "expectedShapeRevision",
+        "targetAnnotationId",
+        "targetRegion",
+        "placement",
+        "points",
+        "fromShapeId",
+        "fromShapeRevision",
+        "toShapeId",
+        "toShapeRevision",
+        "width",
+        "height",
         "annotationPurpose"
       ])
     )) return false;
@@ -204,8 +344,74 @@ function proposalWithinAdmissionBounds(value: unknown): boolean {
         typeof annotationPurpose === "string"
         && annotationPurpose.length > MAX_INTERVIEWER_PROPOSAL_TEXT_CHARACTERS
       )
-      || !boundedRuntimeString(rawAction["targetShapeId"])
+      || !boundedRuntimeString(
+        rawAction["targetShapeId"],
+        MAX_BOARD_ACTION_SHAPE_ID_CHARACTERS
+      )
+      || !boundedRuntimeString(
+        rawAction["targetAnnotationId"],
+        MAX_BOARD_ACTION_SHAPE_ID_CHARACTERS
+      )
+      || !boundedRuntimeString(
+        rawAction["fromShapeId"],
+        MAX_BOARD_ACTION_SHAPE_ID_CHARACTERS
+      )
+      || !boundedRuntimeString(
+        rawAction["toShapeId"],
+        MAX_BOARD_ACTION_SHAPE_ID_CHARACTERS
+      )
     ) return false;
+
+    const targetRegion = rawAction["targetRegion"];
+    if (isRuntimeRecord(targetRegion)) {
+      if (!hasOnlyRuntimeKeys(
+        targetRegion,
+        new Set([
+          "shapeId",
+          "shapeRevision",
+          "xFraction",
+          "yFraction",
+          "widthFraction",
+          "heightFraction"
+        ])
+      )) return false;
+      if (!boundedRuntimeString(
+        targetRegion["shapeId"],
+        MAX_BOARD_ACTION_SHAPE_ID_CHARACTERS
+      )) return false;
+    }
+
+    const placement = rawAction["placement"];
+    if (isRuntimeRecord(placement)) {
+      if (!hasOnlyRuntimeKeys(
+        placement,
+        new Set([
+          "anchorShapeId",
+          "anchorRevision",
+          "position",
+          "x",
+          "y",
+          "offsetX",
+          "offsetY"
+        ])
+      )) return false;
+      if (!boundedRuntimeString(
+        placement["anchorShapeId"],
+        MAX_BOARD_ACTION_SHAPE_ID_CHARACTERS
+      )) return false;
+    }
+
+    const points = rawAction["points"];
+    if (Array.isArray(points)) {
+      if (points.length > MAX_BOARD_ACTION_POINTS) return false;
+      for (const point of points) {
+        if (
+          isRuntimeRecord(point)
+          && !hasOnlyRuntimeKeys(point, new Set(["x", "y"]))
+        ) return false;
+      }
+    }
+
     totalTextCharacters += typeof content === "string" ? content.length : 0;
     totalTextCharacters += typeof annotationPurpose === "string" ? annotationPurpose.length : 0;
     if (totalTextCharacters > MAX_INTERVIEWER_PROPOSAL_TOTAL_TEXT_CHARACTERS) return false;
@@ -1346,6 +1552,57 @@ export class TurnCoordinator {
       if (canonicalJson(parsedRequest.data) !== canonicalJson(generationRequest.data)) {
         return rejectAndSupersedeDrafts(generationId, proposal, "Pedagogical action changed after generation began");
       }
+      const hasBoardOutput = (proposal.boardActions?.length ?? 0) > 0;
+      let boardSceneForValidation: BoardSceneContext | undefined;
+      if (generation.contextManifest === undefined && hasBoardOutput) {
+        return rejectAndSupersedeDrafts(
+          generationId,
+          proposal,
+          "Board output requires a recorded compiled provider context"
+        );
+      }
+
+      if (generation.contextManifest !== undefined) {
+        let currentCompiledContext: ReturnType<typeof compileContext>;
+        try {
+          currentCompiledContext = compileContext({
+            state,
+            problem: input.problem,
+            turnId: generation.basis.turnId,
+            realizationRequest: parsedRequest.data,
+            generationBasis: generation.basis
+          });
+        } catch {
+          return rejectAndSupersedeDrafts(
+            generationId,
+            proposal,
+            "Generation provider context can no longer be reconstructed"
+          );
+        }
+        if (
+          sha256CanonicalJsonSync(currentCompiledContext)
+          !== generation.contextManifest.contextSha256
+        ) {
+          return rejectAndSupersedeDrafts(
+            generationId,
+            proposal,
+            "Generation provider context changed after compilation"
+          );
+        }
+
+        boardSceneForValidation = currentCompiledContext.boardScene;
+        const boardReferenceFailure = validateProposalBoardReferences(
+          proposal,
+          boardSceneForValidation
+        );
+        if (boardReferenceFailure !== undefined) {
+          return rejectDrafts(generationId, proposal, boardReferenceFailure);
+        }
+      }
+      const deliveryProposal = bindTargetlessAiAnnotationErases(
+        proposal,
+        boardSceneForValidation
+      );
       const currentRequest = selectPedagogicalAction(
         state,
         generation.basis.turnId,
@@ -1355,13 +1612,16 @@ export class TurnCoordinator {
         return rejectAndSupersedeDrafts(generationId, proposal, "Application-selected pedagogical action is stale");
       }
       const validation = input.validator.validate({
-        proposal,
+        proposal: deliveryProposal,
         request: parsedRequest.data,
-        protectedDisclosures: input.problem.interviewer.protectedDisclosures
+        protectedDisclosures: input.problem.interviewer.protectedDisclosures,
+        ...(boardSceneForValidation === undefined
+          ? {}
+          : { boardScene: boardSceneForValidation })
       });
       if (!validation.accepted) return rejectDrafts(generationId, proposal, validation.reason);
       const atoms: DeliveryAtom[] = [];
-      if (proposal.speechText !== undefined) {
+      if (deliveryProposal.speechText !== undefined) {
         const speechAnalysis = validation.realizations.speech;
         if (speechAnalysis === null) {
           return rejectDrafts(
@@ -1372,13 +1632,13 @@ export class TurnCoordinator {
         }
         atoms.push(DeliveryAtomSchema.parse({
           deliveryId: newDeliveryId(), generationId,
-          content: { medium: "TEXT", text: proposal.speechText },
+          content: { medium: "TEXT", text: deliveryProposal.speechText },
           disclosureIds: speechAnalysis.effectiveDisclosureIds,
           effectiveDisclosureLevel: speechAnalysis.effectiveDisclosureLevel,
           status: "VALIDATED"
         }));
       }
-      const boardActions = proposal.boardActions ?? [];
+      const boardActions = deliveryProposal.boardActions ?? [];
       if (validation.realizations.boardActions.length !== boardActions.length) {
         return rejectDrafts(
           generationId,

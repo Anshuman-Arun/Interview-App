@@ -113,7 +113,8 @@ function assessContext(
       state,
       problem,
       turnId: generation.basis.turnId,
-      realizationRequest
+      realizationRequest,
+      generationBasis: generation.basis
     })
   };
 }

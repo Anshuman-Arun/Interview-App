@@ -892,8 +892,8 @@ describe("Real tldraw mounted browser integration", () => {
         expectedShapeRevision: 1
       });
     });
-    const aiId = adapter.getCanvasSnapshot().aiAnnotations.at(-1)?.id;
-    if (aiId === undefined) throw new Error("AI annotation was not created");
+    const aiId = adapter.getCanvasSnapshot().aiAnnotations.at(-1)?.physicalShapeIds[0];
+    if (aiId === undefined) throw new Error("AI annotation renderer shape was not created");
     expect(bridge.getShape(aiId)?.isLocked).toBe(true);
 
     const revisionBeforeProtectedPartial = adapter.getBoardRevision();
@@ -1046,7 +1046,7 @@ describe("Real tldraw mounted browser integration", () => {
       annotationPurpose: "must not erase student work",
       targetShapeId: studentId,
       expectedShapeRevision: 1
-    })).rejects.toThrow(/Refusing to erase shape/u);
+    })).rejects.toThrow(/targetShapeId is not valid for erase_ai_annotation/u);
     expect(bridge.getShape(studentId)).toBeDefined();
     expect(adapter.getBoardRevision()).toBe(beforeProtectedDelete);
 

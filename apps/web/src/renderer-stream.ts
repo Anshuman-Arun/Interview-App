@@ -169,7 +169,12 @@ export function createLoopbackAcknowledgementSender(
         globalThis.clearTimeout(timeoutId);
       }
       const parsed = DeliveryAcknowledgedResponseSchema.parse(responseJson);
-      const expectedAcknowledgement = command.type === "ACK_DELIVERY_EXPOSED" ? "EXPOSED" : "COMPLETED";
+      const expectedAcknowledgement =
+        command.type === "ACK_DELIVERY_EXPOSED"
+          ? "EXPOSED"
+          : command.type === "ACK_DELIVERY_COMPLETED"
+            ? "COMPLETED"
+            : "NOT_EXPOSED";
       if (
         parsed.requestId !== command.requestId
         || parsed.deliveryId !== command.deliveryId

@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   AcknowledgeDeliveryCompletedCommandSchema,
   AcknowledgeDeliveryExposedCommandSchema,
+  AcknowledgeDeliveryNotExposedCommandSchema,
   DeliveryCommandSchema,
   DeliveryIdSchema,
   RequestIdSchema,
@@ -58,7 +59,8 @@ export type RendererStreamMessage = z.infer<typeof RendererStreamMessageSchema>;
 
 export const RendererAcknowledgementCommandSchema = z.discriminatedUnion("type", [
   AcknowledgeDeliveryExposedCommandSchema,
-  AcknowledgeDeliveryCompletedCommandSchema
+  AcknowledgeDeliveryCompletedCommandSchema,
+  AcknowledgeDeliveryNotExposedCommandSchema
 ]).superRefine((command, context) => {
   if (!REQUEST_ID_PATTERN.test(command.requestId)) {
     context.addIssue({ code: "custom", path: ["requestId"], message: "Malformed RequestId" });
