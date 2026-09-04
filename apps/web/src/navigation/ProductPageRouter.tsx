@@ -21,7 +21,7 @@ export function ProductPageRouter({
   route,
   sessions,
   activeSessionId,
-  activeSessionCount,
+  activeSessionCount = activeSessionId === null ? 0 : 1,
   currentSessionId,
   activeProblemTitle,
   activeSessionPaused,
@@ -52,7 +52,7 @@ export function ProductPageRouter({
   readonly route: Exclude<ProductRoute, { readonly page: "interview" }>;
   readonly sessions: readonly StoredSessionSummary[];
   readonly activeSessionId: SessionId | null;
-  readonly activeSessionCount: number;
+  readonly activeSessionCount?: number;
   readonly currentSessionId: SessionId | null;
   readonly activeProblemTitle?: string | null;
   readonly activeSessionPaused?: boolean;
