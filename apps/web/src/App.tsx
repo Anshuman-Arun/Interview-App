@@ -1127,6 +1127,7 @@ export const App: React.FC = () => {
             setSplitPercent(38);
           }}
           onPointerDown={(event) => {
+            if (event.pointerType === "mouse" && event.button !== 0) return;
             setPaneFocus("split");
             event.currentTarget.setPointerCapture(event.pointerId);
             setSplitFromClientX(event.clientX);
