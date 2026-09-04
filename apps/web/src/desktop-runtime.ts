@@ -41,6 +41,7 @@ export interface DesktopRuntimeStatus {
 
 export interface DesktopRuntimeBridge {
   readonly getLocalRuntimeStatus: () => Promise<unknown>;
+  readonly refreshLocalRuntimeStatus?: () => Promise<unknown>;
   readonly installPythonRuntime?: () => Promise<unknown>;
   readonly installVoiceModels?: () => Promise<unknown>;
   readonly installVisionModel?: () => Promise<unknown>;
@@ -51,6 +52,7 @@ export function getDesktopRuntimeBridge(): DesktopRuntimeBridge | undefined {
   const bridge = (globalThis as typeof globalThis & {
     readonly interviewDesktop?: {
       readonly getLocalRuntimeStatus?: unknown;
+      readonly refreshLocalRuntimeStatus?: unknown;
       readonly installPythonRuntime?: unknown;
       readonly installVoiceModels?: unknown;
       readonly installVisionModel?: unknown;
@@ -65,6 +67,9 @@ export function getDesktopRuntimeBridge(): DesktopRuntimeBridge | undefined {
   }
   const getLocalRuntimeStatus =
     bridge.getLocalRuntimeStatus as () => Promise<unknown>;
+  const refreshLocalRuntimeStatus = typeof bridge.refreshLocalRuntimeStatus === "function"
+    ? bridge.refreshLocalRuntimeStatus as () => Promise<unknown>
+    : undefined;
   const installPythonRuntime = typeof bridge.installPythonRuntime === "function"
     ? bridge.installPythonRuntime as () => Promise<unknown>
     : undefined;
@@ -79,6 +84,7 @@ export function getDesktopRuntimeBridge(): DesktopRuntimeBridge | undefined {
     : undefined;
   return {
     getLocalRuntimeStatus,
+    ...(refreshLocalRuntimeStatus === undefined ? {} : { refreshLocalRuntimeStatus }),
     ...(installPythonRuntime === undefined ? {} : { installPythonRuntime }),
     ...(installVoiceModels === undefined ? {} : { installVoiceModels }),
     ...(installVisionModel === undefined ? {} : { installVisionModel }),
@@ -134,10 +140,15 @@ export function parseDesktopRuntimeStatus(
 }
 
 export async function readDesktopRuntimeStatus(
-  bridge: DesktopRuntimeBridge
+  bridge: DesktopRuntimeBridge,
+  options: { readonly refreshPrerequisites?: boolean } = {}
 ): Promise<DesktopRuntimeStatus> {
+  const readStatus = options.refreshPrerequisites === true
+    && bridge.refreshLocalRuntimeStatus !== undefined
+    ? bridge.refreshLocalRuntimeStatus
+    : bridge.getLocalRuntimeStatus;
   const parsed = parseDesktopRuntimeStatus(
-    await bridge.getLocalRuntimeStatus()
+    await readStatus()
   );
   if (parsed === undefined) {
     throw new Error("Desktop runtime status is malformed");
