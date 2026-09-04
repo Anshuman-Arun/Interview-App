@@ -23,6 +23,23 @@
   color: var(--danger);
 }
 
+.review-read-state > button {
+  width: fit-content;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border-default);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: 600 8px/1 var(--font-ui);
+}
+
+.review-read-state--error > button {
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border-default));
+  color: var(--danger);
+}
+
 .session-performance-card {
   display: grid;
   gap: 18px;
