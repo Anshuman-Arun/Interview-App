@@ -233,6 +233,50 @@ describe("Oxford formal target admission", () => {
     )).toBe(true);
   });
 
+  it("admits source-faithful false claims so the deterministic verifier can contradict them", () => {
+    expect(admitted(
+      "oxford-domino-chessboard",
+      "Thirty-two black squares minus two removed black corners equals thirty-one black squares.",
+      JSON.stringify({
+        protocol: "INTERVIEW_APP_RATIONAL_ARITHMETIC_CLAIM",
+        protocolVersion: 1,
+        claim: {
+          kind: "EQUALITY",
+          left: {
+            kind: "SUBTRACT",
+            left: rational("32"),
+            right: rational("2")
+          },
+          right: rational("31")
+        }
+      })
+    )).toBe(true);
+
+    expect(admitted(
+      "oxford-triangle-medians",
+      "Along the median, the centroid is two thirds from the vertex, leaving one third; two thirds divided by one third is one.",
+      JSON.stringify({
+        protocol: "INTERVIEW_APP_RATIONAL_ARITHMETIC_CLAIM",
+        protocolVersion: 1,
+        claim: {
+          kind: "EQUALITY",
+          left: {
+            kind: "DIVIDE",
+            left: {
+              kind: "RATIONAL",
+              value: { numerator: "2", denominator: "3" }
+            },
+            right: {
+              kind: "RATIONAL",
+              value: { numerator: "1", denominator: "3" }
+            }
+          },
+          right: rational("1")
+        }
+      })
+    )).toBe(true);
+  });
+
   it("rejects invented numerals and target-shaped trivial substitutions", () => {
     expect(admitted(
       "oxford-domino-chessboard",
