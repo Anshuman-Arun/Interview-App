@@ -576,7 +576,7 @@ describe("desktop local model runtime", () => {
     const bootstrapExecutable = bootstrap.stdout.trim();
     expect(bootstrapExecutable.length).toBeGreaterThan(0);
 
-    const fixtureRoot = temporaryRoot("desktop-python-offline-setup-");
+    const fixtureRoot = temporaryRoot("Interview App Ω Python Setup-");
     const workerScriptPath = join(fixtureRoot, "worker.py");
     const requirementsPath = join(fixtureRoot, "requirements.txt");
     const managedPythonRoot = join(fixtureRoot, "managed-python");
@@ -592,7 +592,7 @@ describe("desktop local model runtime", () => {
     writeFileSync(requirementsPath, "# intentionally empty offline setup fixture\n");
 
     const composition = new DesktopLocalRuntimeComposition({
-      appDataRoot: temporaryRoot("desktop-python-offline-appdata-"),
+      appDataRoot: temporaryRoot("Interview App Ω Python AppData-"),
       cwd: process.cwd(),
       resourcesPath: process.cwd(),
       isPackaged: false,
