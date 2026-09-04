@@ -63,20 +63,26 @@ export function getDesktopRuntimeBridge(): DesktopRuntimeBridge | undefined {
   ) {
     return undefined;
   }
+  const getLocalRuntimeStatus =
+    bridge.getLocalRuntimeStatus as () => Promise<unknown>;
+  const installPythonRuntime = typeof bridge.installPythonRuntime === "function"
+    ? bridge.installPythonRuntime as () => Promise<unknown>
+    : undefined;
+  const installVoiceModels = typeof bridge.installVoiceModels === "function"
+    ? bridge.installVoiceModels as () => Promise<unknown>
+    : undefined;
+  const installVisionModel = typeof bridge.installVisionModel === "function"
+    ? bridge.installVisionModel as () => Promise<unknown>
+    : undefined;
+  const restartApp = typeof bridge.restartApp === "function"
+    ? bridge.restartApp as () => Promise<void>
+    : undefined;
   return {
-    getLocalRuntimeStatus: bridge.getLocalRuntimeStatus.bind(bridge),
-    ...(typeof bridge.installPythonRuntime === "function"
-      ? { installPythonRuntime: bridge.installPythonRuntime.bind(bridge) }
-      : {}),
-    ...(typeof bridge.installVoiceModels === "function"
-      ? { installVoiceModels: bridge.installVoiceModels.bind(bridge) }
-      : {}),
-    ...(typeof bridge.installVisionModel === "function"
-      ? { installVisionModel: bridge.installVisionModel.bind(bridge) }
-      : {}),
-    ...(typeof bridge.restartApp === "function"
-      ? { restartApp: bridge.restartApp.bind(bridge) }
-      : {})
+    getLocalRuntimeStatus,
+    ...(installPythonRuntime === undefined ? {} : { installPythonRuntime }),
+    ...(installVoiceModels === undefined ? {} : { installVoiceModels }),
+    ...(installVisionModel === undefined ? {} : { installVisionModel }),
+    ...(restartApp === undefined ? {} : { restartApp })
   };
 }
 
