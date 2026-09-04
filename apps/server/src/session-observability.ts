@@ -174,6 +174,7 @@ function parsePersistedMetrics(value: unknown): SessionMetrics | undefined {
   const parsed = value as Partial<SessionMetrics>;
   if (
     typeof parsed.partial !== "boolean"
+    || typeof parsed.candidateSubstantiveTurns !== "number"
     || !Number.isSafeInteger(parsed.candidateSubstantiveTurns)
     || parsed.candidateSubstantiveTurns < 0
     || !Array.isArray(parsed.candidateTurnIds)
