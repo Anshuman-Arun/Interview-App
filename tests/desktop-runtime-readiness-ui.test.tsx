@@ -290,6 +290,81 @@ describe("desktop local AI readiness UX", () => {
     });
   });
 
+  it("turns an externally installed Python prerequisite into setup-required on Re-check", async () => {
+    Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
+    let current = runtimeStatus({
+      speech: { state: "UNAVAILABLE", reasonCode: "PYTHON_RUNTIME_UNAVAILABLE" },
+      tts: { state: "UNAVAILABLE", reasonCode: "PYTHON_RUNTIME_UNAVAILABLE" },
+      vision: { state: "UNAVAILABLE", reasonCode: "PYTHON_RUNTIME_UNAVAILABLE" },
+      python: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_UNAVAILABLE",
+        strategy: "SYSTEM_CPYTHON",
+        supportedVersions: ["3.12", "3.13"]
+      }
+    });
+    const getLocalRuntimeStatus = vi.fn(async () => current);
+    vi.stubGlobal("interviewDesktop", { getLocalRuntimeStatus });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const findButton = (label: string): HTMLButtonElement => {
+      const match = Array.from(container.querySelectorAll("button"))
+        .find((button) => button.textContent.trim() === label);
+      if (!(match instanceof HTMLButtonElement)) {
+        throw new Error(`Missing button: ${label}`);
+      }
+      return match;
+    };
+
+    await act(async () => {
+      root.render(
+        <AppearanceProvider>
+          <SettingsPage
+            providerOptions={[READY_PROVIDER]}
+            providerOptionsLoading={false}
+            providerOptionsError={null}
+            onRefreshProviderOptions={vi.fn(async () => [READY_PROVIDER])}
+            onStartInterview={vi.fn()}
+          />
+        </AppearanceProvider>
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(container.textContent).toContain(
+      "Install 64-bit CPython 3.12 or 3.13, then re-check."
+    );
+    expect(container.textContent).not.toContain("Install Python components");
+
+    current = runtimeStatus({
+      speech: { state: "UNAVAILABLE", reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING" },
+      tts: { state: "UNAVAILABLE", reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING" },
+      vision: { state: "UNAVAILABLE", reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING" },
+      python: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING",
+        strategy: "SYSTEM_CPYTHON",
+        supportedVersions: ["3.12", "3.13"]
+      }
+    });
+
+    await act(async () => {
+      findButton("Re-check").click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(getLocalRuntimeStatus).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain("SETUP REQUIRED");
+    expect(findButton("Install Python components").disabled).toBe(false);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("fails closed when an Antigravity re-check errors even if a prior option was ready", () => {
     const markup = renderToStaticMarkup(
       React.createElement(
