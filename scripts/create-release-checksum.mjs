@@ -44,7 +44,7 @@ export async function verifySha256File(filePath, checksumPath) {
       ? raw.slice(0, -1)
       : raw;
   if (/[\r\n]/u.test(line)) throw new Error("Checksum file must contain exactly one line");
-  const match = /^([0-9a-f]{64})  ([^/\\\r\n]+)$/u.exec(line);
+  const match = /^([0-9a-f]{64}) {2}([^/\\\r\n]+)$/u.exec(line);
   if (match === null) throw new Error("Checksum file format is invalid");
   const expectedName = path.basename(filePath);
   if (match[2] !== expectedName) {
