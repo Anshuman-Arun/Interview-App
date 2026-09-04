@@ -1,3 +1,5 @@
+export const DESKTOP_FIRST_RUN_SETUP_KEY = "interview.desktop.first-run-readiness.v1";
+
 export type DesktopRuntimeCapabilityState =
   | "READY"
   | "MISSING_ASSET"
