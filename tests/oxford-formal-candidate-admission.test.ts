@@ -340,6 +340,34 @@ describe("Oxford formal target admission", () => {
     )).toBe(false);
 
     expect(admitted(
+      "oxford-prefix-sums-mod-n",
+      "The prefix sums are 5 and 10, and 5 divides 10.",
+      JSON.stringify({
+        protocol: "INTERVIEW_APP_MODULAR_ARITHMETIC_CLAIM",
+        protocolVersion: 1,
+        claim: {
+          kind: "DIVISIBILITY",
+          divisor: "5",
+          dividend: integer("10")
+        }
+      })
+    )).toBe(false);
+
+    expect(admitted(
+      "oxford-divisibility-chain",
+      "The chosen numbers 6 and 24 have odd part 3, and 3 divides 24.",
+      JSON.stringify({
+        protocol: "INTERVIEW_APP_MODULAR_ARITHMETIC_CLAIM",
+        protocolVersion: 1,
+        claim: {
+          kind: "DIVISIBILITY",
+          divisor: "3",
+          dividend: integer("24")
+        }
+      })
+    )).toBe(false);
+
+    expect(admitted(
       "oxford-divisibility-chain",
       "The numbers 6 and 24 have the same odd part.",
       JSON.stringify({
