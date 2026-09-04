@@ -321,6 +321,91 @@ describe("bounded provider board scene", () => {
     ]);
   });
 
+  it("replays exposed erase actions so removed AI annotations are not advertised to the provider", () => {
+    const revision = BoardRevisionSchema.parse(1);
+    const sessionId = newSessionId();
+    const deliveries: Record<string, SessionState["deliveries"][string]> = {};
+    const generations: Record<string, SessionState["generations"][string]> = {};
+
+    for (let index = 1; index <= 3; index += 1) {
+      const generationId = GenerationIdSchema.parse(`generation:erase:${String(index)}`);
+      generations[generationId] = {
+        generationId,
+        basis: GenerationBasisSchema.parse({
+          contextEpoch: 0,
+          committedInputSequence: index,
+          transcriptRevision: 0,
+          boardRevision: revision,
+          problemStateRevision: 0,
+          policyRevision: 0,
+          turnId: TurnIdSchema.parse(`turn:erase:${String(index)}`)
+        }),
+        provider: "mock",
+        status: "VALIDATED"
+      };
+    }
+
+    const firstId = DeliveryIdSchema.parse("delivery:erase:first");
+    const secondId = DeliveryIdSchema.parse("delivery:erase:second");
+    const eraseId = DeliveryIdSchema.parse("delivery:erase:latest");
+    deliveries[firstId] = DeliveryAtomSchema.parse({
+      deliveryId: firstId,
+      generationId: GenerationIdSchema.parse("generation:erase:1"),
+      content: {
+        medium: "WHITEBOARD",
+        action: {
+          operation: "write_text",
+          layer: "AI_ANNOTATION",
+          content: "first",
+          annotationPurpose: "first annotation"
+        }
+      },
+      disclosureIds: [],
+      effectiveDisclosureLevel: 0,
+      status: "COMPLETED"
+    });
+    deliveries[secondId] = DeliveryAtomSchema.parse({
+      deliveryId: secondId,
+      generationId: GenerationIdSchema.parse("generation:erase:2"),
+      content: {
+        medium: "WHITEBOARD",
+        action: {
+          operation: "write_text",
+          layer: "AI_ANNOTATION",
+          content: "second",
+          annotationPurpose: "second annotation"
+        }
+      },
+      disclosureIds: [],
+      effectiveDisclosureLevel: 0,
+      status: "COMPLETED"
+    });
+    deliveries[eraseId] = DeliveryAtomSchema.parse({
+      deliveryId: eraseId,
+      generationId: GenerationIdSchema.parse("generation:erase:3"),
+      content: {
+        medium: "WHITEBOARD",
+        action: {
+          operation: "erase_ai_annotation",
+          layer: "AI_ANNOTATION",
+          annotationPurpose: "withdraw latest annotation"
+        }
+      },
+      disclosureIds: [],
+      effectiveDisclosureLevel: 0,
+      status: "COMPLETED"
+    });
+
+    const state: SessionState = {
+      ...initialSessionState(sessionId),
+      boardRevision: revision,
+      deliveries,
+      generations
+    };
+    const scene = buildBoardSceneContext(state, revision);
+    expect(scene?.aiAnnotations.map((item) => item.deliveryId)).toEqual([firstId]);
+  });
+
   it("drops narrow-freshness semantics after any later board revision without a new region proof", () => {
     const sessionId = newSessionId();
     const sourceRevision = BoardRevisionSchema.parse(1);
