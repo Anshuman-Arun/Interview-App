@@ -168,11 +168,11 @@
   font: 500 9px/1 var(--font-ui);
 }
 
-.expressive-home__secondary:hover,
+.expressive-home__secondary:hover:not(:disabled),
 .expressive-home__recent header button:hover,
 .expressive-home__row button:hover:not(:disabled),
 .expressive-home__settings-link:hover,
-.expressive-home__active button:hover {
+.expressive-home__active button:hover:not(:disabled) {
   border-color: var(--text-primary);
   color: var(--text-primary);
 }
@@ -545,3 +545,9 @@
 }
 
 .expressive-home__active[data-conflict=true]>span{color:var(--danger)}
+
+.expressive-home__secondary:disabled,
+.expressive-home__section-head button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
