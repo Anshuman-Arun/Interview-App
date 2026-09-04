@@ -35,6 +35,9 @@ interface DesktopRuntimeBridge {
   readonly installLocalModels?: () => Promise<unknown>;
 }
 
+type DesktopRuntimeOperations = DesktopRuntimeBridge &
+  Required<Pick<DesktopRuntimeBridge, "getLocalRuntimeStatus" | "installLocalModels">>;
+
 function readDesktopAppVersion(): string | undefined {
   const bridge = (globalThis as typeof globalThis & {
     readonly interviewDesktop?: DesktopRuntimeBridge;
@@ -48,7 +51,7 @@ function readDesktopAppVersion(): string | undefined {
     : undefined;
 }
 
-function getDesktopRuntimeBridge(): Required<DesktopRuntimeBridge> | undefined {
+function getDesktopRuntimeBridge(): DesktopRuntimeOperations | undefined {
   const bridge = (globalThis as typeof globalThis & {
     readonly interviewDesktop?: DesktopRuntimeBridge;
   }).interviewDesktop;
@@ -59,7 +62,7 @@ function getDesktopRuntimeBridge(): Required<DesktopRuntimeBridge> | undefined {
   ) {
     return undefined;
   }
-  return bridge as Required<DesktopRuntimeBridge>;
+  return bridge as DesktopRuntimeOperations;
 }
 
 function parseDesktopRuntimeStatus(value: unknown): DesktopRuntimeStatus | undefined {
