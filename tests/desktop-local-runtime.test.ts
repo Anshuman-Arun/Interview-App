@@ -231,6 +231,50 @@ describe("desktop local model runtime", () => {
     expect(mutable.pythonExecutable).toBe(launcher);
   });
 
+  it("finds a standard per-user Windows Python install even when Python is absent from PATH", async () => {
+    if (process.platform !== "win32") return;
+
+    const localAppData = temporaryRoot("desktop-python-standard-localappdata-");
+    const standardExecutable = join(
+      localAppData,
+      "Programs",
+      "Python",
+      "Python313",
+      "python.exe"
+    );
+    mkdirSync(dirname(standardExecutable), { recursive: true });
+    writeFileSync(standardExecutable, "test executable placeholder");
+
+    const previousLocalAppData = process.env["LOCALAPPDATA"];
+    const previousPath = process.env["PATH"];
+    process.env["LOCALAPPDATA"] = localAppData;
+    process.env["PATH"] = "";
+    try {
+      const composition = new DesktopLocalRuntimeComposition({
+        appDataRoot: temporaryRoot("desktop-python-standard-appdata-"),
+        cwd: process.cwd(),
+        resourcesPath: process.cwd(),
+        isPackaged: false,
+        pythonExecutable: "python"
+      });
+      compositions.push(composition);
+
+      const mutable = composition as unknown as {
+        pythonExecutable?: string;
+        pythonRuntimeCompatible(executable: string, signal?: AbortSignal): boolean;
+      };
+      mutable.pythonRuntimeCompatible = () => true;
+      await expect(composition.start()).resolves.toBeUndefined();
+      expect(mutable.pythonExecutable).toBe(standardExecutable);
+      expect(composition.getPythonRuntimeStatus()).toEqual({ state: "READY" });
+    } finally {
+      if (previousLocalAppData === undefined) delete process.env["LOCALAPPDATA"];
+      else process.env["LOCALAPPDATA"] = previousLocalAppData;
+      if (previousPath === undefined) delete process.env["PATH"];
+      else process.env["PATH"] = previousPath;
+    }
+  });
+
   it("degrades voice without spawning when the configured Python runtime cannot be resolved", async () => {
     const composition = new DesktopLocalRuntimeComposition({
       appDataRoot: temporaryRoot("desktop-python-missing-"),
