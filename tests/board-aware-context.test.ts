@@ -388,6 +388,9 @@ describe("bounded provider board scene", () => {
     };
     const scene = buildBoardSceneContext(state, revision);
     expect(scene?.aiAnnotations).toHaveLength(6);
+    expect(scene?.aiAnnotationCount).toBe(7);
+    expect(scene?.includedAiAnnotationCount).toBe(6);
+    expect(scene?.aiAnnotationsTruncated).toBe(true);
     expect(scene?.aiAnnotations.map((item) => item.annotationId)).toEqual([
       "delivery:1-lexical-reverse",
       "delivery:2-lexical-reverse",
