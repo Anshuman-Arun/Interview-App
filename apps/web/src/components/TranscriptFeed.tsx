@@ -36,6 +36,7 @@ export const TranscriptFeed: React.FC<TranscriptFeedProps> = ({
   onToggleFocus
 }) => {
   const messagesRef = useRef<HTMLDivElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
   const followingRef = useRef(true);
   const previousScrollContextKeyRef = useRef<string | null>(scrollContextKey);
   const [showJump, setShowJump] = useState(false);
@@ -77,14 +78,19 @@ export const TranscriptFeed: React.FC<TranscriptFeedProps> = ({
 
   useEffect(() => {
     const node = messagesRef.current;
-    if (node === null || typeof ResizeObserver === "undefined") return;
+    const content = contentRef.current;
+    if (
+      node === null
+      || content === null
+      || typeof ResizeObserver === "undefined"
+    ) return;
 
     const observer = new ResizeObserver(() => {
       if (!followingRef.current) return;
       node.scrollTo({ top: node.scrollHeight });
       setShowJump(false);
     });
-    observer.observe(node);
+    observer.observe(content);
     return () => observer.disconnect();
   }, []);
 
@@ -131,52 +137,54 @@ export const TranscriptFeed: React.FC<TranscriptFeedProps> = ({
       </header>
 
       <div className="transcript-feed__messages" ref={messagesRef} onScroll={handleScroll}>
-        {items.length === 0 ? (
-          <div className="transcript-feed__empty">
-            <span className="transcript-feed__empty-index">00</span>
-            <div>
-              <p>The interview dialogue has not started yet.</p>
-              <span>Start the session, then explain the first thing you know rather than waiting for a perfect proof.</span>
+        <div className="transcript-feed__content" ref={contentRef}>
+          {items.length === 0 ? (
+            <div className="transcript-feed__empty">
+              <span className="transcript-feed__empty-index">00</span>
+              <div>
+                <p>The interview dialogue has not started yet.</p>
+                <span>Start the session, then explain the first thing you know rather than waiting for a perfect proof.</span>
+              </div>
             </div>
-          </div>
-        ) : (
-          items.map((item) => {
-            const isStudent = item.role === "student";
-            return (
-              <article
-                key={item.id}
-                data-testid={`transcript-bubble-${item.id}`}
-                className="transcript-entry transcript-message"
-                data-role={item.role}
-              >
-                <div className="transcript-entry__rail">
-                  <span
-                    className="transcript-entry__speaker"
-                    aria-label={isStudent ? "Student (You)" : "Socratic Interviewer"}
-                  >
-                    {isStudent ? "YOU" : "INTERVIEWER"}
-                  </span>
-                </div>
-                <div className="transcript-entry__body">
-                  <div className={isStudent ? "message-content student-math-bubble" : "message-content ai-math-bubble"}>
-                    <MathText text={item.text} />
-                    {!isStudent && item.status === "DELIVERING" && <span className="transcript-entry__streaming" aria-label="Responding">▌</span>}
+          ) : (
+            items.map((item) => {
+              const isStudent = item.role === "student";
+              return (
+                <article
+                  key={item.id}
+                  data-testid={`transcript-bubble-${item.id}`}
+                  className="transcript-entry transcript-message"
+                  data-role={item.role}
+                >
+                  <div className="transcript-entry__rail">
+                    <span
+                      className="transcript-entry__speaker"
+                      aria-label={isStudent ? "Student (You)" : "Socratic Interviewer"}
+                    >
+                      {isStudent ? "YOU" : "INTERVIEWER"}
+                    </span>
                   </div>
-                  <div className="transcript-entry__meta">
-                    <time dateTime={new Date(item.timestamp).toISOString()}>{formatTimestamp(item.timestamp)}</time>
-                    <DeliveryBadge status={item.status} />
-                  </div>
-                  {item.errorMessage !== undefined && (
-                    <div className="transcript-entry__error" role="status">
-                      <span>Error: {item.errorMessage}</span>
-                      {onRetry !== undefined && <button type="button" disabled={retryDisabled} onClick={() => { if (!retryDisabled) void onRetry(item.id); }}>Retry</button>}
+                  <div className="transcript-entry__body">
+                    <div className={isStudent ? "message-content student-math-bubble" : "message-content ai-math-bubble"}>
+                      <MathText text={item.text} />
+                      {!isStudent && item.status === "DELIVERING" && <span className="transcript-entry__streaming" aria-label="Responding">▌</span>}
                     </div>
-                  )}
-                </div>
-              </article>
-            );
-          })
-        )}
+                    <div className="transcript-entry__meta">
+                      <time dateTime={new Date(item.timestamp).toISOString()}>{formatTimestamp(item.timestamp)}</time>
+                      <DeliveryBadge status={item.status} />
+                    </div>
+                    {item.errorMessage !== undefined && (
+                      <div className="transcript-entry__error" role="status">
+                        <span>Error: {item.errorMessage}</span>
+                        {onRetry !== undefined && <button type="button" disabled={retryDisabled} onClick={() => { if (!retryDisabled) void onRetry(item.id); }}>Retry</button>}
+                      </div>
+                    )}
+                  </div>
+                </article>
+              );
+            })
+          )}
+        </div>
       </div>
     </div>
   );
