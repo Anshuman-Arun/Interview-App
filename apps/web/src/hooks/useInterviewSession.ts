@@ -18,6 +18,7 @@ import {
   type SessionStatus,
   type StoredSessionSummary
 } from "../../../../packages/domain/src/index.js";
+import type { SessionPerformanceReadResponse } from "../../../../packages/diagnostics/src/index.js";
 import type {
   SessionEvaluationReadResponse,
   SessionHistoryReadResponse,
@@ -137,6 +138,10 @@ export interface UseInterviewSessionResult {
     sessionId: SessionId,
     signal?: AbortSignal
   ) => Promise<SessionReplayReadResponse>;
+  readonly readSessionPerformance: (
+    sessionId: SessionId,
+    signal?: AbortSignal
+  ) => Promise<SessionPerformanceReadResponse>;
   readonly readSessionHistory: (
     signal?: AbortSignal
   ) => Promise<SessionHistoryReadResponse>;
@@ -909,6 +914,13 @@ export function useInterviewSession(
     signal?: AbortSignal
   ): Promise<SessionReplayReadResponse> => {
     return getSessionReadClient().getReplay(targetSessionId, signal);
+  }, [getSessionReadClient]);
+
+  const readSessionPerformance = useCallback((
+    targetSessionId: SessionId,
+    signal?: AbortSignal
+  ): Promise<SessionPerformanceReadResponse> => {
+    return getSessionReadClient().getPerformance(targetSessionId, signal);
   }, [getSessionReadClient]);
 
   const readSessionHistory = useCallback((
@@ -2056,6 +2068,7 @@ export function useInterviewSession(
     refreshProviderOptions,
     readSessionEvaluation,
     readSessionReplay,
+    readSessionPerformance,
     readSessionHistory,
     readSessionConfiguration,
     startSession,
