@@ -112,3 +112,6 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Editorial v10: keep real performance data, remove dashboard-card chrome. */
+.session-performance-card{gap:18px;margin-top:30px;padding:12px 0 0;border:0;border-top:1px solid var(--text-primary);border-radius:0;background:transparent}.session-performance-card__heading h3{font:500 21px/1.1 var(--font-display)}.session-performance-card__heading small{font:400 8px/1.4 var(--font-mono);color:var(--text-muted)}.session-performance-grid{gap:24px}.session-performance-group{padding-top:10px;border-top:1px solid var(--border-subtle)}.session-performance-group h4{font:500 13px/1.2 var(--font-display)}.session-performance-group dl>div{padding:6px 0;border-bottom:1px solid var(--border-subtle)}.session-performance-group dt,.session-performance-group dd{font:500 8px/1.35 var(--font-ui)}.session-performance-card__note{padding-top:10px;border-top:1px solid var(--border-subtle);color:var(--text-muted)}
