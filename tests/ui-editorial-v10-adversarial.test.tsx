@@ -359,6 +359,72 @@ describe("editorial v10 adversarial UI states", () => {
     expect(host?.textContent).toContain("Loading bounded evaluation…");
   });
 
+  it("does not let a failed Replay read mask a cached Evaluation", async () => {
+    const sessionId = SessionIdSchema.parse(
+      "session_00000000-0000-4000-8000-000000000402"
+    );
+    const readEvaluation = vi.fn(async () => ({
+      protocolVersion: 1 as const,
+      type: "SESSION_EVALUATION_READ" as const,
+      sessionId,
+      available: false as const,
+      reason: "EVALUATION_UNAVAILABLE" as const
+    }));
+    const readReplay = vi.fn(async () => {
+      throw new Error("temporary replay failure");
+    });
+    const readPerformance = vi.fn(() => new Promise<never>(() => undefined));
+
+    await act(async () => {
+      root?.render(
+        <ReviewReadPanel
+          sessionId={sessionId}
+          view="evaluation"
+          readEvaluation={readEvaluation}
+          readReplay={readReplay}
+          readPerformance={readPerformance}
+        />
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(host?.textContent).toContain("NOT SCORED");
+
+    await act(async () => {
+      root?.render(
+        <ReviewReadPanel
+          sessionId={sessionId}
+          view="replay"
+          readEvaluation={readEvaluation}
+          readReplay={readReplay}
+          readPerformance={readPerformance}
+        />
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(host?.textContent).toContain(
+      "The bounded replay read could not be loaded."
+    );
+
+    await act(async () => {
+      root?.render(
+        <ReviewReadPanel
+          sessionId={sessionId}
+          view="evaluation"
+          readEvaluation={readEvaluation}
+          readReplay={readReplay}
+          readPerformance={readPerformance}
+        />
+      );
+      await Promise.resolve();
+    });
+
+    expect(host?.textContent).toContain("NOT SCORED");
+    expect(host?.textContent).not.toContain("bounded replay read could not be loaded");
+    expect(readEvaluation).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps compact and sync-state contracts explicit in source and CSS", () => {
     const app = fs.readFileSync(
       path.resolve(process.cwd(), "apps/web/src/App.tsx"),
