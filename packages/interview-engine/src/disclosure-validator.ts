@@ -163,6 +163,68 @@ function protectedMetadataFormulationCount(
   );
 }
 
+interface BoardDisclosureBounds {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+const BOARD_DISCLOSURE_ASSOCIATION_MARGIN = 32;
+
+function absoluteBoardActionDisclosureBounds(
+  action: BoardAction
+): BoardDisclosureBounds | undefined {
+  const points = action.points;
+  if (points !== undefined && points.length > 0) {
+    const xs = points.map((point) => point.x);
+    const ys = points.map((point) => point.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    return {
+      x: minX,
+      y: minY,
+      width: Math.max(1, maxX - minX),
+      height: Math.max(1, maxY - minY)
+    };
+  }
+
+  const placement = action.placement;
+  if (placement?.x === undefined || placement.y === undefined) return undefined;
+  switch (action.operation) {
+    case "write_text":
+      return { x: placement.x, y: placement.y, width: 220, height: 96 };
+    case "write_equation":
+      return { x: placement.x, y: placement.y, width: 220, height: 56 };
+    case "draw_rectangle":
+    case "draw_ellipse":
+      if (action.width === undefined || action.height === undefined) return undefined;
+      return {
+        x: placement.x,
+        y: placement.y,
+        width: action.width,
+        height: action.height
+      };
+    default:
+      return undefined;
+  }
+}
+
+function boardBoundsAreAssociated(
+  actionBounds: BoardDisclosureBounds,
+  shapeBounds: BoardDisclosureBounds
+): boolean {
+  const margin = BOARD_DISCLOSURE_ASSOCIATION_MARGIN;
+  return (
+    actionBounds.x <= shapeBounds.x + shapeBounds.width + margin
+    && actionBounds.x + actionBounds.width >= shapeBounds.x - margin
+    && actionBounds.y <= shapeBounds.y + shapeBounds.height + margin
+    && actionBounds.y + actionBounds.height >= shapeBounds.y - margin
+  );
+}
+
 function boardTargetDisclosureTexts(
   action: BoardAction,
   boardScene: BoardSceneContext | undefined
@@ -176,6 +238,15 @@ function boardTargetDisclosureTexts(
   if (action.operation === "draw_arrow_between") {
     if (action.fromShapeId !== undefined) shapeIds.add(action.fromShapeId);
     if (action.toShapeId !== undefined) shapeIds.add(action.toShapeId);
+  }
+
+  const absoluteBounds = absoluteBoardActionDisclosureBounds(action);
+  if (absoluteBounds !== undefined) {
+    for (const shape of boardScene.shapes) {
+      if (boardBoundsAreAssociated(absoluteBounds, shape.bounds)) {
+        shapeIds.add(shape.shapeId);
+      }
+    }
   }
 
   const texts: string[] = [];
