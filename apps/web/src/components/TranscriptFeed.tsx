@@ -56,6 +56,19 @@ export const TranscriptFeed: React.FC<TranscriptFeedProps> = ({
     }
   }, [items]);
 
+  useEffect(() => {
+    const node = messagesRef.current;
+    if (node === null || typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver(() => {
+      if (!followingRef.current) return;
+      node.scrollTo({ top: node.scrollHeight });
+      setShowJump(false);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
   const handleScroll = (): void => {
     const node = messagesRef.current;
     if (node === null) return;
