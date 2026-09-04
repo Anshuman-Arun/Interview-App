@@ -31,6 +31,7 @@
 }
 
 .expressive-home__marginalia {
+  overflow: hidden;
   position: absolute;
   z-index: 0;
   inset: 0;
