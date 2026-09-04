@@ -894,7 +894,10 @@ export const App: React.FC = () => {
           aria-selected={compactPane === "interview"}
           aria-controls="compact-pane-interview"
           tabIndex={compactPane === "interview" ? 0 : -1}
-          onClick={() => setCompactPane("interview")}
+          onClick={() => {
+            setPaneFocus("split");
+            setCompactPane("interview");
+          }}
           onKeyDown={(event) => {
             if (
               event.key !== "ArrowRight"
@@ -902,6 +905,7 @@ export const App: React.FC = () => {
               && event.key !== "End"
             ) return;
             event.preventDefault();
+            setPaneFocus("split");
             setCompactPane("whiteboard");
             queueMicrotask(() => compactWhiteboardTabRef.current?.focus());
           }}
@@ -917,6 +921,7 @@ export const App: React.FC = () => {
           aria-controls="compact-pane-whiteboard"
           tabIndex={compactPane === "whiteboard" ? 0 : -1}
           onClick={() => {
+            setPaneFocus("split");
             setCompactPane("whiteboard");
           }}
           onKeyDown={(event) => {
@@ -926,6 +931,7 @@ export const App: React.FC = () => {
               && event.key !== "Home"
             ) return;
             event.preventDefault();
+            setPaneFocus("split");
             setCompactPane("interview");
             queueMicrotask(() => compactInterviewTabRef.current?.focus());
           }}
@@ -1036,11 +1042,12 @@ export const App: React.FC = () => {
               retryDisabled={sessionEntryPending || sessionTerminalPending}
               scrollContextKey={session.sessionId}
               focused={paneFocus === "transcript"}
-              onToggleFocus={() =>
+              onToggleFocus={() => {
+                setCompactPane("interview");
                 setPaneFocus((focus) =>
                   focus === "transcript" ? "split" : "transcript"
-                )
-              }
+                );
+              }}
               className="h-full"
             />
           </div>
@@ -1175,11 +1182,12 @@ export const App: React.FC = () => {
                 type="button"
                 className="board-appbar__layout-action"
                 aria-pressed={paneFocus === "whiteboard"}
-                onClick={() =>
+                onClick={() => {
+                  setCompactPane("whiteboard");
                   setPaneFocus((focus) =>
                     focus === "whiteboard" ? "split" : "whiteboard"
-                  )
-                }
+                  );
+                }}
               >
                 Focus whiteboard
               </button>
