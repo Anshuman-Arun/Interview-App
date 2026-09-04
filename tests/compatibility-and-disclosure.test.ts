@@ -206,6 +206,13 @@ describe("compatibility and disclosure gates", () => {
     ]));
     const boardScene = BoardSceneContextSchema.parse({
       boardRevision: 1,
+      studentShapeCount: 1,
+      includedStudentShapeCount: 1,
+      omittedStudentShapeCount: 0,
+      studentShapesTruncated: false,
+      aiAnnotationCount: 0,
+      includedAiAnnotationCount: 0,
+      aiAnnotationsTruncated: false,
       shapes: [{
         shapeId: "shape:harmless",
         shapeRevision: 1,
@@ -213,6 +220,7 @@ describe("compatibility and disclosure gates", () => {
         bounds: { x: 0, y: 0, width: 160, height: 40 },
         text: "x^2 + y^2 = 1"
       }],
+      semanticRelations: [],
       aiAnnotations: []
     });
     const result = validator.validate({
@@ -250,6 +258,13 @@ describe("compatibility and disclosure gates", () => {
     ]));
     const boardScene = BoardSceneContextSchema.parse({
       boardRevision: 1,
+      studentShapeCount: 1,
+      includedStudentShapeCount: 1,
+      omittedStudentShapeCount: 0,
+      studentShapesTruncated: false,
+      aiAnnotationCount: 0,
+      includedAiAnnotationCount: 0,
+      aiAnnotationsTruncated: false,
       shapes: [{
         shapeId: "shape:protected",
         shapeRevision: 2,
@@ -257,6 +272,7 @@ describe("compatibility and disclosure gates", () => {
         bounds: { x: 0, y: 0, width: 160, height: 40 },
         text: protectedDisclosure.fact
       }],
+      semanticRelations: [],
       aiAnnotations: []
     });
     const result = validator.validate({
@@ -313,6 +329,13 @@ describe("compatibility and disclosure gates", () => {
 
     const fallbackScene = BoardSceneContextSchema.parse({
       boardRevision: 1,
+      studentShapeCount: 1,
+      includedStudentShapeCount: 1,
+      omittedStudentShapeCount: 0,
+      studentShapesTruncated: false,
+      aiAnnotationCount: 0,
+      includedAiAnnotationCount: 0,
+      aiAnnotationsTruncated: false,
       shapes: [{
         shapeId: "shape:fallback-protected",
         shapeRevision: 1,
@@ -320,6 +343,7 @@ describe("compatibility and disclosure gates", () => {
         bounds: { x: 200, y: 200, width: 120, height: 40 },
         text: protectedDisclosure.fact
       }],
+      semanticRelations: [],
       aiAnnotations: []
     });
     const fallbackResult = validator.validate({
