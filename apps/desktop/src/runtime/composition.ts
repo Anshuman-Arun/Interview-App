@@ -219,11 +219,11 @@ export class DesktopLocalRuntimeComposition {
       this.pythonExecutable = executable;
       return;
     }
-    if (!probePythonInterpreter(executable, signal)) {
+    if (!this.pythonInterpreterCompatible(executable, signal)) {
       throw new Error("Python runtime setup requires supported 64-bit CPython 3.12 or 3.13");
     }
 
-    await installPinnedPythonRequirements(executable, this.requirementsPath, signal);
+    await this.installPythonRequirements(executable, signal);
     if (!this.pythonRuntimeCompatible(executable, signal)) {
       throw new Error("Python runtime dependencies did not pass the production worker check");
     }
@@ -439,7 +439,10 @@ export class DesktopLocalRuntimeComposition {
         this.markPendingCapabilitiesCancelled();
         return;
       }
-      const interpreterCompatible = probePythonInterpreter(pythonExecutable, signal);
+      const interpreterCompatible = this.pythonInterpreterCompatible(
+        pythonExecutable,
+        signal
+      );
       if (abortRequested(signal)) {
         this.markPendingCapabilitiesCancelled();
         return;
@@ -579,6 +582,24 @@ export class DesktopLocalRuntimeComposition {
     signal?: AbortSignal
   ): boolean {
     return probePythonRuntime(executable, this.workerScriptPath, signal);
+  }
+
+  private pythonInterpreterCompatible(
+    executable: string,
+    signal?: AbortSignal
+  ): boolean {
+    return probePythonInterpreter(executable, signal);
+  }
+
+  private installPythonRequirements(
+    executable: string,
+    signal?: AbortSignal
+  ): Promise<void> {
+    return installPinnedPythonRequirements(
+      executable,
+      this.requirementsPath,
+      signal
+    );
   }
 
   private async startSpeech(signal?: AbortSignal): Promise<void> {
