@@ -14,6 +14,7 @@ import {
 } from "../apps/web/src/components/TranscriptFeed.js";
 import { HomePage } from "../apps/web/src/pages/HomePage.js";
 import { NewInterviewPage } from "../apps/web/src/pages/NewInterviewPage.js";
+import { SettingsPage } from "../apps/web/src/pages/SettingsPage.js";
 
 const ACT_ENVIRONMENT_KEY = "IS_REACT_ACT_ENVIRONMENT";
 let root: Root | undefined;
@@ -226,6 +227,45 @@ describe("editorial v10 adversarial UI states", () => {
       duration.dispatchEvent(new Event("input", { bubbles: true }));
     });
     expect(start.disabled).toBe(true);
+  });
+
+  it("does not block setup when a non-Antigravity provider is launch-ready", () => {
+    const markup = renderToStaticMarkup(
+      <AppearanceProvider>
+        <SettingsPage
+          providerOptions={[
+            {
+              providerId: "antigravity-cli",
+              providerDisplayName: "Antigravity CLI",
+              providerKind: "LOCAL_PROCESS",
+              modelId: "gemini-local",
+              modelDisplayName: "Gemini Local",
+              availability: "UNAVAILABLE",
+              reason: "CREDENTIALS_REQUIRED"
+            },
+            {
+              providerId: "gemini-api",
+              providerDisplayName: "Gemini API",
+              providerKind: "REMOTE_API",
+              modelId: "gemini-remote",
+              modelDisplayName: "Gemini Remote",
+              availability: "AVAILABLE"
+            }
+          ]}
+          providerOptionsLoading={false}
+          providerOptionsError={null}
+          onRefreshProviderOptions={async () => []}
+          onStartInterview={vi.fn()}
+        />
+      </AppearanceProvider>
+    );
+
+    expect(markup).toContain("Gemini API");
+    expect(markup).toContain("Gemini Remote");
+    expect(markup).toContain("Typed interviews are ready.");
+    expect(markup).not.toMatch(
+      /<button[^>]*disabled=""[^>]*>Start interview<\/button>/u
+    );
   });
 
   it("shows provider rechecks as checking rather than ready", () => {
