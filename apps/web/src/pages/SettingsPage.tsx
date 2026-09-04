@@ -394,7 +394,7 @@ export function SettingsPage({
       >
         <div className="expressive-settings__readiness-heading">
           <div>
-            <span>LOCAL AI</span>
+            <span>INTERVIEW AI</span>
             <h2>Interview readiness</h2>
             <p>
               Configure optional local capabilities here. Typed interviews do not
