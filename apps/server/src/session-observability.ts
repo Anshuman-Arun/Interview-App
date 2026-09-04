@@ -182,13 +182,9 @@ function parsePersistedMetrics(value: unknown): SessionMetrics | undefined {
     || parsed.candidateTurnIds.some((turnId) => typeof turnId !== "string" || turnId.length === 0 || turnId.length > MAX_IDENTIFIER_LENGTH)
     || !Array.isArray(parsed.remoteAttempts)
     || typeof parsed.remoteTotals !== "object"
-    || parsed.remoteTotals === null
     || typeof parsed.formal !== "object"
-    || parsed.formal === null
     || typeof parsed.local !== "object"
-    || parsed.local === null
     || typeof parsed.latencies !== "object"
-    || parsed.latencies === null
   ) return undefined;
   try {
     const metrics = structuredClone(parsed) as SessionMetrics;
@@ -212,8 +208,7 @@ function parsePersistedMetrics(value: unknown): SessionMetrics | undefined {
     for (const attempt of metrics.remoteAttempts) {
       RemoteReasoningOutcomeSchema.parse(attempt.outcome);
       if (
-        (attempt.operation !== "INTERVIEWER_REALIZATION" && attempt.operation !== "FORMAL_INTERPRETATION")
-        || typeof attempt.providerId !== "string"
+        typeof attempt.providerId !== "string"
         || typeof attempt.modelId !== "string"
         || !Number.isFinite(attempt.elapsedMs)
         || attempt.elapsedMs < 0
