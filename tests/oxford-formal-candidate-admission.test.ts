@@ -193,20 +193,24 @@ describe("Oxford formal target admission", () => {
 
     expect(admitted(
       "oxford-triangle-medians",
-      "Along the median, the centroid is two thirds of the way from the vertex.",
+      "Along the median, the centroid is two thirds from the vertex, leaving one third; two thirds divided by one third is two, so the ratio is two to one.",
       JSON.stringify({
         protocol: "INTERVIEW_APP_RATIONAL_ARITHMETIC_CLAIM",
         protocolVersion: 1,
         claim: {
           kind: "EQUALITY",
           left: {
-            kind: "RATIONAL",
-            value: { numerator: "2", denominator: "3" }
+            kind: "DIVIDE",
+            left: {
+              kind: "RATIONAL",
+              value: { numerator: "2", denominator: "3" }
+            },
+            right: {
+              kind: "RATIONAL",
+              value: { numerator: "1", denominator: "3" }
+            }
           },
-          right: {
-            kind: "RATIONAL",
-            value: { numerator: "2", denominator: "3" }
-          }
+          right: rational("2")
         }
       })
     )).toBe(true);
