@@ -7,7 +7,7 @@ import "./HomePage.css";
 
 export function HomePage({
   activeSessionId,
-  activeSessionCount,
+  activeSessionCount = activeSessionId === null ? 0 : 1,
   activeProblemTitle,
   activeSessionPaused,
   sessions,
@@ -19,7 +19,7 @@ export function HomePage({
   sessionEntryPending
 }: {
   readonly activeSessionId: SessionId | null;
-  readonly activeSessionCount: number;
+  readonly activeSessionCount?: number;
   readonly activeProblemTitle?: string | null;
   readonly activeSessionPaused?: boolean;
   readonly sessions: readonly StoredSessionSummary[];
