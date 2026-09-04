@@ -739,7 +739,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
       y,
       props: {
         geo: "ellipse",
-        color: "violet",
+        color: "blue",
         dash: "dashed",
         fill: "none",
         size: "m",
@@ -769,10 +769,10 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
       type: "geo",
       x,
       y,
-      opacity: 0.35,
+      opacity: 0.18,
       props: {
         geo: "rectangle",
-        color: "yellow",
+        color: "blue",
         dash: "solid",
         fill: "semi",
         size: "m",
@@ -806,7 +806,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
         start: { x: 0, y: 0 },
         end: { x: 90, y: 90 },
         arrowheadEnd: "arrow",
-        color: "violet",
+        color: "blue",
         dash: "draw",
         size: "m",
         text: action.content ?? action.annotationPurpose
@@ -837,7 +837,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
         start: { x: 0, y: 0 },
         end: { x: 60, y: 60 },
         arrowheadEnd: "triangle",
-        color: "orange",
+        color: "blue",
         dash: "draw",
         size: "m",
         text: action.content ?? ""
@@ -865,7 +865,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
       y: placement.y,
       props: {
         text: action.content ?? action.annotationPurpose,
-        color: "violet",
+        color: "blue",
         size: "m",
         align: "start"
       },
@@ -895,7 +895,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
       y: placement.y,
       props: {
         text: action.content ?? "",
-        color: "violet",
+        color: "blue",
         size: "m",
         font: "mono"
       },
@@ -1011,7 +1011,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
         end: { x: end.x - start.x, y: end.y - start.y },
         arrowheadStart: "none",
         arrowheadEnd: arrowhead ? "arrow" : "none",
-        color: "violet",
+        color: "blue",
         dash: "draw",
         size: "m",
         text
@@ -1044,7 +1044,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
       y: placement.y,
       props: {
         geo,
-        color: "violet",
+        color: "blue",
         dash: "draw",
         fill: "none",
         size: "m",
