@@ -1372,8 +1372,8 @@ async function runPythonSetupProcess(
       executableId: "python-setup",
       args,
       timeoutMs,
-      maxStdoutBytes: 16 * 1024,
-      maxStderrBytes: 16 * 1024,
+      maxStdoutBytes: 256 * 1024,
+      maxStderrBytes: 64 * 1024,
       ...(signal === undefined ? {} : { signal })
     });
     if (result.exitCode !== 0) {
