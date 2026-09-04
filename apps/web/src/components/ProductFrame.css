@@ -326,7 +326,7 @@
   background: #3b3732;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 960px) {
   .product-frame {
     grid-template-columns: 1fr;
     grid-template-rows: auto minmax(0, 1fr);
