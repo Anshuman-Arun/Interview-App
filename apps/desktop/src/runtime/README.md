@@ -28,56 +28,57 @@ The production runtime is:
 - TTS: Kokoro `af_heart` through Moonshine Voice 0.1.5;
 - ONNX Runtime: exactly 1.29.0 for the Silero worker path;
 - Python dependency lock: exact graph version 1 on CPython 3.12-3.13;
-- vision: no production local backend is selected in this integration.
+- vision: the reviewed production local vision worker and verified vision
+  asset manifest.
 
-Vision therefore reports `UNAVAILABLE / NO_PRODUCTION_BACKEND_CONFIGURED`.
 The desktop never substitutes a deterministic/test vision backend.
 
-## Installation is explicit
+## Installation is explicit and product-managed
 
-Normal desktop startup does not download model weights and does not install
-Python packages. Missing assets produce `MISSING_ASSET`; a missing/incompatible
-Python runtime produces `UNAVAILABLE` or `FAILED`. Typed interviews remain
-usable.
+Normal desktop startup does not download model weights or mutate the user's
+Python installation. Missing assets produce `MISSING_ASSET`; missing,
+unsupported, or incomplete Python produces a bounded `UNAVAILABLE` reason.
+Typed interviews remain usable throughout.
 
-Optional local-model initialization has a 60-second **total desktop startup
-budget**. If speech/TTS cannot reach an admitted usable state within that
-budget, startup cancellation tears down any partial runtime and the typed
-application continues instead of waiting for the per-worker timeout sequence.
-
-The supported production interpreter is **CPython 3.12 or 3.13**. The
-requirements file pins the complete dependency graph used by the worker, not
-only Moonshine/ONNX Runtime.
-
-Use the same interpreter for installation and desktop execution. By default the
-desktop resolves `python` on Windows and `python3` on Linux. For a venv or
-multi-Python machine, set `INTERVIEW_LOCAL_PYTHON` to that interpreter
-(preferably an absolute path); desktop startup canonicalizes and pins it before
-any worker is registered.
+The supported production interpreter is **64-bit CPython 3.12 or 3.13**. The
+packaged requirements file pins the complete dependency graph used by the
+worker, not only Moonshine/ONNX Runtime. First-run Settings distinguishes the
+interpreter itself from the pinned local-AI Python components:
 
 ```text
-<the same python executable> -m pip install --only-binary=:all: -r workers/python/requirements-local-model-runtime.txt
+supported Python + missing pinned packages
+        ↓
+Install Python components
+        ↓
+Install voice models / Install vision model
+        ↓
+Restart once
+        ↓
+live worker readiness check
 ```
 
-The worker verifies the installed distribution versions before READY and binds
-the dependency-lock version into its trusted runtime handshake. A later pip
-resolution therefore cannot silently run under the same admitted runtime
-identity.
+The renderer never runs pip or downloads model files. The authenticated desktop
+IPC path verifies the packaged worker and requirements lock, resolves the same
+supported interpreter used by production workers, and invokes non-interactive
+binary-only pip against that fixed requirements file. It then re-runs the
+production worker's exact `--check-runtime` admission probe before reporting
+the Python component setup as installed. Raw filesystem paths and pip output are
+not exposed to the renderer.
 
-Install the application-owned model manifests explicitly with:
+Voice and vision model installation are separate privileged operations that
+reuse the existing `ModelAssetManager` manifests. Fixed HTTPS source URLs,
+exact expected byte lengths and SHA-256 digests, bounded redirects/timeouts,
+cache limits, disk-space checks, staging, verification, and atomic publication
+remain authoritative. No renderer-provided path, package name, or download URL
+is accepted.
 
-```text
-pnpm setup:desktop-models
-```
+Optional local-model initialization still has a 60-second **total desktop
+startup budget**. If local workers cannot reach an admitted usable state within
+that budget, startup cancellation tears down partial runtime work and the typed
+application continues.
 
-This is a one-shot bootstrap: after all manifests are verified and published it
-exits successfully instead of opening the interview UI. The command fails if
-another Interview App instance is already running. It invokes the existing
-`ModelAssetManager` downloader. It uses fixed
-HTTPS source URLs, exact expected byte lengths and SHA-256 digests, bounded
-redirects/timeouts/cache size, disk-space checks, staging, verification, and
-atomic publication. It does not accept a model- or renderer-provided path or
-URL.
+Developer CLI setup commands remain available for maintenance and smoke testing,
+but they are not part of the normal packaged first-run path.
 
 ## Asset trust boundary
 
