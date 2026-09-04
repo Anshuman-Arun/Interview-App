@@ -69,6 +69,7 @@ export function ReviewReadPanel({
   }, [readPerformance, sessionId]);
 
   useEffect(() => {
+    setError(null);
     if (view === "evaluation" && evaluation !== null) {
       setLoading(false);
       return;
@@ -79,7 +80,6 @@ export function ReviewReadPanel({
     }
 
     const controller = new AbortController();
-    setError(null);
     setLoading(true);
 
     const pending = view === "evaluation"
