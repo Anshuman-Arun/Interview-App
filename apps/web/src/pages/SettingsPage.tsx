@@ -328,8 +328,13 @@ export function SettingsPage({
 
   const recheckAll = useCallback(async (): Promise<void> => {
     if (setupOperationInFlightRef.current) return;
-    await refreshRuntime(true);
-    await onRefreshProviderOptions?.().catch(() => undefined);
+    setupOperationInFlightRef.current = true;
+    try {
+      await refreshRuntime(true);
+      await onRefreshProviderOptions?.().catch(() => undefined);
+    } finally {
+      setupOperationInFlightRef.current = false;
+    }
   }, [onRefreshProviderOptions, refreshRuntime]);
 
   const finishSetup = (): void => {
