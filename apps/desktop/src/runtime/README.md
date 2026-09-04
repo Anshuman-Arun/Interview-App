@@ -58,12 +58,13 @@ live worker readiness check
 ```
 
 The renderer never runs pip or downloads model files. The authenticated desktop
-IPC path verifies the packaged worker and requirements lock, resolves the same
-supported interpreter used by production workers, and invokes non-interactive
-binary-only pip against that fixed requirements file. It then re-runs the
-production worker's exact `--check-runtime` admission probe before reporting
-the Python component setup as installed. Raw filesystem paths and pip output are
-not exposed to the renderer.
+IPC path verifies the packaged worker and requirements lock, uses supported
+system CPython only as a bootstrap, creates an Interview App-owned virtual
+environment under app data, and invokes non-interactive binary-only pip inside
+that isolated environment. The user's base Python environment is not mutated.
+The desktop then re-runs the production worker's exact `--check-runtime`
+admission probe before reporting the Python component setup as installed. Raw
+filesystem paths and pip output are not exposed to the renderer.
 
 Voice and vision model installation are separate privileged operations that
 reuse the existing `ModelAssetManager` manifests. Fixed HTTPS source URLs,
