@@ -67,7 +67,7 @@ export function NewInterviewPage({
   providerOptionsLoading,
   providerOptionsError,
   activeSessionId,
-  activeSessionCount,
+  activeSessionCount = activeSessionId === null ? 0 : 1,
   startPending,
   onRefreshCatalog,
   onRefreshProviderOptions,
@@ -81,7 +81,7 @@ export function NewInterviewPage({
   readonly providerOptionsLoading: boolean;
   readonly providerOptionsError: string | null;
   readonly activeSessionId: SessionId | null;
-  readonly activeSessionCount: number;
+  readonly activeSessionCount?: number;
   readonly startPending: boolean;
   readonly onRefreshCatalog: () => Promise<readonly InterviewCatalogEntry[]>;
   readonly onRefreshProviderOptions: () => Promise<readonly ProviderLaunchOption[]>;
