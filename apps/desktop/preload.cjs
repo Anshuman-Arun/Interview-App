@@ -107,23 +107,25 @@ function validateCapabilityStatus(value) {
     typeof value !== "object"
     || value === null
     || !RUNTIME_STATES.has(value.state)
-    || (value.reasonCode !== undefined
-      && (typeof value.reasonCode !== "string"
-        || !/^[A-Z0-9_]{1,96}$/.test(value.reasonCode)))
   ) {
     throw new Error("Desktop local runtime status is malformed");
   }
+  const reasonRequired = value.state !== "READY";
   const keys = Object.keys(value).sort();
-  const expected = value.reasonCode === undefined ? ["state"] : ["reasonCode", "state"];
+  const expected = reasonRequired ? ["reasonCode", "state"] : ["state"];
   if (
     keys.length !== expected.length
     || !keys.every((key, index) => key === expected[index])
+    || (reasonRequired
+      ? (typeof value.reasonCode !== "string"
+        || !/^[A-Z0-9_]{1,96}$/.test(value.reasonCode))
+      : value.reasonCode !== undefined)
   ) {
     throw new Error("Desktop local runtime status is malformed");
   }
   return Object.freeze({
     state: value.state,
-    ...(value.reasonCode === undefined ? {} : { reasonCode: value.reasonCode })
+    ...(reasonRequired ? { reasonCode: value.reasonCode } : {})
   });
 }
 
@@ -134,6 +136,7 @@ function validateSetupStatus(value) {
     || !hasExactKeys(value, ["state", "restartRequired"])
     || !MODEL_SETUP_STATES.has(value.state)
     || typeof value.restartRequired !== "boolean"
+    || (value.state === "INSTALLED") !== value.restartRequired
   ) {
     throw new Error("Desktop local runtime status is malformed");
   }
@@ -147,16 +150,17 @@ function validatePythonStatus(value) {
   if (typeof value !== "object" || value === null) {
     throw new Error("Desktop local runtime status is malformed");
   }
-  const reasonCodePresent = value.reasonCode !== undefined;
-  const expectedKeys = reasonCodePresent
+  const reasonRequired = value.state === "UNAVAILABLE";
+  const expectedKeys = reasonRequired
     ? ["reasonCode", "state", "strategy", "supportedVersions"]
     : ["state", "strategy", "supportedVersions"];
   if (
     !hasExactKeys(value, expectedKeys)
-    || !RUNTIME_STATES.has(value.state)
-    || (reasonCodePresent
-      && (typeof value.reasonCode !== "string"
-        || !/^[A-Z0-9_]{1,96}$/.test(value.reasonCode)))
+    || (value.state !== "READY" && value.state !== "UNAVAILABLE")
+    || (reasonRequired
+      ? (typeof value.reasonCode !== "string"
+        || !/^[A-Z0-9_]{1,96}$/.test(value.reasonCode))
+      : value.reasonCode !== undefined)
     || value.strategy !== "SYSTEM_CPYTHON"
     || !Array.isArray(value.supportedVersions)
     || value.supportedVersions.length !== 2
@@ -167,7 +171,7 @@ function validatePythonStatus(value) {
   }
   return Object.freeze({
     state: value.state,
-    ...(reasonCodePresent ? { reasonCode: value.reasonCode } : {}),
+    ...(reasonRequired ? { reasonCode: value.reasonCode } : {}),
     strategy: "SYSTEM_CPYTHON",
     supportedVersions: Object.freeze(["3.12", "3.13"])
   });
