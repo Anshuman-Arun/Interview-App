@@ -12,7 +12,7 @@
   grid-template-columns: minmax(480px, 1fr) 520px;
   gap: clamp(54px, 5.6vw, 132px);
   align-items: center;
-  overflow: hidden;
+  overflow: visible;
   padding: 56px 4px 48px;
   border-bottom: 1px solid var(--border-default);
 }
