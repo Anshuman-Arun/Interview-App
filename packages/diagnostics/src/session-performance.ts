@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SessionIdSchema, VerificationStatusSchema } from "../../domain/src/index.js";
+import { SessionIdSchema } from "../../domain/src/index.js";
 
 const NonnegativeSafeIntegerSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const NonnegativeFiniteSchema = z.number().finite().nonnegative();
@@ -63,7 +63,11 @@ export const SessionPerformanceSummarySchema = z.object({
     timeouts: NonnegativeSafeIntegerSchema,
     cancelled: NonnegativeSafeIntegerSchema,
     failedOrMalformed: NonnegativeSafeIntegerSchema,
-    verification: z.record(VerificationStatusSchema, NonnegativeSafeIntegerSchema)
+    verification: z.object({
+      VERIFIED: NonnegativeSafeIntegerSchema,
+      CONTRADICTED: NonnegativeSafeIntegerSchema,
+      UNRESOLVED: NonnegativeSafeIntegerSchema
+    }).strict()
   }).strict(),
   local: z.object({
     voiceInputSessions: NonnegativeSafeIntegerSchema,
