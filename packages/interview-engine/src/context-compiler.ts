@@ -271,6 +271,11 @@ export function buildBoardSceneContext(
     aiAnnotationCount: 0,
     includedAiAnnotationCount: 0,
     aiAnnotationsTruncated: false,
+    aiAnnotationStateUncertain: Object.values(state.deliveries).some(
+      (atom) =>
+        atom.content.medium === "WHITEBOARD"
+        && atom.status === "POSSIBLY_EXPOSED"
+    ),
     ...(contentBounds === undefined ? {} : { contentBounds }),
     shapes: [],
     semanticRelations: [],
@@ -350,9 +355,11 @@ export function buildBoardSceneContext(
     if (latestAnnotationId !== undefined) logicallyVisibleAnnotations.delete(latestAnnotationId);
   }
 
-  const logicalAnnotations = Array.from(logicallyVisibleAnnotations.values());
+  const logicalAnnotations = scene.aiAnnotationStateUncertain
+    ? []
+    : Array.from(logicallyVisibleAnnotations.values());
   scene.aiAnnotationCount = logicalAnnotations.length;
-  scene.aiAnnotationsTruncated = logicalAnnotations.length > 0;
+  scene.aiAnnotationsTruncated = false;
 
   const annotations = logicalAnnotations
     .sort((left, right) => {
