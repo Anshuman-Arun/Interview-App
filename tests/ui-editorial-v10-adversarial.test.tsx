@@ -356,6 +356,7 @@ describe("editorial v10 adversarial UI states", () => {
     expect(app).toContain('className="board-appbar__layout-action"');
     expect(app).toContain('className="board-appbar__clear-action"');
     expect(app).toContain('aria-haspopup="dialog"');
+    expect(app).toContain('event.pointerType === "mouse" && event.button !== 0');
     expect(app).toMatch(
       /setCompactPane\("interview"\);[\s\S]{0,100}setPaneFocus\("split"\);[\s\S]{0,100}\}, \[session\.sessionId\]\);/u
     );
