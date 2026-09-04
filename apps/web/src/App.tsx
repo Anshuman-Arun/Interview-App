@@ -568,6 +568,7 @@ export const App: React.FC = () => {
             view={view}
             readEvaluation={session.readSessionEvaluation}
             readReplay={session.readSessionReplay}
+            readPerformance={session.readSessionPerformance}
           />
         )}
       />
