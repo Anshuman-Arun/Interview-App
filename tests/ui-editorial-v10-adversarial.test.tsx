@@ -229,6 +229,70 @@ describe("editorial v10 adversarial UI states", () => {
     );
   });
 
+
+  it("does not expose dead Sessions or review navigation while an attached interview is paused", () => {
+    const activeSession = "session_00000000-0000-4000-8000-000000000301" as never;
+    const completedSession = "session_00000000-0000-4000-8000-000000000302" as never;
+
+    const frame = renderToStaticMarkup(
+      <AppearanceProvider>
+        <ProductFrame
+          activePage="home"
+          title="Home"
+          kicker="Interview room"
+          onNavigate={vi.fn()}
+          navigationLocked
+        >
+          content
+        </ProductFrame>
+      </AppearanceProvider>
+    );
+    expect(frame).toMatch(/<button[^>]*disabled=""[^>]*>[^<]*<span[^>]*>02<\/span>[^<]*<span[^>]*>Sessions<\/span>/u);
+    expect(frame).toMatch(/<button[^>]*disabled=""[^>]*>[^<]*<span[^>]*>03<\/span>[^<]*<span[^>]*>Settings<\/span>/u);
+
+    const home = renderToStaticMarkup(
+      <HomePage
+        activeSessionId={activeSession}
+        activeSessionCount={1}
+        activeSessionPaused
+        sessions={[
+          {
+            sessionId: activeSession,
+            problemId: "active",
+            problemVersion: "1",
+            status: "ACTIVE",
+            sequence: 2,
+            createdAt: "2026-09-04T20:00:00.000Z",
+            updatedAt: "2026-09-04T20:01:00.000Z",
+            eventCount: 2
+          },
+          {
+            sessionId: completedSession,
+            problemId: "complete",
+            problemVersion: "1",
+            status: "COMPLETED",
+            sequence: 3,
+            createdAt: "2026-09-04T19:00:00.000Z",
+            updatedAt: "2026-09-04T19:30:00.000Z",
+            eventCount: 3
+          }
+        ]}
+        onStartInterview={vi.fn()}
+        onResumeInterview={vi.fn()}
+        onOpenSessions={vi.fn()}
+        onOpenSettings={vi.fn()}
+        canReview={(session) => session.status === "COMPLETED"}
+        onReview={vi.fn()}
+        sessionEntryPending={false}
+      />
+    );
+
+    expect(home).toMatch(/class="expressive-home__secondary"[^>]*disabled=""/u);
+    expect(home).toMatch(/>See all →<\/button>/u);
+    expect(home).toMatch(/<button[^>]*disabled=""[^>]*title="Resume or finish the paused interview before opening another session\."[^>]*>Review<\/button>/u);
+    expect(home).toMatch(/<button[^>]*>Resume<\/button>/u);
+  });
+
   it("contains rejected quant refresh reads instead of creating unhandled promises", () => {
     for (const sourcePath of [
       "apps/web/src/quant/QuantTradingWorkspace.tsx",
