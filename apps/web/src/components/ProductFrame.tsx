@@ -14,7 +14,8 @@ export function ProductFrame({
   aside,
   notice,
   onDismissNotice,
-  reasoningReady = true
+  reasoningReady = true,
+  reasoningChecking = false
 }: {
   readonly activePage: ProductPageId | null;
   readonly title: string;
@@ -25,6 +26,7 @@ export function ProductFrame({
   readonly notice?: string | null | undefined;
   readonly onDismissNotice?: (() => void) | undefined;
   readonly reasoningReady?: boolean;
+  readonly reasoningChecking?: boolean;
 }) {
   const headingRef = useRef<HTMLHeadingElement | null>(null);
 
@@ -82,14 +84,18 @@ export function ProductFrame({
 
         <div className="product-frame__rail-note" aria-label="Local readiness">
           <span className="product-frame__readiness-title">
-            <i data-ready={String(reasoningReady)} aria-hidden="true" />
-            {reasoningReady ? "Ready" : "Setup needed"}
+            <i
+              data-ready={String(reasoningReady)}
+              data-checking={String(reasoningChecking)}
+              aria-hidden="true"
+            />
+            {reasoningChecking ? "Checking" : reasoningReady ? "Ready" : "Setup needed"}
           </span>
           <span className="product-frame__readiness-row"><span>Voice</span><b>LOCAL</b></span>
           <span className="product-frame__readiness-row"><span>Board</span><b>LOCAL</b></span>
           <span className="product-frame__readiness-row">
             <span>Reasoning</span>
-            <b>{reasoningReady ? "READY" : "SETUP"}</b>
+            <b>{reasoningChecking ? "CHECKING" : reasoningReady ? "READY" : "SETUP"}</b>
           </span>
           <span className="product-frame__rail-rule" aria-hidden="true" />
           <span className="product-frame__readiness-foot">VOICE · BOARD · REPLAY</span>
@@ -107,9 +113,10 @@ export function ProductFrame({
             <span
               className="product-frame__status-chip"
               data-ready={String(reasoningReady)}
+              data-checking={String(reasoningChecking)}
             >
               <i aria-hidden="true" />
-              {reasoningReady ? "READY" : "CHECK SETUP"}
+              {reasoningChecking ? "CHECKING" : reasoningReady ? "READY" : "CHECK SETUP"}
             </span>
             <AppearanceDock />
           </div>
