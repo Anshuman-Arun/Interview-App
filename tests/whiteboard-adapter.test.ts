@@ -574,6 +574,89 @@ describe("TldrawWhiteboardAdapter & AI Overlay Subsystem", () => {
         .filter((shape) => shape.meta?.["annotationId"] === otherId)).toHaveLength(1);
     });
 
+    it("targetless erase removes the latest whole multi-shape annotation group", async () => {
+      const editor = new InMemoryTldrawEditor();
+      const adapter = new TldrawWhiteboardAdapter(editor);
+      const olderId = newDeliveryId();
+      const latestPolylineId = newDeliveryId();
+
+      await adapter.presentWhiteboard({
+        operation: "write_text",
+        layer: "AI_ANNOTATION",
+        content: "older",
+        annotationPurpose: "older annotation"
+      }, olderId);
+      await adapter.presentWhiteboard({
+        operation: "draw_polyline",
+        layer: "AI_ANNOTATION",
+        points: [
+          { x: 0, y: 0 },
+          { x: 20, y: 20 },
+          { x: 40, y: 0 },
+          { x: 60, y: 20 }
+        ],
+        annotationPurpose: "latest polyline"
+      }, latestPolylineId);
+
+      expect(editor.getCurrentPageShapes()
+        .filter((shape) => shape.meta?.["annotationId"] === latestPolylineId)).toHaveLength(3);
+
+      await adapter.applyAiOverlayAction({
+        operation: "erase_ai_annotation",
+        layer: "AI_ANNOTATION",
+        annotationPurpose: "remove latest logical annotation"
+      });
+
+      expect(editor.getCurrentPageShapes()
+        .filter((shape) => shape.meta?.["annotationId"] === latestPolylineId)).toHaveLength(0);
+      expect(editor.getCurrentPageShapes()
+        .filter((shape) => shape.meta?.["annotationId"] === olderId)).toHaveLength(1);
+    });
+
+    it("rolls back a partially failed logical group erase instead of leaving a clean partial deletion", async () => {
+      const base = new InMemoryTldrawEditor();
+      let failErase = false;
+      const editor = {
+        getShape: base.getShape.bind(base),
+        getCurrentPageShapes: base.getCurrentPageShapes.bind(base),
+        createShapes: base.createShapes.bind(base),
+        deleteShapes: (ids: readonly string[]) => {
+          if (failErase && ids.length >= 3) {
+            base.deleteShapes(ids.slice(0, 2));
+            throw new Error("injected partial group erase");
+          }
+          base.deleteShapes(ids);
+        },
+        updateShapes: base.updateShapes.bind(base),
+        getShapePageBounds: base.getShapePageBounds.bind(base)
+      };
+      const adapter = new TldrawWhiteboardAdapter(editor);
+      const annotationId = newDeliveryId();
+
+      await adapter.presentWhiteboard({
+        operation: "draw_polyline",
+        layer: "AI_ANNOTATION",
+        points: [
+          { x: 0, y: 0 },
+          { x: 20, y: 20 },
+          { x: 40, y: 0 },
+          { x: 60, y: 20 }
+        ],
+        annotationPurpose: "group erase rollback fixture"
+      }, annotationId);
+      failErase = true;
+
+      await expect(adapter.applyAiOverlayAction({
+        operation: "erase_ai_annotation",
+        layer: "AI_ANNOTATION",
+        targetAnnotationId: annotationId,
+        annotationPurpose: "erase logical group atomically"
+      })).rejects.toThrow(RendererPresentationNotExposedError);
+
+      expect(base.getCurrentPageShapes()
+        .filter((shape) => shape.meta?.["annotationId"] === annotationId)).toHaveLength(3);
+    });
+
     it("rejects unknown and already-erased logical annotation IDs safely", async () => {
       const editor = new InMemoryTldrawEditor();
       const adapter = new TldrawWhiteboardAdapter(editor);
