@@ -116,7 +116,12 @@ export const TranscriptFeed: React.FC<TranscriptFeedProps> = ({
                 data-role={item.role}
               >
                 <div className="transcript-entry__rail">
-                  <span className="transcript-entry__speaker">{isStudent ? "YOU" : "INTERVIEWER"}</span>
+                  <span
+                    className="transcript-entry__speaker"
+                    aria-label={isStudent ? "Student (You)" : "Socratic Interviewer"}
+                  >
+                    {isStudent ? "YOU" : "INTERVIEWER"}
+                  </span>
                 </div>
                 <div className="transcript-entry__body">
                   <div className={isStudent ? "message-content student-math-bubble" : "message-content ai-math-bubble"}>
