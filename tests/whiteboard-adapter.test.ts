@@ -6,6 +6,7 @@ import {
 } from "../packages/domain/src/index.js";
 import {
   RendererClient,
+  RendererPresentationNotExposedError,
   type AudioPlayer,
   type RendererAcknowledgementSender,
   type TextPresenter
@@ -13,8 +14,9 @@ import {
 import {
   InMemoryTldrawEditor,
   StaleShapeRevisionError,
-  StudentShapeImmutableError,
-  TldrawWhiteboardAdapter
+  TldrawWhiteboardAdapter,
+  UnsupportedBoardActionError,
+  WhiteboardPresentationPossiblyExposedError
 } from "../apps/web/src/tldraw-whiteboard-adapter.js";
 
 describe("TldrawWhiteboardAdapter & AI Overlay Subsystem", () => {
@@ -117,7 +119,7 @@ describe("TldrawWhiteboardAdapter & AI Overlay Subsystem", () => {
     });
   });
 
-  describe("2. Non-Destructive AI Overlay Actions (All 7 Operations)", () => {
+  describe("2. Non-Destructive AI Overlay Actions", () => {
     it("renders 'circle' overlay enclosing target bounds with violet dashed stroke", async () => {
       const editor = new InMemoryTldrawEditor();
       const adapter = new TldrawWhiteboardAdapter(editor);
@@ -304,31 +306,33 @@ describe("TldrawWhiteboardAdapter & AI Overlay Subsystem", () => {
       expect(aiEq?.meta?.["isEquation"]).toBe(true);
     });
 
-    it("executes 'erase_ai_annotation' on targeted AI annotation", async () => {
+    it("executes targeted erase using the application-owned logical annotation ID", async () => {
       const editor = new InMemoryTldrawEditor();
       const adapter = new TldrawWhiteboardAdapter(editor);
+      const annotationId = newDeliveryId();
 
       const circleAction: BoardAction = {
         operation: "circle",
         layer: "AI_ANNOTATION",
         annotationPurpose: "temporary hint"
       };
-      await adapter.applyAiOverlayAction(circleAction);
+      await adapter.presentWhiteboard(circleAction, annotationId);
 
-      const shapesBefore = editor.getCurrentPageShapes();
-      const aiShape = shapesBefore.find((s) => s.meta?.["layer"] === "AI_ANNOTATION");
-      expect(aiShape).toBeDefined();
+      const shapesBefore = editor.getCurrentPageShapes()
+        .filter((shape) => shape.meta?.["layer"] === "AI_ANNOTATION");
+      expect(shapesBefore).toHaveLength(1);
+      expect(shapesBefore[0]?.meta?.["annotationId"]).toBe(annotationId);
 
       const eraseAction: BoardAction = {
         operation: "erase_ai_annotation",
         layer: "AI_ANNOTATION",
-        targetShapeId: aiShape?.id,
+        targetAnnotationId: annotationId,
         annotationPurpose: "withdraw hint"
       };
       await adapter.applyAiOverlayAction(eraseAction);
 
-      const shapesAfter = editor.getCurrentPageShapes();
-      expect(shapesAfter.find((s) => s.id === aiShape?.id)).toBeUndefined();
+      expect(editor.getCurrentPageShapes()
+        .filter((shape) => shape.meta?.["layer"] === "AI_ANNOTATION")).toHaveLength(0);
     });
 
     it("uses annotation creation metadata rather than page order for targetless erase", async () => {
@@ -390,7 +394,7 @@ describe("TldrawWhiteboardAdapter & AI Overlay Subsystem", () => {
       expect(base.getShape("shape:ai_older")).toBeDefined();
     });
 
-    it("executes 'erase_ai_annotation' without targetShapeId by deleting most recent AI shape", async () => {
+    it("executes targetless erase by deleting the most recent logical AI annotation group", async () => {
       const editor = new InMemoryTldrawEditor();
       const adapter = new TldrawWhiteboardAdapter(editor);
 
@@ -423,8 +427,417 @@ describe("TldrawWhiteboardAdapter & AI Overlay Subsystem", () => {
     });
   });
 
+  describe("2b. Collaborative Geometry & Placement", () => {
+    it("places a short equation relative to an exact student shape revision", async () => {
+      const editor = new InMemoryTldrawEditor();
+      const adapter = new TldrawWhiteboardAdapter(editor);
+      const target = adapter.createStudentShape({
+        type: "text",
+        x: 100,
+        y: 100,
+        props: { w: 120, h: 40, text: "x^2 + y^2 = 1" }
+      });
+
+      await adapter.applyAiOverlayAction({
+        operation: "write_equation",
+        layer: "AI_ANNOTATION",
+        content: "y^2 = 1 - x^2",
+        placement: {
+          anchorShapeId: target.id,
+          anchorRevision: 1,
+          position: "RIGHT",
+          offsetX: 10,
+          offsetY: 5
+        },
+        annotationPurpose: "write one auxiliary relation"
+      });
+
+      const annotation = editor.getCurrentPageShapes()
+        .find((item) => item.id.startsWith("shape:ai_equation_"));
+      expect(annotation?.x).toBe(246);
+      expect(annotation?.y).toBe(105);
+      expect(annotation?.props?.["text"]).toBe("y^2 = 1 - x^2");
+      expect(editor.getShape(target.id)?.meta?.["shapeRevision"]).toBe(1);
+    });
+
+    it("renders segment, arrow-between, polyline, rectangle, and ellipse as AI-only shapes", async () => {
+      const editor = new InMemoryTldrawEditor();
+      const adapter = new TldrawWhiteboardAdapter(editor);
+      const left = adapter.createStudentShape({
+        type: "geo",
+        x: 0,
+        y: 0,
+        props: { w: 40, h: 40 }
+      });
+      const right = adapter.createStudentShape({
+        type: "geo",
+        x: 200,
+        y: 100,
+        props: { w: 40, h: 40 },
+        shapeRevision: 3
+      });
+      const studentBefore = editor.getCurrentPageShapes()
+        .filter((item) => item.meta?.["layer"] === "STUDENT")
+        .map((item) => JSON.stringify(item));
+
+      await adapter.applyAiOverlayAction({
+        operation: "draw_segment",
+        layer: "AI_ANNOTATION",
+        points: [{ x: 10, y: 20 }, { x: 80, y: 60 }],
+        annotationPurpose: "mark an auxiliary segment"
+      });
+      await adapter.applyAiOverlayAction({
+        operation: "draw_arrow_between",
+        layer: "AI_ANNOTATION",
+        fromShapeId: left.id,
+        fromShapeRevision: 1,
+        toShapeId: right.id,
+        toShapeRevision: 3,
+        annotationPurpose: "compare these two objects"
+      });
+      await adapter.applyAiOverlayAction({
+        operation: "draw_polyline",
+        layer: "AI_ANNOTATION",
+        points: [{ x: 0, y: 0 }, { x: 20, y: 30 }, { x: 50, y: 10 }],
+        annotationPurpose: "sketch a two-segment path"
+      });
+      await adapter.applyAiOverlayAction({
+        operation: "draw_rectangle",
+        layer: "AI_ANNOTATION",
+        placement: { x: 300, y: 150 },
+        width: 80,
+        height: 40,
+        annotationPurpose: "sketch an auxiliary rectangle"
+      });
+      await adapter.applyAiOverlayAction({
+        operation: "draw_ellipse",
+        layer: "AI_ANNOTATION",
+        placement: {
+          anchorShapeId: right.id,
+          anchorRevision: 3,
+          position: "BELOW"
+        },
+        width: 60,
+        height: 30,
+        annotationPurpose: "sketch an auxiliary ellipse"
+      });
+
+      const all = editor.getCurrentPageShapes();
+      const ai = all.filter((item) => item.meta?.["layer"] === "AI_ANNOTATION");
+      expect(ai).toHaveLength(6);
+      expect(ai.every((item) => item.meta?.["origin"] === "AI")).toBe(true);
+      const studentAfter = all
+        .filter((item) => item.meta?.["layer"] === "STUDENT")
+        .map((item) => JSON.stringify(item));
+      expect(studentAfter).toEqual(studentBefore);
+    });
+
+    it("groups every physical polyline segment under one logical delivery ID and erases the whole group", async () => {
+      const editor = new InMemoryTldrawEditor();
+      const adapter = new TldrawWhiteboardAdapter(editor);
+      const polylineId = newDeliveryId();
+      const otherId = newDeliveryId();
+
+      await adapter.presentWhiteboard({
+        operation: "draw_polyline",
+        layer: "AI_ANNOTATION",
+        points: [
+          { x: 0, y: 0 },
+          { x: 30, y: 20 },
+          { x: 60, y: 0 },
+          { x: 90, y: 20 }
+        ],
+        annotationPurpose: "one logical polyline"
+      }, polylineId);
+      await adapter.presentWhiteboard({
+        operation: "write_text",
+        layer: "AI_ANNOTATION",
+        content: "keep",
+        annotationPurpose: "separate annotation"
+      }, otherId);
+
+      const polylineShapes = editor.getCurrentPageShapes()
+        .filter((shape) => shape.meta?.["annotationId"] === polylineId);
+      expect(polylineShapes).toHaveLength(3);
+      expect(polylineShapes.every((shape) => shape.meta?.["deliveryId"] === polylineId)).toBe(true);
+
+      await adapter.applyAiOverlayAction({
+        operation: "erase_ai_annotation",
+        layer: "AI_ANNOTATION",
+        targetAnnotationId: polylineId,
+        annotationPurpose: "remove the obsolete polyline"
+      });
+
+      expect(editor.getCurrentPageShapes()
+        .filter((shape) => shape.meta?.["annotationId"] === polylineId)).toHaveLength(0);
+      expect(editor.getCurrentPageShapes()
+        .filter((shape) => shape.meta?.["annotationId"] === otherId)).toHaveLength(1);
+    });
+
+    it("targetless erase removes the latest whole multi-shape annotation group", async () => {
+      const editor = new InMemoryTldrawEditor();
+      const adapter = new TldrawWhiteboardAdapter(editor);
+      const olderId = newDeliveryId();
+      const latestPolylineId = newDeliveryId();
+
+      await adapter.presentWhiteboard({
+        operation: "write_text",
+        layer: "AI_ANNOTATION",
+        content: "older",
+        annotationPurpose: "older annotation"
+      }, olderId);
+      await adapter.presentWhiteboard({
+        operation: "draw_polyline",
+        layer: "AI_ANNOTATION",
+        points: [
+          { x: 0, y: 0 },
+          { x: 20, y: 20 },
+          { x: 40, y: 0 },
+          { x: 60, y: 20 }
+        ],
+        annotationPurpose: "latest polyline"
+      }, latestPolylineId);
+
+      expect(editor.getCurrentPageShapes()
+        .filter((shape) => shape.meta?.["annotationId"] === latestPolylineId)).toHaveLength(3);
+
+      await adapter.applyAiOverlayAction({
+        operation: "erase_ai_annotation",
+        layer: "AI_ANNOTATION",
+        annotationPurpose: "remove latest logical annotation"
+      });
+
+      expect(editor.getCurrentPageShapes()
+        .filter((shape) => shape.meta?.["annotationId"] === latestPolylineId)).toHaveLength(0);
+      expect(editor.getCurrentPageShapes()
+        .filter((shape) => shape.meta?.["annotationId"] === olderId)).toHaveLength(1);
+    });
+
+    it("rolls back a partially failed logical group erase instead of leaving a clean partial deletion", async () => {
+      const base = new InMemoryTldrawEditor();
+      let failErase = false;
+      const editor = {
+        getShape: base.getShape.bind(base),
+        getCurrentPageShapes: base.getCurrentPageShapes.bind(base),
+        createShapes: base.createShapes.bind(base),
+        deleteShapes: (ids: readonly string[]) => {
+          if (failErase && ids.length >= 3) {
+            base.deleteShapes(ids.slice(0, 2));
+            throw new Error("injected partial group erase");
+          }
+          base.deleteShapes(ids);
+        },
+        updateShapes: base.updateShapes.bind(base),
+        getShapePageBounds: base.getShapePageBounds.bind(base)
+      };
+      const adapter = new TldrawWhiteboardAdapter(editor);
+      const annotationId = newDeliveryId();
+
+      await adapter.presentWhiteboard({
+        operation: "draw_polyline",
+        layer: "AI_ANNOTATION",
+        points: [
+          { x: 0, y: 0 },
+          { x: 20, y: 20 },
+          { x: 40, y: 0 },
+          { x: 60, y: 20 }
+        ],
+        annotationPurpose: "group erase rollback fixture"
+      }, annotationId);
+      failErase = true;
+
+      await expect(adapter.applyAiOverlayAction({
+        operation: "erase_ai_annotation",
+        layer: "AI_ANNOTATION",
+        targetAnnotationId: annotationId,
+        annotationPurpose: "erase logical group atomically"
+      })).rejects.toThrow(RendererPresentationNotExposedError);
+
+      expect(base.getCurrentPageShapes()
+        .filter((shape) => shape.meta?.["annotationId"] === annotationId)).toHaveLength(3);
+    });
+
+    it("rejects unknown and already-erased logical annotation IDs safely", async () => {
+      const editor = new InMemoryTldrawEditor();
+      const adapter = new TldrawWhiteboardAdapter(editor);
+      const annotationId = newDeliveryId();
+
+      await adapter.presentWhiteboard({
+        operation: "write_text",
+        layer: "AI_ANNOTATION",
+        content: "temporary",
+        annotationPurpose: "temporary annotation"
+      }, annotationId);
+
+      await expect(adapter.applyAiOverlayAction({
+        operation: "erase_ai_annotation",
+        layer: "AI_ANNOTATION",
+        targetAnnotationId: newDeliveryId(),
+        annotationPurpose: "unknown annotation"
+      })).rejects.toThrow(UnsupportedBoardActionError);
+
+      await adapter.applyAiOverlayAction({
+        operation: "erase_ai_annotation",
+        layer: "AI_ANNOTATION",
+        targetAnnotationId: annotationId,
+        annotationPurpose: "remove known annotation"
+      });
+      await expect(adapter.applyAiOverlayAction({
+        operation: "erase_ai_annotation",
+        layer: "AI_ANNOTATION",
+        targetAnnotationId: annotationId,
+        annotationPurpose: "repeat erase"
+      })).rejects.toThrow(UnsupportedBoardActionError);
+    });
+
+    it("rolls back an injected partial polyline creation before reporting pre-exposure failure", async () => {
+      const base = new InMemoryTldrawEditor();
+      let injected = false;
+      const editor = {
+        getShape: base.getShape.bind(base),
+        getCurrentPageShapes: base.getCurrentPageShapes.bind(base),
+        createShapes: (shapes: Parameters<typeof base.createShapes>[0]) => {
+          if (!injected && shapes.length >= 3) {
+            injected = true;
+            base.createShapes(shapes.slice(0, 2));
+            throw new Error("injected third-segment failure");
+          }
+          base.createShapes(shapes);
+        },
+        deleteShapes: base.deleteShapes.bind(base),
+        updateShapes: base.updateShapes.bind(base),
+        getShapePageBounds: base.getShapePageBounds.bind(base)
+      };
+      const adapter = new TldrawWhiteboardAdapter(editor);
+
+      await expect(adapter.presentWhiteboard({
+        operation: "draw_polyline",
+        layer: "AI_ANNOTATION",
+        points: [
+          { x: 0, y: 0 },
+          { x: 20, y: 20 },
+          { x: 40, y: 0 },
+          { x: 60, y: 20 }
+        ],
+        annotationPurpose: "atomic polyline"
+      }, newDeliveryId())).rejects.toThrow(RendererPresentationNotExposedError);
+
+      expect(base.getCurrentPageShapes()
+        .filter((shape) => shape.meta?.["layer"] === "AI_ANNOTATION")).toHaveLength(0);
+    });
+
+    it("signals possible exposure when partial polyline rollback cannot be proven", async () => {
+      const base = new InMemoryTldrawEditor();
+      let injected = false;
+      const editor = {
+        getShape: base.getShape.bind(base),
+        getCurrentPageShapes: base.getCurrentPageShapes.bind(base),
+        createShapes: (shapes: Parameters<typeof base.createShapes>[0]) => {
+          if (!injected && shapes.length >= 3) {
+            injected = true;
+            base.createShapes(shapes.slice(0, 2));
+            throw new Error("injected creation failure");
+          }
+          base.createShapes(shapes);
+        },
+        deleteShapes: (ids: readonly string[]) => {
+          if (ids.length > 1) {
+            base.deleteShapes(ids.slice(0, 1));
+            throw new Error("injected rollback failure");
+          }
+          base.deleteShapes(ids);
+        },
+        updateShapes: base.updateShapes.bind(base),
+        getShapePageBounds: base.getShapePageBounds.bind(base)
+      };
+      const adapter = new TldrawWhiteboardAdapter(editor);
+
+      await expect(adapter.presentWhiteboard({
+        operation: "draw_polyline",
+        layer: "AI_ANNOTATION",
+        points: [
+          { x: 0, y: 0 },
+          { x: 20, y: 20 },
+          { x: 40, y: 0 },
+          { x: 60, y: 20 }
+        ],
+        annotationPurpose: "uncertain polyline"
+      }, newDeliveryId())).rejects.toThrow(WhiteboardPresentationPossiblyExposedError);
+
+      expect(base.getCurrentPageShapes()
+        .filter((shape) => shape.meta?.["layer"] === "AI_ANNOTATION").length).toBeGreaterThan(0);
+    });
+
+    it("targets a bounded local region of a student shape without mutating the student shape", async () => {
+      const editor = new InMemoryTldrawEditor();
+      const adapter = new TldrawWhiteboardAdapter(editor);
+      const target = adapter.createStudentShape({
+        type: "text",
+        x: 100,
+        y: 100,
+        props: { w: 200, h: 50, text: "x^2 + y^2 = 1" }
+      });
+      const before = JSON.stringify(editor.getShape(target.id));
+
+      await adapter.applyAiOverlayAction({
+        operation: "highlight",
+        layer: "AI_ANNOTATION",
+        targetRegion: {
+          shapeId: target.id,
+          shapeRevision: 1,
+          xFraction: 0.5,
+          yFraction: 0,
+          widthFraction: 0.25,
+          heightFraction: 1
+        },
+        annotationPurpose: "highlight only the y-squared term"
+      });
+
+      const highlight = editor.getCurrentPageShapes()
+        .find((shape) => shape.id.startsWith("shape:ai_highlight_"));
+      expect(highlight?.x).toBe(194);
+      expect(highlight?.y).toBe(94);
+      expect(highlight?.props?.["w"]).toBe(62);
+      expect(highlight?.props?.["h"]).toBe(62);
+      expect(JSON.stringify(editor.getShape(target.id))).toBe(before);
+    });
+
+    it("fails closed when a placement anchor or arrow endpoint revision is stale", async () => {
+      const editor = new InMemoryTldrawEditor();
+      const adapter = new TldrawWhiteboardAdapter(editor);
+      const a = adapter.createStudentShape({ type: "geo", x: 0, y: 0 });
+      const b = adapter.createStudentShape({ type: "geo", x: 100, y: 0 });
+      adapter.updateStudentShape(a.id, { x: 1 });
+
+      await expect(adapter.applyAiOverlayAction({
+        operation: "write_text",
+        layer: "AI_ANNOTATION",
+        content: "stale",
+        placement: {
+          anchorShapeId: a.id,
+          anchorRevision: 1,
+          position: "RIGHT"
+        },
+        annotationPurpose: "stale placement"
+      })).rejects.toThrow(StaleShapeRevisionError);
+
+      await expect(adapter.applyAiOverlayAction({
+        operation: "draw_arrow_between",
+        layer: "AI_ANNOTATION",
+        fromShapeId: a.id,
+        fromShapeRevision: 1,
+        toShapeId: b.id,
+        toShapeRevision: 1,
+        annotationPurpose: "stale arrow"
+      })).rejects.toThrow(StaleShapeRevisionError);
+
+      expect(editor.getCurrentPageShapes()
+        .filter((item) => item.meta?.["layer"] === "AI_ANNOTATION")).toHaveLength(0);
+    });
+  });
+
   describe("3. Student Shape Immutability & Fail-Closed Guard", () => {
-    it("throws StudentShapeImmutableError and refuses when erase_ai_annotation targets a STUDENT shape", async () => {
+    it("rejects renderer-private student shape IDs as erase targets", async () => {
       const editor = new InMemoryTldrawEditor();
       const adapter = new TldrawWhiteboardAdapter(editor);
 
@@ -435,24 +848,19 @@ describe("TldrawWhiteboardAdapter & AI Overlay Subsystem", () => {
         props: { geo: "ellipse", text: "Student Vertex" }
       });
 
-      const maliciousAction: BoardAction = {
+      await expect(adapter.applyAiOverlayAction({
         operation: "erase_ai_annotation",
         layer: "AI_ANNOTATION",
         targetShapeId: studentShape.id,
         annotationPurpose: "attempted deletion of student stroke"
-      };
+      })).rejects.toThrow();
 
-      await expect(adapter.applyAiOverlayAction(maliciousAction)).rejects.toThrow(
-        StudentShapeImmutableError
-      );
-
-      // Verify the student shape was NOT deleted
       const found = editor.getShape(studentShape.id);
       expect(found).toBeDefined();
       expect(found?.meta?.["layer"]).toBe("STUDENT");
     });
 
-    it("refuses to delete SYSTEM_DECORATION shapes via erase_ai_annotation", async () => {
+    it("rejects renderer-private system decoration IDs as erase targets", async () => {
       const editor = new InMemoryTldrawEditor();
       const adapter = new TldrawWhiteboardAdapter(editor);
 
@@ -465,16 +873,12 @@ describe("TldrawWhiteboardAdapter & AI Overlay Subsystem", () => {
       };
       editor.createShapes([systemShape]);
 
-      const action: BoardAction = {
+      await expect(adapter.applyAiOverlayAction({
         operation: "erase_ai_annotation",
         layer: "AI_ANNOTATION",
         targetShapeId: systemShape.id,
         annotationPurpose: "attempted deletion of system grid"
-      };
-
-      await expect(adapter.applyAiOverlayAction(action)).rejects.toThrow(
-        StudentShapeImmutableError
-      );
+      })).rejects.toThrow();
       expect(editor.getShape(systemShape.id)).toBeDefined();
     });
 
@@ -690,6 +1094,8 @@ describe("TldrawWhiteboardAdapter & AI Overlay Subsystem", () => {
       expect(snapshot.studentShapes[0]?.shapeRevision).toBe(1);
 
       expect(snapshot.aiAnnotations).toHaveLength(1);
+      expect(snapshot.aiAnnotations[0]?.physicalShapeIds).toHaveLength(1);
+      expect(snapshot.aiAnnotations[0]?.annotationId).toBe(snapshot.aiAnnotations[0]?.deliveryId);
       expect(snapshot.aiAnnotations[0]?.operation).toBe("circle");
       expect(snapshot.aiAnnotations[0]?.purpose).toBe("circle vertex A");
       expect(snapshot.aiAnnotations[0]?.targetShapeId).toBe(s1.id);

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   BoardObservationSchema,
   BoardActionSchema,
+  BoardSceneContextSchema,
   GenerationBasisSchema,
   newSessionId
 } from "../packages/domain/src/index.js";
@@ -9,6 +10,7 @@ import { DeliveryCoordinator } from "../packages/delivery/src/index.js";
 import { initialSessionState } from "../packages/events/src/index.js";
 import {
   ClosedWorldDisclosureAnalyzer,
+  ContextCoordinator,
   DisclosureValidator,
   assessVisionFreshness,
   createCommandEnvelope,
@@ -45,6 +47,73 @@ describe("compatibility and disclosure gates", () => {
       expect(result.reason).toMatch(/not active/u);
       expect(Object.keys(harness.writer.getState().deliveries)).toHaveLength(0);
       expect(harness.writer.getState().generations[harness.generationId]?.status).toBe("SUPERSEDED");
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("requires an exact recorded provider context before admitting any board output", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const result = await harness.turns.processProposal({
+        envelope: providerEnvelope(harness),
+        problem: sixPeopleProblem,
+        proposal: {
+          realizedAction: "PROBE_JUSTIFICATION",
+          claimedDisclosureLevel: 0,
+          claimedDisclosureIds: [],
+          speechText: harness.safeProbe,
+          boardActions: [{
+            operation: "draw_segment",
+            layer: "AI_ANNOTATION",
+            points: [{ x: 0, y: 0 }, { x: 20, y: 20 }],
+            annotationPurpose: "board output without provider context"
+          }]
+        },
+        validator: harness.validator
+      });
+      expect(result.accepted).toBe(false);
+      expect(result.reason).toMatch(/recorded compiled provider context/u);
+      expect(harness.writer.getState().generations[harness.generationId]?.status)
+        .toBe("SUPERSEDED");
+      expect(Object.keys(harness.writer.getState().deliveries)).toHaveLength(0);
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("admits the expanded bounded geometry DSL through the application preflight", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const compilation = await new ContextCoordinator(harness.writer).compileForGeneration({
+        generationId: harness.generationId,
+        problem: sixPeopleProblem
+      });
+      expect(compilation.value.compiled).toBe(true);
+
+      const result = await harness.turns.processProposal({
+        envelope: providerEnvelope(harness),
+        problem: sixPeopleProblem,
+        proposal: {
+          realizedAction: "PROBE_JUSTIFICATION",
+          claimedDisclosureLevel: 0,
+          claimedDisclosureIds: [],
+          boardActions: [{
+            operation: "draw_segment",
+            layer: "AI_ANNOTATION",
+            points: [{ x: 20, y: 30 }, { x: 120, y: 80 }],
+            annotationPurpose: harness.safeProbe
+          }]
+        },
+        validator: harness.validator
+      });
+
+      expect(result.accepted).toBe(true);
+      expect(result.deliveryAtoms).toHaveLength(1);
+      expect(result.deliveryAtoms[0]?.content).toMatchObject({
+        medium: "WHITEBOARD",
+        action: { operation: "draw_segment" }
+      });
     } finally {
       harness.store.close();
     }
@@ -98,6 +167,211 @@ describe("compatibility and disclosure gates", () => {
     });
     expect(result.accepted).toBe(false);
     expect(result.analysis?.effectiveDisclosureLevel).toBeGreaterThan(0);
+  });
+
+  it("applies the same disclosure ceiling to speech and board output together", () => {
+    const protectedDisclosure = sixPeopleProblem.interviewer.protectedDisclosures[0];
+    if (protectedDisclosure === undefined) throw new Error("Expected protected disclosure fixture");
+    const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer([
+      "Try substituting this.",
+      "support the spoken prompt"
+    ]));
+    const result = validator.validate({
+      proposal: {
+        realizedAction: "PROBE_JUSTIFICATION",
+        claimedDisclosureLevel: 0,
+        claimedDisclosureIds: [],
+        speechText: "Try substituting this.",
+        boardActions: [{
+          operation: "write_equation",
+          layer: "AI_ANNOTATION",
+          content: protectedDisclosure.fact,
+          annotationPurpose: "support the spoken prompt"
+        }]
+      },
+      request: {
+        requiredAction: "PROBE_JUSTIFICATION",
+        maximumDisclosure: 0
+      },
+      protectedDisclosures: sixPeopleProblem.interviewer.protectedDisclosures
+    });
+    expect(result.accepted).toBe(false);
+    if (result.accepted) throw new Error("Expected mixed-realization disclosure rejection");
+    expect(result.analysis?.effectiveDisclosureLevel).toBeGreaterThan(0);
+  });
+
+  it("does not semantically reject harmless arbitrary student text merely because it is targeted", () => {
+    const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer([
+      "focus candidate on current equality"
+    ]));
+    const boardScene = BoardSceneContextSchema.parse({
+      boardRevision: 1,
+      studentShapeCount: 1,
+      includedStudentShapeCount: 1,
+      omittedStudentShapeCount: 0,
+      studentShapesTruncated: false,
+      aiAnnotationCount: 0,
+      includedAiAnnotationCount: 0,
+      aiAnnotationsTruncated: false,
+    aiAnnotationStateUncertain: false,
+      shapes: [{
+        shapeId: "shape:harmless",
+        shapeRevision: 1,
+        type: "formula",
+        bounds: { x: 0, y: 0, width: 160, height: 40 },
+        text: "x^2 + y^2 = 1"
+      }],
+      semanticRelations: [],
+      aiAnnotations: []
+    });
+    const result = validator.validate({
+      proposal: {
+        realizedAction: "PROBE_JUSTIFICATION",
+        claimedDisclosureLevel: 0,
+        claimedDisclosureIds: [],
+        boardActions: [{
+          operation: "highlight",
+          layer: "AI_ANNOTATION",
+          targetShapeId: "shape:harmless",
+          expectedShapeRevision: 1,
+          annotationPurpose: "focus candidate on current equality"
+        }]
+      },
+      request: {
+        requiredAction: "PROBE_JUSTIFICATION",
+        maximumDisclosure: 0
+      },
+      protectedDisclosures: sixPeopleProblem.interviewer.protectedDisclosures,
+      boardScene
+    });
+
+    expect(result.accepted).toBe(true);
+    if (!result.accepted) throw new Error("Expected harmless board target to remain usable");
+    expect(result.analysis.effectiveDisclosureLevel).toBe(0);
+    expect(result.realizations.boardActions[0]?.effectiveDisclosureLevel).toBe(0);
+  });
+
+  it("treats selecting protected student-board content as a disclosure realization", () => {
+    const protectedDisclosure = sixPeopleProblem.interviewer.protectedDisclosures[0];
+    if (protectedDisclosure === undefined) throw new Error("Expected protected disclosure fixture");
+    const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer([
+      "focus candidate on current equality"
+    ]));
+    const boardScene = BoardSceneContextSchema.parse({
+      boardRevision: 1,
+      studentShapeCount: 1,
+      includedStudentShapeCount: 1,
+      omittedStudentShapeCount: 0,
+      studentShapesTruncated: false,
+      aiAnnotationCount: 0,
+      includedAiAnnotationCount: 0,
+      aiAnnotationsTruncated: false,
+    aiAnnotationStateUncertain: false,
+      shapes: [{
+        shapeId: "shape:protected",
+        shapeRevision: 2,
+        type: "formula",
+        bounds: { x: 0, y: 0, width: 160, height: 40 },
+        text: protectedDisclosure.fact
+      }],
+      semanticRelations: [],
+      aiAnnotations: []
+    });
+    const result = validator.validate({
+      proposal: {
+        realizedAction: "PROBE_JUSTIFICATION",
+        claimedDisclosureLevel: 0,
+        claimedDisclosureIds: [],
+        boardActions: [{
+          operation: "highlight",
+          layer: "AI_ANNOTATION",
+          targetShapeId: "shape:protected",
+          expectedShapeRevision: 2,
+          annotationPurpose: "focus candidate on current equality"
+        }]
+      },
+      request: {
+        requiredAction: "PROBE_JUSTIFICATION",
+        maximumDisclosure: 0
+      },
+      protectedDisclosures: sixPeopleProblem.interviewer.protectedDisclosures,
+      boardScene
+    });
+
+    expect(result.accepted).toBe(false);
+    if (result.accepted) throw new Error("Expected targeted-board disclosure rejection");
+    expect(result.analysis?.effectiveDisclosureLevel).toBeGreaterThan(0);
+
+    const indirectResult = validator.validate({
+      proposal: {
+        realizedAction: "PROBE_JUSTIFICATION",
+        claimedDisclosureLevel: 0,
+        claimedDisclosureIds: [],
+        boardActions: [{
+          operation: "draw_rectangle",
+          layer: "AI_ANNOTATION",
+          placement: { x: -10, y: -10 },
+          width: 180,
+          height: 60,
+          annotationPurpose: "focus candidate on current equality"
+        }]
+      },
+      request: {
+        requiredAction: "PROBE_JUSTIFICATION",
+        maximumDisclosure: 0
+      },
+      protectedDisclosures: sixPeopleProblem.interviewer.protectedDisclosures,
+      boardScene
+    });
+    expect(indirectResult.accepted).toBe(false);
+    if (indirectResult.accepted) {
+      throw new Error("Expected geometry-associated disclosure rejection");
+    }
+    expect(indirectResult.analysis?.effectiveDisclosureLevel).toBeGreaterThan(0);
+
+    const fallbackScene = BoardSceneContextSchema.parse({
+      boardRevision: 1,
+      studentShapeCount: 1,
+      includedStudentShapeCount: 1,
+      omittedStudentShapeCount: 0,
+      studentShapesTruncated: false,
+      aiAnnotationCount: 0,
+      includedAiAnnotationCount: 0,
+      aiAnnotationsTruncated: false,
+    aiAnnotationStateUncertain: false,
+      shapes: [{
+        shapeId: "shape:fallback-protected",
+        shapeRevision: 1,
+        type: "formula",
+        bounds: { x: 200, y: 200, width: 120, height: 40 },
+        text: protectedDisclosure.fact
+      }],
+      semanticRelations: [],
+      aiAnnotations: []
+    });
+    const fallbackResult = validator.validate({
+      proposal: {
+        realizedAction: "PROBE_JUSTIFICATION",
+        claimedDisclosureLevel: 0,
+        claimedDisclosureIds: [],
+        boardActions: [{
+          operation: "highlight",
+          layer: "AI_ANNOTATION",
+          annotationPurpose: "focus candidate on current equality"
+        }]
+      },
+      request: {
+        requiredAction: "PROBE_JUSTIFICATION",
+        maximumDisclosure: 0
+      },
+      protectedDisclosures: sixPeopleProblem.interviewer.protectedDisclosures,
+      boardScene: fallbackScene
+    });
+    expect(fallbackResult.accepted).toBe(false);
+    if (fallbackResult.accepted) {
+      throw new Error("Expected fallback-position disclosure rejection");
+    }
+    expect(fallbackResult.analysis?.effectiveDisclosureLevel).toBeGreaterThan(0);
   });
 
   it("fails closed when semantic validation is uncertain", () => {
@@ -324,6 +598,47 @@ describe("compatibility and disclosure gates", () => {
     }
   });
 
+  it("barge-in cancels a queued unseen WHITEBOARD annotation before it can render", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const compilation = await new ContextCoordinator(harness.writer).compileForGeneration({
+        generationId: harness.generationId,
+        problem: sixPeopleProblem
+      });
+      expect(compilation.value.compiled).toBe(true);
+
+      const processed = await harness.turns.processProposal({
+        envelope: providerEnvelope(harness),
+        problem: sixPeopleProblem,
+        proposal: {
+          realizedAction: "PROBE_JUSTIFICATION",
+          claimedDisclosureLevel: 0,
+          claimedDisclosureIds: [],
+          boardActions: [{
+            operation: "draw_segment",
+            layer: "AI_ANNOTATION",
+            points: [{ x: 10, y: 10 }, { x: 40, y: 30 }],
+            annotationPurpose: harness.safeProbe
+          }]
+        },
+        validator: harness.validator
+      });
+      expect(processed.accepted).toBe(true);
+      const boardAtom = processed.deliveryAtoms.find(
+        (atom) => atom.content.medium === "WHITEBOARD"
+      );
+      if (boardAtom === undefined) throw new Error("Expected queued whiteboard delivery");
+      expect(harness.writer.getState().deliveries[boardAtom.deliveryId]?.status).toBe("QUEUED");
+
+      await harness.turns.beginUtterance();
+
+      expect(harness.writer.getState().generations[harness.generationId]?.status).toBe("SUPERSEDED");
+      expect(harness.writer.getState().deliveries[boardAtom.deliveryId]?.status).toBe("CANCELLED");
+    } finally {
+      harness.store.close();
+    }
+  });
+
   it("board revision marks already-started stale output POSSIBLY_EXPOSED", async () => {
     const harness = await createCoreHarness();
     try {
@@ -510,6 +825,12 @@ describe("compatibility and disclosure gates", () => {
         harness.turnId,
         "attribution-test"
       );
+      const compilation = await new ContextCoordinator(harness.writer).compileForGeneration({
+        generationId: generation.generationId,
+        problem: sixPeopleProblem
+      });
+      expect(compilation.value.compiled).toBe(true);
+
       const processed = await harness.turns.processProposal({
         envelope: createCommandEnvelope({
           sessionId: harness.sessionId,

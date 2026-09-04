@@ -739,6 +739,21 @@ export class LoopbackCommandServer {
           acknowledgement: "COMPLETED"
         };
       }
+      case "ACK_DELIVERY_NOT_EXPOSED": {
+        await new DeliveryCoordinator(writer).acknowledgeNotExposed(
+          command.deliveryId,
+          command.reason,
+          envelope
+        );
+        return {
+          protocolVersion: 1,
+          ok: true,
+          type: "DELIVERY_ACKNOWLEDGED",
+          requestId: command.requestId,
+          deliveryId: command.deliveryId,
+          acknowledgement: "NOT_EXPOSED"
+        };
+      }
     }
   }
 

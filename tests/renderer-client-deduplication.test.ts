@@ -167,7 +167,11 @@ describe("renderer DeliveryId deduplication", () => {
     });
     const message = textMessage();
 
-    await expect(client.handleMessage(message)).rejects.toThrow("proves no insertion");
+    await expect(client.handleMessage(message)).resolves.toMatchObject({
+      deliveryId: message.command.deliveryId,
+      duplicate: false,
+      phase: "NOT_EXPOSED"
+    });
     expect(client.snapshot()).toEqual([]);
     const retried = await client.handleMessage(message);
 

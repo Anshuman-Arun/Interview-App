@@ -124,6 +124,7 @@ export interface CanvasShape {
   readonly type: string;
   readonly content?: string | undefined;
   readonly shapeRevision: number;
+  readonly annotationId?: string | undefined;
   readonly targetShapeId?: string | undefined;
   readonly annotationPurpose?: string | undefined;
 }
@@ -169,13 +170,26 @@ export class LayerIsolatedWhiteboard implements WhiteboardAdapter {
     }
 
     if (validated.operation === "erase_ai_annotation") {
-      if (validated.targetShapeId) {
-        const target = this.shapes.get(validated.targetShapeId);
-        if (target && target.layer === "AI_ANNOTATION") {
-          this.shapes.delete(validated.targetShapeId);
+      const aiShapes = Array.from(this.shapes.values())
+        .filter((shape) => shape.layer === "AI_ANNOTATION");
+      if (validated.targetAnnotationId !== undefined) {
+        const matches = aiShapes.filter(
+          (shape) => shape.annotationId === validated.targetAnnotationId
+        );
+        if (matches.length === 0) {
+          throw new Error("Unknown logical AI annotation");
         }
+        for (const match of matches) this.shapes.delete(match.id);
         return;
       }
+      const latest = aiShapes.at(-1);
+      if (latest === undefined) throw new Error("No logical AI annotation is available");
+      const latestAnnotationId = latest.annotationId;
+      if (latestAnnotationId === undefined) throw new Error("AI annotation is missing logical identity");
+      for (const shape of aiShapes) {
+        if (shape.annotationId === latestAnnotationId) this.shapes.delete(shape.id);
+      }
+      return;
     }
 
     const aiShapeId = `ai_shape_${String(++this.idCounter)}`;
@@ -185,6 +199,7 @@ export class LayerIsolatedWhiteboard implements WhiteboardAdapter {
       type: validated.operation,
       content: validated.content,
       shapeRevision: 1,
+      annotationId: newDeliveryId(),
       targetShapeId: validated.targetShapeId,
       annotationPurpose: validated.annotationPurpose
     };
@@ -556,12 +571,12 @@ describe("Tier 1: Feature Coverage (Isolation)", () => {
     it("erase_ai_annotation never deletes a STUDENT shape", async () => {
       const canvas = new LayerIsolatedWhiteboard();
       canvas.addStudentShape({ id: "student_node_1", type: "vertex" });
-      await canvas.applyAiOverlayAction({
+      await expect(canvas.applyAiOverlayAction({
         operation: "erase_ai_annotation",
         layer: "AI_ANNOTATION",
         targetShapeId: "student_node_1",
         annotationPurpose: "attempt illegal delete"
-      });
+      })).rejects.toThrow();
       expect(canvas.getShape("student_node_1")).toBeDefined();
     });
   });
@@ -617,16 +632,16 @@ describe("Tier 1: Feature Coverage (Isolation)", () => {
     it("erases specific targeted AI annotation", async () => {
       const canvas = new LayerIsolatedWhiteboard();
       await canvas.applyAiOverlayAction({ operation: "circle", layer: "AI_ANNOTATION", targetShapeId: "node_1", annotationPurpose: "temp circle" });
-      const createdId = canvas.getShapes().find((s) => s.type === "circle")?.id;
-      expect(createdId).toBeDefined();
-      if (createdId) {
+      const created = canvas.getShapes().find((s) => s.type === "circle");
+      expect(created?.annotationId).toBeDefined();
+      if (created?.annotationId !== undefined) {
         await canvas.applyAiOverlayAction({
           operation: "erase_ai_annotation",
           layer: "AI_ANNOTATION",
-          targetShapeId: createdId,
+          targetAnnotationId: DeliveryIdSchema.parse(created.annotationId),
           annotationPurpose: "remove circle"
         });
-        expect(canvas.getShape(createdId)).toBeUndefined();
+        expect(canvas.getShape(created.id)).toBeUndefined();
       }
     });
   });
@@ -1499,15 +1514,15 @@ describe("Tier 2: Boundary & Corner Cases", () => {
       expect(canvas.getShapes()).toHaveLength(100);
     });
 
-    it("erase_ai_annotation with empty target shape ignores without deleting", async () => {
+    it("erase_ai_annotation with unknown logical target rejects without deleting", async () => {
       const canvas = new LayerIsolatedWhiteboard();
       canvas.addStudentShape({ id: "v1", type: "node" });
-      await canvas.applyAiOverlayAction({
+      await expect(canvas.applyAiOverlayAction({
         operation: "erase_ai_annotation",
         layer: "AI_ANNOTATION",
-        targetShapeId: "missing_target",
+        targetAnnotationId: DeliveryIdSchema.parse("delivery_missing_target"),
         annotationPurpose: "safe erase"
-      });
+      })).rejects.toThrow("Unknown logical AI annotation");
       expect(canvas.getShapes()).toHaveLength(1);
     });
 

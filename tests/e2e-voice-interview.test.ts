@@ -26,8 +26,10 @@ import {
 } from "../packages/local-compute/src/index.js";
 import {
   ClosedWorldDisclosureAnalyzer,
+  ContextCoordinator,
   DisclosureValidator,
-  TurnCoordinator
+  TurnCoordinator,
+  createCommandEnvelope
 } from "../packages/interview-engine/src/index.js";
 import { BrowserCommandClient } from "../apps/web/src/command-client.js";
 import {
@@ -700,6 +702,149 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
     await expect(server.runtime.start()).rejects.toThrow(
       "cannot restart after voice worker shutdown"
     );
+  });
+
+  it("publishes collaborative board output while local TTS synthesis is still blocked", async () => {
+    const synthesizer = new BlockingFakeSpeechSynthesizer();
+    server = await createAndStartServer({
+      host: "127.0.0.1",
+      commandPort: 0,
+      rendererStreamPort: 0,
+      voicePort: 0,
+      clientToken: TEST_CLIENT_TOKEN,
+      allowedOrigins: [TEST_ORIGIN],
+      databasePath: ":memory:",
+      voiceRuntime: {
+        speechWorker: new SpeechWorkerCore({
+          vadBackend: new ScriptedVadBackend([0]),
+          recognizer: new DeterministicFakeRecognizer()
+        }),
+        tts: {
+          worker: new TtsWorkerCore(synthesizer),
+          voice: "fake-neutral",
+          language: "en-US",
+          sampleRate: 24_000,
+          speed: 1
+        }
+      }
+    });
+
+    const sessionId = newSessionId();
+    const writer = server.registry.get(sessionId);
+    const turns = new TurnCoordinator(writer);
+    await turns.startSession(sixPeopleProblem);
+    await server.runtime.sessions.ensureRecovered(sessionId);
+    const { inputEpisodeId, turnId } = await turns.commitInput(
+      "I have a claim, but I have not justified it yet."
+    );
+    await turns.selectAction(turnId, sixPeopleProblem);
+    const { generationId, basis } = await turns.startGeneration(
+      inputEpisodeId,
+      turnId,
+      "mock-model"
+    );
+    const compiled = await new ContextCoordinator(writer).compileForGeneration({
+      generationId,
+      problem: sixPeopleProblem
+    });
+    if (!compiled.value.compiled) throw new Error("Expected provider context compilation");
+    const generation = writer.getState().generations[generationId];
+    if (generation?.pedagogicalAction === undefined) {
+      throw new Error("Expected generation-bound pedagogical action");
+    }
+
+    const speechText = "Why must that step be true?";
+    const boardPurpose = "mark a small auxiliary segment";
+    const validator = new DisclosureValidator(
+      new ClosedWorldDisclosureAnalyzer([speechText, boardPurpose])
+    );
+    const outcome = await turns.processProposal({
+      envelope: createCommandEnvelope({
+        sessionId,
+        producer: "mock-model",
+        inputEpisodeId,
+        turnId,
+        generationId,
+        contextEpoch: basis.contextEpoch,
+        sourceRevision: basis.committedInputSequence
+      }),
+      problem: sixPeopleProblem,
+      proposal: {
+        realizedAction: generation.pedagogicalAction.requiredAction,
+        claimedDisclosureLevel: 0,
+        claimedDisclosureIds: [],
+        speechText,
+        boardActions: [{
+          operation: "draw_segment",
+          layer: "AI_ANNOTATION",
+          points: [{ x: 20, y: 20 }, { x: 80, y: 50 }],
+          annotationPurpose: boardPurpose
+        }]
+      },
+      validator
+    });
+    expect(outcome.accepted).toBe(true);
+    if (!outcome.accepted) throw new Error(outcome.reason);
+    const textAtom = outcome.deliveryAtoms.find((atom) => atom.content.medium === "TEXT");
+    const boardAtom = outcome.deliveryAtoms.find((atom) => atom.content.medium === "WHITEBOARD");
+    if (textAtom === undefined || boardAtom === undefined) {
+      throw new Error("Expected both text and whiteboard deliveries");
+    }
+
+    const presentedBoard: DeliveryId[] = [];
+    const controller = new AbortController();
+    const renderer = new RendererClient({
+      sessionId,
+      acknowledgementSender: createLoopbackAcknowledgementSender({
+        commandUrl: `${server.bound.command.url}/v1/commands`,
+        authenticatedFetch: authenticatedFetch()
+      }),
+      textPresenter: { presentText: () => undefined },
+      audioPlayer: {
+        playAudio: ({ callbacks }) => {
+          void callbacks.onStarted();
+          void callbacks.onCompleted();
+        }
+      },
+      whiteboardPresenter: {
+        presentWhiteboard: (_action, deliveryId) => {
+          presentedBoard.push(deliveryId);
+        }
+      }
+    });
+    const rendererPromise = consumeAuthenticatedRendererStream({
+      streamUrl: server.bound.rendererStream.streamUrl,
+      sessionId,
+      authenticatedFetch: authenticatedFetch(),
+      signal: controller.signal
+    }, renderer);
+    await waitFor(
+      () => server?.runtime.rendererStreamServer.activeConnectionCount() === 1,
+      "renderer attachment"
+    );
+
+    await server.runtime.rendererStreamServer.publishDelivery(sessionId, textAtom.deliveryId);
+    await synthesizer.started;
+
+    const boardPublication = server.runtime.rendererStreamServer.publishDelivery(
+      sessionId,
+      boardAtom.deliveryId
+    );
+    await expect(boardPublication).resolves.toMatchObject({
+      outcome: "SENT",
+      deliveryId: boardAtom.deliveryId
+    });
+    await waitFor(
+      () => presentedBoard.includes(boardAtom.deliveryId),
+      "whiteboard exposure while TTS remains blocked"
+    );
+    expect(Object.values(writer.getState().deliveries).some(
+      (delivery) => delivery.content.medium === "AUDIO"
+    )).toBe(false);
+
+    synthesizer.release();
+    controller.abort();
+    await rendererPromise;
   });
 
   it("rejects late TTS output even when no cancellation reaches the synthesizer", async () => {
