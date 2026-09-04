@@ -148,7 +148,14 @@ describe("Windows desktop packaging contract", () => {
     expect(workflow).toContain("Check current PR head");
     expect(workflow).toContain("id: current_head");
     expect(workflow).toContain("steps.current_head.outputs.current");
+    expect(workflow).toContain("Re-check current PR head before packaging");
+    expect(workflow).toContain("id: current_head_before_packaging");
+    expect(workflow).toContain("steps.current_head_before_packaging.outputs.current");
     expect(workflow).toContain("EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}");
+    const finalHeadCheckIndex = workflow.indexOf("Re-check current PR head before packaging");
+    const syntheticBuildIndex = workflow.indexOf("Build synthetic prior-version installer");
+    expect(finalHeadCheckIndex).toBeGreaterThan(-1);
+    expect(syntheticBuildIndex).toBeGreaterThan(finalHeadCheckIndex);
     expect(workflow).toContain("pull-requests: read");
     expect(workflow).toContain('CSC_IDENTITY_AUTO_DISCOVERY: "false"');
     expect(workflow).toContain("Validate PowerShell release scripts");
