@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DeliveryIdSchema } from "./ids.js";
 import { BoardRevisionSchema } from "./revisions.js";
 
 export const WhiteboardLayerSchema = z.enum(["STUDENT", "AI_ANNOTATION", "SYSTEM_DECORATION"]);
@@ -44,6 +45,54 @@ export const BoardActionPointSchema = z.object({
   y: BoardActionCoordinateSchema
 }).strict();
 export type BoardActionPoint = z.infer<typeof BoardActionPointSchema>;
+
+const BoardActionFractionSchema = z.number()
+  .refine(Number.isFinite, { message: "Board action fractions must be finite" })
+  .min(0)
+  .max(1);
+
+export const BoardActionTargetRegionSchema = z.object({
+  shapeId: BoardActionShapeIdSchema,
+  shapeRevision: PositiveSafeShapeRevisionSchema,
+  xFraction: BoardActionFractionSchema,
+  yFraction: BoardActionFractionSchema,
+  widthFraction: BoardActionFractionSchema.refine((value) => value > 0, {
+    message: "Target-region width must be positive"
+  }).optional(),
+  heightFraction: BoardActionFractionSchema.refine((value) => value > 0, {
+    message: "Target-region height must be positive"
+  }).optional()
+}).strict().superRefine((region, context) => {
+  const hasWidth = region.widthFraction !== undefined;
+  const hasHeight = region.heightFraction !== undefined;
+  if (hasWidth !== hasHeight) {
+    context.addIssue({
+      code: "custom",
+      message: "Target-region width and height must be supplied together"
+    });
+  }
+  if (
+    region.widthFraction !== undefined
+    && region.xFraction + region.widthFraction > 1
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["widthFraction"],
+      message: "Target region must remain within the referenced shape horizontally"
+    });
+  }
+  if (
+    region.heightFraction !== undefined
+    && region.yFraction + region.heightFraction > 1
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["heightFraction"],
+      message: "Target region must remain within the referenced shape vertically"
+    });
+  }
+});
+export type BoardActionTargetRegion = z.infer<typeof BoardActionTargetRegionSchema>;
 
 export const BoardActionPlacementSchema = z.object({
   anchorShapeId: BoardActionShapeIdSchema.optional(),
@@ -125,6 +174,8 @@ const BoardActionBaseSchema = z.object({
   content: z.string().max(MAX_BOARD_ACTION_CONTENT_CHARACTERS).optional(),
   targetShapeId: BoardActionShapeIdSchema.optional(),
   expectedShapeRevision: PositiveSafeShapeRevisionSchema.optional(),
+  targetAnnotationId: DeliveryIdSchema.optional(),
+  targetRegion: BoardActionTargetRegionSchema.optional(),
   placement: BoardActionPlacementSchema.optional(),
   points: z.array(BoardActionPointSchema).max(MAX_BOARD_ACTION_POINTS).optional(),
   fromShapeId: BoardActionShapeIdSchema.optional(),
@@ -155,6 +206,12 @@ export const BoardActionSchema = BoardActionBaseSchema.superRefine((action, cont
   if (action.toShapeRevision !== undefined && action.toShapeId === undefined) {
     issue(["toShapeRevision"], "toShapeRevision requires toShapeId");
   }
+  if (
+    action.targetRegion !== undefined
+    && (action.targetShapeId !== undefined || action.expectedShapeRevision !== undefined)
+  ) {
+    issue(["targetRegion"], "targetRegion cannot be combined with whole-shape target fields");
+  }
 
   const forbid = (field: keyof typeof action, allowed: boolean): void => {
     if (!allowed && action[field] !== undefined) {
@@ -167,8 +224,8 @@ export const BoardActionSchema = BoardActionBaseSchema.superRefine((action, cont
     action.operation === "draw_arrow"
     || action.operation === "circle"
     || action.operation === "highlight"
-    || action.operation === "point_at"
-    || action.operation === "erase_ai_annotation";
+    || action.operation === "point_at";
+  const isErase = action.operation === "erase_ai_annotation";
   const isPointGeometry = action.operation === "draw_segment" || action.operation === "draw_polyline";
   const isBoxGeometry = action.operation === "draw_rectangle" || action.operation === "draw_ellipse";
   const isArrowBetween = action.operation === "draw_arrow_between";
@@ -183,6 +240,8 @@ export const BoardActionSchema = BoardActionBaseSchema.superRefine((action, cont
   forbid("height", isBoxGeometry);
   forbid("targetShapeId", isWrite || isTargetOverlay);
   forbid("expectedShapeRevision", isWrite || isTargetOverlay);
+  forbid("targetAnnotationId", isErase);
+  forbid("targetRegion", isTargetOverlay);
 
   if (isPointGeometry) {
     const length = action.points?.length ?? 0;
@@ -377,6 +436,8 @@ export type NormalizedBoardMutation = z.infer<typeof NormalizedBoardMutationSche
 
 export const MAX_BOARD_SCENE_SHAPES = 24;
 export const MAX_BOARD_SCENE_AI_ANNOTATIONS = 6;
+export const MAX_BOARD_SCENE_SEMANTIC_RELATIONS = 8;
+export const MAX_BOARD_SCENE_RELATION_SHAPES = 8;
 export const MAX_BOARD_SCENE_TEXT_CHARACTERS = 384;
 export const MAX_BOARD_SCENE_OBSERVATION_CHARACTERS = 384;
 export const MAX_BOARD_SCENE_ANNOTATION_PURPOSE_CHARACTERS = 160;
@@ -413,13 +474,35 @@ export const BoardSceneShapeSchema = z.object({
 }).strict();
 export type BoardSceneShape = z.infer<typeof BoardSceneShapeSchema>;
 
+export const BoardSceneSemanticRelationSchema = z.object({
+  observationId: z.string().min(1).max(MAX_BOARD_ACTION_SHAPE_ID_CHARACTERS),
+  kind: BoardSceneSemanticObservationSchema.shape.kind,
+  relevantShapeIds: z.array(BoardShapeIdSchema)
+    .min(2)
+    .max(MAX_BOARD_SCENE_RELATION_SHAPES),
+  bounds: AuthoritativeBoardBoundsSchema,
+  interpretation: BoardSceneObservationTextSchema,
+  confidence: z.number().min(0).max(1),
+  sourceBoardRevision: BoardRevisionSchema
+}).strict();
+export type BoardSceneSemanticRelation = z.infer<typeof BoardSceneSemanticRelationSchema>;
+
 export const BoardSceneAiAnnotationSchema = z.object({
-  deliveryId: z.string().min(1).max(MAX_BOARD_ACTION_SHAPE_ID_CHARACTERS),
+  annotationId: DeliveryIdSchema,
   operation: z.string().min(1).max(64),
   purpose: z.string().min(1).max(MAX_BOARD_SCENE_ANNOTATION_PURPOSE_CHARACTERS),
   content: BoardSceneTextSchema.optional(),
   targetShapeId: BoardShapeIdSchema.optional(),
-  targetShapeRevision: PositiveSafeBoardShapeRevisionSchema.optional()
+  targetShapeRevision: PositiveSafeBoardShapeRevisionSchema.optional(),
+  targetRegion: BoardActionTargetRegionSchema.optional(),
+  placement: BoardActionPlacementSchema.optional(),
+  points: z.array(BoardActionPointSchema).max(MAX_BOARD_ACTION_POINTS).optional(),
+  fromShapeId: BoardShapeIdSchema.optional(),
+  fromShapeRevision: PositiveSafeBoardShapeRevisionSchema.optional(),
+  toShapeId: BoardShapeIdSchema.optional(),
+  toShapeRevision: PositiveSafeBoardShapeRevisionSchema.optional(),
+  width: BoardActionDimensionSchema.optional(),
+  height: BoardActionDimensionSchema.optional()
 }).strict().superRefine((annotation, context) => {
   if (annotation.targetShapeRevision !== undefined && annotation.targetShapeId === undefined) {
     context.addIssue({
@@ -431,9 +514,25 @@ export const BoardSceneAiAnnotationSchema = z.object({
 });
 export type BoardSceneAiAnnotation = z.infer<typeof BoardSceneAiAnnotationSchema>;
 
+const NonnegativeSceneCountSchema = z.number().refine(
+  (value) => Number.isSafeInteger(value) && value >= 0,
+  { message: "Board scene counts must be non-negative safe integers" }
+);
+
 export const BoardSceneContextSchema = z.object({
   boardRevision: BoardRevisionSchema,
+  studentShapeCount: NonnegativeSceneCountSchema.default(0),
+  includedStudentShapeCount: NonnegativeSceneCountSchema.default(0),
+  omittedStudentShapeCount: NonnegativeSceneCountSchema.default(0),
+  studentShapesTruncated: z.boolean().default(false),
+  aiAnnotationCount: NonnegativeSceneCountSchema.default(0),
+  includedAiAnnotationCount: NonnegativeSceneCountSchema.default(0),
+  aiAnnotationsTruncated: z.boolean().default(false),
+  contentBounds: AuthoritativeBoardBoundsSchema.optional(),
   shapes: z.array(BoardSceneShapeSchema).max(MAX_BOARD_SCENE_SHAPES),
+  semanticRelations: z.array(BoardSceneSemanticRelationSchema)
+    .max(MAX_BOARD_SCENE_SEMANTIC_RELATIONS)
+    .default([]),
   aiAnnotations: z.array(BoardSceneAiAnnotationSchema).max(MAX_BOARD_SCENE_AI_ANNOTATIONS)
 }).strict();
 export type BoardSceneContext = z.infer<typeof BoardSceneContextSchema>;
