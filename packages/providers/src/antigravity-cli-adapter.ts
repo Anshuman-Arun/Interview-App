@@ -644,6 +644,7 @@ function createSingleTurnInput(input: ReasoningTurnInput): string {
     "Admitted vision interpretations are fallible observations with confidence, not authoritative correctness evidence.",
     "If boardScene is present, boardActions may point, highlight, annotate, write a short expression, or sketch simple auxiliary geometry.",
     "Use only stable shape IDs present in boardScene and include the exact supplied revision for every targeted student shape.",
+    "When referring to student work, use an explicit target or placement anchor; do not encode a student target indirectly with absolute coordinates.",
     "Use boardActions sparingly as a supporting explanatory medium; do not dump a solution onto the board.",
     "Do not use tools, subagents, files, prior conversations, or persistent memory.",
     "Return exactly one interviewer proposal satisfying the supplied JSON schema.",
