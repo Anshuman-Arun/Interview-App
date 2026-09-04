@@ -29,6 +29,7 @@ import {
 import {
   WhiteboardVisionCoordinator
 } from "../apps/server/src/whiteboard-vision-coordinator.js";
+import { SessionObservability } from "../apps/server/src/session-observability.js";
 import {
   ManagedLocalVisionBackend
 } from "../apps/desktop/src/runtime/local-vision-backend.js";
@@ -198,10 +199,19 @@ describe("application whiteboard vision integration", () => {
       confidence: 0.95,
       relevantShapeIds: ["shape:graph-model"]
     }]);
+    let monotonicNow = 0;
+    const observability = new SessionObservability(
+      undefined,
+      () => {
+        monotonicNow += 1;
+        return monotonicNow;
+      }
+    );
     const coordinator = new WhiteboardVisionCoordinator({
       sessions: harness.sessions,
       backend,
-      evidenceInterpreter: progressInterpreter()
+      evidenceInterpreter: progressInterpreter(),
+      observability
     });
 
     try {
@@ -223,6 +233,17 @@ describe("application whiteboard vision integration", () => {
         evidenceCommittedCount: 1
       });
       expect(backend.analyzeCallCount).toBe(1);
+      const performance = observability.read(harness.sessionId);
+      expect(performance.summary?.local.vision).toMatchObject({
+        requests: 1,
+        inferenceCompletions: 1,
+        acceptedObservations: 1,
+        inferenceFailures: 0,
+        staleRejections: 0,
+        otherRejections: 0
+      });
+      expect(performance.summary?.local.vision.latency.count).toBe(1);
+      expect(JSON.stringify(performance)).not.toContain(request.pngBase64);
 
       const state = harness.writer.getState();
       const visionState = state.visionRequests[request.requestId];
@@ -1277,19 +1298,30 @@ describe("application whiteboard vision integration", () => {
     }
   });
 
-  it("bounds a backend that never settles and records a timeout discard", async () => {
+  it("closes timeout telemetry before a cancellation-ignoring vision backend settles", async () => {
     const harness = await startedBoardSession();
     const provenance = new DeterministicFakeVisionBackend([]).provenance;
+    let backendAbortObserved = false;
+    const observability = new SessionObservability(
+      undefined,
+      () => backendAbortObserved ? 5_000 : 10
+    );
     const backend: VisionInferenceBackend = {
       provenance,
-      analyze: async () => new Promise<never>(() => {
+      analyze: async (_request, options) => new Promise<never>(() => {
+        const observeAbort = (): void => {
+          backendAbortObserved = true;
+        };
+        if (options.signal.aborted) observeAbort();
+        else options.signal.addEventListener("abort", observeAbort, { once: true });
         // Deliberately ignores cancellation and never settles.
       })
     };
     const coordinator = new WhiteboardVisionCoordinator({
       sessions: harness.sessions,
       backend,
-      backendTimeoutMs: 10
+      backendTimeoutMs: 10,
+      observability
     });
 
     try {
@@ -1301,9 +1333,24 @@ describe("application whiteboard vision integration", () => {
         observationCount: 0,
         evidenceCommittedCount: 0
       });
+      expect(backendAbortObserved).toBe(true);
       expect(harness.writer.getState().visionRequests[request.requestId]?.status)
         .toBe("DISCARDED");
       expect(Object.keys(harness.writer.getState().studentEvidence)).toHaveLength(0);
+
+      const performance = observability.read(harness.sessionId);
+      expect(performance.summary?.local.vision).toMatchObject({
+        requests: 1,
+        inferenceCompletions: 0,
+        inferenceFailures: 1,
+        staleRejections: 0,
+        otherRejections: 1
+      });
+      expect(performance.summary?.local.vision.latency).toEqual({
+        count: 1,
+        medianMs: 0,
+        slowestMs: 0
+      });
     } finally {
       coordinator.shutdown();
       harness.store.close();

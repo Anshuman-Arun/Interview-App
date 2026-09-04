@@ -24,6 +24,7 @@ import {
   getReviewedProblemRealizationTexts,
   realizeProblemInterviewerProposal
 } from "./problem-realization.js";
+import type { SessionObservability } from "./session-observability.js";
 
 export interface TurnOrchestrationInput {
   readonly sessionId: SessionId;
@@ -73,7 +74,8 @@ export class ServerTurnOrchestrator {
     private readonly getRendererStreamServer: () => RendererStreamServer | undefined,
     validator?: DisclosureValidator,
     private readonly providerRuntime: ProviderRuntimeResolver = new ProviderRuntimeResolver(),
-    formalInterpretationProvider?: FormalInterpretationProvider
+    formalInterpretationProvider?: FormalInterpretationProvider,
+    private readonly observability?: SessionObservability
   ) {
     this.validator = validator ?? new DisclosureValidator(
       new ClosedWorldDisclosureAnalyzer(getReviewedProblemRealizationTexts())
@@ -83,8 +85,11 @@ export class ServerTurnOrchestrator {
       formalInterpretationProvider
         ?? new ProviderBackedFormalInterpretationProvider(
           sessions,
-          this.providerRuntime
-        )
+          this.providerRuntime,
+          this.observability
+        ),
+      undefined,
+      this.observability
     );
   }
 
@@ -311,6 +316,7 @@ export class ServerTurnOrchestrator {
     if (composition.mode !== "OXFORD_MATHEMATICS") {
       return "COMPLETE";
     }
+    this.observability?.recordCandidateSubstantiveTurn(input.sessionId, input.turnId);
     const problem = composition.problem;
     const turns = new TurnCoordinator(writer);
 
@@ -377,7 +383,15 @@ export class ServerTurnOrchestrator {
 
     // 5. ProviderCoordinator owns policy/billing admission, context compilation,
     // provider execution, proposal admission, and delivery validation.
-    const coordinator = new ProviderCoordinator(writer);
+    const remoteCallObserver =
+      runtimeResolution.provider.capabilities.dataUse === "LOCAL_ONLY"
+        ? undefined
+        : this.observability?.createInterviewerObserver({
+            sessionId: input.sessionId,
+            providerId: runtimeResolution.providerId,
+            modelId: runtimeResolution.modelId
+          });
+    const coordinator = new ProviderCoordinator(writer, remoteCallObserver);
     let execution: Awaited<ReturnType<ProviderCoordinator["start"]>>;
     try {
       execution = await coordinator.start({

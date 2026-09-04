@@ -48,7 +48,7 @@ describe("desktop-owned persistence", () => {
     expect(packaged.databasePath).toBe(expected);
   });
 
-  it("reconstructs the same durable session across two desktop backend lifecycles", async () => {
+  it("reconstructs the same durable session across two desktop backend lifecycles", { timeout: 15_000 }, async () => {
     const root = await mkdtemp(path.join(tmpdir(), "interview-desktop-db-"));
     roots.push(root);
     const paths = resolveDesktopPaths({

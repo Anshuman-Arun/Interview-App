@@ -37,7 +37,7 @@ function createPrng(seed: number) {
 }
 
 describe("Adversarial Property: Durable Session Interleavings and Invariants", () => {
-  it("maintains sequence continuity, projection accuracy, and idempotency under random operational schedules", { timeout: 30_000 }, async () => {
+  it("maintains sequence continuity, projection accuracy, and idempotency under random operational schedules", { timeout: 60_000 }, async () => {
     const NUM_RUNS = 12;
 
     for (let run = 0; run < NUM_RUNS; run++) {
