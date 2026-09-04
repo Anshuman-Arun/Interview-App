@@ -142,6 +142,9 @@ describe("versioned Windows release publishing", () => {
     expect(workflow).toContain('git merge-base --is-ancestor "$eventCommit" "refs/remotes/origin/main"');
     expect(workflow).toContain("Tagged release commit $eventCommit is not reachable from authoritative main");
     expect(workflow).toContain("Release tag moved during validation");
+    expect(workflow).toContain(
+      "Tagged release commit $env:SOURCE_SHA is no longer reachable from authoritative main"
+    );
     expect(workflow).toContain("Release notes still contain an unresolved template placeholder");
     expect(workflow).toContain("node scripts/check-release-version.mjs");
     expect(workflow).toContain("pnpm check");
@@ -155,12 +158,16 @@ describe("versioned Windows release publishing", () => {
     const buildIndex = workflow.indexOf("Build exact release installer");
     const smokeIndex = workflow.indexOf("Run packaged executable smoke");
     const checksumIndex = workflow.indexOf("Generate and verify SHA-256");
+    const finalMainProofIndex = workflow.indexOf(
+      "Tagged release commit $env:SOURCE_SHA is no longer reachable from authoritative main"
+    );
     const finalTagProofIndex = workflow.indexOf("Release tag moved during validation");
     const releaseIndex = workflow.indexOf("Create draft GitHub Release");
     expect(buildIndex).toBeGreaterThan(-1);
     expect(smokeIndex).toBeGreaterThan(buildIndex);
     expect(checksumIndex).toBeGreaterThan(smokeIndex);
-    expect(finalTagProofIndex).toBeGreaterThan(checksumIndex);
+    expect(finalMainProofIndex).toBeGreaterThan(checksumIndex);
+    expect(finalTagProofIndex).toBeGreaterThan(finalMainProofIndex);
     expect(releaseIndex).toBeGreaterThan(checksumIndex);
   });
 
