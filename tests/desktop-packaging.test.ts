@@ -112,6 +112,7 @@ describe("Windows desktop packaging contract", () => {
     expect(main).toContain("runtime.installPythonRuntimeDependencies(startupAbort.signal)");
     expect(main).toContain('request === "REFRESH_PREREQUISITES"');
     expect(main).toContain("refreshPythonRuntimePrerequisite(startupAbort.signal)");
+    expect(main).toContain("globalThis.interviewDesktop.refreshLocalRuntimeStatus()");
     expect(main).toContain("runtime.installVoiceAssets(startupAbort.signal)");
     expect(main).toContain("runtime.installVisionAssets(startupAbort.signal)");
     expect(main).toContain("--install-local-vision-models");
