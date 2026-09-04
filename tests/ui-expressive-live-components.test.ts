@@ -74,7 +74,7 @@ describe("expressive live interview components", () => {
       /transcript-feed__count\s*,\s*\.transcript-feed__jump/u
     );
     expect(transcript).toContain("new ResizeObserver");
-    expect(app).toContain('data-sync-status={session.whiteboardSync.status}');
+    expect(app).toContain('data-sync={session.whiteboardSync.status}');
     expect(app).toContain('"Board unavailable"');
     expect(app).toContain('event.key !== "Home"');
     expect(app).toContain('event.key !== "End"');
