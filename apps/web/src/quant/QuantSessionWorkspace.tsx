@@ -19,6 +19,7 @@ export interface QuantSessionWorkspaceProps {
   readonly quantState: QuantSessionPublicState | null;
   readonly quantStateLoading: boolean;
   readonly quantActionPending: boolean;
+  readonly connected?: boolean;
   readonly sessionStatus: SessionStatus;
   readonly paused: boolean;
   readonly productHidden: boolean;
@@ -36,6 +37,7 @@ export const QuantSessionWorkspace: React.FC<QuantSessionWorkspaceProps> = ({
   quantState,
   quantStateLoading,
   quantActionPending,
+  connected = true,
   sessionStatus,
   paused,
   productHidden,
@@ -134,9 +136,12 @@ export const QuantSessionWorkspace: React.FC<QuantSessionWorkspaceProps> = ({
           </span>
         </button>
         <div className="app-header__actions">
-          <span className="app-header__connection" data-connected="true">
+          <span
+            className="app-header__connection"
+            data-connected={String(connected)}
+          >
             <span aria-hidden="true" />
-            Deterministic state
+            {connected ? "Deterministic state" : "Disconnected"}
           </span>
           <button
             type="button"
