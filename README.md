@@ -23,7 +23,7 @@ if ($actual -ne $expected) { throw "Checksum verification failed" }
 
 After installation, launch Interview App and use Settings to inspect runtime readiness and the installed application version. Optional local model features may require system CPython 3.12/3.13 and model downloads; remote Antigravity reasoning requires the supported local CLI/runtime to be installed and authenticated.
 
-Maintainers create releases by committing the canonical root `package.json` version on `main`, tagging that exact green commit as `vMAJOR.MINOR.PATCH`, and pushing the tag. The release workflow requires the tagged commit to remain reachable from authoritative `main`, validates tag/version agreement, builds the immutable tagged commit, rechecks that the tag has not moved before publication, runs packaged and upgrade checks, generates the checksum, and creates a draft GitHub Release for final review. See `docs/WINDOWS_DESKTOP_RELEASE.md`.
+Maintainers create releases by committing the canonical root `package.json` version on `main`, tagging that exact green commit as `vMAJOR.MINOR.PATCH`, and pushing the tag. The release workflow requires the tagged commit to remain reachable from authoritative `main`, validates tag/version agreement, builds the immutable tagged commit, rechecks both `main` ancestry and tag identity immediately before publication, runs packaged and upgrade checks, generates the checksum, and creates a draft GitHub Release for final review. See `docs/WINDOWS_DESKTOP_RELEASE.md`.
 
 ## Current product path
 
