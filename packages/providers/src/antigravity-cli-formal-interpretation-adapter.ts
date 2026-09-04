@@ -466,11 +466,6 @@ function createInterpretationResultJsonSchema(
     type: "object",
     additionalProperties: false,
     properties: {
-      protocolVersion: { type: "integer", enum: [1] },
-      requestId: {
-        type: "string",
-        enum: [request.requestId]
-      },
       candidates: {
         type: "array",
         maxItems: MAX_PRODUCTION_FORMAL_INTERPRETATION_CANDIDATES,
@@ -478,7 +473,6 @@ function createInterpretationResultJsonSchema(
           type: "object",
           additionalProperties: false,
           properties: {
-            protocolVersion: { type: "integer", enum: [1] },
             candidateId: {
               type: "string",
               minLength: 1,
@@ -508,164 +502,18 @@ function createInterpretationResultJsonSchema(
             confidence: {
               type: "number",
               enum: [1]
-            },
-            target: formalTargetJsonSchema(request),
-            source: formalSourceJsonSchema(request)
+            }
           },
           required: [
-            "protocolVersion",
             "candidateId",
             "protocol",
             "formalStatement",
-            "confidence",
-            "target",
-            "source"
+            "confidence"
           ]
         }
       }
     },
-    required: ["protocolVersion", "requestId", "candidates"]
-  });
-}
-
-function formalTargetJsonSchema(
-  request: FormalInterpretationRequest
-): Readonly<Record<string, unknown>> {
-  return Object.freeze({
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      problemId: { type: "string", enum: [request.target.problemId] },
-      subject: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          kind: { type: "string", enum: ["CLAIM"] },
-          claimId: {
-            type: "string",
-            enum: [request.target.subject.claimId]
-          }
-        },
-        required: ["kind", "claimId"]
-      },
-      dimension: { type: "string", enum: ["CORRECTNESS"] }
-    },
-    required: ["problemId", "subject", "dimension"]
-  });
-}
-
-function formalSourceJsonSchema(
-  request: FormalInterpretationRequest
-): Readonly<Record<string, unknown>> {
-  const basisProperties: Record<string, unknown> = {
-    contextEpoch: {
-      type: "integer",
-      enum: [request.basis.contextEpoch]
-    },
-    committedInputSequence: {
-      type: "integer",
-      enum: [request.basis.committedInputSequence]
-    },
-    transcriptRevision: {
-      type: "integer",
-      enum: [request.basis.transcriptRevision]
-    },
-    boardRevision: {
-      type: "integer",
-      enum: [request.basis.boardRevision]
-    },
-    problemStateRevision: {
-      type: "integer",
-      enum: [request.basis.problemStateRevision]
-    },
-    policyRevision: {
-      type: "integer",
-      enum: [request.basis.policyRevision]
-    },
-    inputEpisodeId: {
-      type: "string",
-      enum: [request.basis.inputEpisodeId]
-    },
-    turnId: {
-      type: "string",
-      enum: [request.basis.turnId]
-    }
-  };
-  const requiredBasis = Object.keys(basisProperties);
-  return Object.freeze({
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      requestId: { type: "string", enum: [request.requestId] },
-      ...(request.generationId === undefined
-        ? {}
-        : {
-            generationId: {
-              type: "string",
-              enum: [request.generationId]
-            }
-          }),
-      basis: {
-        type: "object",
-        additionalProperties: false,
-        properties: basisProperties,
-        required: requiredBasis
-      },
-      sourceRevision: {
-        type: "integer",
-        enum: [request.source.sourceRevision]
-      },
-      inputEpisodeId: {
-        type: "string",
-        enum: [request.source.inputEpisodeId]
-      },
-      turnId: {
-        type: "string",
-        enum: [request.source.turnId]
-      },
-      eventIds: {
-        type: "array",
-        minItems: request.source.eventIds.length,
-        maxItems: request.source.eventIds.length,
-        items: {
-          type: "string",
-          enum: [...request.source.eventIds]
-        }
-      },
-      span: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          start: { type: "integer", enum: [request.source.span.start] },
-          end: { type: "integer", enum: [request.source.span.end] },
-          text: {
-            type: "string",
-            enum: [request.source.span.text]
-          }
-        },
-        required: ["start", "end", "text"]
-      },
-      problem: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          id: { type: "string", enum: [request.problem.id] },
-          version: { type: "string", enum: [request.problem.version] }
-        },
-        required: ["id", "version"]
-      }
-    },
-    required: [
-      "requestId",
-      ...(request.generationId === undefined ? [] : ["generationId"]),
-      "basis",
-      "sourceRevision",
-      "inputEpisodeId",
-      "turnId",
-      "eventIds",
-      "span",
-      "problem"
-    ]
+    required: ["candidates"]
   });
 }
 
