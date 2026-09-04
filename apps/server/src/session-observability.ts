@@ -487,6 +487,18 @@ export class SessionObservability {
     };
   }
 
+  public recordSttFailure(sessionId: SessionId): void {
+    this.increment(sessionId, (m) => {
+      m.local.sttFailures = addBounded(m.local.sttFailures, 1);
+    });
+  }
+
+  public recordSttCancellation(sessionId: SessionId): void {
+    this.increment(sessionId, (m) => {
+      m.local.sttCancellations = addBounded(m.local.sttCancellations, 1);
+    });
+  }
+
   public recordVoiceInputSession(sessionId: SessionId): void {
     this.increment(sessionId, (m) => { m.local.voiceInputSessions = addBounded(m.local.voiceInputSessions, 1); });
   }
