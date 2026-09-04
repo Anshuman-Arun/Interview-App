@@ -155,9 +155,8 @@ export function validateProposalBoardReferences(
     return undefined;
   };
 
-  const annotations = new Set(
-    (scene?.aiAnnotations ?? []).map((annotation) => annotation.annotationId)
-  );
+  const remainingAnnotationIds = (scene?.aiAnnotations ?? [])
+    .map((annotation) => annotation.annotationId);
 
   for (const action of actions) {
     if (action.operation === "erase_ai_annotation") {
@@ -165,11 +164,16 @@ export function validateProposalBoardReferences(
         return "Provider cannot address an AI annotation by an untrusted canvas shape ID";
       }
       if (action.targetAnnotationId !== undefined) {
-        if (!annotations.has(action.targetAnnotationId)) {
-          return `AI annotation "${action.targetAnnotationId}" was not present in the compiled board scene`;
+        const annotationIndex = remainingAnnotationIds.indexOf(action.targetAnnotationId);
+        if (annotationIndex < 0) {
+          return `AI annotation "${action.targetAnnotationId}" was not present in the remaining compiled board scene`;
         }
-      } else if (annotations.size === 0) {
-        return "No provider-visible AI annotation is available for targetless erase";
+        remainingAnnotationIds.splice(annotationIndex, 1);
+      } else {
+        if (remainingAnnotationIds.length === 0) {
+          return "No provider-visible AI annotation is available for targetless erase";
+        }
+        remainingAnnotationIds.shift();
       }
     }
     if (action.targetShapeId !== undefined) {
