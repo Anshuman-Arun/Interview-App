@@ -6,7 +6,10 @@ import {
   type WhiteboardLayer,
   type DeliveryId
 } from "../../../packages/domain/src/index.js";
-import type { WhiteboardPresenter } from "./renderer-client.js";
+import {
+  RendererPresentationNotExposedError,
+  type WhiteboardPresenter
+} from "./renderer-client.js";
 import {
   normalizeStudentShape,
   type NormalizedStudentMutationSource
@@ -34,10 +37,18 @@ export class UnsupportedBoardActionError extends Error {
   }
 }
 
+export class WhiteboardPresentationPossiblyExposedError extends Error {
+  public constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "WhiteboardPresentationPossiblyExposedError";
+  }
+}
+
 export interface CanvasShapeMeta {
   readonly layer: WhiteboardLayer;
   readonly shapeRevision: number;
   readonly origin: "STUDENT" | "AI" | "SYSTEM";
+  readonly annotationId?: string;
   readonly deliveryId?: DeliveryId;
   readonly turnId?: string;
   readonly generationId?: string;
@@ -123,6 +134,8 @@ export interface CanvasSnapshot {
   }[];
   readonly aiAnnotations: readonly {
     readonly id: string;
+    readonly annotationId: string;
+    readonly physicalShapeIds: readonly string[];
     readonly operation: string;
     readonly deliveryId?: string;
     readonly purpose: string;
@@ -142,6 +155,7 @@ export interface DirtyRegion {
 }
 
 export interface ApplyAiOverlayOptions {
+  readonly annotationId?: string;
   readonly deliveryId?: DeliveryId;
   readonly turnId?: string;
   readonly generationId?: string;
@@ -288,36 +302,42 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
   public async applyAiOverlayAction(action: BoardAction, options?: ApplyAiOverlayOptions): Promise<void> {
     const validatedAction = BoardActionSchema.parse(action);
     const editor = this.requireEditor();
+    const annotationOptions: ApplyAiOverlayOptions = {
+      ...options,
+      annotationId: options?.annotationId
+        ?? options?.deliveryId
+        ?? `local_annotation_${generateId()}`
+    };
 
     this.validateTargetRevision(editor, validatedAction);
 
     switch (validatedAction.operation) {
       case "circle":
-        this.renderCircleOverlay(editor, validatedAction, options);
+        this.renderCircleOverlay(editor, validatedAction, annotationOptions);
         break;
       case "highlight":
-        this.renderHighlightOverlay(editor, validatedAction, options);
+        this.renderHighlightOverlay(editor, validatedAction, annotationOptions);
         break;
       case "draw_arrow":
-        this.renderArrowOverlay(editor, validatedAction, options);
+        this.renderArrowOverlay(editor, validatedAction, annotationOptions);
         break;
       case "point_at":
-        this.renderPointAtOverlay(editor, validatedAction, options);
+        this.renderPointAtOverlay(editor, validatedAction, annotationOptions);
         break;
       case "write_text":
-        this.renderWriteTextOverlay(editor, validatedAction, options);
+        this.renderWriteTextOverlay(editor, validatedAction, annotationOptions);
         break;
       case "write_equation":
-        this.renderWriteEquationOverlay(editor, validatedAction, options);
+        this.renderWriteEquationOverlay(editor, validatedAction, annotationOptions);
         break;
       case "draw_segment":
-        this.renderSegmentOverlay(editor, validatedAction, options);
+        this.renderSegmentOverlay(editor, validatedAction, annotationOptions);
         break;
       case "draw_arrow_between":
-        this.renderArrowBetweenOverlay(editor, validatedAction, options);
+        this.renderArrowBetweenOverlay(editor, validatedAction, annotationOptions);
         break;
       case "draw_polyline":
-        this.renderPolylineOverlay(editor, validatedAction, options);
+        this.renderPolylineOverlay(editor, validatedAction, annotationOptions);
         break;
       case "draw_rectangle":
         this.renderBoxOverlay(editor, validatedAction, "rectangle", options);
@@ -631,6 +651,15 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
       );
     }
 
+    if (action.targetRegion !== undefined) {
+      this.validateShapeRevisionBinding(
+        editor,
+        action.targetRegion.shapeId,
+        action.targetRegion.shapeRevision,
+        "Target region"
+      );
+    }
+
     if (action.operation === "draw_arrow_between") {
       if (action.fromShapeId === undefined || action.toShapeId === undefined) {
         throw new UnsupportedBoardActionError(
@@ -672,7 +701,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
   }
 
   private renderCircleOverlay(editor: TldrawEditor, action: BoardAction, options?: ApplyAiOverlayOptions): void {
-    const targetBounds = this.resolveTargetBounds(editor, action.targetShapeId);
+    const targetBounds = this.resolveActionTargetBounds(editor, action);
     const padding = 12;
     const x = targetBounds.x - padding;
     const y = targetBounds.y - padding;
@@ -700,11 +729,11 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
       meta: { ...meta }
     };
 
-    editor.createShapes([circleShape]);
+    this.commitAiShapeBatch(editor, [circleShape]);
   }
 
   private renderHighlightOverlay(editor: TldrawEditor, action: BoardAction, options?: ApplyAiOverlayOptions): void {
-    const targetBounds = this.resolveTargetBounds(editor, action.targetShapeId);
+    const targetBounds = this.resolveActionTargetBounds(editor, action);
     const padding = 6;
     const x = targetBounds.x - padding;
     const y = targetBounds.y - padding;
@@ -733,11 +762,11 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
       meta: { ...meta }
     };
 
-    editor.createShapes([highlightShape]);
+    this.commitAiShapeBatch(editor, [highlightShape]);
   }
 
   private renderArrowOverlay(editor: TldrawEditor, action: BoardAction, options?: ApplyAiOverlayOptions): void {
-    const targetBounds = this.resolveTargetBounds(editor, action.targetShapeId);
+    const targetBounds = this.resolveActionTargetBounds(editor, action);
     const targetCenterX = targetBounds.x + targetBounds.width / 2;
     const targetCenterY = targetBounds.y + targetBounds.height / 2;
 
@@ -764,11 +793,11 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
       meta: { ...meta }
     };
 
-    editor.createShapes([arrowShape]);
+    this.commitAiShapeBatch(editor, [arrowShape]);
   }
 
   private renderPointAtOverlay(editor: TldrawEditor, action: BoardAction, options?: ApplyAiOverlayOptions): void {
-    const targetBounds = this.resolveTargetBounds(editor, action.targetShapeId);
+    const targetBounds = this.resolveActionTargetBounds(editor, action);
     const targetCenterX = targetBounds.x + targetBounds.width / 2;
     const targetCenterY = targetBounds.y;
 
@@ -795,7 +824,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
       meta: { ...meta }
     };
 
-    editor.createShapes([pointShape]);
+    this.commitAiShapeBatch(editor, [pointShape]);
   }
 
   private renderWriteTextOverlay(editor: TldrawEditor, action: BoardAction, options?: ApplyAiOverlayOptions): void {
@@ -822,7 +851,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
       meta: { ...meta }
     };
 
-    editor.createShapes([textShape]);
+    this.commitAiShapeBatch(editor, [textShape]);
   }
 
   private renderWriteEquationOverlay(editor: TldrawEditor, action: BoardAction, options?: ApplyAiOverlayOptions): void {
@@ -852,7 +881,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
       meta: { ...meta }
     };
 
-    editor.createShapes([equationShape]);
+    this.commitAiShapeBatch(editor, [equationShape]);
   }
 
   private renderSegmentOverlay(editor: TldrawEditor, action: BoardAction, options?: ApplyAiOverlayOptions): void {
@@ -898,21 +927,25 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     if (points === undefined || points.length < 2) {
       throw new UnsupportedBoardActionError("draw_polyline requires at least two points");
     }
+    const meta = this.createAiMeta(action, options);
+    const shapes: TLShapePartialRecord[] = [];
     for (let index = 0; index < points.length - 1; index += 1) {
       const start = points[index];
       const end = points[index + 1];
-      if (start === undefined || end === undefined) continue;
-      this.renderStraightAnnotationSegment(
+      if (start === undefined || end === undefined) {
+        throw new UnsupportedBoardActionError("draw_polyline contains an incomplete segment");
+      }
+      shapes.push(this.buildStraightAnnotationSegment(
         editor,
-        action,
         start,
         end,
         false,
         `ai_polyline_${String(index)}`,
-        options,
-        index === 0
-      );
+        meta,
+        index === 0 ? (action.content ?? "") : ""
+      ));
     }
+    this.commitAiShapeBatch(editor, shapes);
   }
 
   private renderStraightAnnotationSegment(
@@ -925,9 +958,29 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     options?: ApplyAiOverlayOptions,
     includeText = true
   ): void {
-    const meta = this.createAiMeta(action, options);
+    const shape = this.buildStraightAnnotationSegment(
+      editor,
+      start,
+      end,
+      arrowhead,
+      prefix,
+      this.createAiMeta(action, options),
+      includeText ? (action.content ?? "") : ""
+    );
+    this.commitAiShapeBatch(editor, [shape]);
+  }
+
+  private buildStraightAnnotationSegment(
+    editor: TldrawEditor,
+    start: { readonly x: number; readonly y: number },
+    end: { readonly x: number; readonly y: number },
+    arrowhead: boolean,
+    prefix: string,
+    meta: CanvasShapeMeta,
+    text: string
+  ): TLShapePartialRecord {
     const shapeId = allocateUniqueShapeId(editor, prefix);
-    const shape: TLShapePartialRecord = {
+    return {
       id: shapeId,
       type: "arrow",
       x: start.x,
@@ -940,11 +993,10 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
         color: "violet",
         dash: "draw",
         size: "m",
-        text: includeText ? (action.content ?? "") : ""
+        text
       },
       meta: { ...meta }
     };
-    editor.createShapes([shape]);
   }
 
   private renderBoxOverlay(
@@ -964,7 +1016,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     );
     const meta = this.createAiMeta(action, options);
     const shapeId = allocateUniqueShapeId(editor, `ai_${geo}`);
-    editor.createShapes([{
+    this.commitAiShapeBatch(editor, [{
       id: shapeId,
       type: "geo",
       x: placement.x,
@@ -1023,7 +1075,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
       x = placement.x;
       y = placement.y;
     } else if (action.targetShapeId !== undefined) {
-      const targetBounds = this.resolveTargetBounds(editor, action.targetShapeId);
+      const targetBounds = this.resolveActionTargetBounds(editor, action);
       x = targetBounds.x + targetBounds.width + 16;
       y = targetBounds.y;
     }
@@ -1035,48 +1087,181 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
   }
 
   private executeEraseAiAnnotation(editor: TldrawEditor, action: BoardAction): void {
-    if (action.targetShapeId !== undefined) {
-      const shape = editor.getShape(action.targetShapeId);
-      if (shape === undefined) {
-        return;
-      }
+    const aiShapes = editor.getCurrentPageShapes()
+      .filter((shape) => shape.meta?.["layer"] === "AI_ANNOTATION");
+    if (aiShapes.length === 0) {
+      throw new UnsupportedBoardActionError("No AI annotation is available to erase");
+    }
 
-      const layer = shape.meta?.["layer"];
-      if (layer === "STUDENT" || layer === undefined) {
-        throw new StudentShapeImmutableError(
-          `Fail-closed guard: Refusing to erase shape "${action.targetShapeId}" because it is owned by the STUDENT layer.`
-        );
+    let targetAnnotationId = action.targetAnnotationId;
+    if (targetAnnotationId === undefined) {
+      const groups = new Map<string, { readonly shapes: TLShapeRecord[]; latestTime: number }>();
+      for (const shape of aiShapes) {
+        const annotationId = logicalAnnotationId(shape);
+        const existing = groups.get(annotationId);
+        const createdAt = annotationCreatedAtMs(shape);
+        if (existing === undefined) {
+          groups.set(annotationId, { shapes: [shape], latestTime: createdAt });
+        } else {
+          existing.shapes.push(shape);
+          if (createdAt > existing.latestTime) existing.latestTime = createdAt;
+        }
       }
+      let latestId: string | undefined;
+      let latestTime = Number.NEGATIVE_INFINITY;
+      for (const [annotationId, group] of groups) {
+        if (group.latestTime >= latestTime) {
+          latestId = annotationId;
+          latestTime = group.latestTime;
+        }
+      }
+      targetAnnotationId = latestId;
+    }
 
-      if (layer === "SYSTEM_DECORATION") {
-        throw new StudentShapeImmutableError(
-          `Fail-closed guard: Refusing to erase system decoration shape "${action.targetShapeId}".`
-        );
-      }
+    if (targetAnnotationId === undefined) {
+      throw new UnsupportedBoardActionError("No AI annotation is available to erase");
+    }
+    const group = aiShapes.filter((shape) => logicalAnnotationId(shape) === targetAnnotationId);
+    if (group.length === 0) {
+      throw new UnsupportedBoardActionError(
+        `AI annotation "${targetAnnotationId}" is not visible on the canvas`
+      );
+    }
+    this.deleteAiAnnotationGroupAtomically(editor, group);
+  }
 
-      if (layer === "AI_ANNOTATION") {
-        editor.deleteShapes([action.targetShapeId]);
-      }
+  private commitAiShapeBatch(
+    editor: TldrawEditor,
+    shapes: readonly TLShapePartialRecord[]
+  ): void {
+    if (shapes.length === 0) {
+      throw new RendererPresentationNotExposedError("AI annotation batch is empty");
+    }
+    const ids = shapes.map((shape) => shape.id);
+    if (new Set(ids).size !== ids.length) {
+      throw new RendererPresentationNotExposedError("AI annotation batch reused a renderer shape ID");
+    }
+    if (ids.some((id) => editor.getShape(id) !== undefined)) {
+      throw new RendererPresentationNotExposedError("AI annotation batch collided with an existing shape");
+    }
+
+    let createError: unknown;
+    try {
+      editor.createShapes(shapes);
+    } catch (error) {
+      createError = error;
+    }
+
+    const presentIds = ids.filter((id) => editor.getShape(id) !== undefined);
+    if (presentIds.length === ids.length) {
       return;
     }
-
-    const shapes = editor.getCurrentPageShapes();
-    const aiShapes = shapes.filter((shape) => shape.meta?.["layer"] === "AI_ANNOTATION");
-
-    if (aiShapes.length === 0) return;
-
-    let latest = aiShapes[0];
-    let latestTime = annotationCreatedAtMs(latest);
-    for (let index = 1; index < aiShapes.length; index += 1) {
-      const candidate = aiShapes[index];
-      if (candidate === undefined) continue;
-      const candidateTime = annotationCreatedAtMs(candidate);
-      if (candidateTime >= latestTime) {
-        latest = candidate;
-        latestTime = candidateTime;
-      }
+    if (presentIds.length === 0) {
+      throw new RendererPresentationNotExposedError(
+        "AI annotation batch failed before any shape remained visible",
+        ...(createError === undefined ? [] : [{ cause: createError }])
+      );
     }
-    if (latest !== undefined) editor.deleteShapes([latest.id]);
+
+    let rollbackError: unknown;
+    try {
+      editor.deleteShapes(presentIds);
+    } catch (error) {
+      rollbackError = error;
+    }
+    const survivors = ids.filter((id) => editor.getShape(id) !== undefined);
+    if (survivors.length === 0) {
+      throw new RendererPresentationNotExposedError(
+        "AI annotation batch partially mutated but was fully rolled back",
+        ...(createError === undefined ? [] : [{ cause: createError }])
+      );
+    }
+    throw new WhiteboardPresentationPossiblyExposedError(
+      "AI annotation batch partially rendered and rollback could not be proven",
+      { cause: rollbackError ?? createError }
+    );
+  }
+
+  private deleteAiAnnotationGroupAtomically(
+    editor: TldrawEditor,
+    shapes: readonly TLShapeRecord[]
+  ): void {
+    const snapshots = shapes.map((shape): TLShapePartialRecord => ({
+      id: shape.id,
+      type: shape.type,
+      x: shape.x,
+      y: shape.y,
+      ...(shape.rotation === undefined ? {} : { rotation: shape.rotation }),
+      ...(shape.isLocked === undefined ? {} : { isLocked: shape.isLocked }),
+      ...(shape.opacity === undefined ? {} : { opacity: shape.opacity }),
+      props: { ...(shape.props ?? {}) },
+      meta: { ...(shape.meta ?? {}) }
+    }));
+    const ids = snapshots.map((shape) => shape.id);
+
+    let deletionError: unknown;
+    try {
+      editor.deleteShapes(ids);
+    } catch (error) {
+      deletionError = error;
+    }
+    const survivors = ids.filter((id) => editor.getShape(id) !== undefined);
+    if (survivors.length === 0) return;
+
+    const missingSnapshots = snapshots.filter((shape) => editor.getShape(shape.id) === undefined);
+    if (missingSnapshots.length === 0) {
+      throw new RendererPresentationNotExposedError(
+        "AI annotation erase failed before changing the visible group",
+        ...(deletionError === undefined ? [] : [{ cause: deletionError }])
+      );
+    }
+
+    let rollbackError: unknown;
+    try {
+      editor.createShapes(missingSnapshots);
+    } catch (error) {
+      rollbackError = error;
+    }
+    const restored = ids.every((id) => editor.getShape(id) !== undefined);
+    if (restored) {
+      throw new RendererPresentationNotExposedError(
+        "AI annotation erase partially mutated but was fully rolled back",
+        ...(deletionError === undefined ? [] : [{ cause: deletionError }])
+      );
+    }
+    throw new WhiteboardPresentationPossiblyExposedError(
+      "AI annotation erase partially mutated and rollback could not be proven",
+      { cause: rollbackError ?? deletionError }
+    );
+  }
+
+  private resolveActionTargetBounds(editor: TldrawEditor, action: BoardAction): TLShapeBounds {
+    if (action.targetRegion === undefined) {
+      return this.resolveTargetBounds(editor, action.targetShapeId);
+    }
+    const shape = editor.getShape(action.targetRegion.shapeId);
+    if (shape === undefined) {
+      throw new StaleShapeRevisionError(
+        `Target region shape "${action.targetRegion.shapeId}" not found`
+      );
+    }
+    const bounds = this.resolveShapeBounds(editor, shape);
+    const widthFraction = action.targetRegion.widthFraction ?? 0;
+    const heightFraction = action.targetRegion.heightFraction ?? 0;
+    const x = bounds.x + bounds.width * action.targetRegion.xFraction;
+    const y = bounds.y + bounds.height * action.targetRegion.yFraction;
+    const width = bounds.width * widthFraction;
+    const height = bounds.height * heightFraction;
+    return this.validateShapeBounds(shape.id, {
+      x,
+      y,
+      width,
+      height,
+      minX: x,
+      minY: y,
+      maxX: x + width,
+      maxY: y + height
+    });
   }
 
   private resolveTargetBounds(editor: TldrawEditor, targetShapeId?: string): TLShapeBounds {
@@ -1153,6 +1338,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
       layer: "AI_ANNOTATION",
       shapeRevision: 1,
       origin: "AI",
+      ...(options?.annotationId !== undefined ? { annotationId: options.annotationId } : {}),
       ...(options?.deliveryId !== undefined ? { deliveryId: options.deliveryId } : {}),
       ...(options?.turnId !== undefined ? { turnId: options.turnId } : {}),
       ...(options?.generationId !== undefined ? { generationId: options.generationId } : {}),
