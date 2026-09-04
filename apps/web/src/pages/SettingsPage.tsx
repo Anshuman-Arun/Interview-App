@@ -633,7 +633,7 @@ export function SettingsPage({
                 type="button"
                 aria-label={option.label}
                 aria-pressed={settings.accent === option.id}
-                style={{ "--swatch": option.color } as React.CSSProperties}
+                style={{ "--swatch": option.color } as CSSProperties}
                 onClick={() => setAccent(option.id)}
               />
             ))}
