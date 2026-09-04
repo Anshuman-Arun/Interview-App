@@ -397,6 +397,7 @@ export class WhiteboardVisionCoordinator {
     const accepted = admission.observations[0];
     if (accepted === undefined || admission.observations.length !== 1) {
       await turn.discardVisionRequest(upload.requestId, "INVALID_OUTPUT");
+      this.observability?.recordVisionRejected(upload.sessionId, false);
       return this.remember(upload.requestId, fingerprint, rejected(
         upload,
         "INVALID_OUTPUT"
