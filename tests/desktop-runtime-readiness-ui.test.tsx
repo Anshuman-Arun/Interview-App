@@ -9,6 +9,7 @@ import {
   parseDesktopRuntimeStatus,
   type DesktopRuntimeStatus
 } from "../apps/web/src/desktop-runtime.js";
+import { NewInterviewPage } from "../apps/web/src/pages/NewInterviewPage.js";
 import { SettingsPage } from "../apps/web/src/pages/SettingsPage.js";
 
 const READY_PROVIDER = {
@@ -67,6 +68,7 @@ function clearDesktopBridge(): void {
 
 afterEach(() => {
   clearDesktopBridge();
+  Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT");
   document.body.replaceChildren();
 });
 
@@ -208,6 +210,86 @@ describe("desktop local AI readiness UX", () => {
     expect(markup).not.toContain("Python prerequisite required");
   });
 
+  it("does not leave local capabilities stuck on CHECKING after a runtime read failure", async () => {
+    Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
+    vi.stubGlobal("interviewDesktop", {
+      getLocalRuntimeStatus: vi.fn(async () => {
+        throw new Error("runtime bridge failure");
+      })
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <AppearanceProvider>
+          <SettingsPage
+            providerOptions={[READY_PROVIDER]}
+            providerOptionsLoading={false}
+            providerOptionsError={null}
+            onRefreshProviderOptions={vi.fn(async () => [READY_PROVIDER])}
+            onStartInterview={vi.fn()}
+          />
+        </AppearanceProvider>
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain(
+      "Local runtime status could not be verified. Re-check or restart Interview App."
+    );
+    expect(container.textContent).not.toContain("CHECKING");
+    expect(container.textContent).toContain("UNAVAILABLE");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("keeps New Interview usable when desktop local readiness is malformed", async () => {
+    Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
+    vi.stubGlobal("interviewDesktop", {
+      getLocalRuntimeStatus: vi.fn(async () => ({ protocolVersion: 999 }))
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <NewInterviewPage
+          catalog={[]}
+          catalogLoading={false}
+          catalogError={null}
+          providerOptions={[READY_PROVIDER]}
+          providerOptionsLoading={false}
+          providerOptionsError={null}
+          activeSessionId={null}
+          startPending={false}
+          onRefreshCatalog={vi.fn(async () => [])}
+          onRefreshProviderOptions={vi.fn(async () => [READY_PROVIDER])}
+          onStart={vi.fn(async () => undefined)}
+          onResumeActive={null}
+        />
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain(
+      "Local AI readiness could not be verified — typed input and drawing still work."
+    );
+    expect(container.textContent).toContain("Start interview");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("fails closed when an Antigravity re-check errors even if a prior option was ready", () => {
     const markup = renderToStaticMarkup(
       React.createElement(
@@ -286,7 +368,7 @@ describe("desktop local AI readiness UX", () => {
     const root = createRoot(container);
     const findButton = (label: string): HTMLButtonElement => {
       const match = Array.from(container.querySelectorAll("button"))
-        .find((button) => button.textContent?.trim() === label);
+        .find((button) => button.textContent.trim() === label);
       if (!(match instanceof HTMLButtonElement)) {
         throw new Error(`Missing button: ${label}`);
       }
