@@ -21,6 +21,7 @@ export interface TranscriptFeedProps {
   readonly onRetry?: (itemId: string) => void | Promise<void>;
   readonly retryDisabled?: boolean;
   readonly className?: string;
+  readonly scrollContextKey?: string | null;
   readonly focused?: boolean;
   readonly onToggleFocus?: (() => void) | undefined;
 }
@@ -30,11 +31,13 @@ export const TranscriptFeed: React.FC<TranscriptFeedProps> = ({
   onRetry,
   retryDisabled = false,
   className = "",
+  scrollContextKey = null,
   focused = false,
   onToggleFocus
 }) => {
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const followingRef = useRef(true);
+  const previousScrollContextKeyRef = useRef<string | null>(scrollContextKey);
   const [showJump, setShowJump] = useState(false);
 
   const scrollToLatest = (): void => {
@@ -48,13 +51,29 @@ export const TranscriptFeed: React.FC<TranscriptFeedProps> = ({
   useEffect(() => {
     const node = messagesRef.current;
     if (node === null) return;
+
+    if (previousScrollContextKeyRef.current !== scrollContextKey) {
+      previousScrollContextKeyRef.current = scrollContextKey;
+      followingRef.current = true;
+      setShowJump(false);
+      node.scrollTo({ top: items.length === 0 ? 0 : node.scrollHeight });
+      return;
+    }
+
+    if (items.length === 0) {
+      followingRef.current = true;
+      setShowJump(false);
+      node.scrollTo({ top: 0 });
+      return;
+    }
+
     if (followingRef.current) {
       node.scrollTo({ top: node.scrollHeight });
       setShowJump(false);
     } else {
       setShowJump(true);
     }
-  }, [items]);
+  }, [items, scrollContextKey]);
 
   useEffect(() => {
     const node = messagesRef.current;
