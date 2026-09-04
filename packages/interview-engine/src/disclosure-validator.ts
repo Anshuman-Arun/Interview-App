@@ -259,6 +259,9 @@ function boardTargetDisclosureTexts(
   if (action.placement?.anchorShapeId !== undefined) {
     shapeIds.add(action.placement.anchorShapeId);
   }
+  if (action.targetRegion !== undefined) {
+    shapeIds.add(action.targetRegion.shapeId);
+  }
   if (action.operation === "draw_arrow_between") {
     if (action.fromShapeId !== undefined) shapeIds.add(action.fromShapeId);
     if (action.toShapeId !== undefined) shapeIds.add(action.toShapeId);
