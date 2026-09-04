@@ -430,7 +430,7 @@ function localRuntimeStatusForRenderer(): DesktopRendererLocalRuntimeStatus {
     speech: rendererCapability(snapshot?.speech),
     tts: rendererCapability(snapshot?.tts),
     vision: rendererCapability(snapshot?.vision),
-    python: rendererPythonStatus(snapshot),
+    python: rendererPythonStatus(localRuntime?.getPythonRuntimeStatus()),
     pythonSetup: Object.freeze({
       state: pythonSetupState,
       restartRequired: pythonSetupRestartRequired
@@ -447,35 +447,18 @@ function localRuntimeStatusForRenderer(): DesktopRendererLocalRuntimeStatus {
 }
 
 function rendererPythonStatus(
-  snapshot: ReturnType<DesktopLocalRuntimeComposition["getCapabilityStatus"]> | undefined
+  status: ReturnType<DesktopLocalRuntimeComposition["getPythonRuntimeStatus"]> | undefined
 ): DesktopRendererPythonRuntimeStatus {
-  if (snapshot === undefined) {
+  if (status?.state === "READY") {
     return Object.freeze({
-      state: "UNAVAILABLE",
-      reasonCode: "NOT_STARTED",
+      state: "READY",
       strategy: "SYSTEM_CPYTHON",
       supportedVersions: Object.freeze(["3.12", "3.13"] as const)
     });
   }
-  const reasons = [snapshot.speech.reasonCode, snapshot.tts.reasonCode, snapshot.vision.reasonCode];
-  for (const reasonCode of [
-    "PYTHON_RUNTIME_UNAVAILABLE",
-    "PYTHON_RUNTIME_INCOMPATIBLE",
-    "PYTHON_RUNTIME_DEPENDENCIES_MISSING",
-    "UNSUPPORTED_RUNTIME_PLATFORM",
-    "WORKER_EXECUTABLE_UNAVAILABLE"
-  ] as const) {
-    if (reasons.includes(reasonCode)) {
-      return Object.freeze({
-        state: "UNAVAILABLE",
-        reasonCode,
-        strategy: "SYSTEM_CPYTHON",
-        supportedVersions: Object.freeze(["3.12", "3.13"] as const)
-      });
-    }
-  }
   return Object.freeze({
-    state: "READY",
+    state: "UNAVAILABLE",
+    reasonCode: status?.reasonCode ?? "NOT_STARTED",
     strategy: "SYSTEM_CPYTHON",
     supportedVersions: Object.freeze(["3.12", "3.13"] as const)
   });
