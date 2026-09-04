@@ -623,6 +623,8 @@ describe("Antigravity CLI one-turn protocol", () => {
     expect(prompt).toContain("application-owned logical annotations");
     expect(prompt).toContain("truncated board scene is only a selected subset");
     expect(prompt).toContain("Do not infer that omitted space is empty");
+    expect(prompt).toContain("aiAnnotationStateUncertain");
+    expect(prompt).toContain("do not issue erase_ai_annotation");
     expect(prompt).toContain("Use contentBounds as a coarse spatial frame");
     expect(prompt).toContain("Use targetRegion only when");
     expect(prompt).toContain("do not encode a student target indirectly");
