@@ -2,6 +2,7 @@ export const DESKTOP_BOOTSTRAP_CHANNEL = "interview-desktop:get-bootstrap";
 export const DESKTOP_ZOOM_CHANNEL = "interview-desktop:set-zoom";
 export const DESKTOP_ZOOM_CHANGED_CHANNEL = "interview-desktop:zoom-changed";
 export const DESKTOP_LOCAL_RUNTIME_STATUS_CHANNEL = "interview-desktop:get-local-runtime-status";
+export const DESKTOP_INSTALL_PYTHON_RUNTIME_CHANNEL = "interview-desktop:install-python-runtime";
 export const DESKTOP_INSTALL_VOICE_MODELS_CHANNEL = "interview-desktop:install-voice-models";
 export const DESKTOP_INSTALL_VISION_MODEL_CHANNEL = "interview-desktop:install-vision-model";
 export const DESKTOP_RESTART_APP_CHANNEL = "interview-desktop:restart-app";
@@ -45,6 +46,7 @@ export interface DesktopRendererLocalRuntimeStatus {
   readonly tts: DesktopRendererRuntimeCapabilityStatus;
   readonly vision: DesktopRendererRuntimeCapabilityStatus;
   readonly python: DesktopRendererPythonRuntimeStatus;
+  readonly pythonSetup: DesktopRendererModelSetupStatus;
   readonly voiceSetup: DesktopRendererModelSetupStatus;
   readonly visionSetup: DesktopRendererModelSetupStatus;
 }
