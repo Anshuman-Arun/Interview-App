@@ -13,6 +13,69 @@ The stable application identity is `com.anshuman.interviewapp`. The package
 version is the release identity; timestamps and random values are not used in
 artifact names.
 
+## Version authority and tagged release flow
+
+The root `package.json` `version` field is the single canonical application
+version. electron-builder consumes that same package metadata for the packaged
+Electron application and installer name, and the desktop runtime exposes
+`app.getVersion()` to Settings. Development mode reports `development`
+instead of pretending to be a packaged release.
+
+Official release tags use stable semantic versions only:
+
+```text
+0.1.0  -> v0.1.0
+0.1.1  -> v0.1.1
+0.2.0  -> v0.2.0
+```
+
+Before tagging, commit the version bump on the exact green source commit. Then:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+`.github/workflows/windows-release.yml` is tag-only. It checks out the
+immutable tag-event object, resolves it to the exact source commit, verifies
+that the still-visible tag resolves to the same commit, and fails if the tag
+does not exactly match the canonical package version. CI never rewrites
+`package.json` to force agreement.
+
+After the full validation/build/install/upgrade gates pass, the workflow
+creates a **draft** GitHub Release titled `Interview App v<version>`. The
+draft contains the installer, checksum, user-facing release notes, exact source
+SHA, and workflow-run provenance. A maintainer reviews the draft before
+publishing it. Ordinary branch pushes cannot publish a release.
+
+The reusable local version check is:
+
+```bash
+node scripts/check-release-version.mjs --tag v0.1.0
+```
+
+## Release artifact checksum
+
+Each draft release contains:
+
+```text
+InterviewApp-Setup-0.1.0.exe
+InterviewApp-Setup-0.1.0.exe.sha256
+```
+
+The checksum file uses the standard one-line SHA-256 format
+`<lowercase digest><two spaces><filename>`. The release workflow generates
+it from the exact installer built in that same tag-triggered job and verifies
+it again before release creation.
+
+On Windows, verification can be done with built-in PowerShell:
+
+```powershell
+$expected = (Get-Content .\InterviewApp-Setup-0.1.0.exe.sha256).Split()[0]
+$actual = (Get-FileHash .\InterviewApp-Setup-0.1.0.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actual -ne $expected) { throw "Checksum verification failed" }
+```
+
 `pnpm package:win` creates an unpacked Windows application for inspection.
 `pnpm dist:win` creates the NSIS installer. Both run the public-release gate
 and packaged-resource verifier.
@@ -91,8 +154,11 @@ normal per-user program installation directory. The application never writes
 the database, model cache or runtime views into the install directory.
 
 The stable app ID and product identity permit in-place replacement. Installer
-CI installs, launches, writes durable state, reinstalls, and verifies the
-database/model-cache marker survived.
+CI installs a synthetic prior version, launches it, writes durable state,
+installs the current version over the same per-user target, and verifies that
+the authoritative session database, model-asset marker, and a broader
+per-user preference marker survive unchanged. The upgraded binary is then
+launched and required to recover the prior authoritative session.
 
 Default uninstall removes application binaries and intentionally leaves
 `%APPDATA%\Interview App` intact. Delete that residual directory manually
@@ -112,10 +178,10 @@ is exposed to the renderer.
 
 ## Signing and SmartScreen
 
-Current CI/manual artifacts are **unsigned development installers**. No signing
-certificate or private key is committed, generated or faked. A future release
-workflow can provide a genuine signing identity securely without changing the
-packaged resource boundary.
+Current CI, manual, and versioned GitHub Release installers are **unsigned**.
+No signing certificate or private key is committed, generated, faked, or
+embedded in GitHub Actions. Genuine code signing remains separate post-v0.1
+release work and does not change the packaged resource boundary.
 
 Unsigned installers can trigger Windows Defender SmartScreen warnings. That is
 an expected current limitation, not a reason to weaken runtime or installer
@@ -186,5 +252,6 @@ clean Windows x64 machine:
 - CI does not exercise real Moonshine/Kokoro inference weights.
 - The installer remains unsigned until a real certificate is securely supplied.
 - Auto-update is not enabled; upgrades are explicit installer replacements.
+- Git tag releases are created as drafts for maintainer review before publication.
 - macOS signing/notarization and Linux packaging are outside this Windows-first
   slice.
