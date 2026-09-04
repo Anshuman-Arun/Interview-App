@@ -880,6 +880,28 @@ describe("board target admission", () => {
     });
   });
 
+  it("rejects more logical erase actions than the exact provider-visible scene can satisfy", () => {
+    const overErase = InterviewerProposalSchema.parse({
+      realizedAction: "FOCUS_ATTENTION",
+      claimedDisclosureLevel: 0,
+      claimedDisclosureIds: [],
+      boardActions: [
+        {
+          operation: "erase_ai_annotation",
+          layer: "AI_ANNOTATION",
+          annotationPurpose: "remove latest annotation"
+        },
+        {
+          operation: "erase_ai_annotation",
+          layer: "AI_ANNOTATION",
+          annotationPurpose: "try to remove another annotation"
+        }
+      ]
+    });
+    expect(validateProposalBoardReferences(overErase, scene))
+      .toContain("No provider-visible AI annotation is available");
+  });
+
   it("accepts only provider-visible logical annotation IDs for erasure", () => {
     expect(InterviewerProposalSchema.safeParse({
       realizedAction: "FOCUS_ATTENTION",
@@ -917,6 +939,6 @@ describe("board target admission", () => {
       }]
     });
     expect(validateProposalBoardReferences(unknown, scene))
-      .toContain("was not present in the compiled board scene");
+      .toContain("was not present");
   });
 });
