@@ -68,11 +68,6 @@ export function ProductFrame({
           ))}
         </nav>
 
-        <div className="product-frame__rail-note">
-          <span>LOCAL</span>
-          <span aria-hidden="true" className="product-frame__rail-rule" />
-          <span>VOICE · BOARD · REPLAY</span>
-        </div>
       </aside>
 
       <div className="product-frame__main">

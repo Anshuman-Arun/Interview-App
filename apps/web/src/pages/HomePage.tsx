@@ -35,25 +35,21 @@ export function HomePage({
   const completedCount = sessions.filter(
     (session) => session.status === "COMPLETED" || session.status === "ARCHIVED"
   ).length;
+  const latestReviewable = recent.find(canReview) ?? null;
 
   return (
     <div className="expressive-home">
       <section className="expressive-home__hero">
         <div className="expressive-home__hero-copy">
           <div className="expressive-home__coordinate">
-            <span>ROOM 01</span>
-            <span>THINK ALOUD</span>
+            <span>01 / BEGIN</span>
           </div>
 
-          <h2>
-            Think on the page.
-            <span>Talk through the proof.</span>
-          </h2>
+          <h2>A room for thinking out loud.</h2>
 
           <p>
-            A focused interview room for mathematical proofs, market intuition,
-            and research reasoning. Voice and whiteboard stay close; everything
-            else gets out of the way.
+            Practice difficult technical conversations with a responsive
+            interviewer and a whiteboard that stays central.
           </p>
 
           <div className="expressive-home__hero-actions">
@@ -94,31 +90,24 @@ export function HomePage({
           </div>
         </div>
 
-        <div className="expressive-home__studio" aria-label="Interview workspace preview">
-          <div className="expressive-home__studio-top">
-            <span>LIVE WORKSPACE</span>
-            <span className="expressive-home__studio-dot" />
-          </div>
-
-          <div className="expressive-home__paper">
-            <span className="expressive-home__paper-index">Q</span>
-            <strong>Suppose the next step is not obvious.</strong>
-            <p>Say what you know. Draw what you see. Let the interviewer push on the gap.</p>
-          </div>
-
-          <div className="expressive-home__scratch">
-            <span className="expressive-home__scratch-line expressive-home__scratch-line--one" />
-            <span className="expressive-home__scratch-line expressive-home__scratch-line--two" />
-            <span className="expressive-home__scratch-node expressive-home__scratch-node--a" />
-            <span className="expressive-home__scratch-node expressive-home__scratch-node--b" />
-            <span className="expressive-home__scratch-node expressive-home__scratch-node--c" />
-          </div>
-
-          <div className="expressive-home__transcript-preview">
-            <span>INTERVIEWER</span>
-            <p>Why does that implication have to hold?</p>
-          </div>
-        </div>
+        <aside className="expressive-home__summary" aria-label="Practice summary">
+          <section className="expressive-home__summary-card expressive-home__summary-card--ink">
+            <span>LAST SESSION</span>
+            <strong>
+              {latestReviewable?.problemId ?? "Your first review awaits"}
+            </strong>
+            <p>
+              {latestReviewable === null
+                ? "Complete an interview to build your review trail."
+                : "Return to the review while the reasoning is still fresh."}
+            </p>
+          </section>
+          <section className="expressive-home__summary-card">
+            <span>PRACTICE</span>
+            <strong>{completedCount} finished</strong>
+            <p>Completed and archived interviews in your local ledger.</p>
+          </section>
+        </aside>
       </section>
 
       {activeSessionId !== null && (

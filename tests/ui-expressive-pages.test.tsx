@@ -60,7 +60,7 @@ describe("expressive product page layer", () => {
     expect(markup).toContain("01");
     expect(markup).toContain("02");
     expect(markup).toContain("03");
-    expect(markup).toContain("VOICE · BOARD · REPLAY");
+    expect(markup).not.toContain("VOICE · BOARD · REPLAY");
   });
 
   it("renders an active-room-aware editorial home surface", () => {
@@ -79,8 +79,7 @@ describe("expressive product page layer", () => {
       })
     );
 
-    expect(markup).toContain("Think on the page.");
-    expect(markup).toContain("Talk through the proof.");
+    expect(markup).toContain("A room for thinking out loud.");
     expect(markup).toContain("Return to room");
     expect(markup).toContain("Divisibility chains");
     expect(markup).not.toContain(">Enter interview<");

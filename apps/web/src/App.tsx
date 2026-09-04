@@ -32,6 +32,33 @@ import "./styles/app.css";
 import "./styles/transcript.css";
 
 const QUANT_REATTACH_SESSION_KEY = "interview.quant.active-session";
+const LIVE_CONTEXT_WIDTH_KEY = "interview.live-context-width-v1";
+const DEFAULT_LIVE_CONTEXT_WIDTH = 31;
+const MIN_LIVE_CONTEXT_WIDTH = 24;
+const MAX_LIVE_CONTEXT_WIDTH = 46;
+
+function clampLiveContextWidth(value: number): number {
+  return Math.min(MAX_LIVE_CONTEXT_WIDTH, Math.max(MIN_LIVE_CONTEXT_WIDTH, value));
+}
+
+function readLiveContextWidth(): number {
+  try {
+    const value = Number(globalThis.localStorage.getItem(LIVE_CONTEXT_WIDTH_KEY));
+    return Number.isFinite(value)
+      ? clampLiveContextWidth(value)
+      : DEFAULT_LIVE_CONTEXT_WIDTH;
+  } catch {
+    return DEFAULT_LIVE_CONTEXT_WIDTH;
+  }
+}
+
+function writeLiveContextWidth(value: number): void {
+  try {
+    globalThis.localStorage.setItem(LIVE_CONTEXT_WIDTH_KEY, String(value));
+  } catch {
+    // Split preference is optional and never part of session authority.
+  }
+}
 
 function readQuantReattachSessionId(): SessionId | null {
   try {
@@ -65,6 +92,7 @@ export const App: React.FC = () => {
   const [recoverySessionInput, setRecoverySessionInput] = useState("");
   const [compactPane, setCompactPane] =
     useState<"interview" | "whiteboard">("interview");
+  const [liveContextWidth, setLiveContextWidth] = useState(readLiveContextWidth);
   const [historyRead, setHistoryRead] = useState<SessionHistoryReadResponse | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -75,6 +103,7 @@ export const App: React.FC = () => {
   const [sessionTerminalPending, setSessionTerminalPending] = useState(false);
   const [reloadQuantSessionId] = useState<SessionId | null>(() => readQuantReattachSessionId());
   const reloadQuantRecoveryAttemptedRef = useRef(false);
+  const liveMainRef = useRef<HTMLElement | null>(null);
 
   const whiteboardAdapter = useMemo(() => {
     return new TldrawWhiteboardAdapter();
@@ -439,6 +468,21 @@ export const App: React.FC = () => {
     });
   }, [session.synchronizeWhiteboard]);
 
+  const resizeLiveContext = useCallback((clientX: number): void => {
+    const bounds = liveMainRef.current?.getBoundingClientRect();
+    if (bounds === undefined || bounds.width <= 0) return;
+    const next = clampLiveContextWidth(((clientX - bounds.left) / bounds.width) * 100);
+    setLiveContextWidth(Math.round(next * 10) / 10);
+  }, []);
+
+  const adjustLiveContextWidth = useCallback((delta: number): void => {
+    setLiveContextWidth((current) => {
+      const next = clampLiveContextWidth(current + delta);
+      writeLiveContextWidth(next);
+      return next;
+    });
+  }, []);
+
   const hasActiveInterview =
     session.isSessionStarted && session.sessionStatus === "ACTIVE";
   const storedActiveSessions = session.availableSessions.filter(
@@ -760,8 +804,10 @@ export const App: React.FC = () => {
 
       {/* Main Split-Pane Workspace */}
       <main
+        ref={liveMainRef}
         className="flex-1 flex overflow-hidden"
         data-compact-pane={compactPane}
+        style={{ "--live-context-width": `${String(liveContextWidth)}%` } as React.CSSProperties}
       >
         {/* Left Panel: Problem, Transcript, Input */}
         <section className="left-panel w-1/2 flex flex-col border-r border-slate-200 bg-white overflow-hidden">
@@ -815,7 +861,17 @@ export const App: React.FC = () => {
           )}
 
           {/* Scrollable Problem & Transcript Section */}
-          <div className="flex-1 flex flex-col p-4 gap-4 overflow-y-auto min-h-0">
+          <div className="live-context-content flex-1 flex flex-col p-4 gap-4 overflow-y-auto min-h-0">
+            <div className="live-question-progress" aria-label="Question progress">
+              <span>QUESTION 01</span>
+              <span>IN PROGRESS</span>
+            </div>
+            <div className="live-context-art" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+              <span />
+            </div>
             <ProblemCard problem={session.problem} className="shrink-0" />
             <div className="flex-1 min-h-[220px]">
               <TranscriptFeed
@@ -873,6 +929,56 @@ export const App: React.FC = () => {
             />
           </div>
         </section>
+
+        <button
+          type="button"
+          className="live-pane-resizer"
+          role="separator"
+          aria-label="Resize interview and whiteboard panels"
+          aria-orientation="vertical"
+          aria-valuemin={MIN_LIVE_CONTEXT_WIDTH}
+          aria-valuemax={MAX_LIVE_CONTEXT_WIDTH}
+          aria-valuenow={Math.round(liveContextWidth)}
+          aria-valuetext={`${String(Math.round(liveContextWidth))} percent interview, ${String(Math.round(100 - liveContextWidth))} percent whiteboard`}
+          onPointerDown={(event) => {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            resizeLiveContext(event.clientX);
+          }}
+          onPointerMove={(event) => {
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+              resizeLiveContext(event.clientX);
+            }
+          }}
+          onPointerUp={(event) => {
+            setLiveContextWidth((current) => {
+              writeLiveContextWidth(current);
+              return current;
+            });
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          }}
+          onDoubleClick={() => {
+            setLiveContextWidth(DEFAULT_LIVE_CONTEXT_WIDTH);
+            writeLiveContextWidth(DEFAULT_LIVE_CONTEXT_WIDTH);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowLeft") {
+              event.preventDefault();
+              adjustLiveContextWidth(-2);
+            } else if (event.key === "ArrowRight") {
+              event.preventDefault();
+              adjustLiveContextWidth(2);
+            } else if (event.key === "Home") {
+              event.preventDefault();
+              setLiveContextWidth(MIN_LIVE_CONTEXT_WIDTH);
+              writeLiveContextWidth(MIN_LIVE_CONTEXT_WIDTH);
+            } else if (event.key === "End") {
+              event.preventDefault();
+              setLiveContextWidth(MAX_LIVE_CONTEXT_WIDTH);
+              writeLiveContextWidth(MAX_LIVE_CONTEXT_WIDTH);
+            }
+          }}
+          title="Drag to resize · double-click to reset"
+        />
 
         {/* Right Panel: Whiteboard */}
         <section className="right-panel w-1/2 flex flex-col bg-slate-50 overflow-hidden">

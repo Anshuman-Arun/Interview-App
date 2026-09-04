@@ -1,100 +1,108 @@
 .new-interview {
-  max-width: 1040px;
+  max-width: 1020px;
   margin: 0 auto;
 }
 
 .new-interview__form {
   display: grid;
-  gap: 18px;
+  gap: 0;
+  border-top: 1px solid var(--border-strong);
 }
 
 .new-interview__active,
 .new-interview__section,
 .new-interview__submit-row {
-  border: 1px solid var(--line, rgba(120, 120, 120, 0.22));
-  background: var(--surface, rgba(255, 255, 255, 0.74));
-  border-radius: 18px;
+  border: 0;
+  border-bottom: 1px solid var(--border-default);
+  border-radius: 0;
+  background: transparent;
 }
 
 .new-interview__active {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 20px;
-  align-items: center;
-  margin-bottom: 18px;
-  padding: 18px 20px;
+  margin: 0;
+  padding: 20px 2px;
 }
 
 .new-interview__active span,
 .new-interview__submit-row > div > span {
   display: block;
-  margin-bottom: 5px;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.16em;
-  opacity: 0.6;
+  margin-bottom: 6px;
+  color: var(--accent);
+  font: 650 8px/1 var(--font-mono);
+  letter-spacing: 0.12em;
 }
 
 .new-interview__active strong {
   display: block;
-  font-size: 15px;
+  color: var(--text-primary);
+  font: 620 15px/1.25 var(--font-display);
 }
 
 .new-interview__active p,
 .new-interview__submit-row p {
-  margin: 4px 0 0;
-  font-size: 12px;
-  opacity: 0.66;
+  margin: 5px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .new-interview__active button,
 .new-interview__error button {
-  border: 0;
-  border-radius: 10px;
-  padding: 9px 13px;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 750;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  font: 600 10px/1 var(--font-ui);
   cursor: pointer;
 }
 
 .new-interview__section {
-  padding: 22px;
+  display: grid;
+  grid-template-columns: minmax(190px, 0.34fr) minmax(0, 0.66fr);
+  gap: clamp(28px, 6vw, 72px);
+  padding: 32px 2px 36px;
 }
 
 .new-interview__section-heading {
   display: grid;
-  grid-template-columns: 34px 1fr;
-  gap: 12px;
-  margin-bottom: 19px;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-content: start;
+  gap: 10px;
+  margin: 0;
 }
 
 .new-interview__section-heading > span {
-  padding-top: 3px;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  opacity: 0.48;
+  padding-top: 4px;
+  color: var(--accent);
+  font: 650 8px/1 var(--font-mono);
+  letter-spacing: 0.1em;
 }
 
 .new-interview__section-heading h2 {
   margin: 0;
-  font-size: 18px;
-  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  font: 640 20px/1.1 var(--font-display);
+  letter-spacing: -0.035em;
 }
 
 .new-interview__section-heading p {
-  max-width: 680px;
-  margin: 5px 0 0;
-  font-size: 12px;
-  line-height: 1.55;
-  opacity: 0.62;
+  max-width: 38ch;
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.6;
 }
 
 .new-interview__fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 18px 14px;
 }
 
 .new-interview label {
@@ -104,58 +112,53 @@
 }
 
 .new-interview label > span {
-  font-size: 11px;
-  font-weight: 750;
-  letter-spacing: 0.035em;
+  color: var(--text-secondary);
+  font: 650 9px/1.3 var(--font-ui);
+  letter-spacing: 0.025em;
 }
 
 .new-interview label small {
+  color: var(--text-muted);
   font-weight: 500;
-  opacity: 0.55;
 }
 
 .new-interview select,
 .new-interview input {
   width: 100%;
-  min-height: 43px;
+  min-height: 42px;
   box-sizing: border-box;
-  border: 1px solid var(--line, rgba(120, 120, 120, 0.25));
-  border-radius: 11px;
-  background: var(--surface, #fff);
-  color: inherit;
-  padding: 0 12px;
-  font: inherit;
-  font-size: 13px;
+  padding: 0 11px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
   outline: none;
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font: 500 11px/1 var(--font-ui);
 }
 
 .new-interview select:focus,
 .new-interview input:focus {
-  border-color: currentColor;
-  box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 12%, transparent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
-.new-interview__provider-stack {
-  display: grid;
-  gap: 12px;
-}
+.new-interview__provider-stack { display: grid; gap: 15px; }
 
 .new-interview__unavailable {
-  border-top: 1px solid var(--line, rgba(120, 120, 120, 0.18));
-  padding-top: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
 }
 
 .new-interview__unavailable summary {
+  color: var(--text-muted);
+  font: 600 9px/1.4 var(--font-ui);
   cursor: pointer;
-  font-size: 11px;
-  font-weight: 700;
-  opacity: 0.64;
 }
 
 .new-interview__unavailable ul {
   display: grid;
-  gap: 7px;
-  margin: 10px 0 0;
+  gap: 8px;
+  margin: 12px 0 0;
   padding: 0;
   list-style: none;
 }
@@ -164,12 +167,13 @@
   display: flex;
   justify-content: space-between;
   gap: 14px;
-  font-size: 11px;
+  color: var(--text-secondary);
+  font-size: 10px;
 }
 
 .new-interview__unavailable li span {
+  color: var(--text-muted);
   text-align: right;
-  opacity: 0.58;
 }
 
 .new-interview__duration {
@@ -180,80 +184,65 @@
 }
 
 .new-interview__duration > span {
-  font-size: 11px;
-  opacity: 0.58;
+  color: var(--text-muted);
+  font-size: 10px;
 }
 
 .new-interview__status,
 .new-interview__error,
 .new-interview__form-error {
   margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.55;
 }
 
 .new-interview__error {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   gap: 14px;
 }
 
-.new-interview__error p {
-  margin: 0;
-}
-
-.new-interview__form-error {
-  padding: 0 6px;
-}
+.new-interview__error p { margin: 0; }
+.new-interview__form-error { padding: 12px 2px 0; color: var(--danger); }
 
 .new-interview__submit-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  padding: 18px 20px;
+  gap: 30px;
+  padding: 28px 2px;
 }
 
 .new-interview__submit-row button {
-  min-width: 170px;
+  min-width: 180px;
   min-height: 44px;
-  border: 0;
-  border-radius: 12px;
   padding: 0 18px;
-  background: currentColor;
-  color: var(--surface, white);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 800;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-control);
+  background: var(--accent);
+  color: #fff;
+  font: 650 10px/1 var(--font-ui);
   cursor: pointer;
+}
+
+.new-interview__submit-row button:hover:not(:disabled) {
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
 }
 
 .new-interview__submit-row button:disabled {
   cursor: not-allowed;
-  opacity: 0.34;
+  opacity: 0.42;
 }
 
-@media (max-width: 720px) {
-  .new-interview__fields {
-    grid-template-columns: 1fr;
-  }
-
+@media (max-width: 760px) {
+  .new-interview__section { grid-template-columns: 1fr; gap: 22px; }
+  .new-interview__fields { grid-template-columns: 1fr; }
   .new-interview__active,
-  .new-interview__submit-row {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .new-interview__submit-row button {
-    width: 100%;
-  }
-
-  .new-interview__unavailable li {
-    display: grid;
-  }
-
-  .new-interview__unavailable li span {
-    text-align: left;
-  }
+  .new-interview__submit-row { align-items: stretch; flex-direction: column; }
+  .new-interview__submit-row button { width: 100%; }
+  .new-interview__unavailable li { display: grid; }
+  .new-interview__unavailable li span { text-align: left; }
 }

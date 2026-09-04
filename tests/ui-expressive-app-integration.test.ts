@@ -12,6 +12,7 @@ const STYLE_FILES = [
   "apps/web/src/components/VoiceControls.css",
   "apps/web/src/components/DeliveryBadge.css",
   "apps/web/src/pages/HomePage.css",
+  "apps/web/src/pages/NewInterviewPage.css",
   "apps/web/src/pages/SessionsPage.css",
   "apps/web/src/pages/SettingsPage.css",
   "apps/web/src/pages/ReviewPageShell.css",
@@ -221,6 +222,28 @@ describe("expressive product integration invariants", () => {
     expect(css).toContain('main[data-compact-pane="interview"] .right-panel');
     expect(css).toContain('main[data-compact-pane="whiteboard"] .left-panel');
     expect(css).not.toContain("height: 50% !important");
+  });
+
+  it("keeps the live board dominant behind a persisted accessible divider", () => {
+    const app = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+    const css = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/styles/app.css"),
+      "utf8"
+    );
+
+    expect(app).toContain('const LIVE_CONTEXT_WIDTH_KEY = "interview.live-context-width-v1"');
+    expect(app).toContain('className="live-pane-resizer"');
+    expect(app).toContain('role="separator"');
+    expect(app).toContain('aria-orientation="vertical"');
+    expect(app).toContain('event.key === "ArrowLeft"');
+    expect(app).toContain('event.key === "ArrowRight"');
+    expect(app).toContain('className="live-question-progress"');
+    expect(css).toContain("width: var(--live-context-width, 31%) !important");
+    expect(css).toContain("flex: 1 1 auto");
+    expect(css).toContain(".live-pane-resizer { display: none; }");
   });
 
   it("does not hide first letters now that emoji prefixes are gone", () => {

@@ -4,32 +4,37 @@
   --font-display: "Bahnschrift", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
   --font-mono: "Cascadia Code", "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
 
-  --surface-app: #f3f2ee;
-  --surface-panel: #fbfaf7;
-  --surface-raised: #f5f4f0;
-  --surface-hover: #eeede8;
-  --surface-active: #e8e6df;
+  --surface-app: #e8e0d3;
+  --surface-panel: #f4eee3;
+  --surface-raised: #fbf8f0;
+  --surface-hover: #eee5d8;
+  --surface-active: #e4d8c9;
+  --surface-rail: #efe8dc;
+  --board-surface: #fcfaf5;
+  --editorial-indigo: #3f6272;
+  --editorial-indigo-text: #fbf7ee;
+  --botanical-soft: #ead1ca;
 
-  --text-primary: #1f2126;
-  --text-secondary: #555a64;
-  --text-muted: #8a8f98;
+  --text-primary: #292723;
+  --text-secondary: #625b53;
+  --text-muted: #8b8176;
 
-  --border-subtle: #e3e1da;
-  --border-default: #d5d2c8;
-  --border-strong: #bcb8ac;
+  --border-subtle: #ddd2c4;
+  --border-default: #cfc1b0;
+  --border-strong: #b6a591;
 
-  --accent: #315ee8;
-  --accent-hover: #244ed2;
+  --accent: #a65249;
+  --accent-hover: #8f443d;
   --accent-soft: color-mix(
     in srgb,
     var(--accent) var(--accent-wash, 16%),
     var(--surface-panel)
   );
 
-  --success: #19845d;
-  --success-soft: #e6f4ed;
-  --warning: #ad6a0e;
-  --warning-soft: #fbf0dc;
+  --success: #64715b;
+  --success-soft: #e6eadf;
+  --warning: #9a6b31;
+  --warning-soft: #f4e8d6;
   --danger: #c64e55;
   --danger-soft: #fbeaec;
   --info: #3869c7;
@@ -48,6 +53,11 @@
   --surface-raised: #181b20;
   --surface-hover: #1d2127;
   --surface-active: #232831;
+  --surface-rail: #111419;
+  --board-surface: #17191d;
+  --editorial-indigo: #426777;
+  --editorial-indigo-text: #f2eee6;
+  --botanical-soft: #3a2929;
 
   --text-primary: #f1f0eb;
   --text-secondary: #b7bac1;

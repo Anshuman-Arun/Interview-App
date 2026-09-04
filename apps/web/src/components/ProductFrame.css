@@ -15,7 +15,7 @@
   flex-direction: column;
   padding: 14px 10px 12px;
   border-right: 1px solid var(--border-subtle);
-  background: var(--surface-panel);
+  background: var(--surface-rail);
 }
 
 .product-frame__brand {
@@ -73,22 +73,6 @@
 .product-frame__nav-index {
   font: 500 7px/1 var(--font-mono);
   color: var(--text-muted);
-}
-
-.product-frame__rail-note {
-  display: grid;
-  gap: 6px;
-  margin-top: auto;
-  padding: 8px 7px 2px;
-  color: var(--text-muted);
-  font: 600 6.5px/1.25 var(--font-mono);
-  letter-spacing: 0.06em;
-}
-
-.product-frame__rail-rule {
-  width: 32px;
-  height: 1px;
-  background: var(--accent);
 }
 
 .product-frame__main {
@@ -166,8 +150,7 @@
     padding: 0 7px;
   }
 
-  .product-frame__nav-index,
-  .product-frame__rail-note {
+  .product-frame__nav-index {
     display: none;
   }
 

@@ -27,7 +27,7 @@ export const APPEARANCE_STORAGE_KEY = "interview-appearance-v1";
 
 export const DEFAULT_APPEARANCE: AppearanceSettings = {
   theme: "system",
-  accent: "cobalt",
+  accent: "coral",
   accentIntensity: 16,
   zoomPercent: 100,
   corners: "soft",
