@@ -1048,3 +1048,30 @@ summary:focus-visible {
 .fixed.inset-0.z-50 button:disabled {
   cursor: not-allowed;
 }
+
+
+.session-duration-notice {
+  position: fixed;
+  top: 64px;
+  right: 16px;
+  z-index: 58;
+  display: grid;
+  max-width: min(360px, calc(100vw - 32px));
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--warning) 35%, var(--border-subtle));
+  border-radius: var(--radius-control);
+  background: var(--surface-panel);
+  box-shadow: var(--shadow-popover);
+  color: var(--text-primary);
+  pointer-events: none;
+}
+
+.session-duration-notice strong {
+  font: 650 12px/1.35 var(--font-ui);
+}
+
+.session-duration-notice span {
+  color: var(--text-muted);
+  font: 500 11px/1.4 var(--font-ui);
+}
