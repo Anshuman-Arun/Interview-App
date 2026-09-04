@@ -304,8 +304,8 @@ describe("editorial v10 adversarial UI states", () => {
           sessionId={sessionId}
           view="evaluation"
           readEvaluation={readEvaluation}
-          readReplay={vi.fn(() => new Promise(() => undefined))}
-          readPerformance={vi.fn(() => new Promise(() => undefined))}
+          readReplay={vi.fn(() => new Promise<never>(() => undefined))}
+          readPerformance={vi.fn(() => new Promise<never>(() => undefined))}
         />
       );
       await Promise.resolve();
