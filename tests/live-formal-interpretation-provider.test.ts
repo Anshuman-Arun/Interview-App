@@ -253,7 +253,9 @@ describe("production formal interpretation provider", () => {
       });
       expect(executeCalls).toBe(1);
       expect(observedPrompt).toContain(harness.selectedProblem.public.prompt);
-      expect(observedPrompt).toContain(harness.committed.turnId);
+      expect(observedPrompt).toContain(harness.writer.getState().turns[harness.committed.turnId]?.studentText);
+      expect(observedPrompt).not.toContain(harness.committed.turnId);
+      expect(observedPrompt).not.toContain(String(harness.sessionId));
       expect(observedPrompt).not.toContain("canonicalSolution");
       expect(observedPrompt).not.toContain("disclosureBudget");
       expect(harness.writer.getState().generations).toEqual({});
