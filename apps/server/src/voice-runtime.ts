@@ -409,7 +409,9 @@ export class VoiceSynthesisCoordinator {
           );
           return undefined;
         }
-        ttsTiming?.finish("SUCCESS");
+        ttsTiming?.finish(
+          this.cancelledRequests.has(request.requestId) ? "CANCELLED" : "SUCCESS"
+        );
 
         // This is still only an early resource guard. The authoritative
         // queueAudioDeliveryFromValidatedText() transaction below rechecks the
@@ -865,8 +867,12 @@ export class VoiceInputCoordinator {
         // physically playing.
         try {
           const synthesisWasActive = this.synthesis.hasActiveSession(context.sessionId);
+          const exposedAudioWasActive = Object.values(current.deliveries).some((delivery) =>
+            delivery.content.medium === "AUDIO"
+            && delivery.status === "EXPOSED"
+          );
           this.interruptPhysicalPlayback?.(context.sessionId);
-          if (synthesisWasActive) {
+          if (synthesisWasActive || exposedAudioWasActive) {
             this.observability?.recordBargeIn(context.sessionId);
           }
         } catch {
