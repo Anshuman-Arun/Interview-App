@@ -745,6 +745,7 @@ describe("board target admission", () => {
     aiAnnotationCount: 1,
     includedAiAnnotationCount: 1,
     aiAnnotationsTruncated: false,
+    aiAnnotationStateUncertain: false,
     shapes: [
       {
         shapeId: "shape:a",
