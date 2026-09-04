@@ -4,11 +4,7 @@
   height: 100vh;
   grid-template-columns: 196px minmax(0, 1fr);
   overflow: hidden;
-  background:
-    radial-gradient(circle at 18% 4%, rgba(255,255,255,.38), transparent 28%),
-    radial-gradient(circle at 82% 78%, rgba(104,85,55,.035), transparent 33%),
-    repeating-linear-gradient(0deg, rgba(72,57,35,.01) 0, rgba(72,57,35,.01) 1px, transparent 1px, transparent 4px),
-    var(--surface-app);
+  background: var(--surface-app);
   color: var(--text-primary);
   font-family: var(--font-ui);
 }
@@ -19,11 +15,7 @@
   flex-direction: column;
   padding: 18px 14px 16px;
   border-right: 1px solid var(--border-subtle);
-  background: linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--surface-panel) 78%, var(--surface-app)),
-    color-mix(in srgb, var(--surface-panel) 68%, var(--surface-app))
-  );
+  background: color-mix(in srgb, var(--surface-panel) 73%, var(--surface-app));
 }
 
 .product-frame__brand {
@@ -289,10 +281,7 @@
 }
 
 :root[data-theme="dark"] .product-frame {
-  background:
-    radial-gradient(circle at 16% 4%, rgba(255,255,255,.02), transparent 28%),
-    radial-gradient(circle at 82% 78%, rgba(194,160,102,.02), transparent 33%),
-    var(--surface-app);
+  background: var(--surface-app);
 }
 
 :root[data-theme="dark"] .product-frame__rail {
