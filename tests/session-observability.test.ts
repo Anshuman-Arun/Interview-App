@@ -408,6 +408,37 @@ describe("SessionObservability", () => {
     }
   });
 
+  it("makes duplicate terminal callbacks idempotent for remote and local timing", () => {
+    const metrics = new SessionObservability(undefined, () => 10);
+    const sessionId = SessionIdSchema.parse("session-observability-idempotent-terminal");
+
+    const remote = metrics.beginRemoteOperation({
+      sessionId,
+      operation: "INTERVIEWER_REALIZATION",
+      providerId: "provider",
+      modelId: "model"
+    });
+    remote.finish("SUCCESS");
+    remote.finish("FAILED");
+
+    metrics.recordTtsRequest(sessionId);
+    const local = metrics.beginLocalTiming(sessionId, "TTS");
+    local.finish("SUCCESS");
+    local.finish("FAILURE");
+
+    const read = metrics.read(sessionId);
+    expect(read.available).toBe(true);
+    expect(read.summary?.remote.totalCalls).toBe(1);
+    expect(read.summary?.remote.outcomes.SUCCESS).toBe(1);
+    expect(read.summary?.remote.outcomes.FAILED).toBe(0);
+    expect(read.summary?.local.tts).toMatchObject({
+      requests: 1,
+      successes: 1,
+      failures: 0,
+      cancellations: 0
+    });
+  });
+
   it("does not expose provider token, quota, billing, or payload fields", () => {
     const metrics = new SessionObservability();
     const sessionId = SessionIdSchema.parse("session-observability-4");
