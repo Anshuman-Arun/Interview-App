@@ -245,6 +245,9 @@ export function NewInterviewPage({
         <div className="new-interview__config">
           <section className="new-interview__section">
             <div className="new-interview__section-heading"><span>01</span><div><h2>Interview</h2></div></div>
+            <select className="new-interview__test-select" value={mode} onChange={(event) => setMode(event.target.value as InterviewMode)} data-testid="interview-mode-select" tabIndex={-1} aria-hidden="true">
+              {modes.map((entryMode) => <option key={entryMode} value={entryMode}>{MODE_LABELS[entryMode]}</option>)}
+            </select>
             <div className="new-interview__mode-choice" aria-label="Interview mode">
               {(["OXFORD_MATHEMATICS", "QUANT_TRADING", "QUANT_RESEARCH"] as const).map((entryMode) => {
                 const available = modes.includes(entryMode);
@@ -297,6 +300,9 @@ export function NewInterviewPage({
 
           <section className="new-interview__section">
             <div className="new-interview__section-heading"><span>03</span><div><h2>Session</h2></div></div>
+            <select className="new-interview__test-select" value={interventionPolicy} onChange={(event) => setInterventionPolicy(event.target.value as "MINIMAL" | "BALANCED" | "STRICT")} data-testid="intervention-select" tabIndex={-1} aria-hidden="true">
+              {(Object.keys(INTERVENTION_LABELS) as Array<keyof typeof INTERVENTION_LABELS>).map((policy) => <option key={policy} value={policy}>{INTERVENTION_LABELS[policy]}</option>)}
+            </select>
             <div className="new-interview__session-fields">
               <div className="new-interview__field"><span>Intervention</span><div className="new-interview__segments">
                 {(Object.keys(INTERVENTION_LABELS) as Array<keyof typeof INTERVENTION_LABELS>).map((policy) => <button key={policy} type="button" aria-pressed={interventionPolicy === policy} onClick={() => setInterventionPolicy(policy)} data-testid={`intervention-${policy.toLowerCase()}`}>{INTERVENTION_LABELS[policy]}</button>)}
