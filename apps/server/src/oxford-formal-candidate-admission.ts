@@ -35,8 +35,7 @@ export function isOxfordFormalAnalysisSourceRelevant(
         "product plus one",
         "product-plus-one",
         "multiply all",
-        "product of",
-        "plus one"
+        "product of"
       ]);
       const residueLanguage = containsAny(text, [
         "remainder",
@@ -55,6 +54,7 @@ export function isOxfordFormalAnalysisSourceRelevant(
         "p_"
       ]);
       return constructionLanguage
+        || (containsAny(text, ["plus one"]) && primeContext)
         || (residueLanguage && primeContext)
         || (
           containsAny(text, ["listed", "list", "prime"])
@@ -70,15 +70,19 @@ export function isOxfordFormalAnalysisSourceRelevant(
         "s_i",
         "s_j"
       ]);
-      const residueLanguage = containsAny(text, [
+      const arithmeticContext = containsAny(text, [
         "residue",
-        "same remainder",
-        "same residue",
-        "modulo n",
-        "mod n"
+        "remainder",
+        "modulo",
+        " mod ",
+        "mod ",
+        "divisible",
+        "divides",
+        "difference",
+        "subtract",
+        "minus"
       ]);
-      return structuralContext
-        || (residueLanguage && containsAny(text, ["sum", "sums", "prefix", "block"]));
+      return structuralContext && arithmeticContext;
     }
     case "median-ratio-arithmetic": {
       const geometryContext = containsAny(text, [
@@ -110,16 +114,17 @@ export function isOxfordFormalAnalysisSourceRelevant(
         "power of 2",
         "2^"
       ]);
-      const pairLanguage = containsAny(text, [
-        "smaller divides",
-        "divides the larger",
-        "divides the bigger"
+      const divisibilityLanguage = containsAny(text, [
+        "divide",
+        "divides",
+        "divisible",
+        "divisor",
+        "multiple",
+        "smaller",
+        "larger",
+        "bigger"
       ]);
-      return decompositionContext
-        || (
-          pairLanguage
-          && containsAny(text, ["chosen", "odd", "power"])
-        );
+      return decompositionContext && divisibilityLanguage;
     }
     default:
       return false;
