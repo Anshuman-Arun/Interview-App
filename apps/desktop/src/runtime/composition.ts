@@ -1252,7 +1252,6 @@ async function createIsolatedPythonEnvironment(
   await runPythonSetupProcess(
     bootstrapExecutable,
     ["-I", "-m", "venv", root],
-    path.dirname(root),
     pythonSetupEnvironment(bootstrapExecutable),
     signal,
     60_000,
@@ -1340,7 +1339,6 @@ async function installPinnedPythonRequirements(
       "--requirement",
       requirementsPath
     ],
-    path.dirname(requirementsPath),
     pythonSetupEnvironment(executable),
     signal,
     300_000,
@@ -1351,7 +1349,6 @@ async function installPinnedPythonRequirements(
 async function runPythonSetupProcess(
   executable: string,
   args: readonly string[],
-  _cwd: string,
   env: NodeJS.ProcessEnv,
   signal: AbortSignal | undefined,
   timeoutMs: number,
