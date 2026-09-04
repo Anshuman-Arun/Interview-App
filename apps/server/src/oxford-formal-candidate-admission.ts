@@ -112,7 +112,8 @@ export function isOxfordFormalAnalysisSourceRelevant(
         "same odd",
         "power of two",
         "power of 2",
-        "2^"
+        "2^",
+        " times "
       ]);
       const divisibilityLanguage = containsAny(text, [
         "divide",
@@ -236,7 +237,7 @@ export function isOxfordFormalCandidateTargetAdmissible(input: {
       case "divisibility-step":
         return claim.kind === "DIVISIBILITY"
           && claim.dividend.kind === "INTEGER"
-          && sourceExpressesDirectDivisibility(
+          && sourceExpressesTargetDivisibility(
             request.source.span.text,
             claim.divisor,
             claim.dividend.value
@@ -385,19 +386,53 @@ function isPrefixResidueArithmeticClaim(
     && claim.dividend.left.value !== claim.dividend.right.value;
 }
 
-function sourceExpressesDirectDivisibility(
+function sourceExpressesTargetDivisibility(
   sourceText: string,
   divisor: string,
   dividend: string
 ): boolean {
   const tokens = normalizeIntegerWords(sourceText)
     .match(/[-+]?\d+|[a-z]+/gu) ?? [];
-  return tokens.some(
+  const directlyStated = tokens.some(
     (token, index) =>
       token === divisor
       && tokens[index + 1] === "divides"
       && tokens[index + 2] === dividend
   );
+  if (!directlyStated) return false;
+
+  const chosenPair = findExplicitChosenNumberPair(tokens);
+  if (chosenPair !== undefined) {
+    return chosenPair[0] === divisor && chosenPair[1] === dividend;
+  }
+
+  return tokens.find((token) => /^[-+]?\d+$/u.test(token)) === divisor;
+}
+
+function findExplicitChosenNumberPair(
+  tokens: readonly string[]
+): readonly [string, string] | undefined {
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (
+      tokens[index] !== "numbers"
+      || (tokens[index - 1] !== "chosen" && tokens[index - 1] !== "two")
+    ) {
+      continue;
+    }
+    const left = tokens[index + 1];
+    const separator = tokens[index + 2];
+    const right = tokens[index + 3];
+    if (
+      left !== undefined
+      && right !== undefined
+      && /^[-+]?\d+$/u.test(left)
+      && separator === "and"
+      && /^[-+]?\d+$/u.test(right)
+    ) {
+      return [left, right];
+    }
+  }
+  return undefined;
 }
 
 function normalizeIntegerWords(value: string): string {
