@@ -44,29 +44,23 @@ export function HomePage({
     const rail = hero?.closest(".product-frame")?.querySelector<HTMLElement>("[data-product-rail]");
     if (hero === null || copy === null || folio === null || rail === null) return;
 
-    let frame = 0;
     const measure = (): void => {
       if (typeof window === "undefined") return;
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(() => {
-        if (window.matchMedia("(max-width: 1060px)").matches) {
-          copy.style.setProperty("--home-midpoint-shift", "0px");
-          return;
-        }
-
+      if (window.matchMedia("(max-width: 1060px)").matches) {
         copy.style.setProperty("--home-midpoint-shift", "0px");
-        frame = window.requestAnimationFrame(() => {
-          const railRect = rail.getBoundingClientRect();
-          const folioRect = folio.getBoundingClientRect();
-          const copyRect = copy.getBoundingClientRect();
-          const target = (railRect.right + folioRect.left) / 2;
-          const center = (copyRect.left + copyRect.right) / 2;
-          copy.style.setProperty(
-            "--home-midpoint-shift",
-            `${(target - center).toFixed(3)}px`
-          );
-        });
-      });
+        return;
+      }
+
+      copy.style.setProperty("--home-midpoint-shift", "0px");
+      const railRect = rail.getBoundingClientRect();
+      const folioRect = folio.getBoundingClientRect();
+      const copyRect = copy.getBoundingClientRect();
+      const target = (railRect.right + folioRect.left) / 2;
+      const center = (copyRect.left + copyRect.right) / 2;
+      copy.style.setProperty(
+        "--home-midpoint-shift",
+        `${(target - center).toFixed(3)}px`
+      );
     };
 
     const observer = typeof ResizeObserver === "undefined"
@@ -83,7 +77,6 @@ export function HomePage({
     return () => {
       observer?.disconnect();
       window.removeEventListener("resize", measure);
-      window.cancelAnimationFrame(frame);
     };
   }, []);
 
