@@ -42,6 +42,10 @@ function runtimeStatus(input: {
       strategy: "SYSTEM_CPYTHON",
       supportedVersions: ["3.12", "3.13"]
     },
+    pythonSetup: {
+      state: "IDLE",
+      restartRequired: false
+    },
     voiceSetup: {
       state: input.voiceRestartRequired === true ? "INSTALLED" : "IDLE",
       restartRequired: input.voiceRestartRequired === true
