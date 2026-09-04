@@ -215,7 +215,9 @@ export function SettingsPage({
   const borders: readonly BorderStyle[] = ["quiet", "regular", "strong", "contrast"];
 
   const antigravity = providerOptions.find(isAntigravity);
-  const reasoningReady = antigravity?.availability === "AVAILABLE";
+  const reasoningReady = !providerOptionsLoading
+    && providerOptionsError === null
+    && antigravity?.availability === "AVAILABLE";
   const voiceReady = runtimeStatus?.speech.state === "READY"
     && runtimeStatus.tts.state === "READY";
   const visionReady = runtimeStatus?.vision.state === "READY";
