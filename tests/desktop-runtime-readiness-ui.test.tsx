@@ -116,6 +116,46 @@ describe("desktop local AI readiness UX", () => {
       ...valid,
       unexpectedPrivilegedField: "nope"
     })).toBeUndefined();
+
+    expect(parseDesktopRuntimeStatus({
+      ...valid,
+      speech: { state: "READY", reasonCode: "SHOULD_NOT_EXIST" }
+    })).toBeUndefined();
+
+    expect(parseDesktopRuntimeStatus({
+      ...valid,
+      vision: { state: "FAILED" }
+    })).toBeUndefined();
+
+    expect(parseDesktopRuntimeStatus({
+      ...valid,
+      python: {
+        state: "READY",
+        reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING",
+        strategy: "SYSTEM_CPYTHON",
+        supportedVersions: ["3.12", "3.13"]
+      }
+    })).toBeUndefined();
+
+    expect(parseDesktopRuntimeStatus({
+      ...valid,
+      python: {
+        state: "FAILED",
+        reasonCode: "PYTHON_RUNTIME_INCOMPATIBLE",
+        strategy: "SYSTEM_CPYTHON",
+        supportedVersions: ["3.12", "3.13"]
+      }
+    })).toBeUndefined();
+
+    expect(parseDesktopRuntimeStatus({
+      ...valid,
+      voiceSetup: { state: "INSTALLED", restartRequired: false }
+    })).toBeUndefined();
+
+    expect(parseDesktopRuntimeStatus({
+      ...valid,
+      visionSetup: { state: "IDLE", restartRequired: true }
+    })).toBeUndefined();
   });
 
   it("preserves Python reason codes while presenting supported runtime metadata", () => {
