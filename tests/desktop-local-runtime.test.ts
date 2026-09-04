@@ -299,6 +299,70 @@ describe("desktop local model runtime", () => {
     expect(installCalls).toBe(0);
   });
 
+  it("distinguishes a supported Python interpreter with missing pinned dependencies", async () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-python-deps-missing-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+
+    const mutable = composition as unknown as {
+      pythonRuntimeCompatible(executable: string, signal?: AbortSignal): boolean;
+      pythonInterpreterCompatible(executable: string, signal?: AbortSignal): boolean;
+    };
+    mutable.pythonRuntimeCompatible = () => false;
+    mutable.pythonInterpreterCompatible = () => true;
+
+    await expect(composition.start()).resolves.toBeUndefined();
+    expect(composition.getCapabilityStatus()).toEqual({
+      speech: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+      },
+      tts: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+      },
+      vision: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+      }
+    });
+  });
+
+  it("installs pinned Python dependencies through the privileged runtime path and re-probes", async () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-python-deps-install-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+
+    let compatible = false;
+    let installs = 0;
+    const mutable = composition as unknown as {
+      pythonRuntimeCompatible(executable: string, signal?: AbortSignal): boolean;
+      pythonInterpreterCompatible(executable: string, signal?: AbortSignal): boolean;
+      installPythonRequirements(executable: string, signal?: AbortSignal): Promise<void>;
+      pythonExecutable?: string;
+    };
+    mutable.pythonRuntimeCompatible = () => compatible;
+    mutable.pythonInterpreterCompatible = () => true;
+    mutable.installPythonRequirements = async () => {
+      installs += 1;
+      compatible = true;
+    };
+
+    await expect(composition.installPythonRuntimeDependencies()).resolves.toBeUndefined();
+    expect(installs).toBe(1);
+    expect(mutable.pythonExecutable).toBe(process.execPath);
+  });
+
   it("reports an incompatible Python runtime before model admission", async () => {
     const composition = new DesktopLocalRuntimeComposition({
       appDataRoot: temporaryRoot("desktop-python-incompatible-"),
