@@ -20,6 +20,9 @@ const PositiveSafeShapeRevisionSchema = z.number().refine(
 const BoardActionShapeIdSchema = z.string()
   .min(1)
   .max(MAX_BOARD_ACTION_SHAPE_ID_CHARACTERS)
+  .refine((value) => value.trim().length > 0, {
+    message: "targetShapeId must be non-blank"
+  })
   .refine((value) => value === value.trim(), {
     message: "Board action shape IDs must not contain surrounding whitespace"
   });
