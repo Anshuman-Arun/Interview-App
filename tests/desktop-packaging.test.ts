@@ -113,7 +113,7 @@ describe("Windows desktop packaging contract", () => {
     expect(main).toContain("runtime.installVoiceAssets(startupAbort.signal)");
     expect(main).toContain("runtime.installVisionAssets(startupAbort.signal)");
     expect(main).toContain("--install-local-vision-models");
-    expect(main).toContain("await activeModelInstall.catch(() => undefined)");
+    expect(main).toContain("await modelInstallAtShutdown.catch(() => undefined)");
     expect(preload).toContain("getLocalRuntimeStatus");
     expect(preload).toContain("installPythonRuntime");
     expect(preload).toContain("installVoiceModels");
