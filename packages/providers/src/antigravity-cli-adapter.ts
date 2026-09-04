@@ -690,6 +690,7 @@ function createSingleTurnInput(input: ReasoningTurnInput): string {
     "Use only stable shape IDs present in boardScene and include the exact supplied revision for every targeted student shape.",
     "Use targetAnnotationId only with annotationId values present in boardScene.aiAnnotations; these are application-owned logical annotations, never renderer shape IDs.",
     "A truncated board scene is only a selected subset of the board. Do not infer that omitted space is empty or that omitted shapes do not exist.",
+    "If boardScene.aiAnnotationStateUncertain is true, do not infer which prior AI annotations are physically visible and do not issue erase_ai_annotation.",
     "Use contentBounds as a coarse spatial frame for absolute geometry, not proof that unlisted regions are empty.",
     "Use targetRegion only when the visible/semantic evidence supports a precise local region; otherwise target the whole shape.",
     "When referring to student work, use an explicit target, targetRegion, or placement anchor; do not encode a student target indirectly with absolute coordinates.",
