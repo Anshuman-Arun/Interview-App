@@ -215,7 +215,10 @@ export class DesktopLocalRuntimeComposition {
 
   public async refreshPythonRuntimePrerequisite(signal?: AbortSignal): Promise<void> {
     if (
-      !isRefreshablePythonPrerequisiteReason(this.pythonStatus.reasonCode)
+      (
+        this.pythonStatus.state !== "READY"
+        && !isRefreshablePythonPrerequisiteReason(this.pythonStatus.reasonCode)
+      )
       || this.stopping
       || this.stopped
     ) {
