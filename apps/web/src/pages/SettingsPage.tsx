@@ -97,7 +97,7 @@ function pythonDescription(status: DesktopRuntimeStatus | undefined): string {
     case "PYTHON_RUNTIME_INCOMPATIBLE":
       return "Interview App found Python, but it is not a supported 64-bit CPython 3.12/3.13 runtime.";
     case "PYTHON_RUNTIME_DEPENDENCIES_MISSING":
-      return "Supported Python found. Install Interview App's pinned local AI Python components here, then continue with the voice and vision models.";
+      return "Supported Python found. Create Interview App's isolated local AI Python environment here, then continue with the voice and vision models.";
     case "UNSUPPORTED_RUNTIME_PLATFORM":
       return "Local speech and vision are unavailable on this platform or architecture.";
     case "WORKER_EXECUTABLE_UNAVAILABLE":
@@ -454,7 +454,7 @@ export function SettingsPage({
                   <small>
                     {runtimeStatus.pythonSetup.restartRequired
                       ? "Pinned Python components installed. You can install models now; restart once setup is complete."
-                      : "Install the verified local AI dependency lock into the supported Python runtime."}
+                      : "Create an app-owned Python environment and install the verified local AI dependency lock there."}
                   </small>
                   {pythonInstallError !== undefined && (
                     <small className="expressive-settings__setup-error">{pythonInstallError}</small>
