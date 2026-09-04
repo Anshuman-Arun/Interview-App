@@ -421,23 +421,6 @@ describe("authenticated renderer stream transport", () => {
     const sessionId = newSessionId();
     await primeCommandServer(commandAddress, sessionId);
     const writer = registry.get(sessionId);
-    const boardAtom = await queueDelivery(writer, {
-      medium: "WHITEBOARD",
-      action: {
-        operation: "draw_polyline",
-        layer: "AI_ANNOTATION",
-        points: [
-          { x: 0, y: 0 },
-          { x: 20, y: 20 },
-          { x: 40, y: 0 }
-        ],
-        annotationPurpose: "proven rollback fixture"
-      }
-    });
-    const textAtom = await queueDelivery(writer, {
-      medium: "TEXT",
-      text: "stream remains usable after safe rollback"
-    });
     const shownText: DeliveryId[] = [];
     const renderer = new RendererClient({
       sessionId,
@@ -468,6 +451,23 @@ describe("authenticated renderer stream transport", () => {
     }, renderer);
 
     await waitFor(() => streamServer.activeConnectionCount() === 1);
+    const boardAtom = await queueDelivery(writer, {
+      medium: "WHITEBOARD",
+      action: {
+        operation: "draw_polyline",
+        layer: "AI_ANNOTATION",
+        points: [
+          { x: 0, y: 0 },
+          { x: 20, y: 20 },
+          { x: 40, y: 0 }
+        ],
+        annotationPurpose: "proven rollback fixture"
+      }
+    });
+    const textAtom = await queueDelivery(writer, {
+      medium: "TEXT",
+      text: "stream remains usable after safe rollback"
+    });
     await expect(streamServer.publishDelivery(sessionId, boardAtom.deliveryId))
       .resolves.toMatchObject({ outcome: "SENT", deliveryId: boardAtom.deliveryId });
     await waitFor(() =>
@@ -495,20 +495,6 @@ describe("authenticated renderer stream transport", () => {
     const sessionId = newSessionId();
     await primeCommandServer(commandAddress, sessionId);
     const writer = registry.get(sessionId);
-    const atom = await queueDelivery(writer, {
-      medium: "WHITEBOARD",
-      action: {
-        operation: "draw_polyline",
-        layer: "AI_ANNOTATION",
-        points: [
-          { x: 0, y: 0 },
-          { x: 20, y: 20 },
-          { x: 40, y: 0 },
-          { x: 60, y: 20 }
-        ],
-        annotationPurpose: "ambiguous partial render fixture"
-      }
-    });
 
     const renderer = new RendererClient({
       sessionId,
@@ -530,6 +516,20 @@ describe("authenticated renderer stream transport", () => {
     }, renderer);
 
     await waitFor(() => streamServer.activeConnectionCount() === 1);
+    const atom = await queueDelivery(writer, {
+      medium: "WHITEBOARD",
+      action: {
+        operation: "draw_polyline",
+        layer: "AI_ANNOTATION",
+        points: [
+          { x: 0, y: 0 },
+          { x: 20, y: 20 },
+          { x: 40, y: 0 },
+          { x: 60, y: 20 }
+        ],
+        annotationPurpose: "ambiguous partial render fixture"
+      }
+    });
     await expect(streamServer.publishDelivery(sessionId, atom.deliveryId)).resolves.toMatchObject({
       outcome: "SENT",
       deliveryId: atom.deliveryId
