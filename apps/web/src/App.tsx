@@ -72,6 +72,7 @@ export const App: React.FC = () => {
   const [endConfirmOpen, setEndConfirmOpen] = useState(false);
   const liveWorkspaceRef = useRef<HTMLElement | null>(null);
   const endControlRef = useRef<HTMLDivElement | null>(null);
+  const endButtonRef = useRef<HTMLButtonElement | null>(null);
   const endCancelRef = useRef<HTMLButtonElement | null>(null);
   const [historyRead, setHistoryRead] = useState<SessionHistoryReadResponse | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -517,6 +518,7 @@ export const App: React.FC = () => {
       if (event.key !== "Escape") return;
       event.preventDefault();
       setEndConfirmOpen(false);
+      queueMicrotask(() => endButtonRef.current?.focus());
     };
 
     document.addEventListener("pointerdown", closeFromOutside);
@@ -782,6 +784,7 @@ export const App: React.FC = () => {
                 data-open={String(endConfirmOpen)}
               >
                 <button
+                  ref={endButtonRef}
                   type="button"
                   onClick={() => setEndConfirmOpen((open) => !open)}
                   disabled={sessionTerminalPending || sessionEntryPending}
@@ -804,7 +807,10 @@ export const App: React.FC = () => {
                       <button
                         ref={endCancelRef}
                         type="button"
-                        onClick={() => setEndConfirmOpen(false)}
+                        onClick={() => {
+                          setEndConfirmOpen(false);
+                          queueMicrotask(() => endButtonRef.current?.focus());
+                        }}
                       >
                         Cancel
                       </button>
