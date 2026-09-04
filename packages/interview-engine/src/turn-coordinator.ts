@@ -11,6 +11,9 @@ import {
   VisionShapeRevisionBindingSchema,
   VisionSnapshotBasisSchema,
   MAX_AUTHORITATIVE_BOARD_SHAPES,
+  MAX_BOARD_ACTION_POINTS,
+  MAX_BOARD_ACTION_SHAPE_ID_CHARACTERS,
+  MAX_INTERVIEWER_BOARD_ACTIONS,
   MAX_VISION_REGION_SHAPES,
   CommandEnvelopeSchema,
   CommandIdentityValueSchema,
@@ -206,7 +209,7 @@ function assertSessionActive(state: Readonly<SessionState>, operation: string): 
 const MAX_INTERVIEWER_PROPOSAL_TEXT_CHARACTERS = 100_000;
 const MAX_INTERVIEWER_PROPOSAL_TOTAL_TEXT_CHARACTERS = 1_000_000;
 const MAX_INTERVIEWER_PROPOSAL_DISCLOSURE_IDS = 256;
-const MAX_INTERVIEWER_PROPOSAL_BOARD_ACTIONS = 256;
+const MAX_INTERVIEWER_PROPOSAL_BOARD_ACTIONS = MAX_INTERVIEWER_BOARD_ACTIONS;
 const MAX_RUNTIME_ID_CHARACTERS = 512;
 const MAX_EVIDENCE_PROPOSAL_EVENT_IDS = 4_096;
 
@@ -268,6 +271,14 @@ function proposalWithinAdmissionBounds(value: unknown): boolean {
         "content",
         "targetShapeId",
         "expectedShapeRevision",
+        "placement",
+        "points",
+        "fromShapeId",
+        "fromShapeRevision",
+        "toShapeId",
+        "toShapeRevision",
+        "width",
+        "height",
         "annotationPurpose"
       ])
     )) return false;
@@ -279,8 +290,51 @@ function proposalWithinAdmissionBounds(value: unknown): boolean {
         typeof annotationPurpose === "string"
         && annotationPurpose.length > MAX_INTERVIEWER_PROPOSAL_TEXT_CHARACTERS
       )
-      || !boundedRuntimeString(rawAction["targetShapeId"])
+      || !boundedRuntimeString(
+        rawAction["targetShapeId"],
+        MAX_BOARD_ACTION_SHAPE_ID_CHARACTERS
+      )
+      || !boundedRuntimeString(
+        rawAction["fromShapeId"],
+        MAX_BOARD_ACTION_SHAPE_ID_CHARACTERS
+      )
+      || !boundedRuntimeString(
+        rawAction["toShapeId"],
+        MAX_BOARD_ACTION_SHAPE_ID_CHARACTERS
+      )
     ) return false;
+
+    const placement = rawAction["placement"];
+    if (isRuntimeRecord(placement)) {
+      if (!hasOnlyRuntimeKeys(
+        placement,
+        new Set([
+          "anchorShapeId",
+          "anchorRevision",
+          "position",
+          "x",
+          "y",
+          "offsetX",
+          "offsetY"
+        ])
+      )) return false;
+      if (!boundedRuntimeString(
+        placement["anchorShapeId"],
+        MAX_BOARD_ACTION_SHAPE_ID_CHARACTERS
+      )) return false;
+    }
+
+    const points = rawAction["points"];
+    if (Array.isArray(points)) {
+      if (points.length > MAX_BOARD_ACTION_POINTS) return false;
+      for (const point of points) {
+        if (
+          isRuntimeRecord(point)
+          && !hasOnlyRuntimeKeys(point, new Set(["x", "y"]))
+        ) return false;
+      }
+    }
+
     totalTextCharacters += typeof content === "string" ? content.length : 0;
     totalTextCharacters += typeof annotationPurpose === "string" ? annotationPurpose.length : 0;
     if (totalTextCharacters > MAX_INTERVIEWER_PROPOSAL_TOTAL_TEXT_CHARACTERS) return false;
