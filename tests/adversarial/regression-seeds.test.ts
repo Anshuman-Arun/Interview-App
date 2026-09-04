@@ -456,9 +456,11 @@ describe("adversarial named regression schedules", () => {
         command
       };
 
-      await expect(renderer.handleMessage(message)).rejects.toThrow(
-        "proves no exposure"
-      );
+      await expect(renderer.handleMessage(message)).resolves.toMatchObject({
+        deliveryId: atom.deliveryId,
+        duplicate: false,
+        phase: "NOT_EXPOSED"
+      });
       expect(renderer.snapshot()).toEqual([]);
       await renderer.handleMessage(message);
       expect(attempts).toBe(2);
