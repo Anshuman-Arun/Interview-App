@@ -231,6 +231,36 @@ describe("Oxford formal target admission", () => {
         }
       })
     )).toBe(true);
+
+
+    expect(admitted(
+      "oxford-divisibility-chain",
+      "Six equals two times three and twenty-four equals eight times three, so six divides twenty-four.",
+      JSON.stringify({
+        protocol: "INTERVIEW_APP_MODULAR_ARITHMETIC_CLAIM",
+        protocolVersion: 1,
+        claim: {
+          kind: "DIVISIBILITY",
+          divisor: "6",
+          dividend: integer("24")
+        }
+      })
+    )).toBe(true);
+
+    expect(admitted(
+      "oxford-prefix-sums-mod-n",
+      "For n 5, the prefix sums 5 and 10 have the same residue modulo 5.",
+      JSON.stringify({
+        protocol: "INTERVIEW_APP_MODULAR_ARITHMETIC_CLAIM",
+        protocolVersion: 1,
+        claim: {
+          kind: "CONGRUENCE",
+          left: integer("5"),
+          right: integer("10"),
+          modulus: "5"
+        }
+      })
+    )).toBe(true);
   });
 
   it("admits source-faithful false claims so the deterministic verifier can contradict them", () => {
