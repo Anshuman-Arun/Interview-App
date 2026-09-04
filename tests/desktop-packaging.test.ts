@@ -173,6 +173,8 @@ describe("Windows desktop packaging contract", () => {
     expect(smoke).toContain("taskkill.exe /PID $Process.Id /T /F");
     expect(smoke).toContain("Packaged shutdown left Electron process descendants");
     expect(installer).toContain("preserve-across-upgrade-and-uninstall");
+    expect(installer).toContain("packaging-preference-preserve.marker");
+    expect(installer).toContain("per-user preference marker");
     expect(installer).toContain("PriorInstaller");
     expect(installer).toContain("Resolve-InstalledExecutable");
     expect(installer).toContain("WScript.Shell");
