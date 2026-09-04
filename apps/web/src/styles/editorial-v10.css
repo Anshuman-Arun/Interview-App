@@ -2174,6 +2174,13 @@ summary:focus-visible,
     height: 100% !important;
   }
 
+  /* Desktop focus state must not hide the compact pane selected by the tabs
+     after an Electron zoom/resize crosses this breakpoint. */
+  .live-main[data-focus] .reasoning-pane,
+  .live-main[data-focus] .board-pane {
+    display: flex;
+  }
+
   .live-main[data-compact-pane="interview"] .board-pane,
   .live-main[data-compact-pane="whiteboard"] .reasoning-pane {
     display: none !important;
