@@ -571,6 +571,47 @@ describe("compatibility and disclosure gates", () => {
     }
   });
 
+  it("barge-in cancels a queued unseen WHITEBOARD annotation before it can render", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const compilation = await new ContextCoordinator(harness.writer).compileForGeneration({
+        generationId: harness.generationId,
+        problem: sixPeopleProblem
+      });
+      expect(compilation.value.compiled).toBe(true);
+
+      const processed = await harness.turns.processProposal({
+        envelope: providerEnvelope(harness),
+        problem: sixPeopleProblem,
+        proposal: {
+          realizedAction: "PROBE_JUSTIFICATION",
+          claimedDisclosureLevel: 0,
+          claimedDisclosureIds: [],
+          boardActions: [{
+            operation: "draw_segment",
+            layer: "AI_ANNOTATION",
+            points: [{ x: 10, y: 10 }, { x: 40, y: 30 }],
+            annotationPurpose: harness.safeProbe
+          }]
+        },
+        validator: harness.validator
+      });
+      expect(processed.accepted).toBe(true);
+      const boardAtom = processed.deliveryAtoms.find(
+        (atom) => atom.content.medium === "WHITEBOARD"
+      );
+      if (boardAtom === undefined) throw new Error("Expected queued whiteboard delivery");
+      expect(harness.writer.getState().deliveries[boardAtom.deliveryId]?.status).toBe("QUEUED");
+
+      await harness.turns.beginUtterance();
+
+      expect(harness.writer.getState().generations[harness.generationId]?.status).toBe("SUPERSEDED");
+      expect(harness.writer.getState().deliveries[boardAtom.deliveryId]?.status).toBe("CANCELLED");
+    } finally {
+      harness.store.close();
+    }
+  });
+
   it("board revision marks already-started stale output POSSIBLY_EXPOSED", async () => {
     const harness = await createCoreHarness();
     try {
