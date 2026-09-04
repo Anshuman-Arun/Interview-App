@@ -181,13 +181,13 @@ export function isOxfordFormalCandidateTargetAdmissible(input: {
 
     switch (profile.target.subject.claimId) {
       case "color-count-arithmetic":
-        return statementNumbers.has("2")
-          && statementNumbers.has("30")
-          && statementNumbers.has("32")
-          && (
-            containsRationalOperator(parsed.data.claim.left)
-            || containsRationalOperator(parsed.data.claim.right)
-          );
+        return isDominoColorCountEquality(
+          parsed.data.claim.left,
+          parsed.data.claim.right
+        ) || isDominoColorCountEquality(
+          parsed.data.claim.right,
+          parsed.data.claim.left
+        );
       case "median-ratio-arithmetic": {
         if (
           [...statementNumbers].some((value) =>
@@ -260,12 +260,6 @@ function normalizeText(value: string): string {
     .trim();
 }
 
-function containsRationalOperator(
-  expression: RationalExpression
-): boolean {
-  return expression.kind !== "RATIONAL";
-}
-
 function isTwoToOneRatioEquality(
   ratioExpression: RationalExpression,
   resultExpression: RationalExpression
@@ -273,7 +267,19 @@ function isTwoToOneRatioEquality(
   return ratioExpression.kind === "DIVIDE"
     && isRationalLiteral(ratioExpression.left, "2", "3")
     && isRationalLiteral(ratioExpression.right, "1", "3")
-    && isRationalLiteral(resultExpression, "2", "1");
+    && resultExpression.kind === "RATIONAL"
+    && resultExpression.value.denominator === "1";
+}
+
+function isDominoColorCountEquality(
+  countExpression: RationalExpression,
+  resultExpression: RationalExpression
+): boolean {
+  return countExpression.kind === "SUBTRACT"
+    && isRationalLiteral(countExpression.left, "32", "1")
+    && isRationalLiteral(countExpression.right, "2", "1")
+    && resultExpression.kind === "RATIONAL"
+    && resultExpression.value.denominator === "1";
 }
 
 function isRationalLiteral(
