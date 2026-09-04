@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
 import { access, lstat, readFile, realpath, rm } from "node:fs/promises";
@@ -13,6 +13,8 @@ import {
 import {
   LocalRuntimeError,
   LocalRuntimeManager,
+  SupervisedProcessError,
+  SupervisedProcessRunner,
   type LocalComponentDefinition,
   type LocalComponentStatus
 } from "../../../../packages/local-runtime/src/index.js";
@@ -1349,78 +1351,57 @@ async function installPinnedPythonRequirements(
 async function runPythonSetupProcess(
   executable: string,
   args: readonly string[],
-  cwd: string,
+  _cwd: string,
   env: NodeJS.ProcessEnv,
   signal: AbortSignal | undefined,
   timeoutMs: number,
   operationName: string
 ): Promise<void> {
   if (abortRequested(signal)) throw abortError();
-  await new Promise<void>((resolve, reject) => {
-    let settled = false;
-    let terminationError: Error | undefined;
-    let forceKillTimer: NodeJS.Timeout | undefined;
-    const child = spawn(
+  const values: Record<string, string> = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (typeof value === "string") values[key] = value;
+  }
+  const runner = new SupervisedProcessRunner(
+    [{
+      id: "python-setup",
       executable,
-      [...args],
-      {
-        cwd,
-        env,
-        windowsHide: true,
-        shell: false,
-        stdio: ["ignore", "ignore", "pipe"]
-      }
-    );
-    let stderr = "";
-    const finish = (error?: Error): void => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      if (forceKillTimer !== undefined) clearTimeout(forceKillTimer);
-      signal?.removeEventListener("abort", onAbort);
-      if (error === undefined) resolve();
-      else reject(error);
-    };
-    const terminate = (error: Error): void => {
-      if (terminationError !== undefined) return;
-      terminationError = error;
-      child.kill();
-      forceKillTimer = setTimeout(() => {
-        if (!settled) child.kill("SIGKILL");
-      }, 2_000);
-    };
-    const onAbort = (): void => {
-      terminate(abortError());
-    };
-    const timeout = setTimeout(() => {
-      terminate(new Error(`${operationName} timed out`));
-    }, timeoutMs);
-    signal?.addEventListener("abort", onAbort, { once: true });
-    if (signal?.aborted === true) onAbort();
-    child.stderr.on("data", (chunk: Buffer | string) => {
-      if (stderr.length >= 16 * 1024) return;
-      stderr += String(chunk).slice(0, 16 * 1024 - stderr.length);
+      environment: { values }
+    }],
+    { parentEnvironment: {} }
+  );
+  try {
+    const result = await runner.execute({
+      executableId: "python-setup",
+      args,
+      timeoutMs,
+      maxStdoutBytes: 16 * 1024,
+      maxStderrBytes: 16 * 1024,
+      ...(signal === undefined ? {} : { signal })
     });
-    child.once("error", (error) => {
-      finish(new Error(`${operationName} could not start`, { cause: error }));
-    });
-    child.once("exit", (code, exitSignal) => {
-      if (settled) return;
-      if (terminationError !== undefined) {
-        finish(terminationError);
-        return;
+    if (result.exitCode !== 0) {
+      throw new Error(`${operationName} failed`);
+    }
+  } catch (error) {
+    if (error instanceof SupervisedProcessError) {
+      switch (error.code) {
+        case "EXECUTION_CANCELLED":
+          throw abortError();
+        case "EXECUTION_TIMEOUT":
+          throw new Error(`${operationName} timed out`, { cause: error });
+        case "PROCESS_TREE_CLEANUP_FAILED":
+          throw new Error(
+            `${operationName} process-tree cleanup could not be verified`,
+            { cause: error }
+          );
+        default:
+          throw new Error(`${operationName} failed`, { cause: error });
       }
-      if (code === 0 && exitSignal === null) {
-        finish();
-        return;
-      }
-      finish(new Error(
-        stderr.trim().length > 0
-          ? `${operationName} failed: ${stderr.trim().slice(0, 1_024)}`
-          : `${operationName} failed`
-      ));
-    });
-  });
+    }
+    throw error;
+  } finally {
+    await runner.drain();
+  }
 }
 
 function pythonSetupEnvironment(executable: string): NodeJS.ProcessEnv {
