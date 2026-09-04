@@ -5,6 +5,10 @@ import {
   type StoredSessionSummary
 } from "../../../packages/domain/src/index.js";
 import {
+  SessionPerformanceReadResponseSchema,
+  type SessionPerformanceReadResponse
+} from "../../../packages/diagnostics/src/index.js";
+import {
   replaySession,
   type SessionEvent,
   type SessionState
@@ -61,9 +65,14 @@ export interface ExactSessionProblemResolver {
   ) => InterviewProblem | undefined;
 }
 
+export interface SessionPerformanceReadSource {
+  readonly read: (sessionId: SessionId) => SessionPerformanceReadResponse;
+}
+
 export interface SessionReadServiceOptions {
   readonly source: SessionReadSource;
   readonly problemResolver?: ExactSessionProblemResolver;
+  readonly performanceSource?: SessionPerformanceReadSource;
 }
 
 export function createCatalogSessionProblemResolver(
@@ -191,15 +200,55 @@ function summaryFromAuthoritativeEvents(
 export class SessionReadService {
   readonly #source: SessionReadSource;
   readonly #problemResolver: ExactSessionProblemResolver;
+  readonly #performanceSource: SessionPerformanceReadSource | undefined;
 
   public constructor(options: SessionReadServiceOptions) {
     this.#source = options.source;
     this.#problemResolver =
       options.problemResolver ?? createCatalogSessionProblemResolver();
+    this.#performanceSource = options.performanceSource;
   }
 
   public hasSession(sessionId: SessionId): boolean {
     return this.#source.hasSession(sessionId);
+  }
+
+  public readPerformance(
+    rawSessionId: SessionId
+  ): SessionPerformanceReadResponse | null {
+    const sessionId = SessionIdSchema.parse(rawSessionId);
+    if (boundedSessionIdentity(sessionId) === undefined) return null;
+    const known = this.sessionKnown(sessionId);
+    if (known === false) return null;
+    if (this.#performanceSource === undefined) {
+      return SessionPerformanceReadResponseSchema.parse({
+        protocolVersion: 1,
+        type: "SESSION_PERFORMANCE_READ",
+        sessionId,
+        available: false,
+        partial: known === undefined
+      });
+    }
+    try {
+      const response = this.#performanceSource.read(sessionId);
+      return response.sessionId === sessionId
+        ? SessionPerformanceReadResponseSchema.parse(response)
+        : SessionPerformanceReadResponseSchema.parse({
+            protocolVersion: 1,
+            type: "SESSION_PERFORMANCE_READ",
+            sessionId,
+            available: false,
+            partial: true
+          });
+    } catch {
+      return SessionPerformanceReadResponseSchema.parse({
+        protocolVersion: 1,
+        type: "SESSION_PERFORMANCE_READ",
+        sessionId,
+        available: false,
+        partial: true
+      });
+    }
   }
 
   public readEvaluation(
