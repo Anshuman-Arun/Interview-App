@@ -114,7 +114,13 @@ describe("Windows desktop packaging contract", () => {
     expect(main).toContain("--install-local-vision-models");
     expect(main).toContain("await activeModelInstall.catch(() => undefined)");
     expect(preload).toContain("getLocalRuntimeStatus");
-    expect(preload).toContain("installLocalModels");
+    expect(preload).toContain("installVoiceModels");
+    expect(preload).toContain("installVisionModel");
+    expect(preload).toContain("restartApp");
+    expect(main).toContain("activeModelInstallKind");
+    expect(main).toContain('beginLocalModelInstall("VOICE")');
+    expect(main).toContain('beginLocalModelInstall("VISION")');
+    expect(main).toContain("app.relaunch()");
     expect(preload).not.toMatch(/require\(["'](?:node:)?(?:fs|child_process)["']\)/u);
     expect(preload).not.toContain("process.env");
     expect(preload).not.toContain("shell.");
