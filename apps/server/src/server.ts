@@ -10,6 +10,7 @@ import type { LocalTransportSecurity } from "../../../packages/domain/src/index.
 import { LocalInterviewTransportRuntime } from "./local-interview-transport-runtime.js";
 import type { ProviderRuntimeResolver } from "./provider-runtime.js";
 import type { VoiceRuntimeConfiguration } from "./voice-runtime.js";
+import { SessionObservability } from "./session-observability.js";
 
 const DEFAULT_COMMAND_PORT = 43123;
 const DEFAULT_RENDERER_STREAM_PORT = 43124;
@@ -57,6 +58,7 @@ export async function createAndStartServer(config: ServerConfig = {}) {
 
   const store = new SqliteEventStore(databasePath);
   const registry = new SessionRuntimeRegistry(store);
+  const observability = SessionObservability.create(databasePath);
 
   let runtime: LocalInterviewTransportRuntime | undefined;
   let bound: Awaited<ReturnType<LocalInterviewTransportRuntime["start"]>>;
@@ -65,6 +67,7 @@ export async function createAndStartServer(config: ServerConfig = {}) {
       security,
       registry,
       store,
+      observability,
       commandPort,
       rendererStreamPort,
       voicePort,
@@ -87,6 +90,7 @@ export async function createAndStartServer(config: ServerConfig = {}) {
         cleanupFailure = cleanupError;
       }
     }
+    observability.close();
     store.close();
     if (cleanupFailure !== undefined) {
       throw new AggregateError(
@@ -104,11 +108,13 @@ export async function createAndStartServer(config: ServerConfig = {}) {
     runtime: startedRuntime,
     store,
     registry,
+    observability,
     security,
     databasePath,
     bound,
     async stop() {
       await startedRuntime.stop();
+      observability.close();
       store.close();
     }
   };
