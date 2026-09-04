@@ -176,6 +176,53 @@ describe("expressive product page layer", () => {
     expect(sessionsMarkup).not.toContain("secret-version");
   });
 
+
+  it("surfaces multiple active sessions instead of offering a false new-room state", () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(HomePage, {
+        activeSessionId: null,
+        activeSessionCount: 2,
+        activeProblemTitle: null,
+        sessions: [
+          sessions[0],
+          { ...sessions[0], sessionId: COMPLETE, updatedAt: "2026-09-01T20:21:00.000Z" }
+        ],
+        onStartInterview: vi.fn(),
+        onResumeInterview: vi.fn(),
+        onOpenSessions: vi.fn(),
+        onOpenSettings: vi.fn(),
+        canReview: () => false,
+        onReview: vi.fn(),
+        sessionEntryPending: false
+      })
+    );
+
+    expect(markup).toContain("Resolve active sessions");
+    expect(markup).toContain("2 active sessions need resolution");
+    expect(markup).not.toContain('data-testid="start-session-btn"');
+  });
+
+  it("renders setup indicators with explicit non-ready state", () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(
+        AppearanceProvider,
+        null,
+        React.createElement(ProductFrame, {
+          activePage: "home",
+          title: "Home",
+          kicker: "Interview room",
+          onNavigate: vi.fn(),
+          reasoningReady: false,
+          children: React.createElement("div", null, "content")
+        })
+      )
+    );
+
+    expect(markup).toContain("Setup needed");
+    expect(markup).toContain("CHECK SETUP");
+    expect(markup).toContain('data-ready="false"');
+  });
+
   it("keeps review presentation independent of product-read implementation", () => {
     const markup = renderToStaticMarkup(
       React.createElement(ReviewPageShell, {
