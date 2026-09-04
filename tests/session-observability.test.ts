@@ -1,3 +1,7 @@
+import { DatabaseSync } from "node:sqlite";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { SessionIdSchema } from "../packages/domain/src/index.js";
 import {
@@ -100,6 +104,70 @@ describe("SessionObservability", () => {
     if (!read.available || read.summary === undefined) throw new Error("expected metrics");
     expect(read.summary.remote.totalCalls).toBe(300);
     expect(read.summary.partial).toBe(true);
+  });
+
+  it("recovers persisted metrics after restart without semantic replay dependency", () => {
+    const directory = mkdtempSync(join(tmpdir(), "interview-observability-"));
+    const databasePath = join(directory, "session.sqlite");
+    const sessionId = SessionIdSchema.parse("session-observability-recovery");
+    try {
+      const first = SessionObservability.create(databasePath, () => 10);
+      const handle = first.beginRemoteOperation({
+        sessionId,
+        operation: "INTERVIEWER_REALIZATION",
+        providerId: "provider",
+        modelId: "model"
+      });
+      handle.finish("SUCCESS");
+      first.close();
+
+      const recovered = SessionObservability.create(databasePath, () => 20);
+      const read = recovered.read(sessionId);
+      expect(read.available).toBe(true);
+      expect(read.summary?.remote.totalCalls).toBe(1);
+      recovered.close();
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("degrades to partial in-memory metrics when persistence is unavailable", () => {
+    const directory = mkdtempSync(join(tmpdir(), "interview-observability-unavailable-"));
+    const sessionId = SessionIdSchema.parse("session-observability-unavailable");
+    try {
+      const metrics = SessionObservability.create(directory, () => 0);
+      expect(() => metrics.recordVoiceInputSession(sessionId)).not.toThrow();
+      const read = metrics.read(sessionId);
+      expect(read.available).toBe(true);
+      expect(read.partial).toBe(true);
+      metrics.close();
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("treats malformed persisted telemetry as unavailable rather than authoritative", () => {
+    const directory = mkdtempSync(join(tmpdir(), "interview-observability-malformed-"));
+    const databasePath = join(directory, "session.sqlite");
+    const sessionId = SessionIdSchema.parse("session-observability-malformed");
+    try {
+      const initial = SessionObservability.create(databasePath);
+      initial.close();
+      const database = new DatabaseSync(databasePath);
+      database.prepare(
+        "INSERT INTO session_observability(session_id, metrics_json, updated_at) VALUES (?, ?, ?)"
+      ).run(sessionId, "{not-json", new Date(0).toISOString());
+      database.close();
+
+      const recovered = SessionObservability.create(databasePath);
+      expect(recovered.read(sessionId)).toMatchObject({
+        available: false,
+        partial: false
+      });
+      recovered.close();
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it("does not expose provider token, quota, billing, or payload fields", () => {
