@@ -142,7 +142,7 @@ describe("Oxford formal target admission", () => {
   it("admits only source-grounded target-shaped concrete statements", () => {
     expect(admitted(
       "oxford-domino-chessboard",
-      "Thirty-two minus two equals thirty.",
+      "Thirty-two black squares minus two removed black corners equals thirty black squares.",
       JSON.stringify({
         protocol: "INTERVIEW_APP_RATIONAL_ARITHMETIC_CLAIM",
         protocolVersion: 1,
@@ -229,7 +229,7 @@ describe("Oxford formal target admission", () => {
   it("rejects invented numerals and target-shaped trivial substitutions", () => {
     expect(admitted(
       "oxford-domino-chessboard",
-      "Thirty-two minus two equals thirty.",
+      "Thirty-two black squares minus two removed black corners equals thirty black squares.",
       JSON.stringify({
         protocol: "INTERVIEW_APP_RATIONAL_ARITHMETIC_CLAIM",
         protocolVersion: 1,
