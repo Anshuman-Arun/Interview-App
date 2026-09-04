@@ -576,7 +576,74 @@ function sourceExpressesTargetDivisibility(
     return false;
   }
 
-  return tokens.find((token) => /^[-+]?\d+$/u.test(token)) === divisor;
+  return sourceFactorizationsMatchDivisibility(tokens, divisor, dividend);
+}
+
+function sourceFactorizationsMatchDivisibility(
+  tokens: readonly string[],
+  divisor: string,
+  dividend: string
+): boolean {
+  const factorizations: Array<{
+    readonly value: string;
+    readonly factors: readonly [string, string];
+  }> = [];
+  for (let index = 0; index < tokens.length - 4; index += 1) {
+    const value = tokens[index];
+    const relation = tokens[index + 1];
+    const leftFactor = tokens[index + 2];
+    const operator = tokens[index + 3];
+    const rightFactor = tokens[index + 4];
+    if (
+      value === undefined
+      || leftFactor === undefined
+      || rightFactor === undefined
+      || !/^[-+]?\d+$/u.test(value)
+      || (relation !== "equals" && relation !== "is")
+      || !/^[-+]?\d+$/u.test(leftFactor)
+      || operator !== "times"
+      || !/^[-+]?\d+$/u.test(rightFactor)
+    ) {
+      continue;
+    }
+    factorizations.push({
+      value,
+      factors: [leftFactor, rightFactor]
+    });
+  }
+
+  for (let leftIndex = 0; leftIndex < factorizations.length; leftIndex += 1) {
+    const left = factorizations[leftIndex];
+    if (left === undefined) continue;
+    for (
+      let rightIndex = leftIndex + 1;
+      rightIndex < factorizations.length;
+      rightIndex += 1
+    ) {
+      const right = factorizations[rightIndex];
+      if (right === undefined) continue;
+      const pair: readonly [string, string] = [left.value, right.value];
+      if (!pairMatchesDivisibility(pair, divisor, dividend)) continue;
+      if (hasSharedOddFactor(left.factors, right.factors)) return true;
+    }
+  }
+  return false;
+}
+
+function hasSharedOddFactor(
+  left: readonly [string, string],
+  right: readonly [string, string]
+): boolean {
+  for (const candidate of left) {
+    if (!right.includes(candidate)) continue;
+    try {
+      const value = BigInt(candidate);
+      if (value > 1n && value % 2n !== 0n) return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
 }
 
 function pairMatchesDivisibility(
