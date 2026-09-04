@@ -2,7 +2,7 @@ import { z } from "zod";
 import { SessionIdSchema } from "../../domain/src/index.js";
 
 const NonnegativeSafeIntegerSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
-const NonnegativeFiniteSchema = z.number().finite().nonnegative();
+const NonnegativeFiniteSchema = z.number().nonnegative();
 const BoundedBytesSchema = NonnegativeSafeIntegerSchema;
 
 export const RemoteReasoningOperationKindSchema = z.enum([
