@@ -383,6 +383,53 @@ describe("desktop local model runtime", () => {
     expect(mutable.pythonExecutable).toBe(managedExecutable);
   });
 
+  it("creates a real isolated managed Python environment instead of using base site-packages", async () => {
+    const bootstrap = spawnSync("python", [
+      "-I",
+      "-c",
+      "import sys; print(sys.executable)"
+    ], {
+      encoding: "utf8",
+      windowsHide: true
+    });
+    expect(bootstrap.status).toBe(0);
+    const bootstrapExecutable = bootstrap.stdout.trim();
+    expect(bootstrapExecutable.length).toBeGreaterThan(0);
+
+    const managedRoot = temporaryRoot("desktop-python-real-managed-");
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-python-real-appdata-"),
+      managedPythonRoot: managedRoot,
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: bootstrapExecutable
+    });
+    compositions.push(composition);
+
+    const mutable = composition as unknown as {
+      createManagedPythonEnvironment(
+        bootstrapExecutable: string,
+        signal?: AbortSignal
+      ): Promise<string>;
+    };
+    const managedExecutable = await mutable.createManagedPythonEnvironment(
+      bootstrapExecutable
+    );
+    expect(existsSync(managedExecutable)).toBe(true);
+
+    const probe = spawnSync(managedExecutable, [
+      "-I",
+      "-c",
+      "import sys; print(int(sys.prefix != sys.base_prefix))"
+    ], {
+      encoding: "utf8",
+      windowsHide: true
+    });
+    expect(probe.status).toBe(0);
+    expect(probe.stdout.trim()).toBe("1");
+  }, 30_000);
+
   it("repairs an existing app-owned Python environment without mutating bootstrap Python", async () => {
     const composition = new DesktopLocalRuntimeComposition({
       appDataRoot: temporaryRoot("desktop-python-managed-repair-"),
