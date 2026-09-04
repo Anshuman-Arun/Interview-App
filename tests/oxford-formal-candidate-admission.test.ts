@@ -430,6 +430,20 @@ describe("Oxford formal target admission", () => {
 
     expect(admitted(
       "oxford-divisibility-chain",
+      "6 divides 12; separately, 9 and 24 have the same odd part, and 6 divides 24.",
+      JSON.stringify({
+        protocol: "INTERVIEW_APP_MODULAR_ARITHMETIC_CLAIM",
+        protocolVersion: 1,
+        claim: {
+          kind: "DIVISIBILITY",
+          divisor: "6",
+          dividend: integer("24")
+        }
+      })
+    )).toBe(false);
+
+    expect(admitted(
+      "oxford-divisibility-chain",
       "The chosen numbers 6 and 24 have odd part 3, and 3 divides 24.",
       JSON.stringify({
         protocol: "INTERVIEW_APP_MODULAR_ARITHMETIC_CLAIM",
