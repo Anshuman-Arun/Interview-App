@@ -1,73 +1,36 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import {
-  getDesktopRuntimeBridge,
-  readDesktopRuntimeStatus,
-  type DesktopRuntimeStatus
-} from "../desktop-runtime.js";
+import { useEffect, useRef, type ReactNode } from "react";
 import { AppearanceDock } from "./AppearanceDock.js";
 import { BrandMark } from "./BrandMark.js";
 import "./ProductFrame.css";
 
-export type ProductPageId = "home" | "sessions" | "settings";
-
-function readinessLabel(ready: boolean | undefined): string {
-  if (ready === undefined) return "CHECK";
-  return ready ? "READY" : "SETUP";
-}
+export type ProductPageId = "home" | "new" | "sessions" | "settings";
 
 export function ProductFrame({
   activePage,
   title,
   kicker,
   onNavigate,
-  onNewInterview,
-  reasoningReady,
   children,
   aside,
   notice,
-  onDismissNotice
+  onDismissNotice,
+  reasoningReady = true
 }: {
   readonly activePage: ProductPageId | null;
   readonly title: string;
   readonly kicker: string;
   readonly onNavigate: (page: ProductPageId) => void;
-  readonly onNewInterview: () => void;
-  readonly reasoningReady?: boolean;
   readonly children: ReactNode;
   readonly aside?: ReactNode;
   readonly notice?: string | null | undefined;
   readonly onDismissNotice?: (() => void) | undefined;
+  readonly reasoningReady?: boolean;
 }) {
   const headingRef = useRef<HTMLHeadingElement | null>(null);
-  const desktopRuntime = useMemo(() => getDesktopRuntimeBridge(), []);
-  const [runtimeStatus, setRuntimeStatus] = useState<DesktopRuntimeStatus | undefined>();
 
   useEffect(() => {
     headingRef.current?.focus();
   }, [title]);
-
-  useEffect(() => {
-    if (desktopRuntime === undefined) return;
-    let active = true;
-    void readDesktopRuntimeStatus(desktopRuntime)
-      .then((status) => {
-        if (active) setRuntimeStatus(status);
-      })
-      .catch(() => {
-        if (active) setRuntimeStatus(undefined);
-      });
-    return () => {
-      active = false;
-    };
-  }, [desktopRuntime]);
-
-  const voiceReady = runtimeStatus === undefined
-    ? undefined
-    : runtimeStatus.speech.state === "READY" && runtimeStatus.tts.state === "READY";
-  const boardReady = runtimeStatus === undefined
-    ? undefined
-    : runtimeStatus.vision.state === "READY";
-  const allReady = voiceReady === true && boardReady === true && reasoningReady === true;
 
   const items: readonly { id: ProductPageId; label: string; index: string }[] = [
     { id: "home", label: "Home", index: "01" },
@@ -77,7 +40,7 @@ export function ProductFrame({
 
   return (
     <div className="product-frame">
-      <aside className="product-frame__rail">
+      <aside className="product-frame__rail" data-product-rail>
         <button
           type="button"
           className="product-frame__brand"
@@ -91,13 +54,14 @@ export function ProductFrame({
         <button
           type="button"
           className="product-frame__new"
-          onClick={onNewInterview}
+          onClick={() => onNavigate("new")}
         >
           <span>New interview</span>
           <span aria-hidden="true">↗</span>
         </button>
 
         <nav className="product-frame__nav" aria-label="Product navigation">
+          <span className="product-frame__nav-label">Navigation</span>
           {items.map((item) => (
             <button
               key={item.id}
@@ -111,21 +75,24 @@ export function ProductFrame({
               onClick={() => onNavigate(item.id)}
             >
               <span className="product-frame__nav-index">{item.index}</span>
-              <span className="product-frame__nav-label">{item.label}</span>
+              <span className="product-frame__nav-copy">{item.label}</span>
             </button>
           ))}
         </nav>
 
-        <div className="product-frame__readiness" aria-label="Runtime readiness">
-          <div className="product-frame__readiness-title">
-            <i data-ready={String(allReady)} aria-hidden="true" />
-            <span>{allReady ? "Ready" : "Runtime"}</span>
-          </div>
-          <div className="product-frame__readiness-grid">
-            <span>Voice</span><b>{readinessLabel(voiceReady)}</b>
-            <span>Board</span><b>{readinessLabel(boardReady)}</b>
-            <span>Reasoning</span><b>{readinessLabel(reasoningReady)}</b>
-          </div>
+        <div className="product-frame__rail-note" aria-label="Local readiness">
+          <span className="product-frame__readiness-title">
+            <i aria-hidden="true" />
+            {reasoningReady ? "Ready" : "Setup needed"}
+          </span>
+          <span className="product-frame__readiness-row"><span>Voice</span><b>LOCAL</b></span>
+          <span className="product-frame__readiness-row"><span>Board</span><b>LOCAL</b></span>
+          <span className="product-frame__readiness-row">
+            <span>Reasoning</span>
+            <b>{reasoningReady ? "READY" : "SETUP"}</b>
+          </span>
+          <span className="product-frame__rail-rule" aria-hidden="true" />
+          <span className="product-frame__readiness-foot">VOICE · BOARD · REPLAY</span>
         </div>
       </aside>
 
@@ -137,6 +104,10 @@ export function ProductFrame({
           </div>
           <div className="product-frame__header-actions">
             {aside}
+            <span className="product-frame__status-chip">
+              <i aria-hidden="true" />
+              {reasoningReady ? "READY" : "CHECK SETUP"}
+            </span>
             <AppearanceDock />
           </div>
         </header>
