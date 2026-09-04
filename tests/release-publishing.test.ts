@@ -88,10 +88,12 @@ describe("versioned Windows release publishing", () => {
   });
 
   it("pins the release workflow to the immutable tag event and publishes only after gates", async () => {
-    const workflow = await readFile(
-      path.join(repoRoot, ".github/workflows/windows-release.yml"),
-      "utf8"
-    );
+    const workflow = (
+      await readFile(
+        path.join(repoRoot, ".github/workflows/windows-release.yml"),
+        "utf8"
+      )
+    ).replace(/\r\n/gu, "\n");
 
     expect(workflow).toContain('tags:\n      - "v*.*.*"');
     expect(workflow).toContain("ref: ${{ github.sha }}");
