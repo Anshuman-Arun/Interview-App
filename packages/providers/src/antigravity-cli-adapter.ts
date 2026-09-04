@@ -129,6 +129,50 @@ const INTERVIEWER_PROPOSAL_JSON_SCHEMA = Object.freeze({
             minimum: 1,
             maximum: Number.MAX_SAFE_INTEGER
           },
+          targetAnnotationId: {
+            type: "string",
+            minLength: 1,
+            maxLength: MAX_BOARD_TARGET_ID_CHARACTERS,
+            pattern: "\\S"
+          },
+          targetRegion: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              shapeId: {
+                type: "string",
+                minLength: 1,
+                maxLength: MAX_BOARD_TARGET_ID_CHARACTERS,
+                pattern: "\\S"
+              },
+              shapeRevision: {
+                type: "integer",
+                minimum: 1,
+                maximum: Number.MAX_SAFE_INTEGER
+              },
+              xFraction: {
+                type: "number",
+                minimum: 0,
+                maximum: 1
+              },
+              yFraction: {
+                type: "number",
+                minimum: 0,
+                maximum: 1
+              },
+              widthFraction: {
+                type: "number",
+                exclusiveMinimum: 0,
+                maximum: 1
+              },
+              heightFraction: {
+                type: "number",
+                exclusiveMinimum: 0,
+                maximum: 1
+              }
+            },
+            required: ["shapeId", "shapeRevision", "xFraction", "yFraction"]
+          },
           placement: {
             type: "object",
             additionalProperties: false,
@@ -644,7 +688,11 @@ function createSingleTurnInput(input: ReasoningTurnInput): string {
     "Admitted vision interpretations are fallible observations with confidence, not authoritative correctness evidence.",
     "If boardScene is present, boardActions may point, highlight, annotate, write a short expression, or sketch simple auxiliary geometry.",
     "Use only stable shape IDs present in boardScene and include the exact supplied revision for every targeted student shape.",
-    "When referring to student work, use an explicit target or placement anchor; do not encode a student target indirectly with absolute coordinates.",
+    "Use targetAnnotationId only with annotationId values present in boardScene.aiAnnotations; these are application-owned logical annotations, never renderer shape IDs.",
+    "A truncated board scene is only a selected subset of the board. Do not infer that omitted space is empty or that omitted shapes do not exist.",
+    "Use contentBounds as a coarse spatial frame for absolute geometry, not proof that unlisted regions are empty.",
+    "Use targetRegion only when the visible/semantic evidence supports a precise local region; otherwise target the whole shape.",
+    "When referring to student work, use an explicit target, targetRegion, or placement anchor; do not encode a student target indirectly with absolute coordinates.",
     "Use boardActions sparingly as a supporting explanatory medium; do not dump a solution onto the board.",
     "Do not use tools, subagents, files, prior conversations, or persistent memory.",
     "Return exactly one interviewer proposal satisfying the supplied JSON schema.",
