@@ -82,6 +82,13 @@ export const BoardActionPlacementSchema = z.object({
       message: "anchorRevision requires anchorShapeId"
     });
   }
+  if (placement.position !== undefined && !anchored) {
+    context.addIssue({
+      code: "custom",
+      path: ["position"],
+      message: "Relative position requires anchorShapeId"
+    });
+  }
   if (anchored && placement.anchorRevision === undefined) {
     context.addIssue({
       code: "custom",
