@@ -15,7 +15,8 @@ export function ProductFrame({
   notice,
   onDismissNotice,
   reasoningReady = true,
-  reasoningChecking = false
+  reasoningChecking = false,
+  navigationLocked = false
 }: {
   readonly activePage: ProductPageId | null;
   readonly title: string;
@@ -27,6 +28,7 @@ export function ProductFrame({
   readonly onDismissNotice?: (() => void) | undefined;
   readonly reasoningReady?: boolean;
   readonly reasoningChecking?: boolean;
+  readonly navigationLocked?: boolean;
 }) {
   const headingRef = useRef<HTMLHeadingElement | null>(null);
 
@@ -74,6 +76,12 @@ export function ProductFrame({
                   : "product-frame__nav-item"
               }
               aria-current={activePage === item.id ? "page" : undefined}
+              disabled={navigationLocked && item.id !== "home"}
+              title={
+                navigationLocked && item.id !== "home"
+                  ? "Resume or finish the paused interview before opening this page."
+                  : undefined
+              }
               onClick={() => onNavigate(item.id)}
             >
               <span className="product-frame__nav-index">{item.index}</span>
