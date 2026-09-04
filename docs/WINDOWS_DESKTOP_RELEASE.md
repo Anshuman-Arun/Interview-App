@@ -29,7 +29,7 @@ Official release tags use stable semantic versions only:
 0.2.0  -> v0.2.0
 ```
 
-Before tagging, commit the version bump on the exact green source commit. Then:
+Before tagging, commit the version bump on the exact green source commit on authoritative `main`. The release workflow rejects a tagged commit that is not reachable from `main`. Then:
 
 ```bash
 git tag v0.1.0
@@ -38,9 +38,11 @@ git push origin v0.1.0
 
 `.github/workflows/windows-release.yml` is tag-only. It checks out the
 immutable tag-event object, resolves it to the exact source commit, verifies
-that the still-visible tag resolves to the same commit, and fails if the tag
-does not exactly match the canonical package version. CI never rewrites
-`package.json` to force agreement.
+that the still-visible tag resolves to the same commit, confirms that commit is
+reachable from authoritative `main`, and fails if the tag does not exactly match
+the canonical package version. Immediately before creating the draft release, it
+fetches the tag again and fails if the tag moved during validation. CI never
+rewrites `package.json` to force agreement.
 
 After the full validation/build/install/upgrade gates pass, the workflow
 creates a **draft** GitHub Release titled `Interview App v<version>`. The
