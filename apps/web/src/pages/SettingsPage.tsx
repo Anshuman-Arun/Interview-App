@@ -240,16 +240,20 @@ export function SettingsPage({
     && runtimeStatusError !== undefined;
 
   const installPythonRuntime = useCallback(async (): Promise<void> => {
-    if (
-      desktopRuntime?.installPythonRuntime === undefined
-      || setupOperationInFlightRef.current
-    ) return;
+    if (desktopRuntime === undefined || setupOperationInFlightRef.current) return;
+    const operation = desktopRuntime.installPythonRuntime;
+    if (operation === undefined) {
+      setPythonInstallError(
+        "This desktop build does not expose Python component setup. Restart or reinstall Interview App."
+      );
+      return;
+    }
     setupOperationInFlightRef.current = true;
     setInstallingPython(true);
     setPythonInstallError(undefined);
     try {
       const parsed = parseDesktopRuntimeStatus(
-        await desktopRuntime.installPythonRuntime()
+        await operation()
       );
       if (parsed === undefined) throw new Error("Malformed Python setup response");
       setRuntimeStatus(parsed);
@@ -584,12 +588,16 @@ export function SettingsPage({
               <button
                 type="button"
                 onClick={() => {
-                  if (
-                    desktopRuntime?.restartApp === undefined
-                    || setupOperationInFlightRef.current
-                  ) return;
+                  if (setupOperationInFlightRef.current) return;
+                  const restartApp = desktopRuntime?.restartApp;
+                  if (restartApp === undefined) {
+                    setRuntimeStatusError(
+                      "This desktop build cannot restart automatically. Close and reopen Interview App."
+                    );
+                    return;
+                  }
                   setRestarting(true);
-                  void desktopRuntime.restartApp().catch(() => {
+                  void restartApp().catch(() => {
                     setRestarting(false);
                     setRuntimeStatusError(
                       "Interview App could not restart automatically. Close and reopen the app."
