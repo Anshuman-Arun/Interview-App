@@ -283,11 +283,7 @@ function analysisRequestId(
     state.policyRevision,
     profile.problemId,
     profile.problemVersion,
-    profile.target.subject.kind === "CLAIM"
-      ? "CLAIM:" + profile.target.subject.claimId
-      : profile.target.subject.kind === "MILESTONE"
-        ? "MILESTONE:" + profile.target.subject.milestoneId
-        : profile.target.subject.kind,
+    "CLAIM:" + profile.target.subject.claimId,
     ...profile.allowedProtocols.flatMap((protocol) => [protocol.protocol, protocol.version])
   ];
   const digest = createHash("sha256").update(JSON.stringify(basis)).digest("hex");
