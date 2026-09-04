@@ -60,7 +60,14 @@ describe("board provider-context generation binding", () => {
       if (!compilation.compiled) throw new Error("Expected provider context compilation");
       expect(compilation.context.boardScene?.shapes[0]?.semanticObservation).toBeUndefined();
 
+      const snapshotBasis = {
+        snapshotId: "snapshot:eq",
+        snapshotHash: "a".repeat(64),
+        preprocessingVersion: "vision-v1",
+        sourceBoardRevision: basis.boardRevision
+      };
       const requested = await turns.requestVision("region:eq", [target.id], {
+        snapshotBasis,
         relevantShapeRevisions: [{
           shapeId: target.id,
           expectedRevision: target.revision
@@ -84,12 +91,7 @@ describe("board provider-context generation binding", () => {
         proposalId: "proposal:eq",
         observationKind: "EQUATION",
         observation,
-        snapshotBasis: {
-          snapshotId: "snapshot:eq",
-          snapshotHash: "a".repeat(64),
-          preprocessingVersion: "vision-v1",
-          sourceBoardRevision: basis.boardRevision
-        },
+        snapshotBasis,
         sourceRelevantShapeIds: [target.id],
         shapeRevisionBindings: [{
           shapeId: target.id,
