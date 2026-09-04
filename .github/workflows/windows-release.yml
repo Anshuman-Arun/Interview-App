@@ -193,6 +193,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to refresh authoritative main before publication"
+          }
+          git merge-base --is-ancestor "$env:SOURCE_SHA" "refs/remotes/origin/main"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Tagged release commit $env:SOURCE_SHA is no longer reachable from authoritative main"
+          }
+
           $tagRef = "refs/tags/$env:RELEASE_TAG"
           git fetch --force origin "$($tagRef):$($tagRef)"
           if ($LASTEXITCODE -ne 0) {
