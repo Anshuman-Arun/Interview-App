@@ -216,7 +216,10 @@ export function SettingsPage({
   const corners: readonly CornerStyle[] = ["square", "soft", "round", "generous"];
   const borders: readonly BorderStyle[] = ["quiet", "regular", "strong", "contrast"];
 
-  const antigravity = providerOptions.find(isAntigravity);
+  const antigravityOptions = providerOptions.filter(isAntigravity);
+  const antigravity = antigravityOptions.find(
+    (option) => option.availability === "AVAILABLE"
+  ) ?? antigravityOptions[0];
   const reasoningReady = !providerOptionsLoading
     && providerOptionsError === null
     && antigravity?.availability === "AVAILABLE";
