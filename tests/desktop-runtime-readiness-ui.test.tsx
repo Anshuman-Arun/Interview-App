@@ -164,6 +164,25 @@ describe("desktop local AI readiness UX", () => {
     expect(markup).not.toContain("Python prerequisite required");
   });
 
+  it("fails closed when an Antigravity re-check errors even if a prior option was ready", () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(
+        AppearanceProvider,
+        null,
+        React.createElement(SettingsPage, {
+          providerOptions: [READY_PROVIDER],
+          providerOptionsLoading: false,
+          providerOptionsError: "Provider readiness could not be refreshed.",
+          onRefreshProviderOptions: vi.fn(async () => [READY_PROVIDER]),
+          onStartInterview: vi.fn()
+        })
+      )
+    );
+    expect(markup).toContain("A live AI interview needs a ready reasoning provider.");
+    expect(markup).toContain("Provider readiness could not be refreshed.");
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Start interview<\/button>/u);
+  });
+
   it("uses authoritative provider readiness language for Antigravity authentication", () => {
     const markup = renderToStaticMarkup(
       React.createElement(
