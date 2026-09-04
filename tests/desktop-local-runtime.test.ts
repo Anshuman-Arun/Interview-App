@@ -377,6 +377,38 @@ describe("desktop local model runtime", () => {
     });
   });
 
+  it("does not use a compatible global Python as the packaged worker runtime", async () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-python-packaged-managed-only-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: true,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+
+    const mutable = composition as unknown as {
+      workerScriptIsSafe(): Promise<boolean>;
+      resolveManagedPythonExecutable(): Promise<string | undefined>;
+      resolveBootstrapPythonExecutable(): Promise<string | undefined>;
+      pythonRuntimeCompatible(executable: string, signal?: AbortSignal): boolean;
+      pythonInterpreterCompatible(executable: string, signal?: AbortSignal): boolean;
+      pythonExecutable?: string;
+    };
+    mutable.workerScriptIsSafe = async () => true;
+    mutable.resolveManagedPythonExecutable = async () => undefined;
+    mutable.resolveBootstrapPythonExecutable = async () => process.execPath;
+    mutable.pythonRuntimeCompatible = () => true;
+    mutable.pythonInterpreterCompatible = () => true;
+
+    await expect(composition.start()).resolves.toBeUndefined();
+    expect(mutable.pythonExecutable).toBeUndefined();
+    expect(composition.getPythonRuntimeStatus()).toEqual({
+      state: "UNAVAILABLE",
+      reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+    });
+  });
+
   it("installs pinned Python dependencies into an app-owned environment and re-probes", async () => {
     const composition = new DesktopLocalRuntimeComposition({
       appDataRoot: temporaryRoot("desktop-python-deps-install-"),
