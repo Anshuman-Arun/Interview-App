@@ -200,6 +200,48 @@ describe("compatibility and disclosure gates", () => {
     expect(result.analysis?.effectiveDisclosureLevel).toBeGreaterThan(0);
   });
 
+  it("does not semantically reject harmless arbitrary student text merely because it is targeted", () => {
+    const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer([
+      "focus candidate on current equality"
+    ]));
+    const boardScene = BoardSceneContextSchema.parse({
+      boardRevision: 1,
+      shapes: [{
+        shapeId: "shape:harmless",
+        shapeRevision: 1,
+        type: "formula",
+        bounds: { x: 0, y: 0, width: 160, height: 40 },
+        text: "x^2 + y^2 = 1"
+      }],
+      aiAnnotations: []
+    });
+    const result = validator.validate({
+      proposal: {
+        realizedAction: "PROBE_JUSTIFICATION",
+        claimedDisclosureLevel: 0,
+        claimedDisclosureIds: [],
+        boardActions: [{
+          operation: "highlight",
+          layer: "AI_ANNOTATION",
+          targetShapeId: "shape:harmless",
+          expectedShapeRevision: 1,
+          annotationPurpose: "focus candidate on current equality"
+        }]
+      },
+      request: {
+        requiredAction: "PROBE_JUSTIFICATION",
+        maximumDisclosure: 0
+      },
+      protectedDisclosures: sixPeopleProblem.interviewer.protectedDisclosures,
+      boardScene
+    });
+
+    expect(result.accepted).toBe(true);
+    if (!result.accepted) throw new Error("Expected harmless board target to remain usable");
+    expect(result.analysis.effectiveDisclosureLevel).toBe(0);
+    expect(result.realizations.boardActions[0]?.effectiveDisclosureLevel).toBe(0);
+  });
+
   it("treats selecting protected student-board content as a disclosure realization", () => {
     const protectedDisclosure = sixPeopleProblem.interviewer.protectedDisclosures[0];
     if (protectedDisclosure === undefined) throw new Error("Expected protected disclosure fixture");
