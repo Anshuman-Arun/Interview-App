@@ -115,10 +115,14 @@ export function HomePage({
               <button
                 type="button"
                 className="expressive-home__primary"
-                onClick={onOpenSessions}
+                onClick={
+                  activeSessionId === null
+                    ? onOpenSessions
+                    : () => onResumeInterview(activeSessionId)
+                }
                 disabled={sessionEntryPending}
               >
-                <span>Resolve active sessions</span>
+                <span>{activeSessionId === null ? "Choose active session" : "Resume current interview"}</span>
                 <i aria-hidden="true">→</i>
               </button>
             ) : activeSessionId === null ? (
@@ -215,9 +219,23 @@ export function HomePage({
           <span className="expressive-home__active-index">CHECK</span>
           <div>
             <strong>{activeSessionCount} active sessions need resolution</strong>
-            <p>Interview App will not choose an authoritative room for you. Open Sessions and resolve the conflict first.</p>
+            <p>
+              {activeSessionId === null
+                ? "Interview App will not choose an authoritative room for you. Open Sessions and choose which room to recover first."
+                : "A room is already attached. Resume it and end or archive it before recovering another active room."}
+            </p>
           </div>
-          <button type="button" onClick={onOpenSessions}>Open Sessions</button>
+          <button
+            type="button"
+            disabled={sessionEntryPending}
+            onClick={
+              activeSessionId === null
+                ? onOpenSessions
+                : () => onResumeInterview(activeSessionId)
+            }
+          >
+            {activeSessionId === null ? "Open Sessions" : "Resume current"}
+          </button>
         </section>
       ) : activeSessionId !== null && (
         <section className="expressive-home__active">
