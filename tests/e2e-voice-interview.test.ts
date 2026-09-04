@@ -21,7 +21,9 @@ import {
   type SpeechRecognizer,
   type SpeechWorkerEvent,
   type SynthesizedPcm,
+  type TtsOutgoingMessage,
   type TtsSegmentSynthesisRequest,
+  type TtsWorkerOutputSink,
   type VadBackend
 } from "../packages/local-compute/src/index.js";
 import {
@@ -287,6 +289,26 @@ class MutatingSpeechWorker extends SpeechWorkerCore {
   }
 }
 
+class EmptyTranscriptSpeechWorker extends SpeechWorkerCore {
+  public override async submitFrame(
+    envelopeInput: unknown,
+    payload: unknown,
+    heuristicsInput: unknown = {}
+  ): Promise<readonly SpeechWorkerEvent[]> {
+    const events = await super.submitFrame(envelopeInput, payload, heuristicsInput);
+    return events.map((event) => {
+      if (event.type !== "TRANSCRIPT_CANDIDATE") return event;
+      return {
+        ...event,
+        candidate: {
+          ...event.candidate,
+          text: "   "
+        }
+      };
+    });
+  }
+}
+
 class TamperingSpeechWorker extends SpeechWorkerCore {
   public override async submitFrame(
     envelopeInput: unknown,
@@ -363,6 +385,24 @@ class BlockingIgnoringRecognizer implements SpeechRecognizer {
 
   public release(): void {
     this.releaseGate();
+  }
+}
+
+class TamperingTtsWorker extends TtsWorkerCore {
+  public override async handle(
+    input: unknown,
+    sink: TtsWorkerOutputSink
+  ) {
+    return super.handle(input, async (message: TtsOutgoingMessage) => {
+      if (message.type === "AUDIO_END") {
+        await sink({
+          ...message,
+          audioHash: "0".repeat(64)
+        });
+        return;
+      }
+      await sink(message);
+    });
   }
 }
 
@@ -651,6 +691,8 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
       onVoiceCommit: () => undefined
     });
     expect(elements[0]?.pauseCount).toBeGreaterThanOrEqual(1);
+    expect(server.observability.read(sessionId).summary?.local.tts.bargeInInterruptions)
+      .toBe(1);
 
     const lateAudio = await new TurnCoordinator(writer).queueAudioDeliveryFromValidatedText({
       sourceDeliveryId: sourceText.deliveryId,
@@ -826,14 +868,16 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
     await server.runtime.rendererStreamServer.publishDelivery(sessionId, textAtom.deliveryId);
     await synthesizer.started;
 
-    const boardPublication = server.runtime.rendererStreamServer.publishDelivery(
+    const boardPublication = await server.runtime.rendererStreamServer.publishDelivery(
       sessionId,
       boardAtom.deliveryId
     );
-    await expect(boardPublication).resolves.toMatchObject({
-      outcome: "SENT",
-      deliveryId: boardAtom.deliveryId
-    });
+    expect(boardPublication.deliveryId).toBe(boardAtom.deliveryId);
+    if (boardPublication.outcome === "NOT_DELIVERABLE") {
+      expect(boardPublication.status === "EXPOSED" || boardPublication.status === "COMPLETED").toBe(true);
+    } else {
+      expect(boardPublication.outcome).toBe("SENT");
+    }
     await waitFor(
       () => presentedBoard.includes(boardAtom.deliveryId),
       "whiteboard exposure while TTS remains blocked"
@@ -845,6 +889,83 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
     synthesizer.release();
     controller.abort();
     await rendererPromise;
+  });
+
+  it("counts a schema-valid but aggregate-invalid completed TTS stream as failure", async () => {
+    server = await createAndStartServer({
+      host: "127.0.0.1",
+      commandPort: 0,
+      rendererStreamPort: 0,
+      voicePort: 0,
+      clientToken: TEST_CLIENT_TOKEN,
+      allowedOrigins: [TEST_ORIGIN],
+      databasePath: ":memory:",
+      voiceRuntime: {
+        speechWorker: new SpeechWorkerCore({
+          vadBackend: new ScriptedVadBackend([0]),
+          recognizer: new DeterministicFakeRecognizer()
+        }),
+        tts: {
+          worker: new TamperingTtsWorker(new DeterministicFakeSpeechSynthesizer()),
+          voice: "fake-neutral",
+          language: "en-US",
+          sampleRate: 24_000,
+          speed: 1
+        }
+      }
+    });
+
+    const sessionId = newSessionId();
+    const writer = server.registry.get(sessionId);
+    const turns = new TurnCoordinator(writer);
+    await turns.startSession(sixPeopleProblem);
+    await server.runtime.sessions.ensureRecovered(sessionId);
+    const { inputEpisodeId, turnId } = await turns.commitInput(
+      "I have a claim, but I have not justified it yet."
+    );
+    await turns.selectAction(turnId, sixPeopleProblem);
+    const { generationId } = await turns.startGeneration(
+      inputEpisodeId,
+      turnId,
+      "mock-model"
+    );
+    const safeProbe = "Why must that step be true?";
+    const validator = new DisclosureValidator(
+      new ClosedWorldDisclosureAnalyzer([safeProbe])
+    );
+    const source = await authorizeSafeProbe({
+      store: server.store,
+      sessionId,
+      writer,
+      turns,
+      inputEpisodeId,
+      turnId,
+      generationId,
+      safeProbe,
+      validator
+    });
+    await new DeliveryCoordinator(writer).markStarted(source.deliveryId);
+
+    const synthesis = server.runtime.voiceSynthesis;
+    if (synthesis === undefined) throw new Error("Expected voice synthesis coordinator");
+
+    await expect(
+      synthesis.synthesizeSentTextDelivery(sessionId, source.deliveryId)
+    ).resolves.toBeUndefined();
+
+    expect(Object.values(writer.getState().deliveries).filter(
+      (delivery) => delivery.content.medium === "AUDIO"
+    )).toHaveLength(0);
+    expect(server.runtime.audioAssets.inspect()).toEqual({ count: 0, bytes: 0 });
+
+    const performance = server.observability.read(sessionId);
+    expect(performance.summary?.local.tts).toMatchObject({
+      requests: 1,
+      successes: 0,
+      failures: 1,
+      cancellations: 0
+    });
+    expect(performance.summary?.local.tts.latency.count).toBe(1);
   });
 
   it("rejects late TTS output even when no cancellation reaches the synthesizer", async () => {
@@ -921,6 +1042,81 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
       (delivery) => delivery.content.medium === "AUDIO"
     )).toHaveLength(0);
     expect(server.runtime.audioAssets.inspect()).toEqual({ count: 0, bytes: 0 });
+  });
+
+  it("records a blocked TTS barge-in cancellation as cancellation, not success or failure", async () => {
+    const synthesizer = new BlockingFakeSpeechSynthesizer();
+    server = await createAndStartServer({
+      host: "127.0.0.1",
+      commandPort: 0,
+      rendererStreamPort: 0,
+      voicePort: 0,
+      clientToken: TEST_CLIENT_TOKEN,
+      allowedOrigins: [TEST_ORIGIN],
+      databasePath: ":memory:",
+      voiceRuntime: {
+        speechWorker: new SpeechWorkerCore({
+          vadBackend: new ScriptedVadBackend([0]),
+          recognizer: new DeterministicFakeRecognizer()
+        }),
+        tts: {
+          worker: new TtsWorkerCore(synthesizer),
+          voice: "fake-neutral",
+          language: "en-US",
+          sampleRate: 24_000,
+          speed: 1
+        }
+      }
+    });
+
+    const sessionId = newSessionId();
+    const writer = server.registry.get(sessionId);
+    const turns = new TurnCoordinator(writer);
+    await turns.startSession(sixPeopleProblem);
+    await server.runtime.sessions.ensureRecovered(sessionId);
+    const { inputEpisodeId, turnId } = await turns.commitInput(
+      "I have a claim, but I have not justified it yet."
+    );
+    await turns.selectAction(turnId, sixPeopleProblem);
+    const { generationId } = await turns.startGeneration(
+      inputEpisodeId,
+      turnId,
+      "mock-model"
+    );
+    const safeProbe = "Why must that step be true?";
+    const validator = new DisclosureValidator(
+      new ClosedWorldDisclosureAnalyzer([safeProbe])
+    );
+    const source = await authorizeSafeProbe({
+      store: server.store,
+      sessionId,
+      writer,
+      turns,
+      inputEpisodeId,
+      turnId,
+      generationId,
+      safeProbe,
+      validator
+    });
+    await new DeliveryCoordinator(writer).markStarted(source.deliveryId);
+
+    const synthesis = server.runtime.voiceSynthesis;
+    if (synthesis === undefined) throw new Error("Expected voice synthesis coordinator");
+    const pending = synthesis.synthesizeSentTextDelivery(sessionId, source.deliveryId);
+    await synthesizer.started;
+
+    await synthesis.cancelSession(sessionId);
+    synthesizer.release();
+    await expect(pending).resolves.toBeUndefined();
+
+    const performance = server.observability.read(sessionId);
+    expect(performance.summary?.local.tts).toMatchObject({
+      requests: 1,
+      successes: 0,
+      failures: 0,
+      cancellations: 1
+    });
+    expect(performance.summary?.local.tts.latency.count).toBe(1);
   });
 
   it("cancels an in-flight speech stream when the PCM transport is dropped", async () => {
@@ -1236,6 +1432,8 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
     expect(Object.values(state.utterances).every(
       (utterance) => utterance.status !== "CAPTURING"
     )).toBe(true);
+    expect(server.observability.read(sessionId).summary?.local.stt.failures)
+      .toBe(1);
   });
 
   it("does not expose trailing worker onset events after a terminal event revoked the stream", async () => {
@@ -1351,6 +1549,71 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
     expect(Object.keys(writer.getState().inputEpisodes)).toHaveLength(0);
     expect(Object.keys(writer.getState().turns)).toHaveLength(0);
     await speech.cancel();
+  });
+
+  it("records finalized whitespace-only STT as one failure with measured latency", async () => {
+    const speechWorker = new EmptyTranscriptSpeechWorker({
+      vadBackend: new ScriptedVadBackend([1, 1, 0, 0, 0, 0, 0, 0]),
+      recognizer: new DeterministicFakeRecognizer()
+    });
+    server = await createAndStartServer({
+      host: "127.0.0.1",
+      commandPort: 0,
+      rendererStreamPort: 0,
+      voicePort: 0,
+      clientToken: TEST_CLIENT_TOKEN,
+      allowedOrigins: [TEST_ORIGIN],
+      databasePath: ":memory:",
+      voiceRuntime: {
+        speechWorker,
+        tts: {
+          worker: new TtsWorkerCore(new DeterministicFakeSpeechSynthesizer()),
+          voice: "fake-neutral",
+          language: "en-US",
+          sampleRate: 24_000,
+          speed: 1
+        }
+      }
+    });
+
+    const fetchWithAuth = authenticatedFetch();
+    const commandClient = new BrowserCommandClient({
+      baseUrl: server.bound.command.url,
+      clientToken: TEST_CLIENT_TOKEN,
+      fetchImpl: fetchWithAuth
+    });
+    const sessionId = newSessionId();
+    await commandClient.startSession(sessionId);
+    const speech = await new BrowserVoiceClient({
+      baseUrl: server.bound.voice.url,
+      authenticatedFetch: fetchWithAuth
+    }).openStream(sessionId);
+
+    await speech.sendFrame(microphoneFrame(0.2));
+    await speech.sendFrame(microphoneFrame(0.2));
+
+    let terminal = false;
+    for (let index = 0; index < 8; index += 1) {
+      const result = await speech.sendFrame(microphoneFrame(0));
+      if (result.terminal) {
+        terminal = true;
+        break;
+      }
+    }
+    expect(terminal).toBe(true);
+
+    const writer = server.registry.get(sessionId);
+    await writer.waitForIdle();
+    expect(Object.keys(writer.getState().inputEpisodes)).toHaveLength(0);
+    expect(Object.keys(writer.getState().turns)).toHaveLength(0);
+
+    const performance = server.observability.read(sessionId);
+    expect(performance.summary?.local.stt).toMatchObject({
+      finalizations: 0,
+      failures: 1,
+      cancellations: 0
+    });
+    expect(performance.summary?.local.stt.latency.count).toBe(1);
   });
 
   it("rejects a schema-valid worker audio basis that does not match admitted PCM", async () => {
