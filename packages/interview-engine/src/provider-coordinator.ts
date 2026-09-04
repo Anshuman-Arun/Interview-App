@@ -334,6 +334,7 @@ export class ProviderCoordinator {
         if (raced.result.done === true) break;
 
         if (this.cancellationRequested(record.generationId)) {
+          finishObservation("CANCELLED");
           this.requestIteratorReturn(iterator);
           return await this.finishCancellation(record);
         }
