@@ -29,14 +29,7 @@ export function isOxfordFormalAnalysisSourceRelevant(
         "checker",
         "square",
         "corner",
-        "domino",
-        "thirty",
-        "30",
-        "31",
-        "32",
-        "sixty two",
-        "sixty-two",
-        "62"
+        "domino"
       ]);
     case "listed-prime-remainder": {
       const constructionLanguage = containsAny(text, [
@@ -110,17 +103,25 @@ export function isOxfordFormalAnalysisSourceRelevant(
       return geometryContext
         || (ratioLanguage && containsAny(text, ["vertex", "along", "segment", "point g"]));
     }
-    case "divisibility-step":
-      return containsAny(text, [
+    case "divisibility-step": {
+      const decompositionContext = containsAny(text, [
         "odd part",
         "same odd",
         "power of two",
         "power of 2",
-        "2^",
+        "2^"
+      ]);
+      const pairLanguage = containsAny(text, [
         "smaller divides",
         "divides the larger",
         "divides the bigger"
       ]);
+      return decompositionContext
+        || (
+          pairLanguage
+          && containsAny(text, ["chosen", "odd", "power"])
+        );
+    }
     default:
       return false;
   }
