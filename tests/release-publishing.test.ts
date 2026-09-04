@@ -177,8 +177,11 @@ describe("versioned Windows release publishing", () => {
     expect(main).toContain('app.isPackaged ? app.getVersion() : "development"');
     expect(settings).toContain("desktopAppVersion");
     expect(settings).toContain("Interview App");
-    expect(settings.indexOf("<p>Interview App {desktopAppVersion}</p>"))
-      .toBeLessThan(settings.indexOf("{desktopRuntime !== undefined && ("));
+    const versionLabelIndex = settings.indexOf("<p>Interview App {desktopAppVersion}</p>");
+    const runtimeSectionIndex = settings.indexOf("{desktopRuntime !== undefined && (");
+    expect(versionLabelIndex).toBeGreaterThan(-1);
+    expect(runtimeSectionIndex).toBeGreaterThan(-1);
+    expect(versionLabelIndex).toBeLessThan(runtimeSectionIndex);
     expect(settings).toContain("try {");
     expect(settings).toContain("const bootstrap = bridge.getBootstrap();");
     expect(settings).toContain("catch {");
