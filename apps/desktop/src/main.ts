@@ -272,9 +272,12 @@ function installLocalRuntimeHandlers(): void {
 
   ipcMain.handle(
     DESKTOP_LOCAL_RUNTIME_STATUS_CHANNEL,
-    (event: IpcMainInvokeEvent): DesktopRendererLocalRuntimeStatus => {
+    async (event: IpcMainInvokeEvent): Promise<DesktopRendererLocalRuntimeStatus> => {
       if (!isAuthorizedDesktopInvoke(event)) {
         throw new Error("Desktop local runtime request was rejected");
+      }
+      if (activeModelInstall === undefined) {
+        await localRuntime?.refreshPythonRuntimePrerequisite(startupAbort.signal);
       }
       return localRuntimeStatusForRenderer();
     }
