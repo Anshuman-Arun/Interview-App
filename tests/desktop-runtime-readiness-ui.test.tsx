@@ -318,10 +318,14 @@ describe("desktop local AI readiness UX", () => {
     expect(findButton("Install vision model").disabled).toBe(false);
     expect(findButton("Restart Interview App").disabled).toBe(false);
 
+    const voiceButton = findButton("Install voice models");
+    const visionButton = findButton("Install vision model");
     await act(async () => {
-      findButton("Install voice models").click();
+      voiceButton.click();
+      visionButton.click();
     });
     expect(installVoiceModels).toHaveBeenCalledTimes(1);
+    expect(installVisionModel).not.toHaveBeenCalled();
     expect(findButton("Installed — restart required")).toBeTruthy();
 
     await act(async () => {
