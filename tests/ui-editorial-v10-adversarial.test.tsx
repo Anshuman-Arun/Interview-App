@@ -230,6 +230,60 @@ describe("editorial v10 adversarial UI states", () => {
     expect(start.disabled).toBe(true);
   });
 
+  it("does not allow form submission while launch metadata is revalidating", async () => {
+    const onStart = vi.fn(async () => undefined);
+
+    await act(async () => {
+      root?.render(
+        <NewInterviewPage
+          catalog={[{
+            mode: "OXFORD_MATHEMATICS",
+            id: "stale-launch",
+            version: "1",
+            title: "Stale launch metadata",
+            category: "proof",
+            difficulty: "standard"
+          }]}
+          catalogLoading={false}
+          catalogError={null}
+          providerOptions={[{
+            providerId: "test-provider",
+            providerDisplayName: "Test Provider",
+            providerKind: "MOCK",
+            modelId: "test-model",
+            modelDisplayName: "Test Model",
+            availability: "AVAILABLE"
+          }]}
+          providerOptionsLoading
+          providerOptionsError={null}
+          activeSessionId={null}
+          activeSessionCount={0}
+          startPending={false}
+          onRefreshCatalog={async () => []}
+          onRefreshProviderOptions={() => new Promise(() => undefined)}
+          onStart={onStart}
+          onResumeActive={null}
+        />
+      );
+      await Promise.resolve();
+    });
+
+    const form = document.querySelector(".new-interview__layout");
+    if (!(form instanceof HTMLFormElement)) {
+      throw new Error("New Interview form did not mount");
+    }
+
+    await act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await Promise.resolve();
+    });
+
+    expect(onStart).not.toHaveBeenCalled();
+    expect(host?.textContent).toContain(
+      "Launch readiness is still being verified."
+    );
+  });
+
   it("does not block setup when a non-Antigravity provider is launch-ready", () => {
     const markup = renderToStaticMarkup(
       <AppearanceProvider>
