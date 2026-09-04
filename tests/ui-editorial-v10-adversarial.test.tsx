@@ -154,6 +154,80 @@ describe("editorial v10 adversarial UI states", () => {
     );
   });
 
+  it("fails closed before submit when duration is outside the launch contract", async () => {
+    await act(async () => {
+      root?.render(
+        <NewInterviewPage
+          catalog={[{
+            mode: "OXFORD_MATHEMATICS",
+            id: "duration-edge",
+            version: "1",
+            title: "Duration edge case",
+            category: "proof",
+            difficulty: "standard"
+          }]}
+          catalogLoading={false}
+          catalogError={null}
+          providerOptions={[{
+            providerId: "test-provider",
+            providerDisplayName: "Test Provider",
+            providerKind: "MOCK",
+            modelId: "test-model",
+            modelDisplayName: "Test Model",
+            availability: "AVAILABLE"
+          }]}
+          providerOptionsLoading={false}
+          providerOptionsError={null}
+          activeSessionId={null}
+          activeSessionCount={0}
+          startPending={false}
+          onRefreshCatalog={async () => []}
+          onRefreshProviderOptions={async () => []}
+          onStart={vi.fn(async () => undefined)}
+          onResumeActive={null}
+        />
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const duration = document.querySelector("[data-testid='duration-input']");
+    const start = document.querySelector("[data-testid='start-configured-session-btn']");
+    if (!(duration instanceof HTMLInputElement) || !(start instanceof HTMLButtonElement)) {
+      throw new Error("New Interview duration controls did not mount");
+    }
+    const setValue = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value"
+    )?.set;
+    if (setValue === undefined) throw new Error("input value setter unavailable");
+
+    expect(start.disabled).toBe(false);
+
+    await act(async () => {
+      setValue.call(duration, "4");
+      duration.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(duration.getAttribute("aria-invalid")).toBe("true");
+    expect(start.disabled).toBe(true);
+    expect(host?.textContent).toContain(
+      "Duration must be a whole number from 5 to 480 minutes."
+    );
+
+    await act(async () => {
+      setValue.call(duration, "5");
+      duration.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(duration.getAttribute("aria-invalid")).toBe("false");
+    expect(start.disabled).toBe(false);
+
+    await act(async () => {
+      setValue.call(duration, "5.5");
+      duration.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(start.disabled).toBe(true);
+  });
+
   it("shows provider rechecks as checking rather than ready", () => {
     const markup = renderToStaticMarkup(
       <AppearanceProvider>
