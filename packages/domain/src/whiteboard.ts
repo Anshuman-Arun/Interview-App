@@ -158,7 +158,7 @@ export const BoardActionSchema = BoardActionBaseSchema.superRefine((action, cont
 
   const forbid = (field: keyof typeof action, allowed: boolean): void => {
     if (!allowed && action[field] !== undefined) {
-      issue([String(field)], `${String(field)} is not valid for ${action.operation}`);
+      issue([field], `${field} is not valid for ${action.operation}`);
     }
   };
 
