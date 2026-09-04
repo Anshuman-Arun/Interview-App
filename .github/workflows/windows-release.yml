@@ -44,6 +44,14 @@ jobs:
           if ($tagCommit -ne $eventCommit) {
             throw "Tag $env:RELEASE_TAG no longer resolves to immutable tag-event commit $eventCommit"
           }
+          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to fetch authoritative main for release ancestry validation"
+          }
+          git merge-base --is-ancestor "$eventCommit" "refs/remotes/origin/main"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Tagged release commit $eventCommit is not reachable from authoritative main"
+          }
           "SOURCE_SHA=$eventCommit" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "RELEASE_VERSION=$($env:RELEASE_TAG.Substring(1))" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
@@ -163,6 +171,9 @@ jobs:
           $notes = $notes.Replace("{{SOURCE_SHA}}", $env:SOURCE_SHA)
           $notes = $notes.Replace("{{WORKFLOW_URL}}", $workflowUrl)
           $notes = $notes.Replace("{{CHECKSUM}}", $checksum)
+          if ($notes -match "\{\{[A-Z0-9_]+\}\}") {
+            throw "Release notes still contain an unresolved template placeholder"
+          }
           $notesPath = Join-Path $env:RUNNER_TEMP "InterviewApp-Release-Notes.md"
           $notes | Set-Content -Encoding utf8NoBOM $notesPath
           "RELEASE_NOTES_PATH=$notesPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
@@ -182,6 +193,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          git fetch --force origin "refs/tags/$env:RELEASE_TAG:refs/tags/$env:RELEASE_TAG"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Release tag $env:RELEASE_TAG disappeared before publication"
+          }
+          $finalTagCommit = (git rev-parse "$($env:RELEASE_TAG)^{commit}").Trim()
+          if ($finalTagCommit -ne $env:SOURCE_SHA) {
+            throw "Release tag moved during validation: expected $env:SOURCE_SHA, got $finalTagCommit"
+          }
           gh release create "$env:RELEASE_TAG" "$env:INSTALLER_PATH" "$env:CHECKSUM_PATH" `
             --repo "$env:GITHUB_REPOSITORY" `
             --verify-tag `
