@@ -319,6 +319,14 @@ describe("bounded provider board scene", () => {
       "delivery:5-lexical-reverse",
       "delivery:6-lexical-reverse"
     ]);
+    expect(scene?.aiAnnotations.map((item) => item.content)).toEqual([
+      "hint 7",
+      "hint 6",
+      "hint 5",
+      "hint 4",
+      "hint 3",
+      "hint 2"
+    ]);
   });
 
   it("replays exposed erase actions so removed AI annotations are not advertised to the provider", () => {
