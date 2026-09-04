@@ -237,6 +237,7 @@ export function isOxfordFormalCandidateTargetAdmissible(input: {
       case "divisibility-step":
         return claim.kind === "DIVISIBILITY"
           && claim.dividend.kind === "INTEGER"
+          && maximumPositiveInteger(sourceNumbers) === claim.dividend.value
           && sourceExpressesTargetDivisibility(
             request.source.span.text,
             claim.divisor,
