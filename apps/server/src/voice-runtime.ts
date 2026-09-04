@@ -409,6 +409,26 @@ export class VoiceSynthesisCoordinator {
           );
           return undefined;
         }
+        const begin = assembly.begin;
+        const end = assembly.end;
+        if (begin === undefined || end === undefined || assembly.chunks.length === 0) {
+          throw new Error("TTS completed without a complete bounded audio stream");
+        }
+        validateTtsAssemblyConsistency(plan, request.sampleRate, begin, assembly.chunks, end);
+        if (
+          begin.model.engine !== end.model.engine
+          || begin.model.modelId !== end.model.modelId
+          || begin.model.modelVersion !== end.model.modelVersion
+          || begin.model.runtimeVersion !== end.model.runtimeVersion
+          || begin.model.waveformDeterminism !== end.model.waveformDeterminism
+        ) {
+          throw new Error("TTS model/runtime identity changed within one synthesis");
+        }
+
+        const pcm = concatenateTtsPcm(assembly.chunks, end.totalBytes);
+        if (sha256Bytes(pcm) !== end.audioHash) {
+          throw new Error("TTS aggregate audio hash does not match emitted PCM");
+        }
         ttsTiming?.finish(
           this.cancelledRequests.has(request.requestId) ? "CANCELLED" : "SUCCESS"
         );
@@ -433,27 +453,6 @@ export class VoiceSynthesisCoordinator {
           )
         ) {
           return undefined;
-        }
-
-        const begin = assembly.begin;
-        const end = assembly.end;
-        if (begin === undefined || end === undefined || assembly.chunks.length === 0) {
-          throw new Error("TTS completed without a complete bounded audio stream");
-        }
-        validateTtsAssemblyConsistency(plan, request.sampleRate, begin, assembly.chunks, end);
-        if (
-          begin.model.engine !== end.model.engine
-          || begin.model.modelId !== end.model.modelId
-          || begin.model.modelVersion !== end.model.modelVersion
-          || begin.model.runtimeVersion !== end.model.runtimeVersion
-          || begin.model.waveformDeterminism !== end.model.waveformDeterminism
-        ) {
-          throw new Error("TTS model/runtime identity changed within one synthesis");
-        }
-
-        const pcm = concatenateTtsPcm(assembly.chunks, end.totalBytes);
-        if (sha256Bytes(pcm) !== end.audioHash) {
-          throw new Error("TTS aggregate audio hash does not match emitted PCM");
         }
         const wav = encodePcm16Wav(pcm, end.sampleRate);
         const metadata: EphemeralAudioAssetMetadata = {
