@@ -144,7 +144,6 @@ export function isOxfordFormalCandidateTargetAdmissible(input: {
     || request.target.subject.claimId !== profile.target.subject.claimId
     || candidate.target.problemId !== profile.target.problemId
     || candidate.target.subject.claimId !== profile.target.subject.claimId
-    || candidate.target.dimension !== "CORRECTNESS"
     || !isOxfordFormalAnalysisSourceRelevant(profile, request.source.span.text)
   ) {
     return false;
