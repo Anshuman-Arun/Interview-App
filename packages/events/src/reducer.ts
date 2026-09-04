@@ -31,7 +31,7 @@ function withDeliveryStatus(state: SessionState, deliveryId: string, status: Del
   const allowed: Readonly<Record<DeliveryAtom["status"], readonly DeliveryAtom["status"][]>> = {
     VALIDATED: ["QUEUED"],
     QUEUED: ["DELIVERING", "CANCELLED"],
-    DELIVERING: ["EXPOSED", "POSSIBLY_EXPOSED", "CANCELLED"],
+    DELIVERING: ["EXPOSED", "POSSIBLY_EXPOSED"],
     EXPOSED: ["COMPLETED"],
     COMPLETED: [],
     CANCELLED: [],
@@ -851,9 +851,24 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
     case "DELIVERY_COMPLETED":
       next = withDeliveryStatus(state, event.payload.deliveryId, "COMPLETED");
       break;
-    case "DELIVERY_CANCELLED":
-      next = withDeliveryStatus(state, event.payload.deliveryId, "CANCELLED");
+    case "DELIVERY_CANCELLED": {
+      const current = state.deliveries[event.payload.deliveryId];
+      if (
+        current?.status === "DELIVERING"
+        && event.source === "RENDERER"
+      ) {
+        next = {
+          ...state,
+          deliveries: {
+            ...state.deliveries,
+            [event.payload.deliveryId]: { ...current, status: "CANCELLED" }
+          }
+        };
+      } else {
+        next = withDeliveryStatus(state, event.payload.deliveryId, "CANCELLED");
+      }
       break;
+    }
     case "DELIVERY_POSSIBLY_EXPOSED":
       next = withDeliveryStatus(state, event.payload.deliveryId, "POSSIBLY_EXPOSED");
       break;
