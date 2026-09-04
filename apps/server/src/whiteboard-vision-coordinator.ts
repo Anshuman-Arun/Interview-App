@@ -371,6 +371,7 @@ export class WhiteboardVisionCoordinator {
       })),
       new Promise<{ readonly kind: "TIMEOUT" }>((resolve) => {
         timeout = setTimeout(() => {
+          visionTiming?.finish("FAILURE");
           manager.cancel(upload.requestId);
           resolve({ kind: "TIMEOUT" });
         }, this.backendTimeoutMs);
@@ -380,7 +381,7 @@ export class WhiteboardVisionCoordinator {
     const admission = outcome.kind === "ADMISSION"
       ? outcome.admission
       : await admissionPromise;
-    visionTiming?.finish(outcome.kind === "TIMEOUT" ? "FAILURE" : "SUCCESS");
+    if (outcome.kind === "ADMISSION") visionTiming?.finish("SUCCESS");
     if (!admission.accepted) {
       const reason = outcome.kind === "TIMEOUT" ? "BACKEND_TIMEOUT" : admission.reason;
       await turn.discardVisionRequest(upload.requestId, reason);
