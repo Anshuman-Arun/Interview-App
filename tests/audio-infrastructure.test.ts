@@ -4307,9 +4307,11 @@ describe("queued browser audio playback", () => {
       }
     });
 
-    await expect(client.handleMessage(message)).rejects.toBeInstanceOf(
-      RendererPresentationNotExposedError
-    );
+    await expect(client.handleMessage(message)).resolves.toMatchObject({
+      deliveryId,
+      duplicate: false,
+      phase: "NOT_EXPOSED"
+    });
     expect(client.snapshot()).toEqual([]);
 
     blocker.cancel();
