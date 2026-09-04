@@ -6,6 +6,7 @@ const CHANNEL = "interview-desktop:get-bootstrap";
 const ZOOM_CHANNEL = "interview-desktop:set-zoom";
 const ZOOM_CHANGED_CHANNEL = "interview-desktop:zoom-changed";
 const LOCAL_RUNTIME_STATUS_CHANNEL = "interview-desktop:get-local-runtime-status";
+const INSTALL_PYTHON_RUNTIME_CHANNEL = "interview-desktop:install-python-runtime";
 const INSTALL_VOICE_MODELS_CHANNEL = "interview-desktop:install-voice-models";
 const INSTALL_VISION_MODEL_CHANNEL = "interview-desktop:install-vision-model";
 const RESTART_APP_CHANNEL = "interview-desktop:restart-app";
@@ -182,6 +183,7 @@ function validateLocalRuntimeStatus(value) {
       "tts",
       "vision",
       "python",
+      "pythonSetup",
       "voiceSetup",
       "visionSetup"
     ])
@@ -195,6 +197,7 @@ function validateLocalRuntimeStatus(value) {
     tts: validateCapabilityStatus(value.tts),
     vision: validateCapabilityStatus(value.vision),
     python: validatePythonStatus(value.python),
+    pythonSetup: validateSetupStatus(value.pythonSetup),
     voiceSetup: validateSetupStatus(value.voiceSetup),
     visionSetup: validateSetupStatus(value.visionSetup)
   });
@@ -216,6 +219,8 @@ contextBridge.exposeInMainWorld("interviewDesktop", Object.freeze({
   },
   getLocalRuntimeStatus: async () =>
     validateLocalRuntimeStatus(await ipcRenderer.invoke(LOCAL_RUNTIME_STATUS_CHANNEL)),
+  installPythonRuntime: async () =>
+    validateLocalRuntimeStatus(await ipcRenderer.invoke(INSTALL_PYTHON_RUNTIME_CHANNEL)),
   installVoiceModels: async () =>
     validateLocalRuntimeStatus(await ipcRenderer.invoke(INSTALL_VOICE_MODELS_CHANNEL)),
   installVisionModel: async () =>
