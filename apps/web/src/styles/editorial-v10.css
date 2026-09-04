@@ -473,7 +473,7 @@ summary:focus-visible,
   grid-template-columns: minmax(480px, 1fr) 520px;
   gap: clamp(54px, 5.6vw, 132px);
   align-items: center;
-  overflow: hidden;
+  overflow: visible;
   padding: 56px 4px 48px;
   border-bottom: 1px solid var(--rule);
 }
@@ -928,12 +928,12 @@ summary:focus-visible,
 
 @media (max-width: 1320px) {
   .expressive-home__hero {
-    grid-template-columns: minmax(0, 1.12fr) minmax(330px, .68fr);
-    gap: 32px;
+    grid-template-columns: minmax(420px, 1fr) minmax(330px, 450px);
+    gap: 34px;
   }
 
   .expressive-home__title {
-    font-size: clamp(72px, 7.15vw, 96px);
+    font-size: clamp(68px, 6.8vw, 94px);
   }
 
   .expressive-home__folio {
@@ -944,12 +944,14 @@ summary:focus-visible,
 @media (max-width: 1060px) {
   .expressive-home__hero {
     grid-template-columns: 1fr;
+    gap: 34px;
   }
 
   .expressive-home__hero-copy {
-    width: 100%;
+    width: min(100%, 640px);
     justify-self: start;
     transform: none !important;
+    will-change: auto;
   }
 
   .expressive-home__folio {
