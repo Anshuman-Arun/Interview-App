@@ -2435,10 +2435,6 @@ summary:focus-visible,
   .quant-grid {
     grid-template-columns: 1fr;
   }
-
-  .quant-side {
-    display: none;
-  }
 }
 
 /* Sessions --------------------------------------------------------------- */
