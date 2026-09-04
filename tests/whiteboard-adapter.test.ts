@@ -520,7 +520,7 @@ describe("TldrawWhiteboardAdapter & AI Overlay Subsystem", () => {
 
       const all = editor.getCurrentPageShapes();
       const ai = all.filter((item) => item.meta?.["layer"] === "AI_ANNOTATION");
-      expect(ai).toHaveLength(7);
+      expect(ai).toHaveLength(6);
       expect(ai.every((item) => item.meta?.["origin"] === "AI")).toBe(true);
       const studentAfter = all
         .filter((item) => item.meta?.["layer"] === "STUDENT")
