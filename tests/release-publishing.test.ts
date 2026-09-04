@@ -39,7 +39,19 @@ describe("versioned Windows release publishing", () => {
     expect(valid.status).toBe(0);
     expect(valid.stdout).toContain("v0.1.0 = 0.1.0");
 
-    for (const tag of ["0.1.0", "v0.1", "v01.1.0", "v0.1.0-beta.1", "v0.1.0.0"]) {
+    for (const tag of [
+      "0.1.0",
+      "v0.1",
+      "v01.1.0",
+      "v0.01.0",
+      "v0.1.00",
+      "v0.1.0-beta.1",
+      "v0.1.0.0",
+      " v0.1.0",
+      "v0.1.0 ",
+      "v+0.1.0",
+      "v0.-1.0"
+    ]) {
       const invalid = runNode("scripts/check-release-version.mjs", [
         "--tag", tag,
         "--package", packagePath
@@ -53,6 +65,16 @@ describe("versioned Windows release publishing", () => {
     ]);
     expect(mismatch.status).not.toBe(0);
     expect(mismatch.stderr).toContain("does not match canonical package version");
+
+    for (const version of ["01.1.0", "0.01.0", "0.1.00", "0.1.0-beta.1", " 0.1.0"]) {
+      await writeFile(packagePath, JSON.stringify({ version }), "utf8");
+      const invalidPackage = runNode("scripts/check-release-version.mjs", [
+        "--tag", "v0.1.0",
+        "--package", packagePath
+      ]);
+      expect(invalidPackage.status, version).not.toBe(0);
+      expect(invalidPackage.stderr).toContain("Canonical package version");
+    }
   });
 
   it("writes and verifies the checksum for the exact release bytes", async () => {
@@ -85,6 +107,24 @@ describe("versioned Windows release publishing", () => {
     ]);
     expect(tampered.status).not.toBe(0);
     expect(tampered.stderr).toContain("Checksum does not match release artifact");
+
+    await writeFile(installer, bytes);
+    const malformedChecksums = [
+      `${digest.toUpperCase()}  InterviewApp-Setup-0.1.0.exe\n`,
+      `${digest} InterviewApp-Setup-0.1.0.exe\n`,
+      `${digest}   InterviewApp-Setup-0.1.0.exe\n`,
+      `${digest}  InterviewApp-Setup-0.1.1.exe\n`,
+      `${digest}  ../InterviewApp-Setup-0.1.0.exe\n`,
+      `${digest}  InterviewApp-Setup-0.1.0.exe\nextra\n`
+    ];
+    for (const malformed of malformedChecksums) {
+      await writeFile(checksum, malformed, "utf8");
+      const rejected = runNode("scripts/create-release-checksum.mjs", [
+        "--file", installer,
+        "--verify", checksum
+      ]);
+      expect(rejected.status, malformed).not.toBe(0);
+    }
   });
 
   it("pins the release workflow to the immutable tag event and publishes only after gates", async () => {
@@ -99,6 +139,10 @@ describe("versioned Windows release publishing", () => {
     expect(workflow).toContain("ref: ${{ github.sha }}");
     expect(workflow).toContain('git rev-parse "$($env:GITHUB_SHA)^{commit}"');
     expect(workflow).toContain('git rev-parse "$($env:RELEASE_TAG)^{commit}"');
+    expect(workflow).toContain('git merge-base --is-ancestor "$eventCommit" "refs/remotes/origin/main"');
+    expect(workflow).toContain("Tagged release commit $eventCommit is not reachable from authoritative main");
+    expect(workflow).toContain("Release tag moved during validation");
+    expect(workflow).toContain("Release notes still contain an unresolved template placeholder");
     expect(workflow).toContain("node scripts/check-release-version.mjs");
     expect(workflow).toContain("pnpm check");
     expect(workflow).toContain("pnpm dist:win");
@@ -111,10 +155,12 @@ describe("versioned Windows release publishing", () => {
     const buildIndex = workflow.indexOf("Build exact release installer");
     const smokeIndex = workflow.indexOf("Run packaged executable smoke");
     const checksumIndex = workflow.indexOf("Generate and verify SHA-256");
+    const finalTagProofIndex = workflow.indexOf("Release tag moved during validation");
     const releaseIndex = workflow.indexOf("Create draft GitHub Release");
     expect(buildIndex).toBeGreaterThan(-1);
     expect(smokeIndex).toBeGreaterThan(buildIndex);
     expect(checksumIndex).toBeGreaterThan(smokeIndex);
+    expect(finalTagProofIndex).toBeGreaterThan(checksumIndex);
     expect(releaseIndex).toBeGreaterThan(checksumIndex);
   });
 
@@ -131,5 +177,10 @@ describe("versioned Windows release publishing", () => {
     expect(main).toContain('app.isPackaged ? app.getVersion() : "development"');
     expect(settings).toContain("desktopAppVersion");
     expect(settings).toContain("Interview App");
+    expect(settings.indexOf("<p>Interview App {desktopAppVersion}</p>"))
+      .toBeLessThan(settings.indexOf("{desktopRuntime !== undefined && ("));
+    expect(settings).toContain("try {");
+    expect(settings).toContain("const bootstrap = bridge.getBootstrap();");
+    expect(settings).toContain("catch {");
   });
 });
