@@ -18,12 +18,15 @@ import {
 import { resolveSessionStateComposition } from "./interview-session-composition.js";
 import type { ProviderRuntimeResolver } from "./provider-runtime.js";
 import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
+import { serializedApplicationBytes } from "./session-observability.js";
+import type { SessionObservability } from "./session-observability.js";
 
 export class ProviderBackedFormalInterpretationProvider
 implements FormalInterpretationProvider {
   public constructor(
     private readonly sessions: SessionRecoveryCoordinator,
-    private readonly providerRuntime: ProviderRuntimeResolver
+    private readonly providerRuntime: ProviderRuntimeResolver,
+    private readonly observability?: SessionObservability
   ) {}
 
   public async interpret(
@@ -126,26 +129,68 @@ implements FormalInterpretationProvider {
       ) {
         return abstain(request);
       }
+      const executionInput = {
+        request,
+        publicProblem: {
+          id: composition.problem.id,
+          version: composition.problem.version,
+          prompt: composition.problem.public.prompt,
+          givenInformation: composition.problem.public.givenInformation
+        },
+        signal
+      };
+      const telemetry = this.observability?.beginRemoteOperation({
+        sessionId: request.sessionId,
+        operation: "FORMAL_INTERPRETATION",
+        providerId: resolved.providerId,
+        modelId: resolved.modelId
+      });
+      telemetry?.setSizes({
+        requestBytes: serializedApplicationBytes({
+          request: executionInput.request,
+          publicProblem: executionInput.publicProblem
+        })
+      });
       try {
-        return await adapter.interpret({
-          request,
-          publicProblem: {
-            id: composition.problem.id,
-            version: composition.problem.version,
-            prompt: composition.problem.public.prompt,
-            givenInformation: composition.problem.public.givenInformation
-          },
-          signal
-        });
-      } catch (error) {
-        if (
-          error instanceof AntigravityCliFormalInterpretationError
-          && (
-            error.code === "PROCESS_FAILED"
-            || error.code === "INVALID_RUNTIME"
-          )
-        ) {
+        const interpretationWork = adapter.interpret(executionInput);
+        const settled = await settleUnlessAborted(interpretationWork, signal);
+        if (settled === ABORTED) {
+          telemetry?.finish("CANCELLED");
+          void interpretationWork.catch(() => undefined);
           return abstain(request);
+        }
+        const result = settled;
+        telemetry?.setSizes({ responseBytes: serializedApplicationBytes(result) });
+        const parsedResult = InterpretationProviderResultSchema.safeParse(result);
+        telemetry?.finish(
+          parsedResult.success && parsedResult.data.candidates.length === 0
+            ? "ABSTAINED"
+            : parsedResult.success
+              ? "SUCCESS"
+              : "MALFORMED"
+        );
+        return result;
+      } catch (error) {
+        if (error instanceof AntigravityCliFormalInterpretationError) {
+          if (signal.aborted) {
+            telemetry?.finish("CANCELLED");
+          } else if (error.code === "INVALID_RUNTIME") {
+            telemetry?.finish("PROVIDER_UNAVAILABLE");
+          } else if (
+            error.code === "INVALID_PROTOCOL"
+            || error.code === "INVALID_PROVIDER_RESULT"
+          ) {
+            telemetry?.finish("MALFORMED");
+          } else if (error.code === "TOOL_ACTIVITY_REJECTED") {
+            telemetry?.finish("POLICY_DENIED");
+          } else {
+            telemetry?.finish("FAILED");
+          }
+          if (error.code === "PROCESS_FAILED" || error.code === "INVALID_RUNTIME") {
+            return abstain(request);
+          }
+        } else {
+          telemetry?.finish(signal.aborted ? "CANCELLED" : "FAILED");
         }
         throw error;
       }
