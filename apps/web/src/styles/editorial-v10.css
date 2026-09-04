@@ -2660,6 +2660,20 @@ summary:focus-visible,
     display: none;
   }
 
+  .expressive-sessions__history {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .expressive-sessions__history-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .expressive-sessions__improvement,
+  .expressive-sessions__history > p {
+    grid-column: 1;
+  }
+
   .expressive-sessions__toolbar {
     align-items: stretch;
     flex-direction: column;
@@ -2675,6 +2689,40 @@ summary:focus-visible,
 
   .expressive-sessions__row {
     grid-template-columns: 24px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "number identity action"
+      "number status action";
+    gap: 5px 10px;
+    padding: 10px 0;
+  }
+
+  .expressive-sessions__number {
+    grid-area: number;
+  }
+
+  .expressive-sessions__identity {
+    grid-area: identity;
+    grid-column: auto;
+  }
+
+  .expressive-sessions__status {
+    grid-area: status;
+  }
+
+  .expressive-sessions__row button {
+    grid-area: action;
+    align-self: center;
+  }
+
+  .expressive-sessions__events,
+  .expressive-sessions__row time {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .expressive-sessions__history-stats {
+    grid-template-columns: 1fr;
   }
 }
 
