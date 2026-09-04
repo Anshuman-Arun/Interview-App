@@ -184,6 +184,17 @@
   opacity: 0.58;
 }
 
+.new-interview__capability-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  padding: 0 6px;
+  color: inherit;
+  font-size: 11px;
+  line-height: 1.45;
+  opacity: 0.64;
+}
+
 .new-interview__status,
 .new-interview__error,
 .new-interview__form-error {
