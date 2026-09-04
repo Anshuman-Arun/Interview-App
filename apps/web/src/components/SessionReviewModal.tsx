@@ -50,17 +50,17 @@ const REPLAY_FILTERS: readonly {
 export function failureMessage(reason: GroundedReadFailureReason): string {
   switch (reason) {
     case "SESSION_NOT_TERMINAL":
-      return "Grounded evaluation is available after the session is completed or archived.";
+      return "Evaluation is available after the session is completed or archived.";
     case "EXACT_PROBLEM_UNAVAILABLE":
-      return "The exact session-bound problem definition cannot be reconstructed safely.";
+      return "The original interview problem is no longer available for a safe review.";
     case "AUTHORITATIVE_HISTORY_UNAVAILABLE":
-      return "The authoritative event history could not be reconstructed safely.";
+      return "The saved session history could not be reconstructed safely.";
     case "READ_LIMIT_EXCEEDED":
-      return "This session exceeds the bounded product read limit.";
+      return "This session is too large to display in full here.";
     case "EVALUATION_UNAVAILABLE":
-      return "The grounded evaluator rejected the available authoritative context.";
+      return "An evaluation could not be produced safely from the saved session.";
     case "REPLAY_UNAVAILABLE":
-      return "The replay projection rejected this history rather than guessing.";
+      return "The replay could not be reconstructed safely from the saved session.";
   }
 }
 
@@ -257,7 +257,7 @@ export function ReplayPanel({
 
               {entry.delivery?.contentWithheld ? (
                 <p className="mt-2 text-[11px] font-semibold text-amber-800">
-                  Possibly exposed content is intentionally withheld from replay.
+                  Content with uncertain delivery status is omitted from replay.
                 </p>
               ) : null}
 
@@ -338,7 +338,7 @@ export const SessionReviewModal: React.FC<SessionReviewModalProps> = ({
       })
       .catch(() => {
         if (controller.signal.aborted) return;
-        setEvaluationError("The bounded evaluation read could not be loaded.");
+        setEvaluationError("The evaluation could not be loaded.");
         setEvaluationLoading(false);
       });
     return () => controller.abort();
@@ -368,7 +368,7 @@ export const SessionReviewModal: React.FC<SessionReviewModalProps> = ({
       })
       .catch(() => {
         if (controller.signal.aborted) return;
-        setReplayError("The bounded replay read could not be loaded.");
+        setReplayError("The replay could not be loaded.");
         setReplayLoading(false);
       });
     return () => controller.abort();
@@ -443,7 +443,7 @@ export const SessionReviewModal: React.FC<SessionReviewModalProps> = ({
           {activeTab === "evaluation" ? (
             evaluationLoading ? (
               <p className="py-12 text-center text-sm text-slate-500">
-                Loading bounded evaluation…
+                Loading evaluation…
               </p>
             ) : evaluationError !== null ? (
               <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
@@ -464,7 +464,7 @@ export const SessionReviewModal: React.FC<SessionReviewModalProps> = ({
             ) : null
           ) : replayLoading ? (
             <p className="py-12 text-center text-sm text-slate-500">
-              Loading bounded replay…
+              Loading replay…
             </p>
           ) : replayError !== null ? (
             <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
