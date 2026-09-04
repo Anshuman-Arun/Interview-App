@@ -35,6 +35,7 @@ import {
 } from "../../../packages/vision/src/index.js";
 import type { SessionState, VisionRequestState } from "../../../packages/events/src/index.js";
 import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
+import type { SessionObservability } from "./session-observability.js";
 
 const PREPROCESSING_VERSION = "whiteboard-snapshot-v1";
 const MAX_RESPONSE_TOMBSTONES = 64;
@@ -59,6 +60,7 @@ export interface WhiteboardVisionCoordinatorOptions {
   readonly backend?: VisionInferenceBackend;
   readonly evidenceInterpreter?: VisionEvidenceInterpreter;
   readonly backendTimeoutMs?: number;
+  readonly observability?: SessionObservability;
 }
 
 export class WhiteboardVisionCoordinator {
@@ -67,6 +69,7 @@ export class WhiteboardVisionCoordinator {
   private readonly evidenceInterpreter: VisionEvidenceInterpreter | undefined;
   private readonly evidenceInterpreterFingerprint: string | undefined;
   private readonly backendTimeoutMs: number;
+  private readonly observability: SessionObservability | undefined;
   private readonly unregisterVisionEvidenceRecovery: () => void;
   private readonly managers = new Map<SessionId, VisionRequestManager>();
   private readonly tombstones = new Map<string, ResponseTombstone>();
@@ -75,6 +78,7 @@ export class WhiteboardVisionCoordinator {
   public constructor(options: WhiteboardVisionCoordinatorOptions) {
     this.sessions = options.sessions;
     this.backend = options.backend;
+    this.observability = options.observability;
     this.evidenceInterpreter = options.evidenceInterpreter;
     this.evidenceInterpreterFingerprint = options.evidenceInterpreter === undefined
       ? undefined
@@ -349,11 +353,16 @@ export class WhiteboardVisionCoordinator {
         "INVALID_IMAGE"
       ));
     }
+    this.observability?.recordVisionRequest(upload.sessionId);
+    const visionTiming = this.observability?.beginLocalTiming(upload.sessionId, "VISION");
     const admissionPromise = manager.submit(
       request,
       this.backend,
       preparedImageRequest.payload
-    );
+    ).catch((error) => {
+      visionTiming?.finish("FAILURE");
+      throw error;
+    });
     let timeout: ReturnType<typeof setTimeout> | undefined;
     const outcome = await Promise.race([
       admissionPromise.then((admission) => ({
@@ -371,9 +380,14 @@ export class WhiteboardVisionCoordinator {
     const admission = outcome.kind === "ADMISSION"
       ? outcome.admission
       : await admissionPromise;
+    visionTiming?.finish(outcome.kind === "TIMEOUT" ? "FAILURE" : "SUCCESS");
     if (!admission.accepted) {
       const reason = outcome.kind === "TIMEOUT" ? "BACKEND_TIMEOUT" : admission.reason;
       await turn.discardVisionRequest(upload.requestId, reason);
+      this.observability?.recordVisionRejected(
+        upload.sessionId,
+        reason.includes("STALE") || reason.includes("SUPERSEDED")
+      );
       return this.remember(upload.requestId, fingerprint, rejected(
         upload,
         reason
@@ -401,11 +415,13 @@ export class WhiteboardVisionCoordinator {
       evidenceInterpreterFingerprint: this.evidenceInterpreterFingerprint ?? null
     });
     if (!persisted.accepted) {
+      this.observability?.recordVisionRejected(upload.sessionId, true);
       return this.remember(upload.requestId, fingerprint, rejected(
         upload,
         "STALE_BOARD"
       ));
     }
+    this.observability?.recordVisionAccepted(upload.sessionId);
 
     const bridge = await this.completeEvidenceBridge(
       writer,
