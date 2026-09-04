@@ -286,22 +286,33 @@ class SessionMetricsStore {
     if (Buffer.byteLength(json, "utf8") > MAX_PERSISTED_METRICS_BYTES) {
       throw new Error("Session metrics exceed bounded persistence size");
     }
-    this.#database.prepare(`
-      INSERT INTO session_observability(session_id, metrics_json, updated_at)
-      VALUES (?, ?, ?)
-      ON CONFLICT(session_id) DO UPDATE SET
-        metrics_json = excluded.metrics_json,
-        updated_at = excluded.updated_at
-    `).run(sessionId, json, new Date().toISOString());
-    this.#database.prepare(`
-      DELETE FROM session_observability
-      WHERE session_id NOT IN (
-        SELECT session_id
-        FROM session_observability
-        ORDER BY updated_at DESC
-        LIMIT ?
-      )
-    `).run(MAX_PERSISTED_SESSIONS);
+    this.#database.exec("BEGIN IMMEDIATE");
+    try {
+      this.#database.prepare(`
+        INSERT INTO session_observability(session_id, metrics_json, updated_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(session_id) DO UPDATE SET
+          metrics_json = excluded.metrics_json,
+          updated_at = excluded.updated_at
+      `).run(sessionId, json, new Date().toISOString());
+      this.#database.prepare(`
+        DELETE FROM session_observability
+        WHERE session_id NOT IN (
+          SELECT session_id
+          FROM session_observability
+          ORDER BY updated_at DESC, session_id DESC
+          LIMIT ?
+        )
+      `).run(MAX_PERSISTED_SESSIONS);
+      this.#database.exec("COMMIT");
+    } catch (error) {
+      try {
+        this.#database.exec("ROLLBACK");
+      } catch {
+        // A broken sidecar must remain isolated from interview authority.
+      }
+      throw error;
+    }
   }
 
   public close(): void {
