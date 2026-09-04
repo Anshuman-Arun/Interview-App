@@ -676,7 +676,7 @@ export const App: React.FC = () => {
         >
           <BrandMark size={28} title="Interview" />
           <span className="app-header__identity-copy">
-            <strong>Interview</strong>
+            <strong>{hasActiveInterview ? activeModeLabel : "Interview"}</strong>
             <small>{session.problem?.title ?? "Live reasoning workspace"}</small>
           </span>
         </button>
@@ -690,6 +690,13 @@ export const App: React.FC = () => {
             <span aria-hidden="true" />
             {session.isConnected ? "Connected" : "Disconnected"}
           </span>
+
+          {hasActiveInterview && (
+            <span className="app-header__board-state" data-synced={String(session.whiteboardSync.status === "SYNCED")}>
+              <span aria-hidden="true" />
+              {session.whiteboardSync.status === "SYNCED" ? "Board synced" : "Board syncing"}
+            </span>
+          )}
 
           {session.isStreaming && (
             <span className="app-header__streaming">Responding</span>
@@ -721,7 +728,7 @@ export const App: React.FC = () => {
                 {endConfirmOpen && (
                   <div className="live-end-popover" role="dialog" aria-label="Confirm end interview">
                     <strong>End this interview?</strong>
-                    <p>The session will be completed and the current room will close.</p>
+                    <p>You’ll go straight to the grounded review.</p>
                     <div>
                       <button type="button" onClick={() => setEndConfirmOpen(false)}>
                         Cancel
@@ -734,7 +741,7 @@ export const App: React.FC = () => {
                           void handleCompleteSession();
                         }}
                       >
-                        End interview
+                        End & review
                       </button>
                     </div>
                   </div>
@@ -887,27 +894,6 @@ export const App: React.FC = () => {
           </div>
 
           <div className="live-transcript-region">
-            <div className="live-pane-heading">
-              <span>Transcript</span>
-              <div>
-                {paneFocus !== "split" && (
-                  <button type="button" onClick={() => setPaneFocus("split")}>
-                    Restore split
-                  </button>
-                )}
-                <button
-                  type="button"
-                  aria-pressed={paneFocus === "transcript"}
-                  onClick={() =>
-                    setPaneFocus((focus) =>
-                      focus === "transcript" ? "split" : "transcript"
-                    )
-                  }
-                >
-                  Focus transcript
-                </button>
-              </div>
-            </div>
             <TranscriptFeed
               items={session.transcript}
               onRetry={(itemId) => {
@@ -918,6 +904,12 @@ export const App: React.FC = () => {
                 void session.retrySubmission(itemId);
               }}
               retryDisabled={sessionEntryPending || sessionTerminalPending}
+              focused={paneFocus === "transcript"}
+              onToggleFocus={() =>
+                setPaneFocus((focus) =>
+                  focus === "transcript" ? "split" : "transcript"
+                )
+              }
               className="h-full"
             />
           </div>
