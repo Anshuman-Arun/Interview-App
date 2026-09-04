@@ -293,7 +293,7 @@ describe("desktop local model runtime", () => {
     };
 
     await expect(composition.installVoiceAssets()).rejects.toThrow(
-      "compatible Python runtime"
+      "pinned Python runtime"
     );
     expect(cleanupCalls).toBe(0);
     expect(installCalls).toBe(0);
@@ -333,7 +333,7 @@ describe("desktop local model runtime", () => {
     });
   });
 
-  it("installs pinned Python dependencies through the privileged runtime path and re-probes", async () => {
+  it("installs pinned Python dependencies into an app-owned environment and re-probes", async () => {
     const composition = new DesktopLocalRuntimeComposition({
       appDataRoot: temporaryRoot("desktop-python-deps-install-"),
       cwd: process.cwd(),
@@ -343,24 +343,118 @@ describe("desktop local model runtime", () => {
     });
     compositions.push(composition);
 
-    let compatible = false;
-    let installs = 0;
+    const managedExecutable = join(
+      temporaryRoot("desktop-python-managed-fixture-"),
+      process.platform === "win32" ? "python.exe" : "python"
+    );
+    let managedCompatible = false;
+    const installs: string[] = [];
+    const createdFrom: string[] = [];
     const mutable = composition as unknown as {
       pythonRuntimeCompatible(executable: string, signal?: AbortSignal): boolean;
       pythonInterpreterCompatible(executable: string, signal?: AbortSignal): boolean;
+      resolveManagedPythonExecutable(): Promise<string | undefined>;
+      resolveBootstrapPythonExecutable(): Promise<string | undefined>;
+      createManagedPythonEnvironment(
+        bootstrapExecutable: string,
+        signal?: AbortSignal
+      ): Promise<string>;
       installPythonRequirements(executable: string, signal?: AbortSignal): Promise<void>;
       pythonExecutable?: string;
     };
-    mutable.pythonRuntimeCompatible = () => compatible;
+    mutable.resolveManagedPythonExecutable = async () => undefined;
+    mutable.resolveBootstrapPythonExecutable = async () => process.execPath;
+    mutable.pythonRuntimeCompatible = (executable) =>
+      executable === managedExecutable && managedCompatible;
     mutable.pythonInterpreterCompatible = () => true;
-    mutable.installPythonRequirements = async () => {
-      installs += 1;
+    mutable.createManagedPythonEnvironment = async (bootstrapExecutable) => {
+      createdFrom.push(bootstrapExecutable);
+      return managedExecutable;
+    };
+    mutable.installPythonRequirements = async (executable) => {
+      installs.push(executable);
+      managedCompatible = true;
+    };
+
+    await expect(composition.installPythonRuntimeDependencies()).resolves.toBeUndefined();
+    expect(createdFrom).toEqual([process.execPath]);
+    expect(installs).toEqual([managedExecutable]);
+    expect(installs).not.toContain(process.execPath);
+    expect(mutable.pythonExecutable).toBe(managedExecutable);
+  });
+
+  it("repairs an existing app-owned Python environment without mutating bootstrap Python", async () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-python-managed-repair-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+
+    const managedExecutable = "managed-python";
+    let compatible = false;
+    const installs: string[] = [];
+    const mutable = composition as unknown as {
+      pythonRuntimeCompatible(executable: string, signal?: AbortSignal): boolean;
+      pythonInterpreterCompatible(executable: string, signal?: AbortSignal): boolean;
+      resolveManagedPythonExecutable(): Promise<string | undefined>;
+      resolveBootstrapPythonExecutable(): Promise<string | undefined>;
+      createManagedPythonEnvironment(
+        bootstrapExecutable: string,
+        signal?: AbortSignal
+      ): Promise<string>;
+      installPythonRequirements(executable: string, signal?: AbortSignal): Promise<void>;
+      pythonExecutable?: string;
+    };
+    mutable.resolveManagedPythonExecutable = async () => managedExecutable;
+    mutable.resolveBootstrapPythonExecutable = async () => process.execPath;
+    mutable.pythonInterpreterCompatible = (executable) => executable === managedExecutable;
+    mutable.pythonRuntimeCompatible = (executable) =>
+      executable === managedExecutable && compatible;
+    mutable.createManagedPythonEnvironment = async () => {
+      throw new Error("existing managed runtime should be repaired in place");
+    };
+    mutable.installPythonRequirements = async (executable) => {
+      installs.push(executable);
       compatible = true;
     };
 
     await expect(composition.installPythonRuntimeDependencies()).resolves.toBeUndefined();
-    expect(installs).toBe(1);
-    expect(mutable.pythonExecutable).toBe(process.execPath);
+    expect(installs).toEqual([managedExecutable]);
+    expect(mutable.pythonExecutable).toBe(managedExecutable);
+  });
+
+  it("prefers an admitted app-owned Python runtime over bootstrap Python", async () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-python-managed-priority-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+
+    const managedExecutable = "managed-python";
+    const probed: string[] = [];
+    const mutable = composition as unknown as {
+      resolveManagedPythonExecutable(): Promise<string | undefined>;
+      resolveBootstrapPythonExecutable(): Promise<string | undefined>;
+      resolveCompatiblePythonExecutable(signal?: AbortSignal): Promise<string | undefined>;
+      pythonRuntimeCompatible(executable: string, signal?: AbortSignal): boolean;
+      pythonExecutable?: string;
+    };
+    mutable.resolveManagedPythonExecutable = async () => managedExecutable;
+    mutable.resolveBootstrapPythonExecutable = async () => process.execPath;
+    mutable.pythonRuntimeCompatible = (executable) => {
+      probed.push(executable);
+      return executable === managedExecutable;
+    };
+
+    await expect(mutable.resolveCompatiblePythonExecutable()).resolves.toBe(managedExecutable);
+    expect(probed).toEqual([managedExecutable]);
+    expect(mutable.pythonExecutable).toBe(managedExecutable);
   });
 
   it("reports an incompatible Python runtime before model admission", async () => {
