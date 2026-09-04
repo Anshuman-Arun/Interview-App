@@ -94,7 +94,7 @@ function pythonDescription(status: DesktopRuntimeStatus | undefined): string {
   if (status === undefined) return "Checking the local Python worker runtime.";
   switch (status.python.reasonCode) {
     case "PYTHON_RUNTIME_UNAVAILABLE":
-      return "Python is required for local speech and whiteboard understanding. Install 64-bit CPython 3.12 or 3.13, then re-check.";
+      return "Python is required for local speech and whiteboard understanding. Install 64-bit CPython 3.12 or 3.13 with the standard python.org installer, then re-check.";
     case "PYTHON_RUNTIME_INCOMPATIBLE":
       return "Interview App found Python, but it is not a supported 64-bit CPython 3.12/3.13 runtime.";
     case "PYTHON_RUNTIME_DEPENDENCIES_MISSING":
