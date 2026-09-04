@@ -532,6 +532,7 @@ export const BoardSceneContextSchema = z.object({
   aiAnnotationCount: NonnegativeSceneCountSchema,
   includedAiAnnotationCount: NonnegativeSceneCountSchema,
   aiAnnotationsTruncated: z.boolean(),
+  aiAnnotationStateUncertain: z.boolean(),
   contentBounds: AuthoritativeBoardBoundsSchema.optional(),
   shapes: z.array(BoardSceneShapeSchema).max(MAX_BOARD_SCENE_SHAPES),
   semanticRelations: z.array(BoardSceneSemanticRelationSchema)
