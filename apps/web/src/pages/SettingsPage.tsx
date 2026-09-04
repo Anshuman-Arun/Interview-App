@@ -95,7 +95,9 @@ function pythonDescription(status: DesktopRuntimeStatus | undefined): string {
     case "PYTHON_RUNTIME_UNAVAILABLE":
       return "Python is required for local speech and whiteboard understanding. Install 64-bit CPython 3.12 or 3.13, then re-check.";
     case "PYTHON_RUNTIME_INCOMPATIBLE":
-      return "Interview App found Python, but it is not a supported 64-bit CPython 3.12/3.13 runtime with the required local packages.";
+      return "Interview App found Python, but it is not a supported 64-bit CPython 3.12/3.13 runtime.";
+    case "PYTHON_RUNTIME_DEPENDENCIES_MISSING":
+      return "Supported Python found. Install Interview App's pinned local AI Python components here, then continue with the voice and vision models.";
     case "UNSUPPORTED_RUNTIME_PLATFORM":
       return "Local speech and vision are unavailable on this platform or architecture.";
     case "WORKER_EXECUTABLE_UNAVAILABLE":
@@ -156,10 +158,12 @@ export function SettingsPage({
   const [runtimeStatus, setRuntimeStatus] = useState<DesktopRuntimeStatus | undefined>();
   const [runtimeStatusError, setRuntimeStatusError] = useState<string | undefined>();
   const [runtimeChecking, setRuntimeChecking] = useState(false);
+  const [installingPython, setInstallingPython] = useState(false);
   const [installingVoice, setInstallingVoice] = useState(false);
   const [installingVision, setInstallingVision] = useState(false);
   const [voiceInstallError, setVoiceInstallError] = useState<string | undefined>();
   const [visionInstallError, setVisionInstallError] = useState<string | undefined>();
+  const [pythonInstallError, setPythonInstallError] = useState<string | undefined>();
   const [restarting, setRestarting] = useState(false);
 
   useEffect(() => {
@@ -215,13 +219,39 @@ export function SettingsPage({
   const voiceReady = runtimeStatus?.speech.state === "READY"
     && runtimeStatus.tts.state === "READY";
   const visionReady = runtimeStatus?.vision.state === "READY";
-  const anyInstallActive = installingVoice
+  const anyInstallActive = installingPython
+    || installingVoice
     || installingVision
+    || runtimeStatus?.pythonSetup.state === "INSTALLING"
     || runtimeStatus?.voiceSetup.state === "INSTALLING"
     || runtimeStatus?.visionSetup.state === "INSTALLING";
   const pythonReady = runtimeStatus?.python.state === "READY";
-  const restartRequired = runtimeStatus?.voiceSetup.restartRequired === true
+  const pythonUsableForModelInstall = pythonReady
+    || runtimeStatus?.pythonSetup.restartRequired === true;
+  const restartRequired = runtimeStatus?.pythonSetup.restartRequired === true
+    || runtimeStatus?.voiceSetup.restartRequired === true
     || runtimeStatus?.visionSetup.restartRequired === true;
+
+  const installPythonRuntime = useCallback(async (): Promise<void> => {
+    if (desktopRuntime?.installPythonRuntime === undefined) return;
+    setInstallingPython(true);
+    setPythonInstallError(undefined);
+    try {
+      const parsed = parseDesktopRuntimeStatus(
+        await desktopRuntime.installPythonRuntime()
+      );
+      if (parsed === undefined) throw new Error("Malformed Python setup response");
+      setRuntimeStatus(parsed);
+      setRuntimeStatusError(undefined);
+    } catch {
+      setPythonInstallError(
+        "Python component setup failed. Verify CPython 3.12/3.13 and network access, then retry."
+      );
+      await refreshRuntime();
+    } finally {
+      setInstallingPython(false);
+    }
+  }, [desktopRuntime, refreshRuntime]);
 
   const runInstall = useCallback(async (
     kind: "VOICE" | "VISION"
@@ -391,10 +421,13 @@ export function SettingsPage({
               <strong>64-bit CPython 3.12 / 3.13</strong>
             </div>
             <div>
-              <b data-state={capabilityTone(runtimeStatus?.python)}>
+              <b data-state={capabilityTone(runtimeStatus?.python, runtimeStatus?.pythonSetup)}>
                 {desktopRuntime === undefined
                   ? "DESKTOP ONLY"
-                  : capabilityLabel(runtimeStatus?.python)}
+                  : runtimeStatus?.python.reasonCode === "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+                    && runtimeStatus.pythonSetup.restartRequired !== true
+                    ? "SETUP REQUIRED"
+                    : capabilityLabel(runtimeStatus?.python, runtimeStatus?.pythonSetup)}
               </b>
               <small>
                 {desktopRuntime === undefined
@@ -407,6 +440,42 @@ export function SettingsPage({
 
         {desktopRuntime !== undefined && (
           <div className="expressive-settings__setup-actions">
+            {(runtimeStatus?.python.reasonCode === "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+              || runtimeStatus?.pythonSetup.state === "FAILED"
+              || runtimeStatus?.pythonSetup.restartRequired === true) && (
+              <div>
+                <div>
+                  <strong>Python components</strong>
+                  <small>
+                    {runtimeStatus?.pythonSetup.restartRequired === true
+                      ? "Pinned Python components installed. You can install models now; restart once setup is complete."
+                      : "Install the verified local AI dependency lock into the supported Python runtime."}
+                  </small>
+                  {pythonInstallError !== undefined && (
+                    <small className="expressive-settings__setup-error">{pythonInstallError}</small>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void installPythonRuntime()}
+                  disabled={
+                    anyInstallActive
+                    || runtimeStatus === undefined
+                    || runtimeStatus.python.reasonCode !== "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+                    || runtimeStatus.pythonSetup.restartRequired
+                  }
+                >
+                  {installingPython
+                    ? "INSTALLING…"
+                    : runtimeStatus?.pythonSetup.restartRequired
+                      ? "Installed — restart required"
+                      : runtimeStatus?.pythonSetup.state === "FAILED"
+                        ? "Retry Python components"
+                        : "Install Python components"}
+                </button>
+              </div>
+            )}
+
             <div>
               <div>
                 <strong>Speech and voice</strong>
@@ -427,7 +496,7 @@ export function SettingsPage({
                 disabled={
                   anyInstallActive
                   || runtimeStatus === undefined
-                  || !pythonReady
+                  || !pythonUsableForModelInstall
                   || voiceReady
                   || runtimeStatus.voiceSetup.restartRequired
                 }
@@ -458,7 +527,7 @@ export function SettingsPage({
                 disabled={
                   anyInstallActive
                   || runtimeStatus === undefined
-                  || !pythonReady
+                  || !pythonUsableForModelInstall
                   || visionReady
                   || runtimeStatus.visionSetup.restartRequired
                 }
@@ -469,11 +538,14 @@ export function SettingsPage({
               </button>
             </div>
 
-            {runtimeStatus !== undefined && !pythonReady && (
-              <p className="expressive-settings__python-help">
-                {pythonDescription(runtimeStatus)}
-              </p>
-            )}
+            {runtimeStatus !== undefined
+              && !pythonReady
+              && runtimeStatus.python.reasonCode !== "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+              && (
+                <p className="expressive-settings__python-help">
+                  {pythonDescription(runtimeStatus)}
+                </p>
+              )}
           </div>
         )}
 
