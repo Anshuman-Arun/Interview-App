@@ -394,6 +394,23 @@ export const App: React.FC = () => {
   ]);
 
   useEffect(() => {
+    if (session.isSessionStarted && session.sessionStatus === "ACTIVE") return;
+    if (
+      route.page !== "home"
+      && route.page !== "sessions"
+      && route.page !== "review"
+    ) {
+      return;
+    }
+    void session.refreshProviderOptions().catch(() => undefined);
+  }, [
+    route.page,
+    session.isSessionStarted,
+    session.sessionStatus,
+    session.refreshProviderOptions
+  ]);
+
+  useEffect(() => {
     return () => {
       historyAbortRef.current?.abort();
       historyAbortRef.current = null;
