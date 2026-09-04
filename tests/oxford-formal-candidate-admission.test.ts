@@ -219,6 +219,39 @@ describe("Oxford formal target admission", () => {
     )).toBe(true);
 
     expect(admitted(
+      "oxford-euclid-primes",
+      "For listed primes two, three, and five, the product plus one is thirty-one and leaves remainder one modulo two.",
+      JSON.stringify({
+        protocol: "INTERVIEW_APP_MODULAR_ARITHMETIC_CLAIM",
+        protocolVersion: 1,
+        claim: {
+          kind: "CONGRUENCE",
+          left: integer("31"),
+          right: integer("1"),
+          modulus: "2"
+        }
+      })
+    )).toBe(true);
+
+    expect(admitted(
+      "oxford-prefix-sums-mod-n",
+      "For n five, two prefix sums are twelve and seven, so their difference five is divisible by five.",
+      JSON.stringify({
+        protocol: "INTERVIEW_APP_MODULAR_ARITHMETIC_CLAIM",
+        protocolVersion: 1,
+        claim: {
+          kind: "DIVISIBILITY",
+          divisor: "5",
+          dividend: {
+            kind: "SUBTRACT",
+            left: integer("12"),
+            right: integer("7")
+          }
+        }
+      })
+    )).toBe(true);
+
+    expect(admitted(
       "oxford-divisibility-chain",
       "The chosen numbers 6 and 24 have the same odd part, and 6 divides 24.",
       JSON.stringify({
