@@ -899,7 +899,7 @@ describe("Antigravity CLI one-turn protocol", () => {
         boardActions: [{
           operation: "erase_ai_annotation",
           layer: "AI_ANNOTATION",
-          targetAnnotationId: "x".repeat(161),
+          targetAnnotationId: DeliveryIdSchema.parse("x".repeat(161)),
           annotationPurpose: "oversized logical annotation ID"
         }]
       })
