@@ -1,10 +1,22 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
+  BoardSceneContextSchema,
+  BoardSceneSemanticObservationSchema,
   ContextCompilationManifestSchema,
   DisclosureIdSchema,
+  MAX_BOARD_SCENE_AI_ANNOTATIONS,
+  MAX_BOARD_SCENE_ANNOTATION_PURPOSE_CHARACTERS,
+  MAX_BOARD_SCENE_BYTES,
+  MAX_BOARD_SCENE_OBSERVATION_CHARACTERS,
+  MAX_BOARD_SCENE_SHAPES,
+  MAX_BOARD_SCENE_TEXT_CHARACTERS,
+  MIN_BOARD_SCENE_SEMANTIC_CONFIDENCE,
   ProviderContextSpecFingerprintSchema,
   RealizationRequestSchema,
+  type BoardSceneContext,
+  type BoardSceneSemanticObservation,
+  type BoardSceneShape,
   type GenerationBasis,
   type GenerationId,
   type InterviewProblem,
@@ -19,15 +31,262 @@ export const CompiledContextSchema = z.object({
   recentStudentWork: z.string().min(1),
   realizationRequest: RealizationRequestSchema,
   deliveredFacts: z.array(DisclosureIdSchema),
-  forbiddenDisclosureIds: z.array(DisclosureIdSchema)
+  forbiddenDisclosureIds: z.array(DisclosureIdSchema),
+  boardScene: BoardSceneContextSchema.optional()
 }).strict();
 export type CompiledContext = z.infer<typeof CompiledContextSchema>;
 
-export const CONTEXT_COMPILER_VERSION = "phase0-safe-context@2" as const;
+export const CONTEXT_COMPILER_VERSION = "phase0-safe-context@3" as const;
 
 const MAX_LIVE_CONTEXT_STUDENT_TEXT_CHARACTERS = 1_000_000;
 const MAX_LIVE_CONTEXT_PROBLEM_PROMPT_CHARACTERS = 100_000;
 const MAX_LIVE_CONTEXT_TARGET_CHARACTERS = 1_024;
+
+const BOARD_SCENE_VISIBLE_DELIVERY_STATUSES = new Set(["EXPOSED", "COMPLETED"] as const);
+
+function truncateBoardSceneText(value: string, maximum: number): string {
+  if (value.length <= maximum) return value;
+  return value.slice(0, maximum);
+}
+
+function boardSceneShapeTypePriority(type: BoardSceneShape["type"]): number {
+  switch (type) {
+    case "formula": return 3;
+    case "text": return 2;
+    case "arrow": return 1;
+    default: return 0;
+  }
+}
+
+function acceptedObservationStillApplies(
+  state: Readonly<SessionState>,
+  expectedBoardRevision: GenerationBasis["boardRevision"],
+  accepted: NonNullable<SessionState["visionRequests"][string]["acceptedObservation"]>
+): boolean {
+  if (
+    accepted.admittedAtBoardRevision > expectedBoardRevision
+    || accepted.observation.confidence < MIN_BOARD_SCENE_SEMANTIC_CONFIDENCE
+  ) {
+    return false;
+  }
+  if (accepted.freshnessProof === "EXACT_BOARD_REVISION") {
+    return accepted.admittedAtBoardRevision === expectedBoardRevision
+      && accepted.observation.sourceBoardRevision === expectedBoardRevision;
+  }
+  if (accepted.shapeRevisionBindings.length === 0) return false;
+  for (const binding of accepted.shapeRevisionBindings) {
+    const shape = state.boardShapes[binding.shapeId];
+    if (shape === undefined || shape.revision !== binding.expectedRevision) return false;
+  }
+  return true;
+}
+
+function semanticObservationByShape(
+  state: Readonly<SessionState>,
+  expectedBoardRevision: GenerationBasis["boardRevision"]
+): ReadonlyMap<string, BoardSceneSemanticObservation> {
+  const selected = new Map<string, {
+    readonly admittedAtBoardRevision: number;
+    readonly requestId: string;
+    readonly value: BoardSceneSemanticObservation;
+  }>();
+
+  const requests = Object.values(state.visionRequests)
+    .filter((request) =>
+      request.status === "ACCEPTED"
+      && request.acceptedObservation !== undefined
+      && acceptedObservationStillApplies(state, expectedBoardRevision, request.acceptedObservation)
+    )
+    .sort((left, right) => {
+      const leftAccepted = left.acceptedObservation;
+      const rightAccepted = right.acceptedObservation;
+      if (leftAccepted === undefined || rightAccepted === undefined) return 0;
+      if (leftAccepted.admittedAtBoardRevision !== rightAccepted.admittedAtBoardRevision) {
+        return rightAccepted.admittedAtBoardRevision - leftAccepted.admittedAtBoardRevision;
+      }
+      const leftSequence = left.resultSequence ?? -1;
+      const rightSequence = right.resultSequence ?? -1;
+      if (leftSequence !== rightSequence) {
+        return rightSequence - leftSequence;
+      }
+      if (leftAccepted.observation.confidence !== rightAccepted.observation.confidence) {
+        return rightAccepted.observation.confidence - leftAccepted.observation.confidence;
+      }
+      return left.visionRequestId < right.visionRequestId
+        ? -1
+        : left.visionRequestId > right.visionRequestId
+          ? 1
+          : 0;
+    });
+
+  for (const request of requests) {
+    const accepted = request.acceptedObservation;
+    if (accepted === undefined) continue;
+    const value = BoardSceneSemanticObservationSchema.parse({
+      kind: accepted.observationKind,
+      interpretation: truncateBoardSceneText(
+        accepted.observation.interpretation,
+        MAX_BOARD_SCENE_OBSERVATION_CHARACTERS
+      ),
+      confidence: accepted.observation.confidence,
+      sourceBoardRevision: accepted.observation.sourceBoardRevision
+    });
+    for (const shapeId of accepted.observation.relevantShapeIds) {
+      if (selected.has(shapeId)) continue;
+      selected.set(shapeId, {
+        admittedAtBoardRevision: accepted.admittedAtBoardRevision,
+        requestId: request.visionRequestId,
+        value
+      });
+    }
+  }
+
+  return new Map(Array.from(selected.entries()).map(([shapeId, item]) => [shapeId, item.value]));
+}
+
+export function boardSceneContextSerializedBytes(scene: BoardSceneContext): number {
+  const parsed = BoardSceneContextSchema.parse(scene);
+  return new TextEncoder().encode(canonicalJson(parsed)).byteLength;
+}
+
+export function buildBoardSceneContext(
+  state: Readonly<SessionState>,
+  expectedBoardRevision: GenerationBasis["boardRevision"]
+): BoardSceneContext | undefined {
+  if (
+    state.configuration?.mode === "QUANT_TRADING"
+    || state.configuration?.mode === "QUANT_RESEARCH"
+  ) {
+    return undefined;
+  }
+  if (state.boardRevision !== expectedBoardRevision) {
+    throw new Error("Board scene revision does not match the generation basis");
+  }
+
+  const authoritativeShapes = Object.values(state.boardShapes);
+  if (
+    !state.boardShapeAuthorityKnown
+    && (state.boardRevision > 0 || authoritativeShapes.length > 0)
+  ) {
+    throw new Error("Authoritative board shape state is unavailable");
+  }
+
+  const semanticByShape = semanticObservationByShape(state, expectedBoardRevision);
+  const candidates = authoritativeShapes.map((shape): {
+    readonly sceneShape: BoardSceneShape;
+    readonly lastModifiedAt: number;
+  } => ({
+    sceneShape: {
+      shapeId: shape.id,
+      shapeRevision: shape.revision,
+      type: shape.type,
+      bounds: {
+        x: shape.bounds.x,
+        y: shape.bounds.y,
+        width: shape.bounds.width,
+        height: shape.bounds.height
+      },
+      ...(shape.text === undefined
+        ? {}
+        : { text: truncateBoardSceneText(shape.text, MAX_BOARD_SCENE_TEXT_CHARACTERS) }),
+      ...(semanticByShape.get(shape.id) === undefined
+        ? {}
+        : { semanticObservation: semanticByShape.get(shape.id) })
+    },
+    lastModifiedAt: shape.lastModifiedAt
+  }));
+
+  candidates.sort((left, right) => {
+    const leftSemantic = left.sceneShape.semanticObservation === undefined ? 0 : 1;
+    const rightSemantic = right.sceneShape.semanticObservation === undefined ? 0 : 1;
+    if (leftSemantic !== rightSemantic) return rightSemantic - leftSemantic;
+    if (left.lastModifiedAt !== right.lastModifiedAt) return right.lastModifiedAt - left.lastModifiedAt;
+    const typeDelta =
+      boardSceneShapeTypePriority(right.sceneShape.type)
+      - boardSceneShapeTypePriority(left.sceneShape.type);
+    if (typeDelta !== 0) return typeDelta;
+    return left.sceneShape.shapeId < right.sceneShape.shapeId
+      ? -1
+      : left.sceneShape.shapeId > right.sceneShape.shapeId
+        ? 1
+        : 0;
+  });
+
+  const scene: BoardSceneContext = {
+    boardRevision: expectedBoardRevision,
+    shapes: [],
+    aiAnnotations: []
+  };
+
+  for (const candidate of candidates.slice(0, MAX_BOARD_SCENE_SHAPES)) {
+    const next = {
+      ...scene,
+      shapes: [...scene.shapes, candidate.sceneShape]
+    };
+    if (boardSceneContextSerializedBytes(next) <= MAX_BOARD_SCENE_BYTES) {
+      scene.shapes = next.shapes;
+    }
+  }
+
+  const deliveryReplayOrder = new Map(
+    Object.keys(state.deliveries).map((deliveryId, index) => [deliveryId, index] as const)
+  );
+  const annotations = Object.values(state.deliveries)
+    .filter((atom) =>
+      atom.content.medium === "WHITEBOARD"
+      && BOARD_SCENE_VISIBLE_DELIVERY_STATUSES.has(
+        atom.status as "EXPOSED" | "COMPLETED"
+      )
+      && atom.content.action.operation !== "erase_ai_annotation"
+    )
+    .sort((left, right) => {
+      const leftGenerationSequence =
+        state.generations[left.generationId]?.basis.committedInputSequence ?? -1;
+      const rightGenerationSequence =
+        state.generations[right.generationId]?.basis.committedInputSequence ?? -1;
+      if (leftGenerationSequence !== rightGenerationSequence) {
+        return rightGenerationSequence - leftGenerationSequence;
+      }
+      const leftReplayOrder = deliveryReplayOrder.get(left.deliveryId) ?? -1;
+      const rightReplayOrder = deliveryReplayOrder.get(right.deliveryId) ?? -1;
+      if (leftReplayOrder !== rightReplayOrder) {
+        return rightReplayOrder - leftReplayOrder;
+      }
+      return left.deliveryId < right.deliveryId
+        ? -1
+        : left.deliveryId > right.deliveryId
+          ? 1
+          : 0;
+    })
+    .slice(0, MAX_BOARD_SCENE_AI_ANNOTATIONS);
+
+  for (const atom of annotations) {
+    if (atom.content.medium !== "WHITEBOARD") continue;
+    const action = atom.content.action;
+    const annotation = {
+      deliveryId: atom.deliveryId,
+      operation: action.operation,
+      purpose: truncateBoardSceneText(
+        action.annotationPurpose,
+        MAX_BOARD_SCENE_ANNOTATION_PURPOSE_CHARACTERS
+      ),
+      ...(action.targetShapeId === undefined ? {} : { targetShapeId: action.targetShapeId }),
+      ...(action.expectedShapeRevision === undefined
+        ? {}
+        : { targetShapeRevision: action.expectedShapeRevision })
+    };
+    const next = {
+      ...scene,
+      aiAnnotations: [...scene.aiAnnotations, annotation]
+    };
+    if (boardSceneContextSerializedBytes(next) <= MAX_BOARD_SCENE_BYTES) {
+      scene.aiAnnotations = next.aiAnnotations;
+    }
+  }
+
+  if (scene.shapes.length === 0 && scene.aiAnnotations.length === 0) return undefined;
+  return BoardSceneContextSchema.parse(scene);
+}
 
 const MAX_CANONICAL_JSON_DEPTH = 64;
 const MAX_CANONICAL_JSON_NODES = 100_000;
@@ -177,7 +436,17 @@ export function compileContext(input: {
   readonly problem: InterviewProblem;
   readonly turnId: TurnId;
   readonly realizationRequest: RealizationRequest;
+  readonly generationBasis?: GenerationBasis;
 }): CompiledContext {
+  if (
+    input.generationBasis !== undefined
+    && (
+      input.generationBasis.turnId !== input.turnId
+      || input.generationBasis.boardRevision !== input.state.boardRevision
+    )
+  ) {
+    throw new Error("Context compilation board basis is stale");
+  }
   const turn = input.state.turns[input.turnId];
   if (turn === undefined || turn.turnId !== input.turnId) {
     throw new Error(`Unknown or malformed turn ${input.turnId}`);
@@ -271,6 +540,11 @@ export function compileContext(input: {
     }
   }
 
+  const boardScene = buildBoardSceneContext(
+    input.state,
+    input.generationBasis?.boardRevision ?? input.state.boardRevision
+  );
+
   return CompiledContextSchema.parse({
     problemPrompt: input.state.problem.prompt,
     recentStudentWork: turn.studentText,
@@ -278,6 +552,7 @@ export function compileContext(input: {
     deliveredFacts: [...delivered],
     forbiddenDisclosureIds: input.problem.interviewer.protectedDisclosures
       .map((item) => item.id)
-      .filter((id) => !allowed.has(id))
+      .filter((id) => !allowed.has(id)),
+    ...(boardScene === undefined ? {} : { boardScene })
   });
 }
