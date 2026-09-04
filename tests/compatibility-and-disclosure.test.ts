@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   BoardObservationSchema,
   BoardActionSchema,
+  BoardSceneContextSchema,
   GenerationBasisSchema,
   newSessionId
 } from "../packages/domain/src/index.js";
@@ -158,6 +159,49 @@ describe("compatibility and disclosure gates", () => {
     });
     expect(result.accepted).toBe(false);
     if (result.accepted) throw new Error("Expected mixed-realization disclosure rejection");
+    expect(result.analysis?.effectiveDisclosureLevel).toBeGreaterThan(0);
+  });
+
+  it("treats selecting protected student-board content as a disclosure realization", () => {
+    const protectedDisclosure = sixPeopleProblem.interviewer.protectedDisclosures[0];
+    if (protectedDisclosure === undefined) throw new Error("Expected protected disclosure fixture");
+    const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer([
+      "focus candidate on current equality"
+    ]));
+    const boardScene = BoardSceneContextSchema.parse({
+      boardRevision: 1,
+      shapes: [{
+        shapeId: "shape:protected",
+        shapeRevision: 2,
+        type: "formula",
+        bounds: { x: 0, y: 0, width: 160, height: 40 },
+        text: protectedDisclosure.fact
+      }],
+      aiAnnotations: []
+    });
+    const result = validator.validate({
+      proposal: {
+        realizedAction: "PROBE_JUSTIFICATION",
+        claimedDisclosureLevel: 0,
+        claimedDisclosureIds: [],
+        boardActions: [{
+          operation: "highlight",
+          layer: "AI_ANNOTATION",
+          targetShapeId: "shape:protected",
+          expectedShapeRevision: 2,
+          annotationPurpose: "focus candidate on current equality"
+        }]
+      },
+      request: {
+        requiredAction: "PROBE_JUSTIFICATION",
+        maximumDisclosure: 0
+      },
+      protectedDisclosures: sixPeopleProblem.interviewer.protectedDisclosures,
+      boardScene
+    });
+
+    expect(result.accepted).toBe(false);
+    if (result.accepted) throw new Error("Expected targeted-board disclosure rejection");
     expect(result.analysis?.effectiveDisclosureLevel).toBeGreaterThan(0);
   });
 
