@@ -334,7 +334,7 @@ describe("desktop local AI readiness UX", () => {
       await Promise.resolve();
     });
     expect(container.textContent).toContain(
-      "Install 64-bit CPython 3.12 or 3.13, then re-check."
+      "Install 64-bit CPython 3.12 or 3.13 with the standard python.org installer, then re-check."
     );
     expect(container.textContent).not.toContain("Install Python components");
 
