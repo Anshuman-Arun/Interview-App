@@ -11,7 +11,6 @@ import {
 } from "../../../packages/verification/src/index.js";
 import type { OxfordFormalAnalysisProfile } from "./oxford-formal-analysis-catalog.js";
 
-const DOMINO_STRONG_NUMBERS = new Set(["30", "31", "32", "62", "64"]);
 const TRIANGLE_RATIO_NUMBERS = new Set(["1", "2", "3"]);
 
 export function isOxfordFormalAnalysisSourceRelevant(
@@ -176,12 +175,17 @@ export function isOxfordFormalCandidateTargetAdmissible(input: {
     }
 
     switch (profile.target.subject.claimId) {
-      case "color-count-arithmetic": {
-        const strong = [...statementNumbers].filter((value) =>
-          DOMINO_STRONG_NUMBERS.has(unsignedInteger(value))
-        );
-        return new Set(strong.map(unsignedInteger)).size >= 2;
-      }
+      case "color-count-arithmetic":
+        return statementNumbers.has("2")
+          && statementNumbers.has("30")
+          && statementNumbers.has("32")
+          && containsRationalOperator(parsed.data.claim.left)
+            || (
+              statementNumbers.has("2")
+              && statementNumbers.has("30")
+              && statementNumbers.has("32")
+              && containsRationalOperator(parsed.data.claim.right)
+            );
       case "median-ratio-arithmetic": {
         if (
           [...statementNumbers].some((value) =>
@@ -190,14 +194,12 @@ export function isOxfordFormalCandidateTargetAdmissible(input: {
         ) {
           return false;
         }
-        return containsRationalLiteral(
+        return isTwoToOneRatioEquality(
           parsed.data.claim.left,
-          "2",
-          "3"
-        ) || containsRationalLiteral(
+          parsed.data.claim.right
+        ) || isTwoToOneRatioEquality(
           parsed.data.claim.right,
-          "2",
-          "3"
+          parsed.data.claim.left
         );
       }
       default:
@@ -254,6 +256,32 @@ function normalizeText(value: string): string {
     .replace(/[‐‑‒–—−]/gu, "-")
     .replace(/\s+/gu, " ")
     .trim();
+}
+
+function containsRationalOperator(
+  expression: RationalExpression
+): boolean {
+  return expression.kind !== "RATIONAL";
+}
+
+function isTwoToOneRatioEquality(
+  ratioExpression: RationalExpression,
+  resultExpression: RationalExpression
+): boolean {
+  return ratioExpression.kind === "DIVIDE"
+    && isRationalLiteral(ratioExpression.left, "2", "3")
+    && isRationalLiteral(ratioExpression.right, "1", "3")
+    && isRationalLiteral(resultExpression, "2", "1");
+}
+
+function isRationalLiteral(
+  expression: RationalExpression,
+  numerator: string,
+  denominator: string
+): boolean {
+  return expression.kind === "RATIONAL"
+    && expression.value.numerator === numerator
+    && expression.value.denominator === denominator;
 }
 
 function containsRationalLiteral(
