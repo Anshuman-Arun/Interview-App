@@ -292,6 +292,11 @@ summary:focus-visible,
   width: 6px;
   height: 6px;
   border-radius: 50%;
+  background: var(--warning);
+}
+
+.product-frame__readiness-title i[data-ready="true"],
+.product-frame__status-chip[data-ready="true"] i {
   background: var(--success);
 }
 
