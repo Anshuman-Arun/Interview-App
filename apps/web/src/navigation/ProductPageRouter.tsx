@@ -200,6 +200,8 @@ export function ProductPageRouter({
       title={title}
       kicker={kicker}
       onNavigate={onNavigatePage}
+      onNewInterview={onEnterInterview}
+      reasoningReady={providerOptions.some((option) => option.availability === "AVAILABLE")}
       notice={notice}
       onDismissNotice={onDismissNotice}
     >
