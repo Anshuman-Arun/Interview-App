@@ -738,6 +738,13 @@ describe("controlled BoardAction DSL", () => {
 describe("board target admission", () => {
   const scene = BoardSceneContextSchema.parse({
     boardRevision: 7,
+    studentShapeCount: 2,
+    includedStudentShapeCount: 2,
+    omittedStudentShapeCount: 0,
+    studentShapesTruncated: false,
+    aiAnnotationCount: 1,
+    includedAiAnnotationCount: 1,
+    aiAnnotationsTruncated: false,
     shapes: [
       {
         shapeId: "shape:a",
@@ -753,6 +760,7 @@ describe("board target admission", () => {
         bounds: { x: 200, y: 0, width: 80, height: 40 }
       }
     ],
+    semanticRelations: [],
     aiAnnotations: [{
       annotationId: DeliveryIdSchema.parse("delivery:scene:annotation"),
       operation: "circle",
