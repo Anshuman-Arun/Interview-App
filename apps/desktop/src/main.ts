@@ -686,6 +686,64 @@ async function runPackagedSmoke(
     throw new Error("Packaged renderer did not mount the product shell");
   }
 
+  const firstRunReadiness: unknown = await window.webContents.executeJavaScript(
+    `new Promise((resolve) => {
+      const deadline = Date.now() + 5000;
+      const check = async () => {
+        const readiness = document.querySelector('[data-testid="local-ai-readiness"]');
+        if (!(readiness instanceof HTMLElement)) {
+          if (Date.now() >= deadline) {
+            resolve({ mounted: false });
+            return;
+          }
+          setTimeout(() => { void check(); }, 50);
+          return;
+        }
+        try {
+          const status = await globalThis.interviewDesktop.getLocalRuntimeStatus();
+          resolve({
+            mounted: true,
+            headingVisible: readiness.textContent?.includes("Interview readiness") === true,
+            status
+          });
+        } catch {
+          resolve({ mounted: true, headingVisible: true, status: null });
+        }
+      };
+      void check();
+    })`
+  );
+  if (
+    typeof firstRunReadiness !== "object"
+    || firstRunReadiness === null
+    || Array.isArray(firstRunReadiness)
+  ) {
+    throw new Error("Packaged first-run readiness smoke returned malformed proof");
+  }
+  const readinessProof = firstRunReadiness as Record<string, unknown>;
+  const runtimeStatus = readinessProof["status"];
+  if (
+    readinessProof["mounted"] !== true
+    || readinessProof["headingVisible"] !== true
+    || typeof runtimeStatus !== "object"
+    || runtimeStatus === null
+    || Array.isArray(runtimeStatus)
+  ) {
+    throw new Error("Packaged first-run readiness screen did not initialize");
+  }
+  const statusRecord = runtimeStatus as Record<string, unknown>;
+  const pythonStatus = statusRecord["python"];
+  if (
+    statusRecord["protocolVersion"] !== 1
+    || typeof pythonStatus !== "object"
+    || pythonStatus === null
+    || Array.isArray(pythonStatus)
+    || (pythonStatus as Record<string, unknown>)["state"] !== "UNAVAILABLE"
+    || (pythonStatus as Record<string, unknown>)["reasonCode"] !== "PYTHON_RUNTIME_UNAVAILABLE"
+  ) {
+    throw new Error("Packaged first-run missing-Python readiness was not fail-closed");
+  }
+
   const token = backendConfig.clientToken;
   const origin = backendConfig.allowedOrigins?.[0];
   if (
