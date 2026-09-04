@@ -97,7 +97,11 @@ function emptyMetrics(partial = false): SessionMetrics {
       timeouts: 0,
       cancelled: 0,
       failedOrMalformed: 0,
-      verification: {}
+      verification: {
+        VERIFIED: 0,
+        CONTRADICTED: 0,
+        UNRESOLVED: 0
+      }
     },
     local: {
       voiceInputSessions: 0,
