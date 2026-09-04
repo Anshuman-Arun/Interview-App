@@ -63,6 +63,27 @@ export interface ProviderGenerationExecution {
   readonly completion: Promise<ProviderGenerationOutcome>;
 }
 
+export type ProviderCallObservationOutcome =
+  | "SUCCESS"
+  | "CANCELLED"
+  | "MALFORMED"
+  | "FAILED";
+
+export interface ProviderCallObserver {
+  readonly onStarted: (input: {
+    readonly generationId: GenerationId;
+    readonly context: unknown;
+  }) => void;
+  readonly onProposal: (input: {
+    readonly generationId: GenerationId;
+    readonly proposal: InterviewerProposal;
+  }) => void;
+  readonly onFinished: (input: {
+    readonly generationId: GenerationId;
+    readonly outcome: ProviderCallObservationOutcome;
+  }) => void;
+}
+
 interface ExecutionRecord {
   readonly generationId: GenerationId;
   readonly proposalRequestId: RequestId;
@@ -80,7 +101,10 @@ export class ProviderCoordinator {
   private readonly executions = new Map<GenerationId, ExecutionRecord>();
   private readonly cancellationRequests = new Set<GenerationId>();
 
-  public constructor(private readonly writer: SessionWriter) {
+  public constructor(
+    private readonly writer: SessionWriter,
+    private readonly observer?: ProviderCallObserver
+  ) {
     this.turns = new TurnCoordinator(writer);
     this.contexts = new ContextCoordinator(writer);
     this.deliveries = new DeliveryCoordinator(writer);
@@ -244,15 +268,33 @@ export class ProviderCoordinator {
     },
     context: unknown
   ): Promise<ProviderGenerationOutcome> {
+    let observationStarted = false;
+    let observationFinished = false;
+    const finishObservation = (outcome: ProviderCallObservationOutcome): void => {
+      if (!observationStarted || observationFinished) return;
+      observationFinished = true;
+      try {
+        this.observer?.onFinished({ generationId: record.generationId, outcome });
+      } catch {
+        // Observability must never become provider or interview authority.
+      }
+    };
     try {
-      const stream = record.session?.sendTurn({
-        context,
-        generationId: record.generationId
-      });
-      if (stream === undefined) {
+      const session = record.session;
+      if (session === undefined) {
         await this.supersedeIfPossible(record.generationId, "Provider returned no proposal");
         return failed(record.generationId, "NO_PROPOSAL", "NO_PROPOSAL");
       }
+      observationStarted = true;
+      try {
+        this.observer?.onStarted({ generationId: record.generationId, context });
+      } catch {
+        // Observability must never become provider or interview authority.
+      }
+      const stream = session.sendTurn({
+        context,
+        generationId: record.generationId
+      });
 
       const iterator = stream[Symbol.asyncIterator]();
 
@@ -267,6 +309,7 @@ export class ProviderCoordinator {
         ]);
 
         if (raced.kind === "CANCELLED") {
+          finishObservation("CANCELLED");
           this.requestIteratorReturn(iterator);
           return await this.finishCancellation(record);
         }
@@ -276,11 +319,15 @@ export class ProviderCoordinator {
             return await this.finishCancellation(record);
           }
           this.requestIteratorReturn(iterator);
+          const providerFailureCode = safeProviderFailureCode(raced.error);
+          finishObservation(
+            providerFailureCode === "INVALID_PROVIDER_OUTPUT" ? "MALFORMED" : "FAILED"
+          );
           await this.supersedeIfPossible(record.generationId, "Provider stream failed");
           return failed(
             record.generationId,
             "PROVIDER_STREAM",
-            safeProviderFailureCode(raced.error)
+            providerFailureCode
           );
         }
         if (raced.result.done === true) break;
@@ -291,6 +338,15 @@ export class ProviderCoordinator {
         }
 
         const proposal = raced.result.value;
+        try {
+          this.observer?.onProposal({
+            generationId: record.generationId,
+            proposal
+          });
+        } catch {
+          // Observability must never become provider or interview authority.
+        }
+        finishObservation("SUCCESS");
         const state = this.writer.getState();
         const generation = state.generations[record.generationId];
         if (generation === undefined) {
@@ -359,15 +415,21 @@ export class ProviderCoordinator {
       }
     } catch (error) {
       if (this.cancellationRequested(record.generationId)) {
+        finishObservation("CANCELLED");
         return await this.finishCancellation(record);
       }
+      const providerFailureCode = safeProviderFailureCode(error);
+      finishObservation(
+        providerFailureCode === "INVALID_PROVIDER_OUTPUT" ? "MALFORMED" : "FAILED"
+      );
       await this.supersedeIfPossible(record.generationId, "Provider stream failed");
-      return failed(record.generationId, "PROVIDER_STREAM", safeProviderFailureCode(error));
+      return failed(record.generationId, "PROVIDER_STREAM", providerFailureCode);
     }
 
     if (this.cancellationRequested(record.generationId)) {
       return await this.finishCancellation(record);
     }
+    finishObservation("FAILED");
     await this.supersedeIfPossible(record.generationId, "Provider returned no proposal");
     return failed(record.generationId, "NO_PROPOSAL", "NO_PROPOSAL");
   }
