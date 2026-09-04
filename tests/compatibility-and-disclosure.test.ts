@@ -213,6 +213,7 @@ describe("compatibility and disclosure gates", () => {
       aiAnnotationCount: 0,
       includedAiAnnotationCount: 0,
       aiAnnotationsTruncated: false,
+    aiAnnotationStateUncertain: false,
       shapes: [{
         shapeId: "shape:harmless",
         shapeRevision: 1,
@@ -265,6 +266,7 @@ describe("compatibility and disclosure gates", () => {
       aiAnnotationCount: 0,
       includedAiAnnotationCount: 0,
       aiAnnotationsTruncated: false,
+    aiAnnotationStateUncertain: false,
       shapes: [{
         shapeId: "shape:protected",
         shapeRevision: 2,
@@ -336,6 +338,7 @@ describe("compatibility and disclosure gates", () => {
       aiAnnotationCount: 0,
       includedAiAnnotationCount: 0,
       aiAnnotationsTruncated: false,
+    aiAnnotationStateUncertain: false,
       shapes: [{
         shapeId: "shape:fallback-protected",
         shapeRevision: 1,
