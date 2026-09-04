@@ -210,6 +210,7 @@ export function ProductPageRouter({
         && providerOptions.some((option) => option.availability === "AVAILABLE")
       }
       reasoningChecking={providerOptionsLoading}
+      navigationLocked={(activeSessionPaused ?? false) && activeSessionId !== null}
       notice={notice}
       onDismissNotice={onDismissNotice}
     >
