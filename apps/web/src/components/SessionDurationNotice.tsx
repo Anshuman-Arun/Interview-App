@@ -7,8 +7,8 @@ export function SessionDurationNotice({
   createdAt,
   visible
 }: {
-  readonly durationMinutes?: number;
-  readonly createdAt?: string | null;
+  readonly durationMinutes?: number | undefined;
+  readonly createdAt?: string | null | undefined;
   readonly visible: boolean;
 }) {
   const deadline = useMemo(() => {
