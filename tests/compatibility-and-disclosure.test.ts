@@ -757,6 +757,12 @@ describe("compatibility and disclosure gates", () => {
         harness.turnId,
         "attribution-test"
       );
+      const compilation = await new ContextCoordinator(harness.writer).compileForGeneration({
+        generationId: generation.generationId,
+        problem: sixPeopleProblem
+      });
+      expect(compilation.value.compiled).toBe(true);
+
       const processed = await harness.turns.processProposal({
         envelope: createCommandEnvelope({
           sessionId: harness.sessionId,
