@@ -813,6 +813,58 @@ describe("Quant Trading client admission boundaries", () => {
       }
     });
   });
+
+  it("clears a stale quote draft when authoritative Trading round advances", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <QuantTradingWorkspace
+          state={activeTradingState(1)}
+          loading={false}
+          actionPending={false}
+          disabled={false}
+          onRefresh={async () => undefined}
+          onSubmit={async () => activeTradingState(2)}
+          onReview={() => undefined}
+        />
+      );
+    });
+
+    let inputs = [...container.querySelectorAll("input")];
+    if (inputs.length !== 4) throw new Error("Expected four Trading quote inputs");
+    await act(async () => {
+      setInputValue(inputs[0] as HTMLInputElement, "99.5");
+      setInputValue(inputs[1] as HTMLInputElement, "2");
+      setInputValue(inputs[2] as HTMLInputElement, "100.5");
+      setInputValue(inputs[3] as HTMLInputElement, "2");
+    });
+    expect(inputs.map((input) => input.value)).toEqual(["99.5", "2", "100.5", "2"]);
+
+    await act(async () => {
+      root.render(
+        <QuantTradingWorkspace
+          state={activeTradingState(2)}
+          loading={false}
+          actionPending={false}
+          disabled={false}
+          onRefresh={async () => undefined}
+          onSubmit={async () => activeTradingState(3)}
+          onReview={() => undefined}
+        />
+      );
+      await Promise.resolve();
+    });
+
+    inputs = [...container.querySelectorAll("input")];
+    expect(inputs.map((input) => input.value)).toEqual(["", "", "", ""]);
+
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
 });
 
 describe("Quant workspace public rendering", () => {
