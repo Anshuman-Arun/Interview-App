@@ -405,7 +405,7 @@ summary:focus-visible,
   background: var(--paper-hi);
 }
 
-@media (max-width: 760px) {
+@media (max-width: 960px) {
   .product-frame {
     grid-template-columns: 1fr;
     grid-template-rows: auto minmax(0, 1fr);
@@ -3342,4 +3342,8 @@ summary:focus-visible,
   .quant-action-row > button {
     flex: 1 1 140px;
   }
+}
+
+.new-interview__ready-note i[data-ready="false"] {
+  background: var(--warning);
 }
