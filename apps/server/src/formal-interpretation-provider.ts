@@ -151,8 +151,7 @@ implements FormalInterpretationProvider {
         requestBytes: serializedApplicationBytes({
           request: executionInput.request,
           publicProblem: executionInput.publicProblem
-        }),
-        compiledContextBytes: serializedApplicationBytes(executionInput.request)
+        })
       });
       try {
         const result = await adapter.interpret(executionInput);
