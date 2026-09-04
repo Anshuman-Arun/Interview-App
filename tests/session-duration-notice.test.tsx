@@ -36,7 +36,7 @@ describe("planned session duration product notice", () => {
     });
   }
 
-  it("shows a non-blocking reminder when the configured duration is reached", async () => {
+  it("shows a non-blocking reminder when the configured duration is reached", () => {
     renderNotice({
       durationMinutes: 30,
       createdAt: "2026-09-04T01:30:00.000Z",
@@ -67,7 +67,7 @@ describe("planned session duration product notice", () => {
     expect(document.querySelector('[data-testid="session-duration-notice"]')).not.toBeNull();
   });
 
-  it("does not leak the live-session reminder over a backgrounded Home view", async () => {
+  it("does not leak the live-session reminder over a backgrounded Home view", () => {
     renderNotice({
       durationMinutes: 30,
       createdAt: "2026-09-04T01:00:00.000Z",
