@@ -162,13 +162,15 @@ describe("versioned Windows release publishing", () => {
       "Tagged release commit $env:SOURCE_SHA is no longer reachable from authoritative main"
     );
     const finalTagProofIndex = workflow.indexOf("Release tag moved during validation");
-    const releaseIndex = workflow.indexOf("Create draft GitHub Release");
+    const releaseStepIndex = workflow.indexOf("Create draft GitHub Release");
+    const releaseCommandIndex = workflow.indexOf('gh release create "$env:RELEASE_TAG"');
     expect(buildIndex).toBeGreaterThan(-1);
     expect(smokeIndex).toBeGreaterThan(buildIndex);
     expect(checksumIndex).toBeGreaterThan(smokeIndex);
     expect(finalMainProofIndex).toBeGreaterThan(checksumIndex);
     expect(finalTagProofIndex).toBeGreaterThan(finalMainProofIndex);
-    expect(releaseIndex).toBeGreaterThan(checksumIndex);
+    expect(releaseStepIndex).toBeGreaterThan(checksumIndex);
+    expect(releaseCommandIndex).toBeGreaterThan(finalTagProofIndex);
   });
 
   it("uses one canonical version for packaging and exposes packaged/development identity", async () => {
