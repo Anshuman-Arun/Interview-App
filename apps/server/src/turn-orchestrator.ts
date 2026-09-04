@@ -24,6 +24,10 @@ import {
   getReviewedProblemRealizationTexts,
   realizeProblemInterviewerProposal
 } from "./problem-realization.js";
+import {
+  instrumentReasoningProvider,
+  type SessionObservability
+} from "./session-observability.js";
 
 export interface TurnOrchestrationInput {
   readonly sessionId: SessionId;
@@ -73,7 +77,8 @@ export class ServerTurnOrchestrator {
     private readonly getRendererStreamServer: () => RendererStreamServer | undefined,
     validator?: DisclosureValidator,
     private readonly providerRuntime: ProviderRuntimeResolver = new ProviderRuntimeResolver(),
-    formalInterpretationProvider?: FormalInterpretationProvider
+    formalInterpretationProvider?: FormalInterpretationProvider,
+    private readonly observability?: SessionObservability
   ) {
     this.validator = validator ?? new DisclosureValidator(
       new ClosedWorldDisclosureAnalyzer(getReviewedProblemRealizationTexts())
@@ -83,8 +88,11 @@ export class ServerTurnOrchestrator {
       formalInterpretationProvider
         ?? new ProviderBackedFormalInterpretationProvider(
           sessions,
-          this.providerRuntime
-        )
+          this.providerRuntime,
+          this.observability
+        ),
+      undefined,
+      this.observability
     );
   }
 
@@ -311,6 +319,7 @@ export class ServerTurnOrchestrator {
     if (composition.mode !== "OXFORD_MATHEMATICS") {
       return "COMPLETE";
     }
+    this.observability?.recordCandidateSubstantiveTurn(input.sessionId);
     const problem = composition.problem;
     const turns = new TurnCoordinator(writer);
 
@@ -383,7 +392,15 @@ export class ServerTurnOrchestrator {
       execution = await coordinator.start({
         inputEpisodeId: authoritativeTurn.inputEpisodeId,
         turnId: authoritativeTurn.turnId,
-        provider: runtimeResolution.provider,
+        provider: this.observability === undefined
+          ? runtimeResolution.provider
+          : instrumentReasoningProvider({
+              provider: runtimeResolution.provider,
+              observability: this.observability,
+              sessionId: input.sessionId,
+              providerId: runtimeResolution.providerId,
+              modelId: runtimeResolution.modelId
+            }),
         policy: runtimeResolution.policy,
         problem,
         validator: this.validator
