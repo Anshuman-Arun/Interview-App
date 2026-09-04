@@ -1114,7 +1114,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
       throw new UnsupportedBoardActionError("No AI annotation is available to erase");
     }
 
-    let targetAnnotationId = action.targetAnnotationId;
+    let targetAnnotationId: string | undefined = action.targetAnnotationId;
     if (targetAnnotationId === undefined) {
       const groups = new Map<string, { readonly shapes: TLShapeRecord[]; latestTime: number }>();
       for (const shape of aiShapes) {
@@ -1351,6 +1351,9 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
 
   private createAiMeta(action: BoardAction, options?: ApplyAiOverlayOptions): CanvasShapeMeta {
     WhiteboardLayerSchema.parse("AI_ANNOTATION");
+    const targetShapeId = action.targetShapeId ?? action.targetRegion?.shapeId;
+    const targetShapeRevision =
+      action.expectedShapeRevision ?? action.targetRegion?.shapeRevision;
     return {
       layer: "AI_ANNOTATION",
       shapeRevision: 1,
@@ -1359,12 +1362,8 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
       ...(options?.deliveryId !== undefined ? { deliveryId: options.deliveryId } : {}),
       ...(options?.turnId !== undefined ? { turnId: options.turnId } : {}),
       ...(options?.generationId !== undefined ? { generationId: options.generationId } : {}),
-      ...((action.targetShapeId ?? action.targetRegion?.shapeId) === undefined
-        ? {}
-        : { targetShapeId: action.targetShapeId ?? action.targetRegion?.shapeId }),
-      ...((action.expectedShapeRevision ?? action.targetRegion?.shapeRevision) === undefined
-        ? {}
-        : { targetShapeRevision: action.expectedShapeRevision ?? action.targetRegion?.shapeRevision }),
+      ...(targetShapeId === undefined ? {} : { targetShapeId }),
+      ...(targetShapeRevision === undefined ? {} : { targetShapeRevision }),
       annotationPurpose: action.annotationPurpose,
       operation: action.operation,
       createdAt: new Date().toISOString()
