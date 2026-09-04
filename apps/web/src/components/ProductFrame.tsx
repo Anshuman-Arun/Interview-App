@@ -90,7 +90,7 @@ export function ProductFrame({
           ))}
         </nav>
 
-        <div className="product-frame__rail-note" aria-label="Local readiness">
+        <div className="product-frame__rail-note" aria-label="Interview readiness">
           <span className="product-frame__readiness-title">
             <i
               data-ready={String(reasoningReady)}
