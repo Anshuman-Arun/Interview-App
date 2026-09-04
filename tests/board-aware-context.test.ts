@@ -23,6 +23,7 @@ import {
   type SessionState
 } from "../packages/events/src/index.js";
 import {
+  bindTargetlessAiAnnotationErases,
   boardSceneContextSerializedBytes,
   buildBoardSceneContext,
   validateProposalBoardReferences
@@ -858,6 +859,25 @@ describe("board target admission", () => {
       }]
     });
     expect(validateProposalBoardReferences(proposal, scene)).toBeUndefined();
+  });
+
+  it("binds targetless erase to the exact newest provider-visible logical annotation", () => {
+    const targetless = InterviewerProposalSchema.parse({
+      realizedAction: "FOCUS_ATTENTION",
+      claimedDisclosureLevel: 0,
+      claimedDisclosureIds: [],
+      boardActions: [{
+        operation: "erase_ai_annotation",
+        layer: "AI_ANNOTATION",
+        annotationPurpose: "erase latest visible annotation"
+      }]
+    });
+    expect(validateProposalBoardReferences(targetless, scene)).toBeUndefined();
+    const bound = bindTargetlessAiAnnotationErases(targetless, scene);
+    expect(bound.boardActions?.[0]).toMatchObject({
+      operation: "erase_ai_annotation",
+      targetAnnotationId: DeliveryIdSchema.parse("delivery:scene:annotation")
+    });
   });
 
   it("accepts only provider-visible logical annotation IDs for erasure", () => {
