@@ -416,6 +416,84 @@ describe("authenticated renderer stream transport", () => {
     await replacementConsumer;
   });
 
+  it("classifies an ambiguous WHITEBOARD presenter failure as POSSIBLY_EXPOSED and never replays it", async () => {
+    const sessionId = newSessionId();
+    await primeCommandServer(commandAddress, sessionId);
+    const writer = registry.get(sessionId);
+    const atom = await queueDelivery(writer, {
+      medium: "WHITEBOARD",
+      action: {
+        operation: "draw_polyline",
+        layer: "AI_ANNOTATION",
+        points: [
+          { x: 0, y: 0 },
+          { x: 20, y: 20 },
+          { x: 40, y: 0 },
+          { x: 60, y: 20 }
+        ],
+        annotationPurpose: "ambiguous partial render fixture"
+      }
+    });
+
+    const renderer = new RendererClient({
+      sessionId,
+      acknowledgementSender: { send: async () => undefined },
+      textPresenter: { presentText: () => undefined },
+      audioPlayer: { playAudio: () => undefined },
+      whiteboardPresenter: {
+        presentWhiteboard: () => {
+          throw new Error("partial whiteboard render outcome unknown");
+        }
+      }
+    });
+    const controller = new AbortController();
+    const consumer = consumeAuthenticatedRendererStream({
+      streamUrl: streamAddress.streamUrl,
+      sessionId,
+      authenticatedFetch: fetchWithAuth,
+      signal: controller.signal
+    }, renderer);
+
+    await waitFor(() => streamServer.activeConnectionCount() === 1);
+    await expect(streamServer.publishDelivery(sessionId, atom.deliveryId)).resolves.toMatchObject({
+      outcome: "SENT",
+      deliveryId: atom.deliveryId
+    });
+    await expect(consumer).rejects.toThrow("partial whiteboard render outcome unknown");
+    await waitFor(() =>
+      writer.getState().deliveries[atom.deliveryId]?.status === "POSSIBLY_EXPOSED"
+    );
+    expect(deliveryLifecycle(store.load(sessionId), atom.deliveryId)).toEqual([
+      "DELIVERY_QUEUED",
+      "DELIVERY_STARTED",
+      "DELIVERY_POSSIBLY_EXPOSED"
+    ]);
+
+    const replacement = new RendererClient({
+      sessionId,
+      acknowledgementSender: { send: async () => undefined },
+      textPresenter: { presentText: () => undefined },
+      audioPlayer: { playAudio: () => undefined },
+      whiteboardPresenter: {
+        presentWhiteboard: () => {
+          throw new Error("POSSIBLY_EXPOSED delivery must not replay");
+        }
+      }
+    });
+    const replacementController = new AbortController();
+    const replacementConsumer = consumeAuthenticatedRendererStream({
+      streamUrl: streamAddress.streamUrl,
+      sessionId,
+      authenticatedFetch: fetchWithAuth,
+      signal: replacementController.signal
+    }, replacement);
+    await waitFor(() => streamServer.activeConnectionCount() === 1);
+    expect(writer.getState().deliveries[atom.deliveryId]?.status).toBe("POSSIBLY_EXPOSED");
+
+    replacementController.abort();
+    await replacementConsumer;
+  });
+
   it("keeps same-connection AUDIO publish idempotent after its one-shot asset is consumed", async () => {
     await streamServer.stop();
 
