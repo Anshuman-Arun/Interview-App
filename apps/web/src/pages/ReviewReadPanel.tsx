@@ -44,6 +44,7 @@ export function ReviewReadPanel({
   const [performanceError, setPerformanceError] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [readAttempt, setReadAttempt] = useState(0);
 
   useEffect(() => {
     setEvaluation(null);
@@ -51,6 +52,7 @@ export function ReviewReadPanel({
     setPerformance(null);
     setPerformanceError(false);
     setError(null);
+    setReadAttempt(0);
   }, [sessionId]);
 
   useEffect(() => {
@@ -113,7 +115,8 @@ export function ReviewReadPanel({
     readReplay,
     replay,
     sessionId,
-    view
+    view,
+    readAttempt
   ]);
 
   if (loading) {
@@ -131,9 +134,19 @@ export function ReviewReadPanel({
 
   if (error !== null) {
     return (
-      <div className="review-read-state review-read-state--error" role="status">
+      <div className="review-read-state review-read-state--error" role="alert">
         <span>READ ERROR</span>
         <p>{error}</p>
+        <button
+          type="button"
+          onClick={() => {
+            setError(null);
+            setLoading(true);
+            setReadAttempt((attempt) => attempt + 1);
+          }}
+        >
+          Retry read
+        </button>
       </div>
     );
   }
