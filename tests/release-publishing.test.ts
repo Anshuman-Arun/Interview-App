@@ -191,11 +191,12 @@ describe("versioned Windows release publishing", () => {
     expect(settings).toContain("desktopAppVersion");
     expect(settings).toContain("readDesktopAppVersion");
     expect(settings).toContain("<p>Interview App {desktopAppVersion}</p>");
-    const versionLabelIndex = settings.indexOf("<p>Interview App {desktopAppVersion}</p>");
-    const runtimeSectionIndex = settings.indexOf("desktopRuntime !== undefined");
-    expect(versionLabelIndex).toBeGreaterThan(-1);
-    expect(runtimeSectionIndex).toBeGreaterThan(-1);
-    expect(versionLabelIndex).toBeLessThan(runtimeSectionIndex);
+    expect(settings).toContain(
+      "const desktopAppVersion = useMemo(() => readDesktopAppVersion(), []);"
+    );
+    expect(settings).toContain(
+      "{desktopAppVersion !== undefined && (\n            <p>Interview App {desktopAppVersion}</p>"
+    );
     expect(desktopRuntime).toContain("export function readDesktopAppVersion");
     expect(desktopRuntime).toContain("try {");
     expect(desktopRuntime).toContain("const bootstrap = bridge.getBootstrap();");
