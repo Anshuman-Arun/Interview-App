@@ -97,8 +97,102 @@ export const SessionPerformanceSummarySchema = z.object({
     }).strict()
   }).strict()
 }).strict().superRefine((summary, context) => {
-  if (summary.remote.totalCalls !== summary.remote.interviewerCalls + summary.remote.formalInterpretationCalls) {
-    context.addIssue({ code: "custom", message: "Remote call totals are inconsistent" });
+  const boundedSum = (...values: readonly number[]): number =>
+    values.reduce(
+      (total, value) => Math.min(Number.MAX_SAFE_INTEGER, total + value),
+      0
+    );
+  const issue = (message: string): void => {
+    context.addIssue({ code: "custom", message });
+  };
+
+  if (
+    summary.remote.totalCalls
+    !== boundedSum(
+      summary.remote.interviewerCalls,
+      summary.remote.formalInterpretationCalls
+    )
+  ) {
+    issue("Remote call totals are inconsistent");
+  }
+  if (
+    boundedSum(...Object.values(summary.remote.outcomes))
+    !== summary.remote.totalCalls
+  ) {
+    issue("Remote outcome totals are inconsistent");
+  }
+  if (summary.remote.interviewerLatency.count > summary.remote.interviewerCalls) {
+    issue("Interviewer latency samples exceed interviewer calls");
+  }
+  if (
+    summary.remote.formalInterpretationLatency.count
+    > summary.remote.formalInterpretationCalls
+  ) {
+    issue("Formal latency samples exceed formal calls");
+  }
+
+  const formalResults = boundedSum(
+    summary.formalInterpretation.accepted,
+    summary.formalInterpretation.abstentions,
+    summary.formalInterpretation.timeouts,
+    summary.formalInterpretation.cancelled,
+    summary.formalInterpretation.failedOrMalformed
+  );
+  if (formalResults > summary.formalInterpretation.attempts) {
+    issue("Formal interpretation results exceed attempts");
+  }
+  if (
+    boundedSum(
+      summary.formalInterpretation.verification.VERIFIED,
+      summary.formalInterpretation.verification.CONTRADICTED,
+      summary.formalInterpretation.verification.UNRESOLVED
+    ) !== summary.formalInterpretation.accepted
+  ) {
+    issue("Formal verification totals are inconsistent with accepted interpretations");
+  }
+
+  const sttTerminal = boundedSum(
+    summary.local.stt.finalizations,
+    summary.local.stt.failures,
+    summary.local.stt.cancellations
+  );
+  if (summary.local.stt.latency.count > sttTerminal) {
+    issue("STT latency samples exceed terminal STT outcomes");
+  }
+
+  const ttsTerminal = boundedSum(
+    summary.local.tts.successes,
+    summary.local.tts.failures,
+    summary.local.tts.cancellations
+  );
+  if (ttsTerminal > summary.local.tts.requests) {
+    issue("TTS terminal outcomes exceed TTS requests");
+  }
+  if (summary.local.tts.latency.count > ttsTerminal) {
+    issue("TTS latency samples exceed terminal TTS outcomes");
+  }
+  if (summary.local.tts.bargeInInterruptions > summary.local.tts.requests) {
+    issue("TTS barge-in interruptions exceed TTS requests");
+  }
+
+  const visionInferenceTerminal = boundedSum(
+    summary.local.vision.inferenceCompletions,
+    summary.local.vision.inferenceFailures
+  );
+  if (visionInferenceTerminal > summary.local.vision.requests) {
+    issue("Vision terminal inference outcomes exceed vision requests");
+  }
+  if (summary.local.vision.latency.count > visionInferenceTerminal) {
+    issue("Vision latency samples exceed terminal inference outcomes");
+  }
+  if (
+    boundedSum(
+      summary.local.vision.acceptedObservations,
+      summary.local.vision.staleRejections,
+      summary.local.vision.otherRejections
+    ) > visionInferenceTerminal
+  ) {
+    issue("Vision admission outcomes exceed terminal inference outcomes");
   }
 });
 export type SessionPerformanceSummary = z.infer<typeof SessionPerformanceSummarySchema>;
