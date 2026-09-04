@@ -427,13 +427,16 @@ export class DisclosureValidator {
     if (input.proposal.speechText !== undefined) {
       realizationTexts.push([input.proposal.speechText]);
     }
-    for (const action of input.proposal.boardActions ?? []) {
+    const boardActions = input.proposal.boardActions ?? [];
+    const boardTargetTexts = boardActions.map((action) =>
+      boardTargetDisclosureTexts(action, input.boardScene)
+    );
+    for (const action of boardActions) {
       const actionTexts: string[] = [];
       if (action.content !== undefined && action.content.length > 0) {
         actionTexts.push(action.content);
       }
       actionTexts.push(action.annotationPurpose);
-      actionTexts.push(...boardTargetDisclosureTexts(action, input.boardScene));
       realizationTexts.push(actionTexts);
     }
     const texts = realizationTexts.flat();
@@ -446,17 +449,54 @@ export class DisclosureValidator {
     }
     const metadataCharacters = protectedMetadataCharacterCount(input.protectedDisclosures);
     const formulationCount = protectedMetadataFormulationCount(input.protectedDisclosures);
+    const boardTargetTextCount = boardTargetTexts.reduce(
+      (total, group) => total + group.length,
+      0
+    );
+    const boardTargetTextCharacters = boardTargetTexts.reduce(
+      (total, group) =>
+        total + group.reduce((groupTotal, text) => groupTotal + text.length, 0),
+      0
+    );
     if (
-      texts.length * metadataCharacters > MAX_DISCLOSURE_ANALYSIS_WORK_CHARACTERS
-      || totalProposalTextCharacters * formulationCount > MAX_DISCLOSURE_ANALYSIS_WORK_CHARACTERS
+      (texts.length + boardTargetTextCount) * metadataCharacters
+        > MAX_DISCLOSURE_ANALYSIS_WORK_CHARACTERS
+      || (totalProposalTextCharacters + boardTargetTextCharacters) * formulationCount
+        > MAX_DISCLOSURE_ANALYSIS_WORK_CHARACTERS
     ) {
       return { accepted: false, reason: "Proposal exceeds the bounded disclosure-analysis work budget" };
     }
 
     const analyses: DisclosureAnalysis[] = [];
     const protectedMatches: ProtectedMatch[] = [];
+    const boardTargetMatches: ProtectedMatch[] = [];
     const deterministicIds = new Set<DisclosureId>();
     let deterministicLevel: DisclosureLevel = 0;
+
+    for (const targetTexts of boardTargetTexts) {
+      const targetIds = new Set<DisclosureId>();
+      let targetLevel: DisclosureLevel = 0;
+      for (const text of targetTexts) {
+        const targetMatch = deriveProtectedMatch(text, input.protectedDisclosures);
+        if (!targetMatch.ok) {
+          return {
+            accepted: false,
+            reason: "Protected board-target disclosure metadata cannot be analyzed deterministically"
+          };
+        }
+        for (const disclosureId of targetMatch.ids) {
+          targetIds.add(disclosureId);
+          deterministicIds.add(disclosureId);
+        }
+        if (targetMatch.level > targetLevel) targetLevel = targetMatch.level;
+        if (targetMatch.level > deterministicLevel) deterministicLevel = targetMatch.level;
+      }
+      boardTargetMatches.push({
+        ok: true,
+        ids: [...targetIds],
+        level: targetLevel
+      });
+    }
     let totalAnalyzerReasonCharacters = 0;
     let totalAnalyzerDisclosureIds = 0;
     for (const text of texts) {
@@ -555,18 +595,34 @@ export class DisclosureValidator {
     }
 
     const baseRealizationAnalyses: DisclosureAnalysis[] = [];
+    const speechOffset = input.proposal.speechText === undefined ? 0 : 1;
     let analysisOffset = 0;
-    for (const group of realizationTexts) {
+    for (let realizationIndex = 0; realizationIndex < realizationTexts.length; realizationIndex += 1) {
+      const group = realizationTexts[realizationIndex];
+      if (group === undefined) {
+        return {
+          accepted: false,
+          reason: "Disclosure realization attribution failed closed"
+        };
+      }
       const groupAnalyses = analyses.slice(analysisOffset, analysisOffset + group.length);
       const groupMatches = protectedMatches.slice(analysisOffset, analysisOffset + group.length);
       analysisOffset += group.length;
-      const groupDeterministicIds = Array.from(new Set(
-        groupMatches.flatMap((match) => match.ids)
-      ));
-      const groupDeterministicLevel = groupMatches.reduce<DisclosureLevel>(
+      const targetMatch = realizationIndex < speechOffset
+        ? undefined
+        : boardTargetMatches[realizationIndex - speechOffset];
+      const groupDeterministicIds = Array.from(new Set([
+        ...groupMatches.flatMap((match) => match.ids),
+        ...(targetMatch?.ids ?? [])
+      ]));
+      const emittedLevel = groupMatches.reduce<DisclosureLevel>(
         (maximum, match) => match.level > maximum ? match.level : maximum,
         0
       );
+      const groupDeterministicLevel =
+        targetMatch !== undefined && targetMatch.level > emittedLevel
+          ? targetMatch.level
+          : emittedLevel;
       baseRealizationAnalyses.push(combineSafeAnalyses(
         groupAnalyses,
         groupDeterministicIds,
@@ -665,7 +721,6 @@ export class DisclosureValidator {
       };
     }
 
-    const speechOffset = input.proposal.speechText === undefined ? 0 : 1;
     const speechAnalysis = input.proposal.speechText === undefined
       ? null
       : realizationAnalyses[0] ?? null;
