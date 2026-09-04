@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import type {
   QuantTradingCandidateAction,
   QuantTradingPublicState
@@ -51,6 +51,21 @@ export const QuantTradingWorkspace: React.FC<QuantTradingWorkspaceProps> = ({
   const [askPrice, setAskPrice] = useState("");
   const [askSize, setAskSize] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
+  const authoritativeDraftKey =
+    state === null
+      ? null
+      : `${state.scenario.id}@${state.scenario.version}:${String(state.currentRound)}`;
+  const previousAuthoritativeDraftKeyRef = useRef<string | null>(authoritativeDraftKey);
+
+  useEffect(() => {
+    if (previousAuthoritativeDraftKeyRef.current === authoritativeDraftKey) return;
+    previousAuthoritativeDraftKeyRef.current = authoritativeDraftKey;
+    setBidPrice("");
+    setBidSize("");
+    setAskPrice("");
+    setAskSize("");
+    setLocalError(null);
+  }, [authoritativeDraftKey]);
 
   const validation = useMemo(() => {
     if (state?.status !== "ACTIVE" || state.quoteRequest === undefined) {
