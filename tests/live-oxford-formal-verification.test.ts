@@ -243,6 +243,78 @@ describe("live Oxford formal reasoning analysis", () => {
     }
   });
 
+  it("fails closed when one of multiple provider candidates is target-inadmissible", async () => {
+    const store = new SqliteEventStore(":memory:");
+    try {
+      const registry = new SessionRuntimeRegistry(store);
+      const sessionId = newSessionId();
+      const writer = registry.get(sessionId);
+      const turns = new TurnCoordinator(writer);
+      const selectedProblem = problem("oxford-domino-chessboard");
+      await turns.startSession(selectedProblem);
+      const committed = await turns.commitInput(
+        sourceTextFor(selectedProblem.id, "CORRECT")
+      );
+
+      const provider = new DeterministicFormalInterpretationProvider(
+        (request: FormalInterpretationRequest) => {
+          const protocol = request.allowedProtocols[0];
+          if (protocol === undefined) throw new Error("Expected protocol");
+          return providerResultFor(request, [
+            {
+              protocolVersion: 1,
+              candidateId: "candidate-valid",
+              protocol,
+              formalStatement: statementFor(request, "CORRECT"),
+              confidence: 1,
+              target: request.target,
+              source: echoInterpretationCandidateSource(request)
+            },
+            {
+              protocolVersion: 1,
+              candidateId: "candidate-unrelated",
+              protocol,
+              formalStatement: JSON.stringify({
+                protocol: RATIONAL_ARITHMETIC_PROTOCOL,
+                protocolVersion: 1,
+                claim: {
+                  kind: "EQUALITY",
+                  left: rationalLiteral("2"),
+                  right: rationalLiteral("2")
+                }
+              }),
+              confidence: 1,
+              target: request.target,
+              source: echoInterpretationCandidateSource(request)
+            }
+          ]);
+        }
+      );
+
+      const outcome = await new StudentReasoningAnalysisCoordinator(
+        new SessionRecoveryCoordinator(registry, store),
+        provider
+      ).analyze({
+        sessionId,
+        turnId: committed.turnId,
+        inputEpisodeId: committed.inputEpisodeId
+      });
+
+      expect(outcome).toMatchObject({
+        status: "ANALYZED",
+        interpretation: {
+          status: "NO_SUPPORTED_INTERPRETATION",
+          reason: "NO_INTERPRETATION",
+          candidateCount: 2
+        }
+      });
+      expect(Object.values(writer.getState().verificationRequests)).toHaveLength(0);
+      expect(Object.values(writer.getState().studentEvidence)).toHaveLength(0);
+    } finally {
+      store.close();
+    }
+  });
+
   it("preserves a deterministic contradiction as a local-error policy signal without creating false correctness evidence", async () => {
     const store = new SqliteEventStore(":memory:");
     try {
