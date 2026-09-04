@@ -4,6 +4,27 @@ A local-first technical interview application with an event-sourced session core
 
 The repository is intentionally explicit about implementation status. Backend capability is substantially ahead of the user-facing vertical integration; an implemented subsystem is not automatically a live product feature.
 
+## Windows releases
+
+Windows x64 releases are distributed through GitHub Releases rather than CI artifact browsing. A published release contains:
+
+```text
+InterviewApp-Setup-<version>.exe
+InterviewApp-Setup-<version>.exe.sha256
+```
+
+The installer is currently unsigned. Verify the downloaded installer before running it:
+
+```powershell
+$expected = (Get-Content .\InterviewApp-Setup-0.1.0.exe.sha256).Split()[0]
+$actual = (Get-FileHash .\InterviewApp-Setup-0.1.0.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actual -ne $expected) { throw "Checksum verification failed" }
+```
+
+After installation, launch Interview App and use Settings to inspect runtime readiness and the installed application version. Optional local model features may require system CPython 3.12/3.13 and model downloads; remote Antigravity reasoning requires the supported local CLI/runtime to be installed and authenticated.
+
+Maintainers create releases by committing the canonical root `package.json` version, tagging the exact green commit as `vMAJOR.MINOR.PATCH`, and pushing that tag. The release workflow validates tag/version agreement, builds the immutable tagged commit, runs packaged and upgrade checks, generates the checksum, and creates a draft GitHub Release for final review. See `docs/WINDOWS_DESKTOP_RELEASE.md`.
+
 ## Current product path
 
 The production-wired interview path currently provides:
