@@ -397,6 +397,64 @@ describe("desktop local AI readiness UX", () => {
     });
   });
 
+  it("does not pretend Re-check refreshed prerequisites through an older partial bridge", async () => {
+    Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
+    const stale = runtimeStatus({
+      speech: { state: "UNAVAILABLE", reasonCode: "PYTHON_RUNTIME_UNAVAILABLE" },
+      tts: { state: "UNAVAILABLE", reasonCode: "PYTHON_RUNTIME_UNAVAILABLE" },
+      vision: { state: "UNAVAILABLE", reasonCode: "PYTHON_RUNTIME_UNAVAILABLE" },
+      python: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_UNAVAILABLE",
+        strategy: "SYSTEM_CPYTHON",
+        supportedVersions: ["3.12", "3.13"]
+      }
+    });
+    const getLocalRuntimeStatus = vi.fn(async () => stale);
+    vi.stubGlobal("interviewDesktop", { getLocalRuntimeStatus });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <AppearanceProvider>
+          <SettingsPage
+            providerOptions={[READY_PROVIDER]}
+            providerOptionsLoading={false}
+            providerOptionsError={null}
+            onRefreshProviderOptions={vi.fn(async () => [READY_PROVIDER])}
+            onStartInterview={vi.fn()}
+          />
+        </AppearanceProvider>
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const recheck = Array.from(container.querySelectorAll("button"))
+      .find((button) => button.textContent.trim() === "Re-check");
+    if (!(recheck instanceof HTMLButtonElement)) {
+      throw new Error("Missing Re-check button");
+    }
+
+    await act(async () => {
+      recheck.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(getLocalRuntimeStatus).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain(
+      "Local runtime status could not be verified. Re-check or restart Interview App."
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("surfaces a partial desktop bridge instead of silently ignoring Python setup", async () => {
     Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
     const current = runtimeStatus({
