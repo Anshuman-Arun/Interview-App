@@ -57,7 +57,7 @@ export interface RendererDeliverySnapshot {
 export interface RendererHandleResult {
   readonly deliveryId: DeliveryId;
   readonly duplicate: boolean;
-  readonly phase: RendererDeliverySnapshot["phase"];
+  readonly phase: RendererDeliverySnapshot["phase"] | "NOT_EXPOSED";
 }
 
 interface TrackedDelivery {
@@ -174,7 +174,24 @@ export class RendererClient {
       }
     } catch (error) {
       if (error instanceof RendererPresentationNotExposedError && !entry.exposureBegan) {
+        const reason = error.message.trim().slice(0, 512)
+          || "Renderer confirmed presentation did not begin";
+        await this.acknowledgementSender.send(
+          RendererAcknowledgementCommandSchema.parse({
+            protocolVersion: 1,
+            type: "ACK_DELIVERY_NOT_EXPOSED",
+            requestId: this.requestIdFactory(),
+            sessionId: this.sessionId,
+            deliveryId: command.deliveryId,
+            reason
+          })
+        );
         this.tracked.delete(command.deliveryId);
+        return {
+          deliveryId: command.deliveryId,
+          duplicate: false,
+          phase: "NOT_EXPOSED"
+        };
       }
       throw error;
     }
