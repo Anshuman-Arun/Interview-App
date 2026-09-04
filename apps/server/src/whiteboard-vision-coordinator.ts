@@ -359,7 +359,7 @@ export class WhiteboardVisionCoordinator {
       request,
       this.backend,
       preparedImageRequest.payload
-    ).catch((error) => {
+    ).catch((error: unknown) => {
       visionTiming?.finish("FAILURE");
       throw error;
     });
