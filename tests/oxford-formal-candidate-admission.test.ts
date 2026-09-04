@@ -260,6 +260,35 @@ describe("Oxford formal target admission", () => {
     )).toBe(false);
 
     expect(admitted(
+      "oxford-euclid-primes",
+      "For the listed prime 31, the product plus one 31 leaves remainder 0 modulo 31.",
+      JSON.stringify({
+        protocol: "INTERVIEW_APP_MODULAR_ARITHMETIC_CLAIM",
+        protocolVersion: 1,
+        claim: {
+          kind: "CONGRUENCE",
+          left: integer("31"),
+          right: integer("0"),
+          modulus: "31"
+        }
+      })
+    )).toBe(false);
+
+    expect(admitted(
+      "oxford-triangle-medians",
+      "Along the median, the centroid ratio uses 2 and 1.",
+      JSON.stringify({
+        protocol: "INTERVIEW_APP_RATIONAL_ARITHMETIC_CLAIM",
+        protocolVersion: 1,
+        claim: {
+          kind: "EQUALITY",
+          left: rational("2"),
+          right: rational("2")
+        }
+      })
+    )).toBe(false);
+
+    expect(admitted(
       "oxford-divisibility-chain",
       "The numbers 6 and 24 have the same odd part.",
       JSON.stringify({
