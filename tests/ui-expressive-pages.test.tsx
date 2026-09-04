@@ -79,8 +79,8 @@ describe("expressive product page layer", () => {
       })
     );
 
-    expect(markup).toContain("Think on the page.");
-    expect(markup).toContain("Talk through the proof.");
+    expect(markup).toContain("Think aloud.");
+    expect(markup).toContain("Draw it out.");
     expect(markup).toContain("Return to room");
     expect(markup).toContain("Divisibility chains");
     expect(markup).not.toContain(">Enter interview<");
