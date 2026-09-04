@@ -184,8 +184,8 @@ describe("expressive product page layer", () => {
         activeSessionCount: 2,
         activeProblemTitle: null,
         sessions: [
-          sessions[0],
-          { ...sessions[0], sessionId: COMPLETE, updatedAt: "2026-09-01T20:21:00.000Z" }
+          sessions[0]!,
+          { ...sessions[0]!, sessionId: COMPLETE, updatedAt: "2026-09-01T20:21:00.000Z" }
         ],
         onStartInterview: vi.fn(),
         onResumeInterview: vi.fn(),
