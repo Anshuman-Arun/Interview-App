@@ -96,16 +96,23 @@ export function NewInterviewPage({
   const desktopRuntime = useMemo(() => getDesktopRuntimeBridge(), []);
   const [localRuntimeStatus, setLocalRuntimeStatus] =
     useState<DesktopRuntimeStatus | undefined>();
+  const [localRuntimeStatusError, setLocalRuntimeStatusError] = useState(false);
 
   useEffect(() => {
     if (desktopRuntime === undefined) return;
     let active = true;
     void readDesktopRuntimeStatus(desktopRuntime)
       .then((status) => {
-        if (active) setLocalRuntimeStatus(status);
+        if (active) {
+          setLocalRuntimeStatus(status);
+          setLocalRuntimeStatusError(false);
+        }
       })
       .catch(() => {
-        if (active) setLocalRuntimeStatus(undefined);
+        if (active) {
+          setLocalRuntimeStatus(undefined);
+          setLocalRuntimeStatusError(true);
+        }
       });
     return () => {
       active = false;
@@ -354,11 +361,15 @@ export function NewInterviewPage({
           )}
         </section>
 
-        {localRuntimeStatus !== undefined && (
+        {desktopRuntime !== undefined && localRuntimeStatusError ? (
+          <div className="new-interview__capability-note" aria-live="polite">
+            <span>Local AI readiness could not be verified — typed input and drawing still work.</span>
+          </div>
+        ) : localRuntimeStatus !== undefined && (
           localRuntimeStatus.speech.state !== "READY"
           || localRuntimeStatus.tts.state !== "READY"
           || localRuntimeStatus.vision.state !== "READY"
-        ) && (
+        ) ? (
           <div className="new-interview__capability-note" aria-live="polite">
             {(localRuntimeStatus.speech.state !== "READY"
               || localRuntimeStatus.tts.state !== "READY") && (
@@ -368,7 +379,7 @@ export function NewInterviewPage({
               <span>Whiteboard recognition unavailable — drawing still works.</span>
             )}
           </div>
-        )}
+        ) : null}
 
         <section className="new-interview__section">
           <div className="new-interview__section-heading">
