@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   BoardActionSchema,
+  DeliveryIdSchema,
   DisclosureIdSchema,
   SocraticActionSchema,
   newGenerationId,
@@ -651,7 +652,7 @@ describe("Antigravity CLI one-turn protocol", () => {
         {
           operation: "erase_ai_annotation",
           layer: "AI_ANNOTATION",
-          targetAnnotationId: "delivery_prior_annotation" as never,
+          targetAnnotationId: DeliveryIdSchema.parse("delivery_prior_annotation"),
           annotationPurpose: "remove obsolete prior circle"
         }
       ]
