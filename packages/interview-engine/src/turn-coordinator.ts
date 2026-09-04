@@ -122,7 +122,7 @@ export const ProcessProposalResultSchema = z.object({
 }).strict();
 export type ProcessProposalResult = z.infer<typeof ProcessProposalResultSchema>;
 
-function validateProposalBoardReferences(
+export function validateProposalBoardReferences(
   proposal: InterviewerProposal,
   scene: ReturnType<typeof buildBoardSceneContext>
 ): string | undefined {
