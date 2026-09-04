@@ -34,12 +34,14 @@ export interface DesktopRuntimeStatus {
   readonly tts: DesktopRuntimeCapabilityStatus;
   readonly vision: DesktopRuntimeCapabilityStatus;
   readonly python: DesktopPythonRuntimeStatus;
+  readonly pythonSetup: DesktopModelSetupStatus;
   readonly voiceSetup: DesktopModelSetupStatus;
   readonly visionSetup: DesktopModelSetupStatus;
 }
 
 export interface DesktopRuntimeBridge {
   readonly getLocalRuntimeStatus: () => Promise<unknown>;
+  readonly installPythonRuntime?: () => Promise<unknown>;
   readonly installVoiceModels?: () => Promise<unknown>;
   readonly installVisionModel?: () => Promise<unknown>;
   readonly restartApp?: () => Promise<void>;
@@ -49,6 +51,7 @@ export function getDesktopRuntimeBridge(): DesktopRuntimeBridge | undefined {
   const bridge = (globalThis as typeof globalThis & {
     readonly interviewDesktop?: {
       readonly getLocalRuntimeStatus?: unknown;
+      readonly installPythonRuntime?: unknown;
       readonly installVoiceModels?: unknown;
       readonly installVisionModel?: unknown;
       readonly restartApp?: unknown;
@@ -62,6 +65,9 @@ export function getDesktopRuntimeBridge(): DesktopRuntimeBridge | undefined {
   }
   return {
     getLocalRuntimeStatus: bridge.getLocalRuntimeStatus.bind(bridge),
+    ...(typeof bridge.installPythonRuntime === "function"
+      ? { installPythonRuntime: bridge.installPythonRuntime.bind(bridge) }
+      : {}),
     ...(typeof bridge.installVoiceModels === "function"
       ? { installVoiceModels: bridge.installVoiceModels.bind(bridge) }
       : {}),
@@ -84,6 +90,7 @@ export function parseDesktopRuntimeStatus(
     "tts",
     "vision",
     "python",
+    "pythonSetup",
     "voiceSetup",
     "visionSetup"
   ])) {
@@ -93,6 +100,7 @@ export function parseDesktopRuntimeStatus(
   const tts = parseCapability(value["tts"]);
   const vision = parseCapability(value["vision"]);
   const python = parsePython(value["python"]);
+  const pythonSetup = parseSetup(value["pythonSetup"]);
   const voiceSetup = parseSetup(value["voiceSetup"]);
   const visionSetup = parseSetup(value["visionSetup"]);
   if (
@@ -101,6 +109,7 @@ export function parseDesktopRuntimeStatus(
     || tts === undefined
     || vision === undefined
     || python === undefined
+    || pythonSetup === undefined
     || voiceSetup === undefined
     || visionSetup === undefined
   ) {
@@ -112,6 +121,7 @@ export function parseDesktopRuntimeStatus(
     tts,
     vision,
     python,
+    pythonSetup,
     voiceSetup,
     visionSetup
   };
