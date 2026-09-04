@@ -554,7 +554,7 @@ export class SessionObservability {
     try {
       const metrics = this.load(sessionId) ?? emptyMetrics(this.persistenceUnavailable);
       operation(metrics);
-      this.#cache.set(sessionId, metrics);
+      this.rememberInCache(sessionId, metrics);
       try {
         this.#store?.write(sessionId, metrics);
       } catch {
@@ -571,13 +571,23 @@ export class SessionObservability {
     try {
       const persisted = this.#store?.read(sessionId);
       if (persisted !== undefined) {
-        this.#cache.set(sessionId, persisted);
+        this.rememberInCache(sessionId, persisted);
         return persisted;
       }
     } catch {
       return undefined;
     }
     return undefined;
+  }
+
+  private rememberInCache(sessionId: SessionId, metrics: SessionMetrics): void {
+    this.#cache.delete(sessionId);
+    this.#cache.set(sessionId, metrics);
+    while (this.#cache.size > MAX_PERSISTED_SESSIONS) {
+      const oldest = this.#cache.keys().next().value;
+      if (oldest === undefined) break;
+      this.#cache.delete(oldest);
+    }
   }
 
   private project(metricsInput: SessionMetrics): SessionPerformanceSummary {
