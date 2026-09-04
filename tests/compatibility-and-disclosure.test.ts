@@ -50,6 +50,36 @@ describe("compatibility and disclosure gates", () => {
     }
   });
 
+  it("requires an exact recorded provider context before admitting any board output", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const result = await harness.turns.processProposal({
+        envelope: providerEnvelope(harness),
+        problem: sixPeopleProblem,
+        proposal: {
+          realizedAction: "PROBE_JUSTIFICATION",
+          claimedDisclosureLevel: 0,
+          claimedDisclosureIds: [],
+          speechText: harness.safeProbe,
+          boardActions: [{
+            operation: "draw_segment",
+            layer: "AI_ANNOTATION",
+            points: [{ x: 0, y: 0 }, { x: 20, y: 20 }],
+            annotationPurpose: "board output without provider context"
+          }]
+        },
+        validator: harness.validator
+      });
+      expect(result.accepted).toBe(false);
+      expect(result.reason).toMatch(/recorded compiled provider context/u);
+      expect(harness.writer.getState().generations[harness.generationId]?.status)
+        .toBe("SUPERSEDED");
+      expect(Object.keys(harness.writer.getState().deliveries)).toHaveLength(0);
+    } finally {
+      harness.store.close();
+    }
+  });
+
   it("increments Context Epoch on transcript correction and invalidates prior basis", async () => {
     const harness = await createCoreHarness();
     try {
@@ -97,6 +127,37 @@ describe("compatibility and disclosure gates", () => {
       protectedDisclosures: sixPeopleProblem.interviewer.protectedDisclosures
     });
     expect(result.accepted).toBe(false);
+    expect(result.analysis?.effectiveDisclosureLevel).toBeGreaterThan(0);
+  });
+
+  it("applies the same disclosure ceiling to speech and board output together", () => {
+    const protectedDisclosure = sixPeopleProblem.interviewer.protectedDisclosures[0];
+    if (protectedDisclosure === undefined) throw new Error("Expected protected disclosure fixture");
+    const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer([
+      "Try substituting this.",
+      "support the spoken prompt"
+    ]));
+    const result = validator.validate({
+      proposal: {
+        realizedAction: "PROBE_JUSTIFICATION",
+        claimedDisclosureLevel: 0,
+        claimedDisclosureIds: [],
+        speechText: "Try substituting this.",
+        boardActions: [{
+          operation: "write_equation",
+          layer: "AI_ANNOTATION",
+          content: protectedDisclosure.fact,
+          annotationPurpose: "support the spoken prompt"
+        }]
+      },
+      request: {
+        requiredAction: "PROBE_JUSTIFICATION",
+        maximumDisclosure: 0
+      },
+      protectedDisclosures: sixPeopleProblem.interviewer.protectedDisclosures
+    });
+    expect(result.accepted).toBe(false);
+    if (result.accepted) throw new Error("Expected mixed-realization disclosure rejection");
     expect(result.analysis?.effectiveDisclosureLevel).toBeGreaterThan(0);
   });
 
