@@ -1545,6 +1545,19 @@ export function useInterviewSession(
         setIsPaused(false);
         return;
       }
+
+      // A pointer-up can have already admitted a mutation just before Home
+      // revokes further mutation admission. Wait for that admitted work to
+      // settle before comparing the still-mounted local canvas to server state.
+      const pendingCoordinator =
+        boardSyncSessionRef.current === targetSessionId
+          ? boardSyncRef.current
+          : null;
+      if (pendingCoordinator !== null) {
+        await pendingCoordinator.awaitQuiescence();
+      }
+      if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+
       await synchronizeWhiteboardFor(targetSessionId);
       if (sessionTransitionEpochRef.current !== transitionEpoch) return;
       const coordinator = boardSyncRef.current;
@@ -1566,7 +1579,16 @@ export function useInterviewSession(
       sessionMutationAdmissionRef.current = false;
       setIsPaused(true);
       const message = err instanceof Error ? err.message : "Failed to resume interview";
-      setError(message);
+      setWhiteboardSync((current) =>
+        current.status === "UNSYNCHRONIZED"
+          ? current
+          : {
+              status: "UNSYNCHRONIZED",
+              pendingMutationCount: 0,
+              reason: message
+            }
+      );
+      setError("Whiteboard is reconnecting. Try Resume again in a moment.");
       throw err;
     }
   }, [
