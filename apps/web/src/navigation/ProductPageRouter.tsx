@@ -204,7 +204,12 @@ export function ProductPageRouter({
       title={title}
       kicker={kicker}
       onNavigate={onNavigatePage}
-      reasoningReady={providerOptions.some((option) => option.availability === "AVAILABLE")}
+      reasoningReady={
+        !providerOptionsLoading
+        && providerOptionsError === null
+        && providerOptions.some((option) => option.availability === "AVAILABLE")
+      }
+      reasoningChecking={providerOptionsLoading}
       notice={notice}
       onDismissNotice={onDismissNotice}
     >
