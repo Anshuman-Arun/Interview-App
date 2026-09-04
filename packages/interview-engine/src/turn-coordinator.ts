@@ -171,6 +171,9 @@ export function validateProposalBoardReferences(
       if (failure !== undefined) return failure;
     }
     if (action.operation === "draw_arrow_between") {
+      if (action.fromShapeId === undefined || action.toShapeId === undefined) {
+        return "draw_arrow_between omitted a required scene shape reference";
+      }
       const fromFailure = requireSceneShape(
         action.fromShapeId,
         action.fromShapeRevision,
