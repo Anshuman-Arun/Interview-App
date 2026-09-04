@@ -76,7 +76,9 @@ export const TranscriptFeed: React.FC<TranscriptFeedProps> = ({
       <header className="transcript-feed__header">
         <strong>Conversation</strong>
         <div className="transcript-feed__header-actions">
-          <span className="transcript-feed__count">{items.length} turns · live transcript</span>
+          <span className="transcript-feed__count">
+            {items.length} {items.length === 1 ? "entry" : "entries"} · live transcript
+          </span>
           {showJump && (
             <button type="button" className="transcript-feed__jump" onClick={scrollToLatest}>
               Jump to latest ↓
