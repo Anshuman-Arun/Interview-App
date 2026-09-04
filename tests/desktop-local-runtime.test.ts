@@ -661,6 +661,43 @@ describe("desktop local model runtime", () => {
         reasonCode: "START_CANCELLED"
       }
     });
+    expect(composition.getPythonRuntimeStatus()).toEqual({
+      state: "UNAVAILABLE",
+      reasonCode: "START_CANCELLED"
+    });
+  });
+
+  it("does not claim Python readiness when asset-cache admission fails before interpreter probing", async () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-python-cache-admission-failure-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+
+    const mutable = composition as unknown as {
+      assetManager: { cleanupTemporary(): Promise<void> };
+      pythonRuntimeCompatible(executable: string, signal?: AbortSignal): boolean;
+    };
+    mutable.assetManager.cleanupTemporary = async () => {
+      throw new Error("synthetic cache admission failure");
+    };
+    mutable.pythonRuntimeCompatible = () => {
+      throw new Error("Python must not be probed after cache admission failed");
+    };
+
+    await expect(composition.start()).resolves.toBeUndefined();
+    expect(composition.getPythonRuntimeStatus()).toEqual({
+      state: "UNAVAILABLE",
+      reasonCode: "PYTHON_RUNTIME_UNVERIFIED"
+    });
+    expect(composition.getCapabilityStatus()).toEqual({
+      speech: { state: "FAILED", reasonCode: "ASSET_CACHE_UNSAFE" },
+      tts: { state: "FAILED", reasonCode: "ASSET_CACHE_UNSAFE" },
+      vision: { state: "FAILED", reasonCode: "ASSET_CACHE_UNSAFE" }
+    });
   });
 
   it("does not degrade to typed-only mode when worker cleanup is unverified", async () => {
@@ -727,6 +764,7 @@ describe("desktop local model runtime", () => {
         reasonCode: "VISION_ASSET_MISSING"
       }
     });
+    expect(composition.getPythonRuntimeStatus()).toEqual({ state: "READY" });
   });
 
   it("aborts and joins startup before local runtime shutdown can complete", async () => {
