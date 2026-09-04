@@ -211,7 +211,7 @@ export function HomePage({
       </section>
 
       {activeSessionCount > 1 ? (
-        <section className="expressive-home__active" role="alert">
+        <section className="expressive-home__active" data-conflict="true" role="alert">
           <span className="expressive-home__active-index">CHECK</span>
           <div>
             <strong>{activeSessionCount} active sessions need resolution</strong>
