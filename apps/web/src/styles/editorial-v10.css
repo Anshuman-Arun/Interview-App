@@ -619,7 +619,7 @@ summary:focus-visible,
   font: 500 10px/1 var(--font-ui);
 }
 
-.expressive-home__secondary:hover {
+.expressive-home__secondary:hover:not(:disabled) {
   border-color: var(--ink);
   color: var(--ink);
 }
@@ -3237,4 +3237,10 @@ summary:focus-visible,
 .app-header__board-state[data-sync-status="UNINITIALIZED"] > span,
 .board-sync i[data-sync="UNINITIALIZED"] {
   background: var(--text-muted);
+}
+
+.expressive-home__secondary:disabled,
+.expressive-home__section-head button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
 }
