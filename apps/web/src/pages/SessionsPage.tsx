@@ -71,21 +71,20 @@ export function SessionsPage({
           <small>completed</small>
         </div>
         <p>
-          A ledger, not a dashboard. Resume work, inspect finished sessions,
-          and keep exact problem/version history separate.
+          Resume active work, inspect finished interviews, and keep each session tied to the problem version it used.
         </p>
       </section>
 
       <section className="expressive-sessions__history" data-testid="longitudinal-history-panel">
         <header>
-          <span>GROUND TRUTH</span>
-          <strong>Longitudinal read</strong>
+          <span>PROGRESS</span>
+          <strong>Across sessions</strong>
           <small>
             {history === null
               ? historyLoading
                 ? "reading…"
-                : historyError ?? "no grounded aggregate yet"
-              : `${String(history.longitudinal.includedSessionCount)} bounded session projection(s)`}
+                : historyError ?? "no session summary yet"
+              : `${String(history.longitudinal.includedSessionCount)} session(s) included`}
           </small>
         </header>
 
@@ -110,7 +109,7 @@ export function SessionsPage({
               <div className="expressive-sessions__improvement">
                 {history.longitudinal.improvement.slice(0, 3).map((item) => (
                   <span key={`${item.fromSessionId}:${item.toSessionId}`}>
-                    exact-problem Δ {item.compositeScoreDelta > 0 ? "+" : ""}
+                    Score change {item.compositeScoreDelta > 0 ? "+" : ""}
                     {item.compositeScoreDelta}
                   </span>
                 ))}
@@ -119,8 +118,7 @@ export function SessionsPage({
 
             {history.longitudinal.sessionTruncation.truncated && (
               <p>
-                {history.longitudinal.sessionTruncation.remainingCount} session(s)
-                sit outside this bounded aggregate.
+                {history.longitudinal.sessionTruncation.remainingCount} older session(s) are not included in this summary.
               </p>
             )}
           </>
