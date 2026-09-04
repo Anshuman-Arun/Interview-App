@@ -262,6 +262,7 @@ interface TtsAssembly {
 
 export class VoiceSynthesisCoordinator {
   private readonly activeBySession = new Map<SessionId, Set<string>>();
+  private readonly cancelledRequests = new Set<string>();
   private readonly inFlightSourceDeliveries = new Map<SessionId, Set<DeliveryId>>();
   private readonly runtime: VoiceTtsRuntimeSnapshot;
 
@@ -287,6 +288,7 @@ export class VoiceSynthesisCoordinator {
     this.inFlightSourceDeliveries.set(sessionId, inFlightForSession);
 
     let registeredAudioRef: string | undefined;
+    let ttsTiming: LocalTimingHandle | undefined;
     try {
       await this.sessions.ensureRecovered(sessionId);
       const writer = this.sessions.getWriter(sessionId);
@@ -340,7 +342,7 @@ export class VoiceSynthesisCoordinator {
       };
       this.rememberActive(sessionId, request.requestId);
       this.observability?.recordTtsRequest(sessionId);
-      const ttsTiming = this.observability?.beginLocalTiming(sessionId, "TTS");
+      ttsTiming = this.observability?.beginLocalTiming(sessionId, "TTS");
 
       try {
         const summary = await this.runtime.worker.handle(request, async (messageInput) => {
@@ -400,7 +402,9 @@ export class VoiceSynthesisCoordinator {
         });
 
         if (summary.kind !== "SYNTHESIS" || summary.summary.outcome !== "DONE") {
-          ttsTiming?.finish("FAILURE");
+          ttsTiming?.finish(
+            this.cancelledRequests.has(request.requestId) ? "CANCELLED" : "FAILURE"
+          );
           return undefined;
         }
         ttsTiming?.finish("SUCCESS");
@@ -482,6 +486,7 @@ export class VoiceSynthesisCoordinator {
         return audioAtom;
       } finally {
         this.forgetActive(sessionId, request.requestId);
+        this.cancelledRequests.delete(request.requestId);
       }
     } catch {
       ttsTiming?.finish("FAILURE");
@@ -499,7 +504,7 @@ export class VoiceSynthesisCoordinator {
   public async cancelSession(sessionIdInput: SessionId): Promise<void> {
     const sessionId = SessionIdSchema.parse(sessionIdInput);
     const requestIds = [...(this.activeBySession.get(sessionId) ?? [])];
-    for (const _requestId of requestIds) this.observability?.recordTtsCancellation(sessionId);
+    for (const requestId of requestIds) this.cancelledRequests.add(requestId);
     await Promise.all(requestIds.map(async (requestId) => {
       try {
         await this.runtime.worker.handle({
