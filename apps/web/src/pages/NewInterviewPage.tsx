@@ -167,6 +167,15 @@ export function NewInterviewPage({
     targets.find((entry) => targetKey(entry) === selectedTargetKey) ?? null;
   const selectedProvider =
     providerOptions.find((option) => providerKey(option) === selectedProviderKey) ?? null;
+  const durationCandidate =
+    durationText.trim().length === 0 ? null : Number(durationText);
+  const durationInvalid =
+    durationCandidate !== null
+    && (
+      !Number.isInteger(durationCandidate)
+      || durationCandidate < 5
+      || durationCandidate > 480
+    );
 
   const submit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
@@ -185,12 +194,12 @@ export function NewInterviewPage({
     }
 
     let durationMinutes: number | undefined;
-    if (durationText.trim().length > 0) {
-      durationMinutes = Number(durationText);
-      if (!Number.isInteger(durationMinutes) || durationMinutes < 5 || durationMinutes > 480) {
-        setFormError("Duration must be a whole number from 5 to 480 minutes.");
-        return;
-      }
+    if (durationInvalid) {
+      setFormError("Duration must be a whole number from 5 to 480 minutes.");
+      return;
+    }
+    if (durationCandidate !== null) {
+      durationMinutes = durationCandidate;
     }
 
     const common = {
@@ -242,7 +251,12 @@ export function NewInterviewPage({
     activeSessionId !== null || activeSessionCount > 0;
   const launchChecking = catalogLoading || providerOptionsLoading;
   const launchBlocked =
-    metadataUnavailable || sessionAuthorityBlocked || launchChecking;
+    metadataUnavailable
+    || sessionAuthorityBlocked
+    || launchChecking
+    || selectedTarget === null
+    || selectedProvider?.availability !== "AVAILABLE"
+    || durationInvalid;
 
   return (
     <div className="new-interview" data-testid="new-interview-page">
@@ -295,7 +309,21 @@ export function NewInterviewPage({
                   </select><i aria-hidden="true">⌄</i>
                 </div></label>
                 <label className="new-interview__field new-interview__duration-field"><span>Duration</span><div className="new-interview__duration">
-                  <input type="number" min={5} max={480} step={1} value={durationText} onChange={(event) => setDurationText(event.target.value)} placeholder="—" data-testid="duration-input" /><small>min</small>
+                  <input
+                    type="number"
+                    min={5}
+                    max={480}
+                    step={1}
+                    value={durationText}
+                    onChange={(event) => {
+                      setDurationText(event.target.value);
+                      if (formError !== null) setFormError(null);
+                    }}
+                    placeholder="—"
+                    aria-invalid={durationInvalid}
+                    title={durationInvalid ? "Enter a whole number from 5 to 480 minutes" : undefined}
+                    data-testid="duration-input"
+                  /><small>min</small>
                 </div></label>
               </div>
             )}
@@ -360,10 +388,10 @@ export function NewInterviewPage({
             <div><span>Model</span><strong>{selectedProvider === null ? "Not selected" : `${selectedProvider.providerDisplayName} · ${selectedProvider.modelDisplayName}`}</strong></div>
             <div><span>Intervention</span><strong>{INTERVENTION_LABELS[interventionPolicy]}</strong></div>
             <div><span>Input</span><strong>{mode === "OXFORD_MATHEMATICS" ? "Voice + tldraw + text" : "Structured"}</strong></div>
-            <div><span>Duration</span><strong>{durationText.trim().length === 0 ? "Open" : `${durationText} min`}</strong></div>
+            <div><span>Duration</span><strong>{durationInvalid ? "Invalid" : durationText.trim().length === 0 ? "Open" : `${durationText} min`}</strong></div>
           </div>
-          <button className="new-interview__start" type="submit" disabled={sessionAuthorityBlocked || startPending || catalogLoading || providerOptionsLoading || metadataUnavailable || selectedTarget === null || selectedProvider?.availability !== "AVAILABLE"} data-testid="start-configured-session-btn"><span>{startPending ? "Starting…" : "Start interview"}</span><em aria-hidden="true">→</em></button>
-          <div className="new-interview__ready-note"><i data-ready={String(!launchBlocked)} aria-hidden="true" /><span>{activeSessionCount > 1 ? "Resolve the active-session conflict from Sessions." : activeSessionId !== null ? "Current interview owns session authority." : launchChecking ? "Revalidating launch readiness…" : metadataUnavailable ? "Resolve launch readiness first." : "Server revalidates this configuration on start."}</span></div>
+          <button className="new-interview__start" type="submit" disabled={startPending || launchBlocked} data-testid="start-configured-session-btn"><span>{startPending ? "Starting…" : "Start interview"}</span><em aria-hidden="true">→</em></button>
+          <div className="new-interview__ready-note"><i data-ready={String(!launchBlocked)} aria-hidden="true" /><span>{activeSessionCount > 1 ? "Resolve the active-session conflict from Sessions." : activeSessionId !== null ? "Current interview owns session authority." : durationInvalid ? "Duration must be a whole number from 5 to 480 minutes." : launchChecking ? "Revalidating launch readiness…" : metadataUnavailable || selectedTarget === null || selectedProvider?.availability !== "AVAILABLE" ? "Resolve launch readiness first." : "Server revalidates this configuration on start."}</span></div>
         </aside>
       </form>
     </div>
