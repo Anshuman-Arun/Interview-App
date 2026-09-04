@@ -651,6 +651,8 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
       onVoiceCommit: () => undefined
     });
     expect(elements[0]?.pauseCount).toBeGreaterThanOrEqual(1);
+    expect(server.observability.read(sessionId).summary?.local.tts.bargeInInterruptions)
+      .toBe(1);
 
     const lateAudio = await new TurnCoordinator(writer).queueAudioDeliveryFromValidatedText({
       sourceDeliveryId: sourceText.deliveryId,
@@ -1236,6 +1238,8 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
     expect(Object.values(state.utterances).every(
       (utterance) => utterance.status !== "CAPTURING"
     )).toBe(true);
+    expect(server.observability.read(sessionId).summary?.local.stt.failures)
+      .toBe(1);
   });
 
   it("does not expose trailing worker onset events after a terminal event revoked the stream", async () => {
