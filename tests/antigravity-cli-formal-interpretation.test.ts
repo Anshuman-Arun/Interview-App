@@ -353,6 +353,40 @@ describe("Antigravity formal interpretation adapter", () => {
     })).rejects.toMatchObject({ code: "INVALID_PROVIDER_RESULT" });
   });
 
+  it("rejects provider attempts to choose application-owned provenance", async () => {
+    const result = modelCandidateResult();
+    const malicious = {
+      ...result,
+      requestId: "provider-chosen-request",
+      candidates: result.candidates.map((candidate) => ({
+        ...candidate,
+        target: {
+          problemId: "another-problem",
+          subject: { kind: "CLAIM", claimId: "provider-target" },
+          dimension: "CORRECTNESS"
+        },
+        source: {
+          turnId: "provider-turn"
+        }
+      }))
+    };
+    const adapter = createAntigravityCliFormalInterpretationAdapter(
+      runtime(async (execution) =>
+        executionResult(formalStream(execution, malicious)))
+    );
+
+    await expect(adapter.interpret({
+      request: request(),
+      publicProblem: {
+        id: "oxford-domino-chessboard",
+        version: "1.0.0",
+        prompt: "Public prompt",
+        givenInformation: []
+      },
+      signal: new AbortController().signal
+    })).rejects.toMatchObject({ code: "INVALID_PROVIDER_RESULT" });
+  });
+
   it("rejects any tool or subagent activity", async () => {
     const adapter = createAntigravityCliFormalInterpretationAdapter(
       runtime(async (execution) => executionResult(formalStream(
