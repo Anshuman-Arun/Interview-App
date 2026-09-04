@@ -1,0 +1,524 @@
+r(--ink)}
+body[data-theme="dark"] .brand-lockup strong,
+body[data-theme="dark"] .page-title,
+body[data-theme="dark"] .hero-title,
+body[data-theme="dark"] .mode-card h3,
+body[data-theme="dark"] .config-head h2{color:var(--ink)}
+body[data-theme="dark"] .status-chip,
+body[data-theme="dark"] .icon-btn{color:var(--muted)}
+
+@media(min-width:2200px){
+  .hero-title{font-size:clamp(112px,4.05vw,132px)}
+  .hero-copy{max-width:1150px}
+}
+@media(max-width:1200px){
+  .hero-title em{text-align:left}
+  .hero-dek,.hero-actions,.copy-picker{margin-left:0}
+  .mode-choice,.interview-basics,.provider-card-v3{margin-left:0}
+}
+@media(max-width:820px){
+  .model-selected-facts{grid-template-columns:1fr 1fr}
+  .model-selected-facts span:nth-child(2){border-right:0}
+  .model-selected-facts span{border-bottom:1px solid var(--rule-faint)}
+  .model-select .model-catalog{width:min(700px,calc(100vw - 34px))}
+  .model-metrics{grid-template-columns:1fr 1fr 1fr}
+  .interview-basics{grid-template-columns:1fr}
+  .interview-basics>.field:first-child{border-right:0;border-bottom:1px solid var(--rule-soft)}
+}
+
+
+/* ================================================================
+   V5 — stable landing composition, mathematical folio, draggable split
+   ================================================================ */
+
+/* Sidebar: restore readiness to the actual bottom. Add a quiet editorial
+   gutter instead of moving runtime state up into the navigation. */
+.side-rail{
+  position:relative;
+  overflow:hidden;
+}
+.side-rail::after{
+  content:"";
+  position:absolute;
+  z-index:0;
+  inset:0 auto 0 0;
+  width:38px;
+  background:color-mix(in srgb,var(--paper-lo) 38%,transparent);
+  border-right:1px solid var(--rule-faint);
+  pointer-events:none;
+}
+.side-rail::before{
+  left:38px;
+  z-index:0;
+}
+.side-brand,.new-cta,.side-nav,.side-runtime{position:relative;z-index:1}
+.side-runtime{
+  margin-top:auto!important;
+  margin-right:1px;
+  margin-bottom:1px;
+  margin-left:1px;
+}
+.side-nav{
+  padding-left:0;
+  padding-right:0;
+}
+.side-nav button{
+  grid-template-columns:18px minmax(0,1fr);
+  padding-left:6px;
+}
+.side-nav button.active:before{
+  left:-1px;
+  top:7px;
+  bottom:7px;
+  width:2px;
+}
+.nav-glyph{
+  text-align:center;
+  color:var(--verm);
+  opacity:.7;
+}
+.side-brand{
+  padding-left:5px;
+}
+.new-cta{
+  margin-left:3px;
+  margin-right:3px;
+}
+
+/* Landing hero: two explicit typographic rows. The indent is tied to the
+   type size (em), not viewport width, so zooming does not move it around. */
+.home-wrap{
+  width:min(100%,2100px);
+  max-width:none;
+  margin:0 auto;
+}
+.home-hero{
+  width:100%;
+  min-width:0;
+  grid-template-columns:minmax(0,1.16fr) minmax(350px,.72fr);
+  gap:clamp(34px,4vw,96px);
+  padding-left:clamp(0px,1vw,18px);
+  padding-right:clamp(0px,1vw,18px);
+}
+.hero-copy{
+  min-width:0;
+  container-type:normal;
+}
+.hero-title{
+  display:block;
+  width:max-content;
+  max-width:100%;
+  margin-top:24px;
+  font-size:clamp(78px,7.35vw,126px);
+  line-height:.83;
+  letter-spacing:-.058em;
+  white-space:nowrap;
+}
+.hero-title em{
+  display:block;
+  width:max-content;
+  max-width:calc(100% - 1.15em);
+  margin-left:1.15em!important;
+  padding:0;
+  text-align:left!important;
+  font-size:.94em;
+  white-space:nowrap;
+  color:var(--ink-2);
+}
+.hero-dek,.hero-actions,.copy-picker{
+  margin-left:1.55em;
+}
+.folio{
+  min-width:0;
+  width:100%;
+  display:flex;
+  justify-content:center;
+}
+.folio-sheet{
+  width:min(100%,520px);
+  max-width:100%;
+  transform:rotate(.35deg);
+}
+.folio-board-v3{
+  top:70px;
+  right:32px;
+  bottom:88px;
+  left:32px;
+}
+.folio-board-v3 svg{
+  overflow:hidden;
+}
+.folio-main-line{
+  stroke-width:2;
+}
+.folio-distance{
+  stroke-width:1.65;
+  opacity:.9;
+}
+.folio-right-angle{
+  stroke-width:1.25;
+  opacity:.65;
+}
+.folio-label{
+  font-family:Georgia,"Times New Roman",serif;
+  font-size:17px;
+  fill:var(--ink);
+}
+.folio-label-p{
+  fill:var(--verm);
+  font-style:italic;
+}
+
+/* Custom menus on the compact Problem row should align to the full field cell,
+   not appear inset inside it. */
+.interview-basics .custom-select{
+  position:static;
+}
+.interview-basics .field{
+  position:relative;
+}
+.interview-basics .custom-select-menu{
+  left:-12px;
+  right:-12px;
+  top:calc(100% + 1px);
+  width:auto;
+  border-radius:0 0 3px 3px;
+  box-shadow:0 18px 34px rgba(37,29,19,.15);
+}
+
+/* Oxford live split: genuine resizable divider. */
+.live-main{
+  --oxford-left:38%;
+  display:grid;
+  grid-template-columns:minmax(300px,var(--oxford-left)) 9px minmax(360px,1fr);
+  overflow:hidden;
+}
+.reasoning-pane{
+  border-right:0;
+}
+.split-divider{
+  position:relative;
+  z-index:12;
+  min-width:9px;
+  width:9px;
+  cursor:col-resize;
+  touch-action:none;
+  background:color-mix(in srgb,var(--paper-lo) 48%,var(--paper));
+  border-right:1px solid var(--rule-soft);
+  border-left:1px solid var(--rule-soft);
+  outline:none;
+}
+.split-divider::before{
+  content:"";
+  position:absolute;
+  top:0;
+  bottom:0;
+  left:50%;
+  width:1px;
+  transform:translateX(-50%);
+  background:var(--rule);
+  opacity:.55;
+}
+.split-divider:hover,
+.split-divider[data-dragging="true"],
+.split-divider:focus-visible{
+  background:var(--verm-soft);
+}
+.split-divider:hover::before,
+.split-divider[data-dragging="true"]::before,
+.split-divider:focus-visible::before{
+  background:var(--verm);
+  opacity:1;
+}
+.split-divider-grip{
+  position:absolute;
+  top:50%;
+  left:50%;
+  width:5px;
+  transform:translate(-50%,-50%);
+  display:grid;
+  gap:3px;
+}
+.split-divider-grip i{
+  display:block;
+  width:5px;
+  height:1px;
+  background:var(--muted);
+}
+.split-divider:hover .split-divider-grip i,
+.split-divider[data-dragging="true"] .split-divider-grip i{
+  background:var(--verm);
+}
+
+/* Dark mode: logo itself becomes white, not merely "light ink". */
+body[data-theme="dark"] .mark .bracket{
+  stroke:#fff!important;
+}
+body[data-theme="dark"] .mark .dot{
+  fill:#fff!important;
+}
+body[data-theme="dark"] .brand-lockup strong,
+body[data-theme="dark"] .live-id strong{
+  color:#fff!important;
+}
+body[data-theme="dark"] .folio-label{
+  fill:var(--ink);
+}
+body[data-theme="dark"] .folio-label-p{
+  fill:var(--verm);
+}
+body[data-theme="dark"] .split-divider{
+  background:#302e2b;
+  border-color:#4a4742;
+}
+body[data-theme="dark"] .interview-basics .custom-select-menu{
+  background:var(--paper-hi);
+  box-shadow:0 18px 36px rgba(0,0,0,.42);
+}
+
+/* 3440×1440: preserve the same composition rather than stretching the indent. */
+@media(min-width:2200px){
+  .home-hero{
+    grid-template-columns:minmax(0,1.22fr) minmax(500px,.68fr);
+    gap:clamp(80px,5vw,150px);
+  }
+  .hero-title{
+    font-size:126px;
+  }
+  .hero-title em{
+    margin-left:1.15em!important;
+  }
+  .hero-dek,.hero-actions,.copy-picker{
+    margin-left:1.55em;
+  }
+  .folio-sheet{
+    width:560px;
+  }
+}
+
+/* Normal desktop: keep the folio visible; only stack below a true laptop width. */
+@media(max-width:1320px){
+  .home-hero{
+    grid-template-columns:minmax(0,1.12fr) minmax(330px,.68fr);
+    gap:32px;
+  }
+  .hero-title{
+    font-size:clamp(72px,7.15vw,96px);
+  }
+  .hero-title em{
+    margin-left:1.05em!important;
+  }
+  .hero-dek,.hero-actions,.copy-picker{
+    margin-left:1.25em;
+  }
+}
+@media(max-width:1080px){
+  .home-hero{
+    grid-template-columns:1fr;
+  }
+  .hero-title{
+    width:max-content;
+  }
+  .hero-title em{
+    margin-left:.85em!important;
+  }
+  .folio{
+    width:min(100%,560px);
+    margin:14px auto 0;
+  }
+}
+@media(max-width:760px){
+  .hero-title{
+    font-size:clamp(49px,12vw,72px);
+    white-space:normal;
+  }
+  .hero-title em{
+    max-width:100%;
+    margin-left:0!important;
+    white-space:normal;
+  }
+  .hero-dek,.hero-actions,.copy-picker{
+    margin-left:0;
+  }
+  .live-main{
+    grid-template-columns:1fr;
+  }
+  .split-divider{
+    display:none;
+  }
+}
+
+
+/* ================================================================
+   V6 — flush hero, clean numbered sidebar, exact-width dropdown
+   ================================================================ */
+
+/* Fixed landing copy: exact shared left edge. */
+.hero-title{
+  width:max-content;
+  max-width:100%;
+}
+.hero-title em{
+  margin-left:0!important;
+  max-width:100%;
+  text-align:left!important;
+}
+.hero-dek,
+.hero-actions{
+  margin-left:0!important;
+}
+.copy-picker{display:none!important}
+
+/* Sidebar: no gutters, no vertical rules. Use small numbered tabs as the
+   visual motif instead. */
+.side-rail{
+  padding:17px 13px 14px;
+  background:color-mix(in srgb,var(--paper-hi) 73%,var(--paper));
+}
+.side-rail::before,
+.side-rail::after{
+  content:none!important;
+  display:none!important;
+}
+.side-brand{
+  padding:3px 4px 13px;
+  border-bottom:1px solid var(--rule-faint);
+}
+.side-brand::after{
+  content:none!important;
+}
+.new-cta{
+  margin:19px 2px 9px;
+  box-shadow:none;
+}
+.side-nav{
+  gap:3px;
+  margin-top:8px;
+  padding:0;
+  border:0;
+}
+.side-nav button{
+  grid-template-columns:25px minmax(0,1fr);
+  min-height:38px;
+  align-items:center;
+  padding:5px 7px;
+  border:1px solid transparent;
+  border-radius:2px;
+}
+.side-nav button::before{
+  content:none!important;
+}
+.side-nav button:hover{
+  border-color:var(--rule-faint);
+  background:color-mix(in srgb,var(--paper-lo) 25%,transparent);
+}
+.side-nav button.active{
+  border-color:var(--rule-soft);
+  background:var(--paper-hi);
+}
+.nav-glyph{
+  display:grid;
+  width:22px;
+  height:22px;
+  place-items:center;
+  padding:0;
+  border:1px solid var(--rule-soft);
+  border-radius:2px;
+  color:var(--faint);
+  font:600 6.5px/1 var(--mono);
+}
+.side-nav button.active .nav-glyph{
+  border-color:var(--verm);
+  background:var(--verm-soft);
+  color:var(--verm);
+}
+.nav-copy strong{
+  font-size:10.5px;
+}
+.side-runtime{
+  margin-top:auto!important;
+  padding:12px 7px 2px;
+  border-top:1px solid var(--rule-soft);
+  background:transparent;
+}
+
+/* Problem dropdown: menu width must exactly equal the field box. */
+.interview-basics .field{
+  position:relative;
+}
+.interview-basics .custom-select{
+  position:static;
+}
+.interview-basics .custom-select-menu{
+  left:0!important;
+  right:0!important;
+  top:100%!important;
+  width:auto!important;
+  margin:0!important;
+  border-radius:0 0 2px 2px;
+  box-shadow:0 14px 30px rgba(37,29,19,.14);
+}
+
+/* Make icon inversion unambiguous, including <use>-referenced geometry. */
+.mark{
+  color:var(--ink);
+  --logo-stroke:var(--ink);
+  --logo-dot:var(--verm);
+}
+body[data-theme="dark"] .mark{
+  color:#fff!important;
+  --logo-stroke:#fff!important;
+  --logo-dot:#fff!important;
+}
+body[data-theme="dark"] .mark .bracket{
+  stroke:#fff!important;
+}
+body[data-theme="dark"] .mark .dot{
+  fill:#fff!important;
+}
+
+/* Slightly calmer dark sidebar. */
+body[data-theme="dark"] .side-rail{
+  background:#34312d;
+}
+body[data-theme="dark"] .side-nav button.active{
+  background:#3b3732;
+}
+body[data-theme="dark"] .nav-glyph{
+  border-color:#514b45;
+}
+body[data-theme="dark"] .side-nav button.active .nav-glyph{
+  border-color:var(--verm);
+  background:var(--verm-soft);
+}
+
+/* Keep both hero lines flush even at ultrawide / laptop breakpoints. */
+@media(min-width:2200px){
+  .hero-title em{margin-left:0!important}
+  .hero-dek,.hero-actions{margin-left:0!important}
+}
+@media(max-width:1320px){
+  .hero-title em{margin-left:0!important}
+  .hero-dek,.hero-actions{margin-left:0!important}
+}
+@media(max-width:1080px){
+  .hero-title em{margin-left:0!important}
+}
+
+
+/* V7 interaction polish */
+.mark{color:var(--ink)!important}
+body[data-theme="dark"] .mark{color:#fff!important}
+.mark .bracket{stroke:currentColor!important}
+.mark .dot{fill:currentColor!important}
+
+/* Sidebar: quiet folio tabs, no vertical ornament. */
+.side-rail{background:color-mix(in srgb,var(--paper-hi) 76%,var(--paper))}
+.side-brand{border-bottom:1px solid var(--rule-faint)}
+.side-nav button{transition:background .12s ease,border-color .12s ease,color .12s ease}
+.side-nav button:hover .nav-glyph{border-color:var(--verm);color:var(--verm)}
+.side-nav button:hover .nav-copy strong{transform:translateX(1px)}
+.nav-copy strong{display:inline-block;transition:transform .12s ease}
+.side-runtime{margin-top:auto!important}
+
+/* O
