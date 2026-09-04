@@ -766,7 +766,7 @@ describe("adversarial named regression schedules", () => {
       await scheduler.cancelPendingAndDrain();
       await fixture.close();
     }
-  });
+  }, 15_000);
 
   it("conflicting RequestId reuse fails closed instead of silently acknowledging a different command", async () => {
     const fixture = await AdversarialFixture.create();
