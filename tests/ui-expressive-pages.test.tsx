@@ -197,7 +197,7 @@ describe("expressive product page layer", () => {
       })
     );
 
-    expect(markup).toContain("Resolve active sessions");
+    expect(markup).toContain("Choose active session");
     expect(markup).toContain("2 active sessions need resolution");
     expect(markup).not.toContain('data-testid="start-session-btn"');
   });
