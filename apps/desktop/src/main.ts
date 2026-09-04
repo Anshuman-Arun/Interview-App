@@ -272,11 +272,23 @@ function installLocalRuntimeHandlers(): void {
 
   ipcMain.handle(
     DESKTOP_LOCAL_RUNTIME_STATUS_CHANNEL,
-    async (event: IpcMainInvokeEvent): Promise<DesktopRendererLocalRuntimeStatus> => {
+    async (
+      event: IpcMainInvokeEvent,
+      request?: unknown
+    ): Promise<DesktopRendererLocalRuntimeStatus> => {
       if (!isAuthorizedDesktopInvoke(event)) {
         throw new Error("Desktop local runtime request was rejected");
       }
-      if (activeModelInstall === undefined) {
+      if (
+        request !== undefined
+        && request !== "REFRESH_PREREQUISITES"
+      ) {
+        throw new Error("Desktop local runtime refresh request was rejected");
+      }
+      if (
+        request === "REFRESH_PREREQUISITES"
+        && activeModelInstall === undefined
+      ) {
         await localRuntime?.refreshPythonRuntimePrerequisite(startupAbort.signal);
       }
       return localRuntimeStatusForRenderer();
@@ -665,6 +677,7 @@ async function runPackagedSmoke(
           && root.childElementCount > 0
           && typeof globalThis.interviewDesktop?.getBootstrap === "function"
           && typeof globalThis.interviewDesktop?.getLocalRuntimeStatus === "function"
+          && typeof globalThis.interviewDesktop?.refreshLocalRuntimeStatus === "function"
           && typeof globalThis.interviewDesktop?.installPythonRuntime === "function"
           && typeof globalThis.interviewDesktop?.installVoiceModels === "function"
           && typeof globalThis.interviewDesktop?.installVisionModel === "function"
