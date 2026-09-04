@@ -176,6 +176,81 @@ describe("bounded provider board scene", () => {
       .toBeUndefined();
   });
 
+  it("preserves an admitted relationship observation as one bounded scene-level relation", () => {
+    const sessionId = newSessionId();
+    const revision = BoardRevisionSchema.parse(6);
+    const requestId = newRequestId();
+    const a = shape("shape:a", 10, "", 1, "stroke");
+    const b = shape("shape:b", 11, "", 1, "stroke");
+    const cShape = shape("shape:c", 12, "", 1, "stroke");
+    const accepted = AcceptedBoardObservationSchema.parse({
+      requestId,
+      sessionId,
+      proposalId: "proposal:triangle",
+      observationKind: "DIAGRAM_RELATION",
+      observation: {
+        regionId: "region:triangle",
+        sourceBoardRevision: revision,
+        relevantShapeIds: [a.id, b.id, cShape.id],
+        bounds: { x: 0, y: 0, width: 160, height: 80 },
+        interpretation: "A, B, and C form the visible triangle",
+        confidence: 0.94
+      },
+      snapshotBasis: {
+        snapshotId: "snapshot:triangle",
+        snapshotHash: "b".repeat(64),
+        preprocessingVersion: "vision-v1",
+        sourceBoardRevision: revision
+      },
+      sourceRelevantShapeIds: [a.id, b.id, cShape.id],
+      shapeRevisionBindings: [
+        { shapeId: a.id, expectedRevision: 1 },
+        { shapeId: b.id, expectedRevision: 1 },
+        { shapeId: cShape.id, expectedRevision: 1 }
+      ],
+      backend: {
+        backendId: "local-vision",
+        backendVersion: "1",
+        providerId: "local",
+        modelId: "diagram",
+        modelVersion: "1",
+        visionCapabilityVersion: "1"
+      },
+      admittedAtBoardRevision: revision,
+      freshnessProof: "EXACT_BOARD_REVISION"
+    });
+    const state: SessionState = {
+      ...initialSessionState(sessionId),
+      boardRevision: revision,
+      boardShapes: {
+        [a.id]: a,
+        [b.id]: b,
+        [cShape.id]: cShape
+      },
+      visionRequests: {
+        [requestId]: {
+          visionRequestId: requestId,
+          regionId: "region:triangle",
+          relevantShapeIds: [a.id, b.id, cShape.id],
+          sourceBoardRevision: revision,
+          status: "ACCEPTED",
+          acceptedObservation: accepted,
+          resultSequence: 1
+        }
+      }
+    };
+
+    const scene = buildBoardSceneContext(state, revision);
+    expect(scene?.semanticRelations).toHaveLength(1);
+    expect(scene?.semanticRelations[0]).toMatchObject({
+      observationId: requestId,
+      kind: "DIAGRAM_RELATION",
+      relevantShapeIds: [a.id, b.id, cShape.id],
+      interpretation: "A, B, and C form the visible triangle",
+      sourceBoardRevision: revision
+    });
+  });
+
   it("prefers the most recently admitted same-revision semantic observation", () => {
     const sessionId = newSessionId();
     const revision = BoardRevisionSchema.parse(5);
@@ -313,7 +388,7 @@ describe("bounded provider board scene", () => {
     };
     const scene = buildBoardSceneContext(state, revision);
     expect(scene?.aiAnnotations).toHaveLength(6);
-    expect(scene?.aiAnnotations.map((item) => item.deliveryId)).toEqual([
+    expect(scene?.aiAnnotations.map((item) => item.annotationId)).toEqual([
       "delivery:1-lexical-reverse",
       "delivery:2-lexical-reverse",
       "delivery:3-lexical-reverse",
@@ -413,7 +488,53 @@ describe("bounded provider board scene", () => {
       generations
     };
     const scene = buildBoardSceneContext(state, revision);
-    expect(scene?.aiAnnotations.map((item) => item.deliveryId)).toEqual([firstId]);
+    expect(scene?.aiAnnotations.map((item) => item.annotationId)).toEqual([firstId]);
+    expect(scene?.aiAnnotationCount).toBe(1);
+    expect(scene?.includedAiAnnotationCount).toBe(1);
+    expect(scene?.aiAnnotationsTruncated).toBe(false);
+
+    const targetedEraseId = DeliveryIdSchema.parse("delivery:erase:targeted");
+    const targetedState: SessionState = {
+      ...state,
+      deliveries: {
+        ...state.deliveries,
+        [eraseId]: DeliveryAtomSchema.parse({
+          deliveryId: eraseId,
+          generationId: GenerationIdSchema.parse("generation:erase:3"),
+          content: {
+            medium: "WHITEBOARD",
+            action: {
+              operation: "erase_ai_annotation",
+              layer: "AI_ANNOTATION",
+              targetAnnotationId: firstId,
+              annotationPurpose: "withdraw first annotation"
+            }
+          },
+          disclosureIds: [],
+          effectiveDisclosureLevel: 0,
+          status: "COMPLETED"
+        }),
+        [targetedEraseId]: DeliveryAtomSchema.parse({
+          deliveryId: targetedEraseId,
+          generationId: GenerationIdSchema.parse("generation:erase:3"),
+          content: {
+            medium: "WHITEBOARD",
+            action: {
+              operation: "write_text",
+              layer: "AI_ANNOTATION",
+              content: "third",
+              annotationPurpose: "third annotation"
+            }
+          },
+          disclosureIds: [],
+          effectiveDisclosureLevel: 0,
+          status: "COMPLETED"
+        })
+      }
+    };
+    const targetedScene = buildBoardSceneContext(targetedState, revision);
+    expect(targetedScene?.aiAnnotations.map((item) => item.annotationId)).toContain(targetedEraseId);
+    expect(targetedScene?.aiAnnotations.map((item) => item.annotationId)).not.toContain(firstId);
   });
 
   it("drops narrow-freshness semantics after any later board revision without a new region proof", () => {
@@ -491,6 +612,11 @@ describe("bounded provider board scene", () => {
     expect(scene.shapes.length).toBeLessThanOrEqual(MAX_BOARD_SCENE_SHAPES);
     expect(boardSceneContextSerializedBytes(scene)).toBeLessThanOrEqual(MAX_BOARD_SCENE_BYTES);
     expect(scene.shapes.every((item) => (item.text?.length ?? 0) <= 384)).toBe(true);
+    expect(scene.studentShapeCount).toBe(80);
+    expect(scene.includedStudentShapeCount).toBe(scene.shapes.length);
+    expect(scene.omittedStudentShapeCount).toBe(80 - scene.shapes.length);
+    expect(scene.studentShapesTruncated).toBe(true);
+    expect(scene.contentBounds).toBeDefined();
   });
 
   it("fails closed when authoritative shape state is unknown", () => {
@@ -623,7 +749,13 @@ describe("board target admission", () => {
         bounds: { x: 200, y: 0, width: 80, height: 40 }
       }
     ],
-    aiAnnotations: []
+    aiAnnotations: [{
+      annotationId: DeliveryIdSchema.parse("delivery:scene:annotation"),
+      operation: "circle",
+      purpose: "prior circle",
+      targetShapeId: "shape:a",
+      targetShapeRevision: 2
+    }]
   });
 
   it("accepts exact scene targets and rejects invented or stale targets", () => {
@@ -669,6 +801,44 @@ describe("board target admission", () => {
       .toContain("revision does not match");
   });
 
+  it("requires exact revisions for bounded local-region targets", () => {
+    const exact = InterviewerProposalSchema.parse({
+      realizedAction: "FOCUS_ATTENTION",
+      claimedDisclosureLevel: 0,
+      claimedDisclosureIds: [],
+      boardActions: [{
+        operation: "point_at",
+        layer: "AI_ANNOTATION",
+        targetRegion: {
+          shapeId: "shape:a",
+          shapeRevision: 2,
+          xFraction: 0.5,
+          yFraction: 0,
+          widthFraction: 0.25,
+          heightFraction: 1
+        },
+        annotationPurpose: "point at one term"
+      }]
+    });
+    expect(validateProposalBoardReferences(exact, scene)).toBeUndefined();
+
+    const stale = InterviewerProposalSchema.parse({
+      ...exact,
+      boardActions: [{
+        operation: "point_at",
+        layer: "AI_ANNOTATION",
+        targetRegion: {
+          shapeId: "shape:a",
+          shapeRevision: 1,
+          xFraction: 0.5,
+          yFraction: 0
+        },
+        annotationPurpose: "stale local target"
+      }]
+    });
+    expect(validateProposalBoardReferences(stale, scene)).toContain("revision does not match");
+  });
+
   it("requires exact revisions for shape-relative geometry", () => {
     const proposal = InterviewerProposalSchema.parse({
       realizedAction: "FOCUS_ATTENTION",
@@ -687,8 +857,8 @@ describe("board target admission", () => {
     expect(validateProposalBoardReferences(proposal, scene)).toBeUndefined();
   });
 
-  it("does not let a provider address arbitrary AI canvas IDs for erasure", () => {
-    const proposal = InterviewerProposalSchema.parse({
+  it("accepts only provider-visible logical annotation IDs for erasure", () => {
+    expect(InterviewerProposalSchema.safeParse({
       realizedAction: "FOCUS_ATTENTION",
       claimedDisclosureLevel: 0,
       claimedDisclosureIds: [],
@@ -697,10 +867,33 @@ describe("board target admission", () => {
         layer: "AI_ANNOTATION",
         targetShapeId: "shape:ai_guess",
         expectedShapeRevision: 1,
-        annotationPurpose: "attempt arbitrary erase"
+        annotationPurpose: "attempt arbitrary renderer erase"
+      }]
+    }).success).toBe(false);
+
+    const exact = InterviewerProposalSchema.parse({
+      realizedAction: "FOCUS_ATTENTION",
+      claimedDisclosureLevel: 0,
+      claimedDisclosureIds: [],
+      boardActions: [{
+        operation: "erase_ai_annotation",
+        layer: "AI_ANNOTATION",
+        targetAnnotationId: DeliveryIdSchema.parse("delivery:scene:annotation"),
+        annotationPurpose: "erase prior circle"
       }]
     });
-    expect(validateProposalBoardReferences(proposal, scene))
-      .toContain("cannot address an AI annotation");
+    expect(validateProposalBoardReferences(exact, scene)).toBeUndefined();
+
+    const unknown = InterviewerProposalSchema.parse({
+      ...exact,
+      boardActions: [{
+        operation: "erase_ai_annotation",
+        layer: "AI_ANNOTATION",
+        targetAnnotationId: DeliveryIdSchema.parse("delivery:scene:unknown"),
+        annotationPurpose: "erase unknown annotation"
+      }]
+    });
+    expect(validateProposalBoardReferences(unknown, scene))
+      .toContain("was not present in the compiled board scene");
   });
 });
