@@ -3272,17 +3272,17 @@ summary:focus-visible,
 }
 
 
-.app-header__board-state[data-sync-status="PENDING"] > span,
+.app-header__board-state[data-sync="PENDING"] > span,
 .board-sync i[data-sync="PENDING"] {
   background: var(--warning);
 }
 
-.app-header__board-state[data-sync-status="UNSYNCHRONIZED"] > span,
+.app-header__board-state[data-sync="UNSYNCHRONIZED"] > span,
 .board-sync i[data-sync="UNSYNCHRONIZED"] {
   background: var(--danger);
 }
 
-.app-header__board-state[data-sync-status="UNINITIALIZED"] > span,
+.app-header__board-state[data-sync="UNINITIALIZED"] > span,
 .board-sync i[data-sync="UNINITIALIZED"] {
   background: var(--text-muted);
 }
