@@ -2,7 +2,9 @@ export const DESKTOP_BOOTSTRAP_CHANNEL = "interview-desktop:get-bootstrap";
 export const DESKTOP_ZOOM_CHANNEL = "interview-desktop:set-zoom";
 export const DESKTOP_ZOOM_CHANGED_CHANNEL = "interview-desktop:zoom-changed";
 export const DESKTOP_LOCAL_RUNTIME_STATUS_CHANNEL = "interview-desktop:get-local-runtime-status";
-export const DESKTOP_INSTALL_LOCAL_MODELS_CHANNEL = "interview-desktop:install-local-models";
+export const DESKTOP_INSTALL_VOICE_MODELS_CHANNEL = "interview-desktop:install-voice-models";
+export const DESKTOP_INSTALL_VISION_MODEL_CHANNEL = "interview-desktop:install-vision-model";
+export const DESKTOP_RESTART_APP_CHANNEL = "interview-desktop:restart-app";
 export const DESKTOP_AUTH_HEADER_VALUE = "desktop-managed-v1";
 
 export const DESKTOP_MIN_ZOOM_FACTOR = 0.25;
@@ -26,19 +28,25 @@ export type DesktopRendererModelSetupState =
   | "INSTALLED"
   | "FAILED";
 
+export interface DesktopRendererPythonRuntimeStatus
+  extends DesktopRendererRuntimeCapabilityStatus {
+  readonly strategy: "SYSTEM_CPYTHON";
+  readonly supportedVersions: readonly ["3.12", "3.13"];
+}
+
+export interface DesktopRendererModelSetupStatus {
+  readonly state: DesktopRendererModelSetupState;
+  readonly restartRequired: boolean;
+}
+
 export interface DesktopRendererLocalRuntimeStatus {
   readonly protocolVersion: 1;
   readonly speech: DesktopRendererRuntimeCapabilityStatus;
   readonly tts: DesktopRendererRuntimeCapabilityStatus;
   readonly vision: DesktopRendererRuntimeCapabilityStatus;
-  readonly python: {
-    readonly strategy: "SYSTEM_CPYTHON";
-    readonly supportedVersions: readonly ["3.12", "3.13"];
-  };
-  readonly modelSetup: {
-    readonly state: DesktopRendererModelSetupState;
-    readonly restartRequired: boolean;
-  };
+  readonly python: DesktopRendererPythonRuntimeStatus;
+  readonly voiceSetup: DesktopRendererModelSetupStatus;
+  readonly visionSetup: DesktopRendererModelSetupStatus;
 }
 
 export function isDesktopZoomFactor(value: unknown): value is DesktopZoomFactor {
