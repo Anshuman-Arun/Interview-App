@@ -168,6 +168,11 @@ export function ProductPageRouter({
       content = (
         <SettingsPage
           {...(connection === undefined ? {} : { connection })}
+          providerOptions={providerOptions}
+          providerOptionsLoading={providerOptionsLoading}
+          providerOptionsError={providerOptionsError}
+          onRefreshProviderOptions={onRefreshProviderOptions}
+          onStartInterview={onEnterInterview}
         />
       );
       break;
