@@ -237,326 +237,95 @@ export function NewInterviewPage({
     <div className="new-interview" data-testid="new-interview-page">
       {activeSessionId !== null && (
         <section className="new-interview__active" aria-live="polite">
-          <div>
-            <span>ACTIVE SESSION</span>
-            <strong>Finish or resume the current interview first.</strong>
-            <p>Starting a second authoritative session is disabled.</p>
-          </div>
-          {onResumeActive !== null && (
-            <button type="button" onClick={onResumeActive}>
-              Resume interview
-            </button>
-          )}
+          <div><span>ACTIVE SESSION</span><strong>Finish or resume the current interview first.</strong><p>Starting a second authoritative session is disabled.</p></div>
+          {onResumeActive !== null && <button type="button" onClick={onResumeActive}>Resume interview</button>}
         </section>
       )}
-
       <form className="new-interview__layout" onSubmit={(event) => void submit(event)}>
         <div className="new-interview__config">
           <section className="new-interview__section">
-            <div className="new-interview__section-heading">
-              <span>01</span>
-              <div>
-                <h2>Interview</h2>
-                <p>Choose the room and the server-published problem or scenario.</p>
-              </div>
-            </div>
-
-            {catalogLoading ? (
-              <p className="new-interview__status">Loading interview catalog…</p>
-            ) : catalogError !== null ? (
-              <div className="new-interview__error" role="alert">
-                <p>{catalogError}</p>
-                <button type="button" onClick={() => void onRefreshCatalog().catch(() => undefined)}>
-                  Retry catalog
-                </button>
-              </div>
-            ) : modes.length === 0 ? (
-              <p className="new-interview__status">No interview targets are currently available.</p>
-            ) : (
-              <>
-                <select
-                  className="new-interview__test-select"
-                  value={mode}
-                  onChange={(event) => setMode(event.target.value as InterviewMode)}
-                  data-testid="interview-mode-select"
-                  tabIndex={-1}
-                  aria-hidden="true"
-                >
-                  {modes.map((entryMode) => (
-                    <option key={entryMode} value={entryMode}>{MODE_LABELS[entryMode]}</option>
-                  ))}
-                </select>
-
-                <div className="new-interview__mode-choice" role="radiogroup" aria-label="Interview mode">
-                  {modes.map((entryMode) => (
-                    <button
-                      key={entryMode}
-                      type="button"
-                      role="radio"
-                      aria-checked={mode === entryMode}
-                      className={
-                        mode === entryMode
-                          ? "new-interview__choice-card new-interview__choice-card--selected"
-                          : "new-interview__choice-card"
-                      }
-                      onClick={() => setMode(entryMode)}
-                    >
-                      <span>
-                        {entryMode === "OXFORD_MATHEMATICS"
-                          ? "Socratic + board"
-                          : entryMode === "QUANT_TRADING"
-                            ? "Market making"
-                            : "Research"}
-                      </span>
-                      <strong>{MODE_LABELS[entryMode]}</strong>
-                    </button>
-                  ))}
-                </div>
-
-                <div className="new-interview__basics">
-                  <label className="new-interview__field">
-                    <span>{mode === "OXFORD_MATHEMATICS" ? "Problem" : "Scenario"}</span>
-                    <div className="new-interview__select-shell">
-                      <select
-                        value={selectedTargetKey}
-                        onChange={(event) => setSelectedTargetKey(event.target.value)}
-                        data-testid="interview-target-select"
-                      >
-                        {targets.map((entry) => (
-                          <option key={targetKey(entry)} value={targetKey(entry)}>
-                            {entry.title}
-                          </option>
-                        ))}
-                      </select>
-                      <i aria-hidden="true">⌄</i>
-                    </div>
-                  </label>
-
-                  <label className="new-interview__field new-interview__field--duration">
-                    <span>Duration <small>optional</small></span>
-                    <div className="new-interview__duration">
-                      <input
-                        type="number"
-                        min={5}
-                        max={480}
-                        step={1}
-                        value={durationText}
-                        onChange={(event) => setDurationText(event.target.value)}
-                        placeholder="50"
-                        data-testid="duration-input"
-                      />
-                      <span>min</span>
-                    </div>
-                  </label>
-                </div>
-              </>
-            )}
-          </section>
-
-          <section className="new-interview__section">
-            <div className="new-interview__section-heading">
-              <span>02</span>
-              <div>
-                <h2>Intervention</h2>
-                <p>Control how quickly the interviewer steps in when the reasoning stalls.</p>
-              </div>
-            </div>
-
-            <select
-              className="new-interview__test-select"
-              value={interventionPolicy}
-              onChange={(event) =>
-                setInterventionPolicy(
-                  event.target.value as "MINIMAL" | "BALANCED" | "STRICT"
-                )
-              }
-              data-testid="intervention-select"
-              tabIndex={-1}
-              aria-hidden="true"
-            >
-              {(Object.keys(INTERVENTION_LABELS) as Array<keyof typeof INTERVENTION_LABELS>)
-                .map((policy) => (
-                  <option key={policy} value={policy}>{INTERVENTION_LABELS[policy]}</option>
-                ))}
-            </select>
-
-            <div className="new-interview__segments" role="radiogroup" aria-label="Intervention policy">
-              {(Object.keys(INTERVENTION_LABELS) as Array<keyof typeof INTERVENTION_LABELS>)
-                .map((policy) => (
-                  <button
-                    key={policy}
-                    type="button"
-                    role="radio"
-                    aria-checked={interventionPolicy === policy}
-                    onClick={() => setInterventionPolicy(policy)}
-                  >
-                    {INTERVENTION_LABELS[policy]}
+            <div className="new-interview__section-heading"><span>01</span><div><h2>Interview</h2></div></div>
+            <div className="new-interview__mode-choice" aria-label="Interview mode">
+              {(["OXFORD_MATHEMATICS", "QUANT_TRADING", "QUANT_RESEARCH"] as const).map((entryMode) => {
+                const available = modes.includes(entryMode);
+                const tag = entryMode === "OXFORD_MATHEMATICS" ? "Socratic + board" : entryMode === "QUANT_TRADING" ? "Market making" : "Research";
+                return (
+                  <button key={entryMode} type="button" className="new-interview__choice" aria-pressed={mode === entryMode} disabled={!available || catalogLoading} onClick={() => setMode(entryMode)}>
+                    <span>{tag}</span><strong>{MODE_LABELS[entryMode]}</strong>
                   </button>
-                ))}
+                );
+              })}
             </div>
-          </section>
-
-          <section className="new-interview__section">
-            <div className="new-interview__section-heading">
-              <span>03</span>
-              <div>
-                <h2>Reasoning provider</h2>
-                <p>Only launch-ready providers are selectable; server policy remains authoritative.</p>
-              </div>
-            </div>
-
-            {providerOptionsLoading ? (
-              <p className="new-interview__status">Checking providers…</p>
-            ) : providerOptionsError !== null ? (
-              <div className="new-interview__error" role="alert">
-                <p>{providerOptionsError}</p>
-                <button type="button" onClick={() => void onRefreshProviderOptions().catch(() => undefined)}>
-                  Retry providers
-                </button>
-              </div>
-            ) : (
-              <div className="new-interview__provider-card">
-                <header>
-                  <strong>Provider / model</strong>
-                  <span className="new-interview__availability">
-                    <i aria-hidden="true" />
-                    {availableProviders.length > 0 ? "AVAILABLE" : "UNAVAILABLE"}
-                  </span>
-                </header>
-                <div className="new-interview__provider-main">
-                  <div className="new-interview__select-shell">
-                    <select
-                      value={selectedProviderKey}
-                      onChange={(event) => setSelectedProviderKey(event.target.value)}
-                      disabled={availableProviders.length === 0}
-                      data-testid="provider-select"
-                    >
-                      {availableProviders.length === 0 && (
-                        <option value="">No launch-ready provider</option>
-                      )}
-                      {availableProviders.map((option) => (
-                        <option key={providerKey(option)} value={providerKey(option)}>
-                          {option.providerDisplayName} · {option.modelDisplayName}
-                        </option>
-                      ))}
-                    </select>
-                    <i aria-hidden="true">⌄</i>
-                  </div>
-                  {selectedProvider !== null && (
-                    <div className="new-interview__provider-meta">
-                      <span>{selectedProvider.providerDisplayName}</span>
-                      <b>{selectedProvider.modelDisplayName}</b>
-                    </div>
-                  )}
-                </div>
-
-                {providerOptions.some((option) => option.availability === "UNAVAILABLE") && (
-                  <details className="new-interview__unavailable">
-                    <summary>Registered but unavailable</summary>
-                    <ul>
-                      {providerOptions
-                        .filter((option) => option.availability === "UNAVAILABLE")
-                        .map((option) => (
-                          <li key={providerKey(option)}>
-                            <strong>{option.providerDisplayName} · {option.modelDisplayName}</strong>
-                            <span>{providerReason(option.reason)}</span>
-                          </li>
-                        ))}
-                    </ul>
-                  </details>
-                )}
+            {catalogLoading ? <p className="new-interview__status">Loading interview catalog…</p> : catalogError !== null ? (
+              <div className="new-interview__error" role="alert"><p>{catalogError}</p><button type="button" onClick={() => void onRefreshCatalog().catch(() => undefined)}>Retry catalog</button></div>
+            ) : modes.length === 0 ? <p className="new-interview__status">No interview targets are currently available.</p> : (
+              <div className="new-interview__basics">
+                <label className="new-interview__field"><span>{mode === "OXFORD_MATHEMATICS" ? "Problem" : "Scenario"}</span><div className="new-interview__select-wrap">
+                  <select value={selectedTargetKey} onChange={(event) => setSelectedTargetKey(event.target.value)} data-testid="interview-target-select">
+                    {targets.map((entry) => <option key={targetKey(entry)} value={targetKey(entry)}>{entry.title}</option>)}
+                  </select><i aria-hidden="true">⌄</i>
+                </div></label>
+                <label className="new-interview__field new-interview__duration-field"><span>Duration</span><div className="new-interview__duration">
+                  <input type="number" min={5} max={480} step={1} value={durationText} onChange={(event) => setDurationText(event.target.value)} placeholder="—" data-testid="duration-input" /><small>min</small>
+                </div></label>
               </div>
             )}
           </section>
 
-          {desktopRuntime !== undefined && localRuntimeStatusError ? (
-            <div className="new-interview__capability-note" aria-live="polite">
-              <span>Local AI readiness could not be verified — typed input and drawing still work.</span>
+          <section className="new-interview__section">
+            <div className="new-interview__section-heading"><span>02</span><div><h2>Model</h2></div></div>
+            <div className="new-interview__provider-card">
+              <header><div><strong>Reasoning</strong><small>Current runtime catalog</small></div><span className="new-interview__availability" data-ready={String(selectedProvider?.availability === "AVAILABLE")}><i aria-hidden="true" />{providerOptionsLoading ? "CHECKING" : selectedProvider?.availability === "AVAILABLE" ? "READY" : "SETUP"}</span></header>
+              {providerOptionsLoading ? <p className="new-interview__status">Checking providers…</p> : providerOptionsError !== null ? (
+                <div className="new-interview__error" role="alert"><p>{providerOptionsError}</p><button type="button" onClick={() => void onRefreshProviderOptions().catch(() => undefined)}>Retry providers</button></div>
+              ) : (
+                <div className="new-interview__provider-main">
+                  <label className="new-interview__field"><span>Model</span><div className="new-interview__select-wrap new-interview__select-wrap--model">
+                    <select value={selectedProviderKey} onChange={(event) => setSelectedProviderKey(event.target.value)} disabled={availableProviders.length === 0} data-testid="provider-select">
+                      {availableProviders.length === 0 && <option value="">No launch-ready provider</option>}
+                      {availableProviders.map((option) => <option key={providerKey(option)} value={providerKey(option)}>{option.providerDisplayName} · {option.modelDisplayName}</option>)}
+                    </select><i aria-hidden="true">⌄</i>
+                  </div></label>
+                  {selectedProvider !== null && <div className="new-interview__provider-facts"><span><b>PROVIDER</b>{selectedProvider.providerDisplayName}</span><span><b>MODEL</b>{selectedProvider.modelDisplayName}</span><span><b>ROUTE</b>{selectedProvider.providerId}</span></div>}
+                  {providerOptions.some((option) => option.availability === "UNAVAILABLE") && <details className="new-interview__unavailable"><summary>Registered but unavailable</summary><ul>
+                    {providerOptions.filter((option) => option.availability === "UNAVAILABLE").map((option) => <li key={providerKey(option)}><strong>{option.providerDisplayName} · {option.modelDisplayName}</strong><span>{providerReason(option.reason)}</span></li>)}
+                  </ul></details>}
+                </div>
+              )}
             </div>
-          ) : localRuntimeStatus !== undefined && (
-            localRuntimeStatus.speech.state !== "READY"
-            || localRuntimeStatus.tts.state !== "READY"
-            || localRuntimeStatus.vision.state !== "READY"
-          ) ? (
+          </section>
+
+          <section className="new-interview__section">
+            <div className="new-interview__section-heading"><span>03</span><div><h2>Session</h2></div></div>
+            <div className="new-interview__session-fields">
+              <div className="new-interview__field"><span>Intervention</span><div className="new-interview__segments">
+                {(Object.keys(INTERVENTION_LABELS) as Array<keyof typeof INTERVENTION_LABELS>).map((policy) => <button key={policy} type="button" aria-pressed={interventionPolicy === policy} onClick={() => setInterventionPolicy(policy)} data-testid={`intervention-${policy.toLowerCase()}`}>{INTERVENTION_LABELS[policy]}</button>)}
+              </div></div>
+              <div className="new-interview__input-note"><span>Input</span><strong>{mode === "OXFORD_MATHEMATICS" ? "Voice + tldraw + text" : "Structured actions"}</strong></div>
+            </div>
+          </section>
+
+          {desktopRuntime !== undefined && localRuntimeStatusError ? <div className="new-interview__capability-note" aria-live="polite"><span>Local AI readiness could not be verified — typed input and drawing still work.</span></div> : localRuntimeStatus !== undefined && (localRuntimeStatus.speech.state !== "READY" || localRuntimeStatus.tts.state !== "READY" || localRuntimeStatus.vision.state !== "READY") ? (
             <div className="new-interview__capability-note" aria-live="polite">
-              {(localRuntimeStatus.speech.state !== "READY"
-                || localRuntimeStatus.tts.state !== "READY") && (
-                <span>Voice unavailable — typed input will be used.</span>
-              )}
-              {localRuntimeStatus.vision.state !== "READY" && (
-                <span>Whiteboard recognition unavailable — drawing still works.</span>
-              )}
+              {(localRuntimeStatus.speech.state !== "READY" || localRuntimeStatus.tts.state !== "READY") && <span>Voice unavailable — typed input will be used.</span>}
+              {localRuntimeStatus.vision.state !== "READY" && <span>Whiteboard recognition unavailable — drawing still works.</span>}
             </div>
           ) : null}
-
-          {formError !== null && (
-            <p className="new-interview__form-error" role="alert">{formError}</p>
-          )}
+          {formError !== null && <p className="new-interview__form-error" role="alert">{formError}</p>}
         </div>
 
         <aside className="new-interview__slip">
-          <div className="new-interview__slip-kicker">
-            <span>Configuration</span>
-            <span>READY SLIP</span>
-          </div>
-          <h3>{mode === "" ? "Interview" : MODE_LABELS[mode]}</h3>
-          <p className="new-interview__slip-sub">
-            {selectedTarget?.title ?? "Choose a server-published target."}
-          </p>
-
+          <div className="new-interview__slip-kicker"><span>{metadataUnavailable ? "CHECK" : "READY"}</span><span>LOCAL</span></div>
+          <h3>{selectedTarget === null ? "Interview" : MODE_LABELS[selectedTarget.mode]}</h3>
+          <p>{selectedTarget?.title ?? "Choose an available target"}</p>
           <div className="new-interview__slip-list">
-            <div>
-              <span>Mode</span>
-              <strong>{mode === "" ? "—" : MODE_LABELS[mode]}</strong>
-            </div>
-            <div>
-              <span>{mode === "OXFORD_MATHEMATICS" ? "Problem" : "Scenario"}</span>
-              <strong>{selectedTarget?.title ?? "—"}</strong>
-            </div>
-            <div>
-              <span>Duration</span>
-              <strong>{durationText.trim().length === 0 ? "Flexible" : `${durationText} min`}</strong>
-            </div>
-            <div>
-              <span>Intervention</span>
-              <strong>{INTERVENTION_LABELS[interventionPolicy]}</strong>
-            </div>
-            <div>
-              <span>Provider</span>
-              <strong>
-                {selectedProvider === null
-                  ? "—"
-                  : `${selectedProvider.providerDisplayName} · ${selectedProvider.modelDisplayName}`}
-              </strong>
-            </div>
+            <div><span>Model</span><strong>{selectedProvider === null ? "Not selected" : `${selectedProvider.providerDisplayName} · ${selectedProvider.modelDisplayName}`}</strong></div>
+            <div><span>Intervention</span><strong>{INTERVENTION_LABELS[interventionPolicy]}</strong></div>
+            <div><span>Input</span><strong>{mode === "OXFORD_MATHEMATICS" ? "Voice + tldraw + text" : "Structured"}</strong></div>
+            <div><span>Duration</span><strong>{durationText.trim().length === 0 ? "Open" : `${durationText} min`}</strong></div>
           </div>
-
-          <button
-            type="submit"
-            className="new-interview__start"
-            disabled={
-              activeSessionId !== null
-              || startPending
-              || catalogLoading
-              || providerOptionsLoading
-              || metadataUnavailable
-              || selectedTarget === null
-              || selectedProvider?.availability !== "AVAILABLE"
-            }
-            data-testid="start-configured-session-btn"
-          >
-            <span>{startPending ? "Starting…" : "Start interview"}</span>
-            <em aria-hidden="true">→</em>
-          </button>
-
-          <p className="new-interview__ready-note">
-            <i aria-hidden="true" />
-            {activeSessionId !== null
-              ? "Current interview owns session authority."
-              : metadataUnavailable
-                ? "Resolve launch readiness before starting."
-                : "Configuration is revalidated by the server."}
-          </p>
+          <button className="new-interview__start" type="submit" disabled={activeSessionId !== null || startPending || catalogLoading || providerOptionsLoading || metadataUnavailable || selectedTarget === null || selectedProvider?.availability !== "AVAILABLE"} data-testid="start-configured-session-btn"><span>{startPending ? "Starting…" : "Start interview"}</span><em aria-hidden="true">→</em></button>
+          <div className="new-interview__ready-note"><i aria-hidden="true" /><span>{activeSessionId !== null ? "Current interview owns session authority." : metadataUnavailable ? "Resolve launch readiness first." : "Server revalidates this configuration on start."}</span></div>
         </aside>
       </form>
     </div>
