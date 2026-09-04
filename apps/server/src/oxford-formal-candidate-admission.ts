@@ -237,9 +237,11 @@ export function isOxfordFormalCandidateTargetAdmissible(input: {
             || isIntegerLiteral(claim.right, "1")
           );
       case "prefix-residue-arithmetic":
-        return claim.kind === "CONGRUENCE" || claim.kind === "DIVISIBILITY";
+        return isPrefixResidueArithmeticClaim(claim);
       case "divisibility-step":
-        return claim.kind === "DIVISIBILITY";
+        return claim.kind === "DIVISIBILITY"
+          && sourceNumbers.size === 2
+          && statementNumbers.size === 2;
       default:
         return false;
     }
@@ -331,6 +333,22 @@ function collectRationalNumbers(
       }
       return;
   }
+}
+
+function isPrefixResidueArithmeticClaim(
+  claim: ReturnType<typeof ModularArithmeticInterpretationSchema.parse>["claim"]
+): boolean {
+  if (claim.kind === "CONGRUENCE") {
+    return claim.left.kind === "INTEGER"
+      && claim.right.kind === "INTEGER"
+      && claim.left.value !== claim.right.value
+      && claim.left.value !== claim.modulus
+      && claim.right.value !== claim.modulus;
+  }
+  return claim.dividend.kind === "SUBTRACT"
+    && claim.dividend.left.kind === "INTEGER"
+    && claim.dividend.right.kind === "INTEGER"
+    && claim.dividend.left.value !== claim.dividend.right.value;
 }
 
 function collectIntegerNumbers(
