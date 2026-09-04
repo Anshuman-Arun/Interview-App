@@ -15,6 +15,7 @@ import {
 import { HomePage } from "../apps/web/src/pages/HomePage.js";
 import { NewInterviewPage } from "../apps/web/src/pages/NewInterviewPage.js";
 import { SettingsPage } from "../apps/web/src/pages/SettingsPage.js";
+import { ReviewReadPanel } from "../apps/web/src/pages/ReviewReadPanel.js";
 
 const ACT_ENVIRONMENT_KEY = "IS_REACT_ACT_ENVIRONMENT";
 let root: Root | undefined;
@@ -287,6 +288,46 @@ describe("editorial v10 adversarial UI states", () => {
     expect(markup).toContain("Checking");
     expect(markup).toContain("CHECKING");
     expect(markup).not.toContain(">READY<");
+  });
+
+  it("retries a transient bounded review read in place", async () => {
+    const sessionId = SessionIdSchema.parse(
+      "session_00000000-0000-4000-8000-000000000401"
+    );
+    const readEvaluation = vi.fn()
+      .mockRejectedValueOnce(new Error("temporary read failure"))
+      .mockImplementationOnce(() => new Promise(() => undefined));
+
+    await act(async () => {
+      root?.render(
+        <ReviewReadPanel
+          sessionId={sessionId}
+          view="evaluation"
+          readEvaluation={readEvaluation}
+          readReplay={vi.fn(() => new Promise(() => undefined))}
+          readPerformance={vi.fn(() => new Promise(() => undefined))}
+        />
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(host?.textContent).toContain(
+      "The bounded evaluation read could not be loaded."
+    );
+    const retry = Array.from(document.querySelectorAll("button"))
+      .find((button) => button.textContent.trim() === "Retry read");
+    if (!(retry instanceof HTMLButtonElement)) {
+      throw new Error("Review retry action did not mount");
+    }
+
+    await act(async () => {
+      retry.click();
+      await Promise.resolve();
+    });
+
+    expect(readEvaluation).toHaveBeenCalledTimes(2);
+    expect(host?.textContent).toContain("Loading bounded evaluation…");
   });
 
   it("keeps compact and sync-state contracts explicit in source and CSS", () => {
