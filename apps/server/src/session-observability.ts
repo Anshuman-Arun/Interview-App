@@ -339,8 +339,10 @@ export class SessionObservability {
     readonly modelId: string;
   }): RemoteOperationHandle {
     const parsedSessionId = SessionIdSchema.safeParse(input.sessionId);
-    if (!parsedSessionId.success) return noOpRemoteOperationHandle();
+    const parsedOperation = RemoteReasoningOperationKindSchema.safeParse(input.operation);
+    if (!parsedSessionId.success || !parsedOperation.success) return noOpRemoteOperationHandle();
     const sessionId = parsedSessionId.data;
+    const operation = parsedOperation.data;
     const startedMonotonic = this.safeNow();
     const startedAt = safeWallTime();
     let requestBytes = 0;
@@ -370,7 +372,7 @@ export class SessionObservability {
           const elapsedMs = elapsedSince(startedMonotonic, this.safeNow());
           this.mutate(sessionId, (metrics) => {
             const attempt: RemoteAttempt = {
-              operation: input.operation,
+              operation,
               providerId: boundedIdentifier(input.providerId),
               modelId: boundedIdentifier(input.modelId),
               startedAt,
@@ -381,7 +383,7 @@ export class SessionObservability {
               responseBytes
             };
             if (elapsedMs === null) metrics.partial = true;
-            if (input.operation === "INTERVIEWER_REALIZATION") {
+            if (operation === "INTERVIEWER_REALIZATION") {
               metrics.remoteTotals.interviewerCalls =
                 addBounded(metrics.remoteTotals.interviewerCalls, 1);
             } else {
