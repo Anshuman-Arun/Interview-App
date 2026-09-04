@@ -575,6 +575,37 @@ describe("desktop local AI readiness UX", () => {
     Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT");
   });
 
+  it("treats Antigravity as ready when a later published model is launch-ready", () => {
+    const unavailableFirst = {
+      ...AUTH_REQUIRED_PROVIDER,
+      modelId: "gemini-3.7-flash-low",
+      modelDisplayName: "Gemini 3.7 Flash Low"
+    } as ProviderLaunchOption;
+    const readySecond = {
+      ...READY_PROVIDER,
+      modelId: "gemini-3.7-flash-medium",
+      modelDisplayName: "Gemini 3.7 Flash Medium"
+    } as ProviderLaunchOption;
+
+    const markup = renderToStaticMarkup(
+      React.createElement(
+        AppearanceProvider,
+        null,
+        React.createElement(SettingsPage, {
+          providerOptions: [unavailableFirst, readySecond],
+          providerOptionsLoading: false,
+          providerOptionsError: null,
+          onRefreshProviderOptions: vi.fn(async () => [unavailableFirst, readySecond]),
+          onStartInterview: vi.fn()
+        })
+      )
+    );
+
+    expect(markup).toContain("Ready to interview.");
+    expect(markup).toContain("Gemini 3.7 Flash Medium");
+    expect(markup).not.toMatch(/<button[^>]*disabled=""[^>]*>Start interview<\/button>/u);
+  });
+
   it("uses authoritative provider readiness language for Antigravity authentication", () => {
     const markup = renderToStaticMarkup(
       React.createElement(
