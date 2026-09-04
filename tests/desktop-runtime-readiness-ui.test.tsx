@@ -365,6 +365,62 @@ describe("desktop local AI readiness UX", () => {
     });
   });
 
+  it("surfaces a partial desktop bridge instead of silently ignoring Python setup", async () => {
+    Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
+    const current = runtimeStatus({
+      speech: { state: "UNAVAILABLE", reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING" },
+      tts: { state: "UNAVAILABLE", reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING" },
+      vision: { state: "UNAVAILABLE", reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING" },
+      python: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING",
+        strategy: "SYSTEM_CPYTHON",
+        supportedVersions: ["3.12", "3.13"]
+      }
+    });
+    vi.stubGlobal("interviewDesktop", {
+      getLocalRuntimeStatus: vi.fn(async () => current)
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <AppearanceProvider>
+          <SettingsPage
+            providerOptions={[READY_PROVIDER]}
+            providerOptionsLoading={false}
+            providerOptionsError={null}
+            onRefreshProviderOptions={vi.fn(async () => [READY_PROVIDER])}
+            onStartInterview={vi.fn()}
+          />
+        </AppearanceProvider>
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const pythonButton = Array.from(container.querySelectorAll("button"))
+      .find((button) => button.textContent.trim() === "Install Python components");
+    if (!(pythonButton instanceof HTMLButtonElement)) {
+      throw new Error("Missing Python setup button");
+    }
+
+    await act(async () => {
+      pythonButton.click();
+    });
+
+    expect(container.textContent).toContain(
+      "This desktop build does not expose Python component setup. Restart or reinstall Interview App."
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("fails closed when an Antigravity re-check errors even if a prior option was ready", () => {
     const markup = renderToStaticMarkup(
       React.createElement(
