@@ -108,10 +108,15 @@
   text-align: left;
 }
 
-.product-frame__nav-item:hover {
+.product-frame__nav-item:hover:not(:disabled) {
   border-color: var(--border-subtle);
   background: color-mix(in srgb, var(--surface-active) 18%, transparent);
   color: var(--text-primary);
+}
+
+.product-frame__nav-item:disabled {
+  cursor: not-allowed;
+  opacity: .45;
 }
 
 .product-frame__nav-item--active {
