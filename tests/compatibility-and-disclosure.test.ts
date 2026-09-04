@@ -241,6 +241,33 @@ describe("compatibility and disclosure gates", () => {
     expect(result.accepted).toBe(false);
     if (result.accepted) throw new Error("Expected targeted-board disclosure rejection");
     expect(result.analysis?.effectiveDisclosureLevel).toBeGreaterThan(0);
+
+    const indirectResult = validator.validate({
+      proposal: {
+        realizedAction: "PROBE_JUSTIFICATION",
+        claimedDisclosureLevel: 0,
+        claimedDisclosureIds: [],
+        boardActions: [{
+          operation: "draw_rectangle",
+          layer: "AI_ANNOTATION",
+          placement: { x: -10, y: -10 },
+          width: 180,
+          height: 60,
+          annotationPurpose: "focus candidate on current equality"
+        }]
+      },
+      request: {
+        requiredAction: "PROBE_JUSTIFICATION",
+        maximumDisclosure: 0
+      },
+      protectedDisclosures: sixPeopleProblem.interviewer.protectedDisclosures,
+      boardScene
+    });
+    expect(indirectResult.accepted).toBe(false);
+    if (indirectResult.accepted) {
+      throw new Error("Expected geometry-associated disclosure rejection");
+    }
+    expect(indirectResult.analysis?.effectiveDisclosureLevel).toBeGreaterThan(0);
   });
 
   it("fails closed when semantic validation is uncertain", () => {
