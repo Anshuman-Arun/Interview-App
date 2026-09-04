@@ -346,6 +346,68 @@ describe("SessionObservability", () => {
     });
   });
 
+  it("rejects logically inconsistent persisted aggregates instead of presenting them as usage", () => {
+    const directory = mkdtempSync(join(tmpdir(), "interview-observability-inconsistent-"));
+    const databasePath = join(directory, "session.sqlite");
+    const sessionId = SessionIdSchema.parse("session-observability-inconsistent");
+    try {
+      const initial = SessionObservability.create(databasePath, () => 1);
+      const handle = initial.beginRemoteOperation({
+        sessionId,
+        operation: "INTERVIEWER_REALIZATION",
+        providerId: "provider",
+        modelId: "model"
+      });
+      handle.finish("SUCCESS");
+      initial.close();
+
+      const database = new DatabaseSync(databasePath);
+      const row = database.prepare(
+        "SELECT metrics_json FROM session_observability WHERE session_id = ?"
+      ).get(sessionId) as { metrics_json: string };
+      const parsed = JSON.parse(row.metrics_json) as {
+        remoteTotals: { outcomes: { SUCCESS: number } };
+      };
+      parsed.remoteTotals.outcomes.SUCCESS = 0;
+      database.prepare(
+        "UPDATE session_observability SET metrics_json = ? WHERE session_id = ?"
+      ).run(JSON.stringify(parsed), sessionId);
+      database.close();
+
+      const recovered = SessionObservability.create(databasePath);
+      expect(recovered.read(sessionId)).toMatchObject({
+        available: false,
+        partial: true
+      });
+      recovered.close();
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("enforces the persisted session retention bound", () => {
+    const directory = mkdtempSync(join(tmpdir(), "interview-observability-retention-"));
+    const databasePath = join(directory, "session.sqlite");
+    try {
+      const metrics = SessionObservability.create(databasePath);
+      for (let index = 0; index < 105; index += 1) {
+        metrics.recordVoiceInputSession(
+          SessionIdSchema.parse(`session-observability-retention-${String(index).padStart(3, "0")}`)
+        );
+      }
+      metrics.close();
+
+      const database = new DatabaseSync(databasePath);
+      const row = database.prepare(
+        "SELECT COUNT(*) AS count FROM session_observability"
+      ).get() as { count: number };
+      database.close();
+      expect(row.count).toBe(100);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("does not expose provider token, quota, billing, or payload fields", () => {
     const metrics = new SessionObservability();
     const sessionId = SessionIdSchema.parse("session-observability-4");
