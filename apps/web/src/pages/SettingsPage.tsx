@@ -319,6 +319,7 @@ export function SettingsPage({
   }, [onRefreshProviderOptions, refreshRuntime]);
 
   const finishSetup = (): void => {
+    if (setupOperationInFlightRef.current) return;
     try {
       globalThis.localStorage.setItem(DESKTOP_FIRST_RUN_SETUP_KEY, "complete");
     } catch {
