@@ -149,26 +149,29 @@ function parseCapability(
   value: unknown
 ): DesktopRuntimeCapabilityStatus | undefined {
   if (!isRecord(value)) return undefined;
+  const state = value["state"];
+  if (!isCapabilityState(state)) return undefined;
   const reasonCode = value["reasonCode"];
-  const expectedKeys = reasonCode === undefined
-    ? ["state"]
-    : ["reasonCode", "state"];
+  const reasonRequired = state !== "READY";
+  const expectedKeys = reasonRequired
+    ? ["reasonCode", "state"]
+    : ["state"];
   if (
     !hasExactKeys(value, expectedKeys)
-    || !isCapabilityState(value["state"])
     || (
-      reasonCode !== undefined
+      reasonRequired
       && (
         typeof reasonCode !== "string"
         || !/^[A-Z0-9_]{1,96}$/u.test(reasonCode)
       )
     )
+    || (!reasonRequired && reasonCode !== undefined)
   ) {
     return undefined;
   }
   return {
-    state: value["state"],
-    ...(reasonCode === undefined ? {} : { reasonCode })
+    state,
+    ...(reasonRequired ? { reasonCode: reasonCode as string } : {})
   };
 }
 
@@ -176,21 +179,24 @@ function parsePython(
   value: unknown
 ): DesktopPythonRuntimeStatus | undefined {
   if (!isRecord(value)) return undefined;
+  const state = value["state"];
+  if (state !== "READY" && state !== "UNAVAILABLE") return undefined;
   const reasonCode = value["reasonCode"];
-  const expectedKeys = reasonCode === undefined
-    ? ["state", "strategy", "supportedVersions"]
-    : ["reasonCode", "state", "strategy", "supportedVersions"];
+  const reasonRequired = state === "UNAVAILABLE";
+  const expectedKeys = reasonRequired
+    ? ["reasonCode", "state", "strategy", "supportedVersions"]
+    : ["state", "strategy", "supportedVersions"];
   const versions = value["supportedVersions"];
   if (
     !hasExactKeys(value, expectedKeys)
-    || !isCapabilityState(value["state"])
     || (
-      reasonCode !== undefined
+      reasonRequired
       && (
         typeof reasonCode !== "string"
         || !/^[A-Z0-9_]{1,96}$/u.test(reasonCode)
       )
     )
+    || (!reasonRequired && reasonCode !== undefined)
     || value["strategy"] !== "SYSTEM_CPYTHON"
     || !Array.isArray(versions)
     || versions.length !== 2
@@ -200,8 +206,8 @@ function parsePython(
     return undefined;
   }
   return {
-    state: value["state"],
-    ...(reasonCode === undefined ? {} : { reasonCode }),
+    state,
+    ...(reasonRequired ? { reasonCode: reasonCode as string } : {}),
     strategy: "SYSTEM_CPYTHON",
     supportedVersions: ["3.12", "3.13"]
   };
@@ -215,6 +221,7 @@ function parseSetup(
     || !hasExactKeys(value, ["state", "restartRequired"])
     || !isSetupState(value["state"])
     || typeof value["restartRequired"] !== "boolean"
+    || (value["state"] === "INSTALLED") !== value["restartRequired"]
   ) {
     return undefined;
   }
