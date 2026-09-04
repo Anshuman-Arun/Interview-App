@@ -34,6 +34,7 @@ export function HomePage({
   const heroRef = useRef<HTMLElement | null>(null);
   const heroCopyRef = useRef<HTMLDivElement | null>(null);
   const folioRef = useRef<HTMLDivElement | null>(null);
+  const routeLocked = activeSessionPaused === true && activeSessionId !== null;
   const recent = [...sessions]
     .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
     .slice(0, 5);
@@ -158,6 +159,12 @@ export function HomePage({
               type="button"
               className="expressive-home__secondary"
               onClick={onOpenSessions}
+              disabled={routeLocked}
+              title={
+                routeLocked
+                  ? "Resume or finish the paused interview before opening Sessions."
+                  : undefined
+              }
             >
               Sessions
             </button>
@@ -287,7 +294,18 @@ export function HomePage({
       <section className="expressive-home__recent">
         <div className="expressive-home__section-head">
           <h3>Recent sessions</h3>
-          <button type="button" onClick={onOpenSessions}>See all →</button>
+          <button
+            type="button"
+            onClick={onOpenSessions}
+            disabled={routeLocked}
+            title={
+              routeLocked
+                ? "Resume or finish the paused interview before opening Sessions."
+                : undefined
+            }
+          >
+            See all →
+          </button>
         </div>
 
         {recent.length === 0 ? (
@@ -325,7 +343,26 @@ export function HomePage({
                   </time>
                   <button
                     type="button"
-                    disabled={session.status !== "ACTIVE" && !reviewable}
+                    disabled={
+                      sessionEntryPending
+                      || (
+                        routeLocked
+                        && (
+                          session.status !== "ACTIVE"
+                          || session.sessionId !== activeSessionId
+                        )
+                      )
+                      || (session.status !== "ACTIVE" && !reviewable)
+                    }
+                    title={
+                      routeLocked
+                      && (
+                        session.status !== "ACTIVE"
+                        || session.sessionId !== activeSessionId
+                      )
+                        ? "Resume or finish the paused interview before opening another session."
+                        : undefined
+                    }
                     onClick={
                       session.status === "ACTIVE"
                         ? () => onResumeInterview(session.sessionId)
