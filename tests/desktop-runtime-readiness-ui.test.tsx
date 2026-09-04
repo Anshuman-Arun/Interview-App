@@ -262,7 +262,14 @@ describe("desktop local AI readiness UX", () => {
     await act(async () => {
       root.render(
         <NewInterviewPage
-          catalog={[]}
+          catalog={[{
+            mode: "OXFORD_MATHEMATICS",
+            id: "adversarial-local-runtime",
+            version: "1",
+            title: "Adversarial local-runtime problem",
+            category: "proof",
+            difficulty: "hard"
+          }]}
           catalogLoading={false}
           catalogError={null}
           providerOptions={[READY_PROVIDER]}
@@ -270,7 +277,14 @@ describe("desktop local AI readiness UX", () => {
           providerOptionsError={null}
           activeSessionId={null}
           startPending={false}
-          onRefreshCatalog={vi.fn(async () => [])}
+          onRefreshCatalog={vi.fn(async () => [{
+            mode: "OXFORD_MATHEMATICS" as const,
+            id: "adversarial-local-runtime",
+            version: "1",
+            title: "Adversarial local-runtime problem",
+            category: "proof",
+            difficulty: "hard"
+          }])}
           onRefreshProviderOptions={vi.fn(async () => [READY_PROVIDER])}
           onStart={vi.fn(async () => undefined)}
           onResumeActive={null}
@@ -283,7 +297,11 @@ describe("desktop local AI readiness UX", () => {
     expect(container.textContent).toContain(
       "Local AI readiness could not be verified — typed input and drawing still work."
     );
-    expect(container.textContent).toContain("Start interview");
+    const startButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="start-configured-session-btn"]'
+    );
+    expect(startButton).not.toBeNull();
+    expect(startButton?.disabled).toBe(false);
 
     await act(async () => {
       root.unmount();
