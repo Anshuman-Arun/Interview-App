@@ -371,6 +371,9 @@ describe("editorial v10 adversarial UI states", () => {
     expect(editorialCss).not.toContain(
       ".live-pane-heading button,\n  .board-appbar__actions button {\n    display: none;"
     );
+    expect(editorialCss).toMatch(
+      /@media \(max-width: 960px\)[\s\S]*?\.live-main\[data-focus\] \.reasoning-pane,[\s\S]*?\.live-main\[data-focus\] \.board-pane \{[\s\S]*?display:\s*flex;/u
+    );
     expect(editorialCss).not.toMatch(
       /@media \(max-width: 900px\)[\s\S]{0,300}\.quant-side\s*\{\s*display:\s*none/u
     );
