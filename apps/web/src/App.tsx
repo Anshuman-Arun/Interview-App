@@ -1147,7 +1147,10 @@ export const App: React.FC = () => {
               <button
                 type="button"
                 className="board-appbar__clear-action"
-                onClick={() => void whiteboardAdapter.clearAiOverlay()}
+                disabled={session.whiteboardSync.status === "UNINITIALIZED"}
+                onClick={() => {
+                  void whiteboardAdapter.clearAiOverlay().catch(() => undefined);
+                }}
               >
                 Clear AI marks
               </button>
