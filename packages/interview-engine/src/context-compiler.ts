@@ -452,6 +452,7 @@ export function buildBoardSceneContext(
     authoritativeShapes.length === 0
     && logicalAnnotations.length === 0
     && scene.semanticRelations.length === 0
+    && !scene.aiAnnotationStateUncertain
   ) {
     return undefined;
   }
