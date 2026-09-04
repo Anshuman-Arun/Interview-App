@@ -166,17 +166,27 @@ implements FormalInterpretationProvider {
         );
         return result;
       } catch (error) {
-        if (
-          error instanceof AntigravityCliFormalInterpretationError
-          && (
-            error.code === "PROCESS_FAILED"
-            || error.code === "INVALID_RUNTIME"
-          )
-        ) {
-          telemetry?.finish(signal.aborted ? "CANCELLED" : "PROVIDER_UNAVAILABLE");
-          return abstain(request);
+        if (error instanceof AntigravityCliFormalInterpretationError) {
+          if (signal.aborted) {
+            telemetry?.finish("CANCELLED");
+          } else if (error.code === "INVALID_RUNTIME") {
+            telemetry?.finish("PROVIDER_UNAVAILABLE");
+          } else if (
+            error.code === "INVALID_PROTOCOL"
+            || error.code === "INVALID_PROVIDER_RESULT"
+          ) {
+            telemetry?.finish("MALFORMED");
+          } else if (error.code === "TOOL_ACTIVITY_REJECTED") {
+            telemetry?.finish("POLICY_DENIED");
+          } else {
+            telemetry?.finish("FAILED");
+          }
+          if (error.code === "PROCESS_FAILED" || error.code === "INVALID_RUNTIME") {
+            return abstain(request);
+          }
+        } else {
+          telemetry?.finish(signal.aborted ? "CANCELLED" : "FAILED");
         }
-        telemetry?.finish(signal.aborted ? "CANCELLED" : "FAILED");
         throw error;
       }
     } finally {
