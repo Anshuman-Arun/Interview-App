@@ -108,6 +108,14 @@ Avoid copying fixed total assertion counts into status documents. The suite chan
 
 Authoritative CI is configured for pull requests and pushes to `main`, on Ubuntu and Windows. A newer first-attempt PR run may cancel an older superseded PR run. Main pushes and reruns use SHA/attempt-scoped concurrency groups, so newly queued validation does not replace unrelated pending or running validation. This is validation policy, not merge enforcement: the repository currently has no branch protection/ruleset requiring CI, and GitHub-level skip/manual-cancel behavior remains outside the workflow.
 
+Windows distribution is separately gated by a tag-only release workflow. The root
+`package.json` version is canonical; only exact `vMAJOR.MINOR.PATCH` tags
+that match it are accepted. The workflow builds the immutable tagged commit,
+runs packaged executable and installer upgrade/persistence checks, generates
+and verifies `InterviewApp-Setup-<version>.exe.sha256`, records the exact
+source SHA, and creates a draft GitHub Release. It does not auto-publish,
+auto-update, or fabricate code signing.
+
 The local aggregate is:
 
 ```bash
