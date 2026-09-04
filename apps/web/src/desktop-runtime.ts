@@ -92,6 +92,27 @@ export function getDesktopRuntimeBridge(): DesktopRuntimeBridge | undefined {
   };
 }
 
+export function readDesktopAppVersion(): string | undefined {
+  const bridge = (globalThis as typeof globalThis & {
+    readonly interviewDesktop?: {
+      readonly getBootstrap?: () => unknown;
+    };
+  }).interviewDesktop;
+  if (bridge === undefined || typeof bridge.getBootstrap !== "function") {
+    return undefined;
+  }
+  try {
+    const bootstrap = bridge.getBootstrap();
+    if (!isRecord(bootstrap)) return undefined;
+    const appVersion = bootstrap["appVersion"];
+    return typeof appVersion === "string" && appVersion.trim().length > 0
+      ? appVersion
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function parseDesktopRuntimeStatus(
   value: unknown
 ): DesktopRuntimeStatus | undefined {
