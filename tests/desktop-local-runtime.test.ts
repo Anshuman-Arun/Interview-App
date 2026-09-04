@@ -506,6 +506,59 @@ describe("desktop local model runtime", () => {
     expect(probe.stdout.trim()).toBe("1");
   }, 30_000);
 
+  it("runs the real managed venv, pip, and production-style re-probe path without network access", async () => {
+    const bootstrap = spawnSync("python", [
+      "-I",
+      "-c",
+      "import sys; print(sys.executable)"
+    ], {
+      encoding: "utf8",
+      windowsHide: true
+    });
+    expect(bootstrap.status).toBe(0);
+    const bootstrapExecutable = bootstrap.stdout.trim();
+    expect(bootstrapExecutable.length).toBeGreaterThan(0);
+
+    const fixtureRoot = temporaryRoot("desktop-python-offline-setup-");
+    const workerScriptPath = join(fixtureRoot, "worker.py");
+    const requirementsPath = join(fixtureRoot, "requirements.txt");
+    const managedPythonRoot = join(fixtureRoot, "managed-python");
+    writeFileSync(
+      workerScriptPath,
+      [
+        "import sys",
+        "if '--check-runtime' not in sys.argv:",
+        "    raise SystemExit(2)",
+        "print('{\"runtimeCompatible\":true}')"
+      ].join("\n")
+    );
+    writeFileSync(requirementsPath, "# intentionally empty offline setup fixture\n");
+
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-python-offline-appdata-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: bootstrapExecutable,
+      workerScriptPath,
+      requirementsPath,
+      managedPythonRoot
+    });
+    compositions.push(composition);
+
+    await expect(
+      composition.installPythonRuntimeDependencies()
+    ).resolves.toBeUndefined();
+
+    const mutable = composition as unknown as {
+      pythonExecutable?: string;
+    };
+    expect(mutable.pythonExecutable).toBeDefined();
+    expect(mutable.pythonExecutable).not.toBe(bootstrapExecutable);
+    expect(mutable.pythonExecutable?.startsWith(managedPythonRoot)).toBe(true);
+    expect(composition.getPythonRuntimeStatus()).toEqual({ state: "READY" });
+  }, 60_000);
+
   it("repairs an existing app-owned Python environment without mutating bootstrap Python", async () => {
     const composition = new DesktopLocalRuntimeComposition({
       appDataRoot: temporaryRoot("desktop-python-managed-repair-"),
