@@ -2,7 +2,11 @@ import { DatabaseSync } from "node:sqlite";
 import {
   SessionIdSchema,
   type SessionId,
-  type VerificationStatus
+  type VerificationStatus,
+  type ReasoningProvider,
+  type ReasoningSession,
+  type ReasoningTurnInput,
+  type InterviewerProposal
 } from "../../../packages/domain/src/index.js";
 import {
   RemoteReasoningOutcomeSchema,
@@ -546,4 +550,73 @@ export function serializedApplicationBytes(value: unknown): number {
   } catch {
     return 0;
   }
+}
+
+
+export function instrumentReasoningProvider(input: {
+  readonly provider: ReasoningProvider;
+  readonly observability: SessionObservability;
+  readonly sessionId: SessionId;
+  readonly providerId: string;
+  readonly modelId: string;
+}): ReasoningProvider {
+  const provider = input.provider;
+  return {
+    name: provider.name,
+    adapterVersion: provider.adapterVersion,
+    capabilities: provider.capabilities,
+    verifyBillingSafety: (verificationInput) =>
+      provider.verifyBillingSafety(verificationInput),
+    createSession: async (): Promise<ReasoningSession> => {
+      const session = await provider.createSession();
+      const cancelled = new Set<string>();
+      return {
+        sendTurn: (turnInput: ReasoningTurnInput): AsyncIterable<InterviewerProposal> => {
+          const handle = input.observability.beginRemoteOperation({
+            sessionId: input.sessionId,
+            operation: "INTERVIEWER_REALIZATION",
+            providerId: input.providerId,
+            modelId: input.modelId
+          });
+          handle.setSizes({
+            requestBytes: serializedApplicationBytes(turnInput),
+            compiledContextBytes: serializedApplicationBytes(turnInput.context)
+          });
+          const stream = session.sendTurn(turnInput);
+          return (async function* (): AsyncIterable<InterviewerProposal> {
+            let responseBytes = 0;
+            let finished = false;
+            try {
+              for await (const proposal of stream) {
+                responseBytes = addBounded(responseBytes, serializedApplicationBytes(proposal));
+                yield proposal;
+              }
+              handle.setSizes({ responseBytes });
+              handle.finish(cancelled.has(turnInput.generationId) ? "CANCELLED" : "SUCCESS");
+              finished = true;
+            } catch (error) {
+              handle.setSizes({ responseBytes });
+              handle.finish(cancelled.has(turnInput.generationId) ? "CANCELLED" : "FAILED");
+              finished = true;
+              throw error;
+            } finally {
+              if (!finished) {
+                handle.setSizes({ responseBytes });
+                handle.finish(cancelled.has(turnInput.generationId) ? "CANCELLED" : "SUCCESS");
+              }
+            }
+          })();
+        },
+        ...(session.cancelTurn === undefined
+          ? {}
+          : {
+              cancelTurn: async (generationId) => {
+                cancelled.add(generationId);
+                return session.cancelTurn?.(generationId) ?? { semantics: "NONE" as const };
+              }
+            }),
+        close: () => session.close()
+      };
+    }
+  };
 }
