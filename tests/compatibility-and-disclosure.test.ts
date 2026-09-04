@@ -100,6 +100,37 @@ describe("compatibility and disclosure gates", () => {
     expect(result.analysis?.effectiveDisclosureLevel).toBeGreaterThan(0);
   });
 
+  it("applies the same disclosure ceiling to speech and board output together", () => {
+    const protectedDisclosure = sixPeopleProblem.interviewer.protectedDisclosures[0];
+    if (protectedDisclosure === undefined) throw new Error("Expected protected disclosure fixture");
+    const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer([
+      "Try substituting this.",
+      "support the spoken prompt"
+    ]));
+    const result = validator.validate({
+      proposal: {
+        realizedAction: "PROBE_JUSTIFICATION",
+        claimedDisclosureLevel: 0,
+        claimedDisclosureIds: [],
+        speechText: "Try substituting this.",
+        boardActions: [{
+          operation: "write_equation",
+          layer: "AI_ANNOTATION",
+          content: protectedDisclosure.fact,
+          annotationPurpose: "support the spoken prompt"
+        }]
+      },
+      request: {
+        requiredAction: "PROBE_JUSTIFICATION",
+        maximumDisclosure: 0
+      },
+      protectedDisclosures: sixPeopleProblem.interviewer.protectedDisclosures
+    });
+    expect(result.accepted).toBe(false);
+    if (result.accepted) throw new Error("Expected mixed-realization disclosure rejection");
+    expect(result.analysis?.effectiveDisclosureLevel).toBeGreaterThan(0);
+  });
+
   it("fails closed when semantic validation is uncertain", () => {
     const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer([]));
     const result = validator.validate({
