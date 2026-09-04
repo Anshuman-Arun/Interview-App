@@ -220,7 +220,7 @@ export class SessionReadService {
     if (boundedSessionIdentity(sessionId) === undefined) return null;
     const known = this.sessionKnown(sessionId);
     if (known === false) return null;
-    if (this.#performanceSource === undefined) {
+    if (known === undefined || this.#performanceSource === undefined) {
       return SessionPerformanceReadResponseSchema.parse({
         protocolVersion: 1,
         type: "SESSION_PERFORMANCE_READ",
