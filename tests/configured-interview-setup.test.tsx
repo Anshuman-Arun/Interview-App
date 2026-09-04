@@ -146,6 +146,7 @@ describe("configured interview setup product flow", () => {
 
     expect(document.body.textContent).toContain("Oxford Mathematics");
     expect(document.body.textContent).toContain("Registered but unavailable");
+    expect(document.body.textContent).toContain("Duration is a planning reminder only");
     expect(document.body.textContent).not.toContain("API key");
     expect(document.body.textContent).not.toContain("reasoningGraph");
 
