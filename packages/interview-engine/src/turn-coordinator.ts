@@ -1422,6 +1422,7 @@ export class TurnCoordinator {
         return rejectAndSupersedeDrafts(generationId, proposal, "Pedagogical action changed after generation began");
       }
       const hasBoardOutput = (proposal.boardActions?.length ?? 0) > 0;
+      let boardSceneForValidation: BoardSceneContext | undefined;
       if (generation.contextManifest === undefined && hasBoardOutput) {
         return rejectAndSupersedeDrafts(
           generationId,
@@ -1458,9 +1459,10 @@ export class TurnCoordinator {
           );
         }
 
+        boardSceneForValidation = currentCompiledContext.boardScene;
         const boardReferenceFailure = validateProposalBoardReferences(
           proposal,
-          currentCompiledContext.boardScene
+          boardSceneForValidation
         );
         if (boardReferenceFailure !== undefined) {
           return rejectDrafts(generationId, proposal, boardReferenceFailure);
@@ -1477,7 +1479,10 @@ export class TurnCoordinator {
       const validation = input.validator.validate({
         proposal,
         request: parsedRequest.data,
-        protectedDisclosures: input.problem.interviewer.protectedDisclosures
+        protectedDisclosures: input.problem.interviewer.protectedDisclosures,
+        ...(boardSceneForValidation === undefined
+          ? {}
+          : { boardScene: boardSceneForValidation })
       });
       if (!validation.accepted) return rejectDrafts(generationId, proposal, validation.reason);
       const atoms: DeliveryAtom[] = [];
