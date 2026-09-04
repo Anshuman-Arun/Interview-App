@@ -251,8 +251,15 @@ export function NewInterviewPage({
           <div>
             <span>ACTIVE SESSION CONFLICT</span>
             <strong>{activeSessionCount} active sessions are stored.</strong>
-            <p>Starting another room is disabled until the conflict is resolved from Sessions.</p>
+            <p>
+              {activeSessionId === null
+                ? "Starting another room is disabled. Open Sessions and choose an active room to recover first."
+                : "Starting another room is disabled. Resume the attached room and end or archive it before recovering another."}
+            </p>
           </div>
+          {onResumeActive !== null && (
+            <button type="button" onClick={onResumeActive}>Resume current interview</button>
+          )}
         </section>
       ) : activeSessionId !== null && (
         <section className="new-interview__active" aria-live="polite">
