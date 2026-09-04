@@ -109,12 +109,26 @@ describe("Windows desktop packaging contract", () => {
     const preload = await source("apps/desktop/preload.cjs");
 
     expect(main).toContain("isAuthorizedDesktopInvoke(event)");
+    expect(main).toContain("runtime.installPythonRuntimeDependencies(startupAbort.signal)");
+    expect(main).toContain('request === "REFRESH_PREREQUISITES"');
+    expect(main).toContain("refreshPythonRuntimePrerequisite(startupAbort.signal)");
+    expect(main).toContain("globalThis.interviewDesktop.refreshLocalRuntimeStatus()");
     expect(main).toContain("runtime.installVoiceAssets(startupAbort.signal)");
     expect(main).toContain("runtime.installVisionAssets(startupAbort.signal)");
     expect(main).toContain("--install-local-vision-models");
-    expect(main).toContain("await activeModelInstall.catch(() => undefined)");
+    expect(main).toContain("await modelInstallAtShutdown.catch(() => undefined)");
     expect(preload).toContain("getLocalRuntimeStatus");
-    expect(preload).toContain("installLocalModels");
+    expect(preload).toContain("refreshLocalRuntimeStatus");
+    expect(preload).toContain("REFRESH_PREREQUISITES");
+    expect(preload).toContain("installPythonRuntime");
+    expect(preload).toContain("installVoiceModels");
+    expect(preload).toContain("installVisionModel");
+    expect(preload).toContain("restartApp");
+    expect(main).toContain("activeModelInstallKind");
+    expect(main).toContain('beginLocalModelInstall("PYTHON")');
+    expect(main).toContain('beginLocalModelInstall("VOICE")');
+    expect(main).toContain('beginLocalModelInstall("VISION")');
+    expect(main).toContain("app.relaunch()");
     expect(preload).not.toMatch(/require\(["'](?:node:)?(?:fs|child_process)["']\)/u);
     expect(preload).not.toContain("process.env");
     expect(preload).not.toContain("shell.");

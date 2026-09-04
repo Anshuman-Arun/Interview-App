@@ -17,8 +17,11 @@ import { DesktopLocalRuntimeComposition } from "./runtime/index.js";
 import { PACKAGED_DESKTOP_PRELOAD_SHA256 } from "./runtime/packaged-resource-integrity.js";
 import {
   DESKTOP_BOOTSTRAP_CHANNEL,
-  DESKTOP_INSTALL_LOCAL_MODELS_CHANNEL,
+  DESKTOP_INSTALL_PYTHON_RUNTIME_CHANNEL,
+  DESKTOP_INSTALL_VISION_MODEL_CHANNEL,
+  DESKTOP_INSTALL_VOICE_MODELS_CHANNEL,
   DESKTOP_LOCAL_RUNTIME_STATUS_CHANNEL,
+  DESKTOP_RESTART_APP_CHANNEL,
   DESKTOP_ZOOM_CHANGED_CHANNEL,
   DESKTOP_ZOOM_CHANNEL,
   DESKTOP_MAX_ZOOM_FACTOR,
@@ -30,6 +33,7 @@ import {
   type DesktopRendererBootstrap,
   type DesktopRendererLocalRuntimeStatus,
   type DesktopRendererModelSetupState,
+  type DesktopRendererPythonRuntimeStatus,
   type DesktopRendererRuntimeCapabilityStatus,
   type DesktopZoomFactor
 } from "./bootstrap.js";
@@ -76,9 +80,16 @@ let removePermissionCapability: (() => void) | undefined;
 let shuttingDown = false;
 let shutdownComplete = false;
 let shutdownPromise: Promise<void> | undefined;
-let modelSetupState: DesktopRendererModelSetupState = "IDLE";
-let modelSetupRestartRequired = false;
-let modelInstallPromise: Promise<DesktopRendererLocalRuntimeStatus> | undefined;
+let pythonSetupState: DesktopRendererModelSetupState = "IDLE";
+let pythonSetupRestartRequired = false;
+let voiceSetupState: DesktopRendererModelSetupState = "IDLE";
+let voiceSetupRestartRequired = false;
+let visionSetupState: DesktopRendererModelSetupState = "IDLE";
+let visionSetupRestartRequired = false;
+let activeModelInstall:
+  | Promise<DesktopRendererLocalRuntimeStatus>
+  | undefined;
+let activeModelInstallKind: "PYTHON" | "VOICE" | "VISION" | undefined;
 const packagedSingleInstanceSmokeHost = process.argv.includes(
   "--packaged-single-instance-smoke-host"
 );
@@ -254,40 +265,135 @@ async function startDesktop(): Promise<void> {
 
 function installLocalRuntimeHandlers(): void {
   ipcMain.removeHandler(DESKTOP_LOCAL_RUNTIME_STATUS_CHANNEL);
-  ipcMain.removeHandler(DESKTOP_INSTALL_LOCAL_MODELS_CHANNEL);
+  ipcMain.removeHandler(DESKTOP_INSTALL_PYTHON_RUNTIME_CHANNEL);
+  ipcMain.removeHandler(DESKTOP_INSTALL_VOICE_MODELS_CHANNEL);
+  ipcMain.removeHandler(DESKTOP_INSTALL_VISION_MODEL_CHANNEL);
+  ipcMain.removeHandler(DESKTOP_RESTART_APP_CHANNEL);
 
   ipcMain.handle(
     DESKTOP_LOCAL_RUNTIME_STATUS_CHANNEL,
-    (event: IpcMainInvokeEvent): DesktopRendererLocalRuntimeStatus => {
+    async (
+      event: IpcMainInvokeEvent,
+      request?: unknown
+    ): Promise<DesktopRendererLocalRuntimeStatus> => {
       if (!isAuthorizedDesktopInvoke(event)) {
         throw new Error("Desktop local runtime request was rejected");
+      }
+      if (
+        request !== undefined
+        && request !== "REFRESH_PREREQUISITES"
+      ) {
+        throw new Error("Desktop local runtime refresh request was rejected");
+      }
+      if (
+        request === "REFRESH_PREREQUISITES"
+        && activeModelInstall === undefined
+      ) {
+        await localRuntime?.refreshPythonRuntimePrerequisite(startupAbort.signal);
       }
       return localRuntimeStatusForRenderer();
     }
   );
 
   ipcMain.handle(
-    DESKTOP_INSTALL_LOCAL_MODELS_CHANNEL,
-    async (event: IpcMainInvokeEvent): Promise<DesktopRendererLocalRuntimeStatus> => {
+    DESKTOP_INSTALL_PYTHON_RUNTIME_CHANNEL,
+    (event: IpcMainInvokeEvent): Promise<DesktopRendererLocalRuntimeStatus> => {
       if (!isAuthorizedDesktopInvoke(event)) {
-        throw new Error("Desktop local model setup request was rejected");
+        throw new Error("Desktop Python runtime setup request was rejected");
       }
-      if (modelInstallPromise !== undefined) return modelInstallPromise;
-      if (modelSetupRestartRequired) return localRuntimeStatusForRenderer();
-      const runtime = localRuntime;
-      if (runtime === undefined || shuttingDown) {
-        throw new Error("Desktop local runtime is unavailable");
-      }
-      modelSetupState = "INSTALLING";
-      modelSetupRestartRequired = false;
-      const operation = installLocalModels(runtime);
-      modelInstallPromise = operation;
-      void operation.finally(() => {
-        if (modelInstallPromise === operation) modelInstallPromise = undefined;
-      }).catch(() => undefined);
-      return operation;
+      return beginLocalModelInstall("PYTHON");
     }
   );
+
+  ipcMain.handle(
+    DESKTOP_INSTALL_VOICE_MODELS_CHANNEL,
+    (event: IpcMainInvokeEvent): Promise<DesktopRendererLocalRuntimeStatus> => {
+      if (!isAuthorizedDesktopInvoke(event)) {
+        throw new Error("Desktop voice model setup request was rejected");
+      }
+      return beginLocalModelInstall("VOICE");
+    }
+  );
+
+  ipcMain.handle(
+    DESKTOP_INSTALL_VISION_MODEL_CHANNEL,
+    (event: IpcMainInvokeEvent): Promise<DesktopRendererLocalRuntimeStatus> => {
+      if (!isAuthorizedDesktopInvoke(event)) {
+        throw new Error("Desktop vision model setup request was rejected");
+      }
+      return beginLocalModelInstall("VISION");
+    }
+  );
+
+  ipcMain.handle(
+    DESKTOP_RESTART_APP_CHANNEL,
+    (event: IpcMainInvokeEvent): true => {
+      if (!isAuthorizedDesktopInvoke(event)) {
+        throw new Error("Desktop restart request was rejected");
+      }
+      if (activeModelInstall !== undefined || shuttingDown) {
+        throw new Error("Desktop restart is unavailable while model setup is active");
+      }
+      setImmediate(() => {
+        if (shuttingDown) return;
+        app.relaunch();
+        app.quit();
+      });
+      return true;
+    }
+  );
+}
+
+function beginLocalModelInstall(
+  kind: "PYTHON" | "VOICE" | "VISION"
+): Promise<DesktopRendererLocalRuntimeStatus> {
+  if (activeModelInstall !== undefined) {
+    if (activeModelInstallKind === kind) return activeModelInstall;
+    return Promise.reject(new Error("Another local model installation is already running"));
+  }
+
+  const restartRequired = kind === "PYTHON"
+    ? pythonSetupRestartRequired
+    : kind === "VOICE"
+      ? voiceSetupRestartRequired
+      : visionSetupRestartRequired;
+  if (restartRequired) return Promise.resolve(localRuntimeStatusForRenderer());
+
+  const runtime = localRuntime;
+  if (runtime === undefined || shuttingDown) {
+    return Promise.reject(new Error("Desktop local runtime is unavailable"));
+  }
+
+  setSetupState(kind, "INSTALLING", false);
+  const operation = installLocalModelAssets(kind, runtime);
+  activeModelInstall = operation;
+  activeModelInstallKind = kind;
+  void operation.finally(() => {
+    if (activeModelInstall === operation) {
+      activeModelInstall = undefined;
+      activeModelInstallKind = undefined;
+    }
+  }).catch(() => undefined);
+  return operation;
+}
+
+function setSetupState(
+  kind: "PYTHON" | "VOICE" | "VISION",
+  state: DesktopRendererModelSetupState,
+  restartRequired: boolean
+): void {
+  if (kind === "PYTHON") {
+    pythonSetupState = state;
+    pythonSetupRestartRequired = restartRequired;
+    return;
+  }
+  if (kind === "VOICE") {
+    voiceSetupState = state;
+    voiceSetupRestartRequired = restartRequired;
+    return;
+  }
+  visionSetupState = state;
+  visionSetupRestartRequired = restartRequired;
 }
 
 function isAuthorizedDesktopInvoke(event: IpcMainInvokeEvent): boolean {
@@ -306,24 +412,28 @@ function isAuthorizedDesktopInvoke(event: IpcMainInvokeEvent): boolean {
     });
 }
 
-async function installLocalModels(
+async function installLocalModelAssets(
+  kind: "PYTHON" | "VOICE" | "VISION",
   runtime: DesktopLocalRuntimeComposition
 ): Promise<DesktopRendererLocalRuntimeStatus> {
   try {
-    await runtime.installVoiceAssets(startupAbort.signal);
-    modelSetupState = "INSTALLED";
-    modelSetupRestartRequired = true;
+    if (kind === "PYTHON") {
+      await runtime.installPythonRuntimeDependencies(startupAbort.signal);
+    } else if (kind === "VOICE") {
+      await runtime.installVoiceAssets(startupAbort.signal);
+    } else {
+      await runtime.installVisionAssets(startupAbort.signal);
+    }
+    setSetupState(kind, "INSTALLED", true);
     return localRuntimeStatusForRenderer();
   } catch {
     if (startupAbort.signal.aborted) {
-      modelSetupState = "IDLE";
-      modelSetupRestartRequired = false;
+      setSetupState(kind, "IDLE", false);
       throw new Error("Local model setup was cancelled");
     }
-    modelSetupState = "FAILED";
-    modelSetupRestartRequired = false;
+    setSetupState(kind, "FAILED", false);
     throw new Error(
-      "Local model setup failed. Check network access, available disk space, and retry."
+      "Local model setup failed. Check Python, network access, available disk space, and retry."
     );
   }
 }
@@ -335,14 +445,37 @@ function localRuntimeStatusForRenderer(): DesktopRendererLocalRuntimeStatus {
     speech: rendererCapability(snapshot?.speech),
     tts: rendererCapability(snapshot?.tts),
     vision: rendererCapability(snapshot?.vision),
-    python: Object.freeze({
+    python: rendererPythonStatus(localRuntime?.getPythonRuntimeStatus()),
+    pythonSetup: Object.freeze({
+      state: pythonSetupState,
+      restartRequired: pythonSetupRestartRequired
+    }),
+    voiceSetup: Object.freeze({
+      state: voiceSetupState,
+      restartRequired: voiceSetupRestartRequired
+    }),
+    visionSetup: Object.freeze({
+      state: visionSetupState,
+      restartRequired: visionSetupRestartRequired
+    })
+  });
+}
+
+function rendererPythonStatus(
+  status: ReturnType<DesktopLocalRuntimeComposition["getPythonRuntimeStatus"]> | undefined
+): DesktopRendererPythonRuntimeStatus {
+  if (status?.state === "READY") {
+    return Object.freeze({
+      state: "READY",
       strategy: "SYSTEM_CPYTHON",
       supportedVersions: Object.freeze(["3.12", "3.13"] as const)
-    }),
-    modelSetup: Object.freeze({
-      state: modelSetupState,
-      restartRequired: modelSetupRestartRequired
-    })
+    });
+  }
+  return Object.freeze({
+    state: "UNAVAILABLE",
+    reasonCode: status?.reasonCode ?? "NOT_STARTED",
+    strategy: "SYSTEM_CPYTHON",
+    supportedVersions: Object.freeze(["3.12", "3.13"] as const)
   });
 }
 
@@ -544,7 +677,11 @@ async function runPackagedSmoke(
           && root.childElementCount > 0
           && typeof globalThis.interviewDesktop?.getBootstrap === "function"
           && typeof globalThis.interviewDesktop?.getLocalRuntimeStatus === "function"
-          && typeof globalThis.interviewDesktop?.installLocalModels === "function";
+          && typeof globalThis.interviewDesktop?.refreshLocalRuntimeStatus === "function"
+          && typeof globalThis.interviewDesktop?.installPythonRuntime === "function"
+          && typeof globalThis.interviewDesktop?.installVoiceModels === "function"
+          && typeof globalThis.interviewDesktop?.installVisionModel === "function"
+          && typeof globalThis.interviewDesktop?.restartApp === "function";
         if (mounted) {
           resolve(true);
           return;
@@ -560,6 +697,77 @@ async function runPackagedSmoke(
   );
   if (rendererReady !== true) {
     throw new Error("Packaged renderer did not mount the product shell");
+  }
+
+  const firstRunReadiness: unknown = await window.webContents.executeJavaScript(
+    `new Promise((resolve) => {
+      const deadline = Date.now() + 5000;
+      const check = async () => {
+        const readiness = document.querySelector('[data-testid="local-ai-readiness"]');
+        if (!(readiness instanceof HTMLElement)) {
+          if (Date.now() >= deadline) {
+            resolve({ mounted: false });
+            return;
+          }
+          setTimeout(() => { void check(); }, 50);
+          return;
+        }
+        try {
+          const status = await globalThis.interviewDesktop.getLocalRuntimeStatus();
+          const refreshedStatus = await globalThis.interviewDesktop.refreshLocalRuntimeStatus();
+          resolve({
+            mounted: true,
+            headingVisible: readiness.textContent?.includes("Interview readiness") === true,
+            status,
+            refreshedStatus
+          });
+        } catch {
+          resolve({
+            mounted: true,
+            headingVisible: true,
+            status: null,
+            refreshedStatus: null
+          });
+        }
+      };
+      void check();
+    })`
+  );
+  if (
+    typeof firstRunReadiness !== "object"
+    || firstRunReadiness === null
+    || Array.isArray(firstRunReadiness)
+  ) {
+    throw new Error("Packaged first-run readiness smoke returned malformed proof");
+  }
+  const readinessProof = firstRunReadiness as Record<string, unknown>;
+  const runtimeStatus = readinessProof["status"];
+  const refreshedRuntimeStatus = readinessProof["refreshedStatus"];
+  if (
+    readinessProof["mounted"] !== true
+    || readinessProof["headingVisible"] !== true
+    || typeof runtimeStatus !== "object"
+    || runtimeStatus === null
+    || Array.isArray(runtimeStatus)
+    || typeof refreshedRuntimeStatus !== "object"
+    || refreshedRuntimeStatus === null
+    || Array.isArray(refreshedRuntimeStatus)
+  ) {
+    throw new Error("Packaged first-run readiness screen did not initialize");
+  }
+  for (const candidate of [runtimeStatus, refreshedRuntimeStatus]) {
+    const statusRecord = candidate as Record<string, unknown>;
+    const pythonStatus = statusRecord["python"];
+    if (
+      statusRecord["protocolVersion"] !== 1
+      || typeof pythonStatus !== "object"
+      || pythonStatus === null
+      || Array.isArray(pythonStatus)
+      || (pythonStatus as Record<string, unknown>)["state"] !== "UNAVAILABLE"
+      || (pythonStatus as Record<string, unknown>)["reasonCode"] !== "PYTHON_RUNTIME_UNAVAILABLE"
+    ) {
+      throw new Error("Packaged first-run missing-Python readiness was not fail-closed");
+    }
   }
 
   const token = backendConfig.clientToken;
@@ -850,7 +1058,10 @@ function shutdownDesktop(): Promise<void> {
   ipcMain.removeAllListeners(DESKTOP_BOOTSTRAP_CHANNEL);
   ipcMain.removeAllListeners(DESKTOP_ZOOM_CHANNEL);
   ipcMain.removeHandler(DESKTOP_LOCAL_RUNTIME_STATUS_CHANNEL);
-  ipcMain.removeHandler(DESKTOP_INSTALL_LOCAL_MODELS_CHANNEL);
+  ipcMain.removeHandler(DESKTOP_INSTALL_PYTHON_RUNTIME_CHANNEL);
+  ipcMain.removeHandler(DESKTOP_INSTALL_VOICE_MODELS_CHANNEL);
+  ipcMain.removeHandler(DESKTOP_INSTALL_VISION_MODEL_CHANNEL);
+  ipcMain.removeHandler(DESKTOP_RESTART_APP_CHANNEL);
 
   const failures: unknown[] = [];
 
@@ -898,9 +1109,9 @@ function shutdownDesktop(): Promise<void> {
       failures.push(error);
     }
 
-    const activeModelInstall = modelInstallPromise;
-    if (activeModelInstall !== undefined) {
-      await activeModelInstall.catch(() => undefined);
+    const modelInstallAtShutdown = activeModelInstall;
+    if (modelInstallAtShutdown !== undefined) {
+      await modelInstallAtShutdown.catch(() => undefined);
     }
 
     const currentLocalRuntime = localRuntime;

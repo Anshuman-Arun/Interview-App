@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
-import { access, lstat, readFile, realpath } from "node:fs/promises";
+import { access, lstat, readFile, realpath, rm } from "node:fs/promises";
 import path from "node:path";
 import {
   KokoroSpeechSynthesizer,
@@ -13,6 +13,8 @@ import {
 import {
   LocalRuntimeError,
   LocalRuntimeManager,
+  SupervisedProcessError,
+  SupervisedProcessRunner,
   type LocalComponentDefinition,
   type LocalComponentStatus
 } from "../../../../packages/local-runtime/src/index.js";
@@ -39,6 +41,7 @@ import {
   moonshineRecognizerVersion
 } from "./runtime-adapters.js";
 import {
+  PACKAGED_LOCAL_MODEL_REQUIREMENTS_SHA256,
   PACKAGED_LOCAL_MODEL_WORKER_SHA256,
   PACKAGED_LOCAL_VISION_RUNTIME_SHA256
 } from "./packaged-resource-integrity.js";
@@ -89,6 +92,8 @@ export interface DesktopLocalRuntimeCompositionOptions {
   readonly pythonExecutable?: string;
   readonly workerScriptPath?: string;
   readonly visionRuntimeModulePath?: string;
+  readonly requirementsPath?: string;
+  readonly managedPythonRoot?: string;
 }
 
 export class DesktopLocalRuntimeComposition {
@@ -98,9 +103,13 @@ export class DesktopLocalRuntimeComposition {
   private readonly runtimeViewsRoot: string;
   private readonly workerScriptPath: string;
   private readonly visionRuntimeModulePath: string;
+  private readonly requirementsPath: string;
+  private readonly managedPythonRoot: string;
   private readonly pythonExecutableCandidate: string;
+  private readonly requireManagedPythonRuntime: boolean;
   private readonly enforcePackagedWorkerIntegrity: boolean;
   private pythonExecutable: string | undefined;
+  private pythonStatus: DesktopRuntimeCapabilityStatus = unavailable("NOT_STARTED");
   private speechStatus: DesktopRuntimeCapabilityStatus = unavailable("NOT_STARTED");
   private ttsStatus: DesktopRuntimeCapabilityStatus = unavailable("NOT_STARTED");
   private visionStatus: DesktopRuntimeCapabilityStatus = unavailable("NOT_STARTED");
@@ -151,8 +160,26 @@ export class DesktopLocalRuntimeComposition {
         ? path.join(options.resourcesPath, "workers", "python", "local_vision_runtime.py")
         : path.resolve(options.cwd, "workers", "python", "local_vision_runtime.py")
     );
+    this.requirementsPath = options.requirementsPath ?? (
+      options.isPackaged
+        ? path.join(
+          options.resourcesPath,
+          "workers",
+          "python",
+          "requirements-local-model-runtime.txt"
+        )
+        : path.resolve(
+          options.cwd,
+          "workers",
+          "python",
+          "requirements-local-model-runtime.txt"
+        )
+    );
+    this.managedPythonRoot = options.managedPythonRoot
+      ?? path.join(options.appDataRoot, "python-runtime");
     this.pythonExecutableCandidate = options.pythonExecutable
       ?? (process.platform === "win32" ? "python" : "python3");
+    this.requireManagedPythonRuntime = options.isPackaged;
     this.enforcePackagedWorkerIntegrity = options.isPackaged;
   }
 
@@ -177,6 +204,109 @@ export class DesktopLocalRuntimeComposition {
     });
   }
 
+  public getPythonRuntimeStatus(): DesktopRuntimeCapabilityStatus {
+    return Object.freeze({
+      state: this.pythonStatus.state,
+      ...(this.pythonStatus.reasonCode === undefined
+        ? {}
+        : { reasonCode: this.pythonStatus.reasonCode })
+    });
+  }
+
+  public async refreshPythonRuntimePrerequisite(signal?: AbortSignal): Promise<void> {
+    if (
+      (
+        this.pythonStatus.state !== "READY"
+        && !isRefreshablePythonPrerequisiteReason(this.pythonStatus.reasonCode)
+      )
+      || this.stopping
+      || this.stopped
+    ) {
+      return;
+    }
+    if (abortRequested(signal)) throw abortError();
+
+    if (!isProductionLocalModelPlatformSupported(process.platform, process.arch)) {
+      this.pythonStatus = unavailable("UNSUPPORTED_RUNTIME_PLATFORM");
+      return;
+    }
+    if (!await this.workerScriptIsSafe()) {
+      this.pythonStatus = unavailable("WORKER_EXECUTABLE_UNAVAILABLE");
+      return;
+    }
+
+    const compatibleExecutable = await this.resolveCompatiblePythonExecutable(signal);
+    if (compatibleExecutable !== undefined) return;
+    if (abortRequested(signal)) throw abortError();
+
+    const reasonCode = await this.diagnosePythonRuntime(signal);
+    if (abortRequested(signal)) throw abortError();
+    this.pythonStatus = unavailable(reasonCode);
+    this.refreshPythonDependentCapabilityReasons(reasonCode);
+  }
+
+  public async installPythonRuntimeDependencies(signal?: AbortSignal): Promise<void> {
+    if (!isProductionLocalModelPlatformSupported(process.platform, process.arch)) {
+      throw new Error("Python runtime setup is unavailable on this platform");
+    }
+    if (abortRequested(signal)) throw abortError();
+    if (!await this.workerScriptIsSafe()) {
+      throw new Error("Python runtime setup requires the verified production worker");
+    }
+    if (!await this.requirementsFileIsSafe()) {
+      throw new Error("Python runtime setup requires the verified dependency lock");
+    }
+
+    const managedExecutable = await this.resolveManagedPythonExecutable();
+    if (
+      managedExecutable !== undefined
+      && this.pythonInterpreterCompatible(managedExecutable, signal)
+    ) {
+      if (this.pythonRuntimeCompatible(managedExecutable, signal)) {
+        this.pythonExecutable = managedExecutable;
+        this.pythonStatus = Object.freeze({ state: "READY" });
+        return;
+      }
+      try {
+        await this.installPythonRequirements(managedExecutable, signal);
+        if (!this.pythonRuntimeCompatible(managedExecutable, signal)) {
+          throw new Error("Python runtime dependencies did not pass the production worker check");
+        }
+        this.pythonExecutable = managedExecutable;
+        this.pythonStatus = Object.freeze({ state: "READY" });
+        return;
+      } catch (error) {
+        await rm(this.managedPythonRoot, { recursive: true, force: true }).catch(() => undefined);
+        throw error;
+      }
+    }
+
+    const bootstrapExecutable = await this.resolveBootstrapPythonExecutable();
+    if (bootstrapExecutable === undefined) {
+      throw new Error("Python runtime setup requires 64-bit CPython 3.12 or 3.13");
+    }
+    if (!this.pythonInterpreterCompatible(bootstrapExecutable, signal)) {
+      throw new Error("Python runtime setup requires supported 64-bit CPython 3.12 or 3.13");
+    }
+
+    let isolatedExecutable: string | undefined;
+    try {
+      isolatedExecutable = await this.createManagedPythonEnvironment(
+        bootstrapExecutable,
+        signal
+      );
+      await this.installPythonRequirements(isolatedExecutable, signal);
+      if (!this.pythonRuntimeCompatible(isolatedExecutable, signal)) {
+        throw new Error("Python runtime dependencies did not pass the production worker check");
+      }
+      this.pythonExecutable = isolatedExecutable;
+      this.pythonStatus = Object.freeze({ state: "READY" });
+    } catch (error) {
+      await rm(this.managedPythonRoot, { recursive: true, force: true }).catch(() => undefined);
+      throw error;
+    }
+  }
+
   public async installVoiceAssets(signal?: AbortSignal): Promise<void> {
     if (!isProductionLocalModelPlatformSupported(process.platform, process.arch)) {
       throw new Error("Local model installation is unavailable on this platform");
@@ -185,19 +315,11 @@ export class DesktopLocalRuntimeComposition {
     if (!await this.workerScriptIsSafe()) {
       throw new Error("Local model installation requires the verified production worker");
     }
-    const pythonExecutable = await resolvePythonExecutable(
-      this.pythonExecutableCandidate,
-      process.platform,
-      process.env
-    );
+    const pythonExecutable = await this.resolveCompatiblePythonExecutable(signal);
     if (pythonExecutable === undefined) {
-      throw new Error("Local model installation requires a compatible Python runtime");
-    }
-    if (!this.pythonRuntimeCompatible(pythonExecutable, signal)) {
       if (abortRequested(signal)) throw abortError();
       throw new Error("Local model installation requires the pinned Python runtime");
     }
-    this.pythonExecutable = pythonExecutable;
 
     await this.assetManager.cleanupTemporary(signal);
     for (const asset of VOICE_ASSETS) {
@@ -214,19 +336,11 @@ export class DesktopLocalRuntimeComposition {
     if (!await this.workerScriptIsSafe() || !await this.visionRuntimeModuleIsSafe()) {
       throw new Error("Local vision installation requires the verified production workers");
     }
-    const pythonExecutable = await resolvePythonExecutable(
-      this.pythonExecutableCandidate,
-      process.platform,
-      process.env
-    );
+    const pythonExecutable = await this.resolveCompatiblePythonExecutable(signal);
     if (pythonExecutable === undefined) {
-      throw new Error("Local vision installation requires a compatible Python runtime");
-    }
-    if (!this.pythonRuntimeCompatible(pythonExecutable, signal)) {
       if (abortRequested(signal)) throw abortError();
       throw new Error("Local vision installation requires the pinned Python runtime");
     }
-    this.pythonExecutable = pythonExecutable;
 
     await this.visionAssetManager.cleanupTemporary(signal);
     for (const asset of VISION_ASSETS) {
@@ -344,6 +458,7 @@ export class DesktopLocalRuntimeComposition {
         this.markPendingCapabilitiesCancelled();
         return;
       }
+      this.pythonStatus = unavailable("PYTHON_RUNTIME_UNVERIFIED");
       this.speechStatus = failed("ASSET_CACHE_UNSAFE");
       this.ttsStatus = failed("ASSET_CACHE_UNSAFE");
       this.visionStatus = failed("ASSET_CACHE_UNSAFE");
@@ -355,6 +470,7 @@ export class DesktopLocalRuntimeComposition {
     }
 
     if (!isProductionLocalModelPlatformSupported(process.platform, process.arch)) {
+      this.pythonStatus = unavailable("UNSUPPORTED_RUNTIME_PLATFORM");
       this.speechStatus = unavailable("UNSUPPORTED_RUNTIME_PLATFORM");
       this.ttsStatus = unavailable("UNSUPPORTED_RUNTIME_PLATFORM");
       this.visionStatus = unavailable("UNSUPPORTED_RUNTIME_PLATFORM");
@@ -363,32 +479,28 @@ export class DesktopLocalRuntimeComposition {
 
     const workerAvailable = await this.workerScriptIsSafe();
     if (!workerAvailable) {
+      this.pythonStatus = unavailable("WORKER_EXECUTABLE_UNAVAILABLE");
       this.speechStatus = unavailable("WORKER_EXECUTABLE_UNAVAILABLE");
       this.ttsStatus = unavailable("WORKER_EXECUTABLE_UNAVAILABLE");
       this.visionStatus = unavailable("WORKER_EXECUTABLE_UNAVAILABLE");
       return;
     }
 
-    const pythonExecutable = await resolvePythonExecutable(
-      this.pythonExecutableCandidate,
-      process.platform,
-      process.env
-    );
+    const pythonExecutable = await this.resolveCompatiblePythonExecutable(signal);
     if (pythonExecutable === undefined) {
-      this.speechStatus = unavailable("PYTHON_RUNTIME_UNAVAILABLE");
-      this.ttsStatus = unavailable("PYTHON_RUNTIME_UNAVAILABLE");
-      this.visionStatus = unavailable("PYTHON_RUNTIME_UNAVAILABLE");
-      return;
-    }
-    this.pythonExecutable = pythonExecutable;
-    if (!this.pythonRuntimeCompatible(pythonExecutable, signal)) {
       if (abortRequested(signal)) {
         this.markPendingCapabilitiesCancelled();
         return;
       }
-      this.speechStatus = unavailable("PYTHON_RUNTIME_INCOMPATIBLE");
-      this.ttsStatus = unavailable("PYTHON_RUNTIME_INCOMPATIBLE");
-      this.visionStatus = unavailable("PYTHON_RUNTIME_INCOMPATIBLE");
+      const reasonCode = await this.diagnosePythonRuntime(signal);
+      if (abortRequested(signal)) {
+        this.markPendingCapabilitiesCancelled();
+        return;
+      }
+      this.pythonStatus = unavailable(reasonCode);
+      this.speechStatus = unavailable(reasonCode);
+      this.ttsStatus = unavailable(reasonCode);
+      this.visionStatus = unavailable(reasonCode);
       return;
     }
 
@@ -513,11 +625,117 @@ export class DesktopLocalRuntimeComposition {
   }
 
 
+  private refreshPythonDependentCapabilityReasons(reasonCode: string): void {
+    if (isRefreshablePythonPrerequisiteReason(this.speechStatus.reasonCode)) {
+      this.speechStatus = unavailable(reasonCode);
+    }
+    if (isRefreshablePythonPrerequisiteReason(this.ttsStatus.reasonCode)) {
+      this.ttsStatus = unavailable(reasonCode);
+    }
+    if (isRefreshablePythonPrerequisiteReason(this.visionStatus.reasonCode)) {
+      this.visionStatus = unavailable(reasonCode);
+    }
+  }
+
   private pythonRuntimeCompatible(
     executable: string,
     signal?: AbortSignal
   ): boolean {
     return probePythonRuntime(executable, this.workerScriptPath, signal);
+  }
+
+  private pythonInterpreterCompatible(
+    executable: string,
+    signal?: AbortSignal
+  ): boolean {
+    return probePythonInterpreter(executable, signal);
+  }
+
+  private resolveManagedPythonExecutable(): Promise<string | undefined> {
+    return resolvePythonExecutable(
+      managedPythonExecutablePath(this.managedPythonRoot, process.platform),
+      process.platform,
+      process.env
+    );
+  }
+
+  private resolveBootstrapPythonExecutable(): Promise<string | undefined> {
+    return resolvePythonExecutable(
+      this.pythonExecutableCandidate,
+      process.platform,
+      process.env
+    );
+  }
+
+  private async resolveCompatiblePythonExecutable(
+    signal?: AbortSignal
+  ): Promise<string | undefined> {
+    const managedExecutable = await this.resolveManagedPythonExecutable();
+    const candidates = this.requireManagedPythonRuntime
+      ? [this.pythonExecutable, managedExecutable]
+      : [
+          this.pythonExecutable,
+          managedExecutable,
+          await this.resolveBootstrapPythonExecutable()
+        ];
+    const seen = new Set<string>();
+    for (const executable of candidates) {
+      if (executable === undefined || seen.has(executable)) continue;
+      seen.add(executable);
+      if (this.pythonRuntimeCompatible(executable, signal)) {
+        this.pythonExecutable = executable;
+        this.pythonStatus = Object.freeze({ state: "READY" });
+        return executable;
+      }
+      if (abortRequested(signal)) return undefined;
+    }
+    return undefined;
+  }
+
+  private async diagnosePythonRuntime(
+    signal?: AbortSignal
+  ): Promise<
+    | "PYTHON_RUNTIME_UNAVAILABLE"
+    | "PYTHON_RUNTIME_INCOMPATIBLE"
+    | "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+  > {
+    const managedExecutable = await this.resolveManagedPythonExecutable();
+    const bootstrapExecutable = await this.resolveBootstrapPythonExecutable();
+    const candidates = [managedExecutable, bootstrapExecutable];
+    let foundExecutable = false;
+    for (const executable of candidates) {
+      if (executable === undefined) continue;
+      foundExecutable = true;
+      if (this.pythonInterpreterCompatible(executable, signal)) {
+        return "PYTHON_RUNTIME_DEPENDENCIES_MISSING";
+      }
+      if (abortRequested(signal)) return "PYTHON_RUNTIME_UNAVAILABLE";
+    }
+    return foundExecutable
+      ? "PYTHON_RUNTIME_INCOMPATIBLE"
+      : "PYTHON_RUNTIME_UNAVAILABLE";
+  }
+
+  private createManagedPythonEnvironment(
+    bootstrapExecutable: string,
+    signal?: AbortSignal
+  ): Promise<string> {
+    return createIsolatedPythonEnvironment(
+      bootstrapExecutable,
+      this.managedPythonRoot,
+      signal
+    );
+  }
+
+  private installPythonRequirements(
+    executable: string,
+    signal?: AbortSignal
+  ): Promise<void> {
+    return installPinnedPythonRequirements(
+      executable,
+      this.requirementsPath,
+      signal
+    );
   }
 
   private async startSpeech(signal?: AbortSignal): Promise<void> {
@@ -802,6 +1020,9 @@ export class DesktopLocalRuntimeComposition {
   }
 
   private markPendingCapabilitiesCancelled(): void {
+    if (this.pythonStatus.reasonCode === "NOT_STARTED") {
+      this.pythonStatus = unavailable("START_CANCELLED");
+    }
     if (this.speechStatus.reasonCode === "NOT_STARTED") {
       this.speechStatus = unavailable("START_CANCELLED");
     }
@@ -949,6 +1170,21 @@ export class DesktopLocalRuntimeComposition {
       return false;
     }
   }
+
+  private async requirementsFileIsSafe(): Promise<boolean> {
+    try {
+      const metadata = await lstat(this.requirementsPath);
+      if (!metadata.isFile() || metadata.isSymbolicLink()) return false;
+      if (!this.enforcePackagedWorkerIntegrity) return true;
+
+      const digest = createHash("sha256")
+        .update(await readFile(this.requirementsPath))
+        .digest("hex");
+      return digest === PACKAGED_LOCAL_MODEL_REQUIREMENTS_SHA256;
+    } catch {
+      return false;
+    }
+  }
 }
 
 function isProductionLocalModelPlatformSupported(
@@ -1046,6 +1282,205 @@ async function resolvePythonExecutable(
   return undefined;
 }
 
+function managedPythonExecutablePath(
+  root: string,
+  platform: NodeJS.Platform
+): string {
+  return platform === "win32"
+    ? path.join(root, "Scripts", "python.exe")
+    : path.join(root, "bin", "python");
+}
+
+async function createIsolatedPythonEnvironment(
+  bootstrapExecutable: string,
+  root: string,
+  signal: AbortSignal | undefined
+): Promise<string> {
+  if (abortRequested(signal)) throw abortError();
+  await rm(root, { recursive: true, force: true });
+  const setupBootstrapExecutable = process.platform === "win32"
+    ? bootstrapExecutable
+    : await realpath(bootstrapExecutable);
+  await runPythonSetupProcess(
+    setupBootstrapExecutable,
+    ["-I", "-m", "venv", "--copies", root],
+    pythonSetupEnvironment(setupBootstrapExecutable),
+    signal,
+    60_000,
+    "Python isolated runtime creation"
+  );
+  const executable = await resolvePythonExecutable(
+    managedPythonExecutablePath(root, process.platform),
+    process.platform,
+    process.env
+  );
+  if (executable === undefined || !probePythonInterpreter(executable, signal)) {
+    throw new Error("Python isolated runtime could not be verified");
+  }
+  return executable;
+}
+
+function probePythonInterpreter(
+  executable: string,
+  signal: AbortSignal | undefined
+): boolean {
+  if (abortRequested(signal)) return false;
+  const script = [
+    "import json, platform, struct, sys",
+    "print(json.dumps({",
+    "'implementation': platform.python_implementation(),",
+    "'major': sys.version_info[0],",
+    "'minor': sys.version_info[1],",
+    "'bits': struct.calcsize('P') * 8,",
+    "'machine': platform.machine().lower()",
+    "}, separators=(',', ':')))"
+  ].join("\n");
+  const result = spawnSync(
+    executable,
+    ["-I", "-c", script],
+    {
+      cwd: path.dirname(executable),
+      env: {
+        PATH: path.dirname(executable)
+      },
+      encoding: "utf8",
+      maxBuffer: 16 * 1024,
+      timeout: 5_000,
+      windowsHide: true,
+      shell: false
+    }
+  );
+  if (
+    abortRequested(signal)
+    || result.error !== undefined
+    || result.signal !== null
+    || result.status !== 0
+  ) {
+    return false;
+  }
+  try {
+    const parsed = JSON.parse(result.stdout.trim()) as Record<string, unknown>;
+    return parsed["implementation"] === "CPython"
+      && parsed["major"] === 3
+      && (parsed["minor"] === 12 || parsed["minor"] === 13)
+      && parsed["bits"] === 64
+      && (
+        parsed["machine"] === "amd64"
+        || parsed["machine"] === "x86_64"
+      );
+  } catch {
+    return false;
+  }
+}
+
+async function installPinnedPythonRequirements(
+  executable: string,
+  requirementsPath: string,
+  signal: AbortSignal | undefined
+): Promise<void> {
+  await runPythonSetupProcess(
+    executable,
+    [
+      "-I",
+      "-m",
+      "pip",
+      "install",
+      "--disable-pip-version-check",
+      "--no-input",
+      "--only-binary=:all:",
+      "--requirement",
+      requirementsPath
+    ],
+    pythonSetupEnvironment(executable),
+    signal,
+    300_000,
+    "Python runtime dependency installation"
+  );
+}
+
+async function runPythonSetupProcess(
+  executable: string,
+  args: readonly string[],
+  env: NodeJS.ProcessEnv,
+  signal: AbortSignal | undefined,
+  timeoutMs: number,
+  operationName: string
+): Promise<void> {
+  if (abortRequested(signal)) throw abortError();
+  const values: Record<string, string> = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (typeof value === "string") values[key] = value;
+  }
+  const runner = new SupervisedProcessRunner(
+    [{
+      id: "python-setup",
+      executable,
+      environment: { values }
+    }],
+    { parentEnvironment: {} }
+  );
+  try {
+    const result = await runner.execute({
+      executableId: "python-setup",
+      args,
+      timeoutMs,
+      maxStdoutBytes: 256 * 1024,
+      maxStderrBytes: 64 * 1024,
+      ...(signal === undefined ? {} : { signal })
+    });
+    if (result.exitCode !== 0) {
+      throw new Error(`${operationName} failed`);
+    }
+  } catch (error) {
+    if (error instanceof SupervisedProcessError) {
+      switch (error.code) {
+        case "EXECUTION_CANCELLED":
+          throw abortError();
+        case "EXECUTION_TIMEOUT":
+          throw new Error(`${operationName} timed out`, { cause: error });
+        case "PROCESS_TREE_CLEANUP_FAILED":
+          throw new Error(
+            `${operationName} process-tree cleanup could not be verified`,
+            { cause: error }
+          );
+        default:
+          throw new Error(`${operationName} failed`, { cause: error });
+      }
+    }
+    throw error;
+  } finally {
+    await runner.drain();
+  }
+}
+
+function pythonSetupEnvironment(executable: string): NodeJS.ProcessEnv {
+  const environment: NodeJS.ProcessEnv = {
+    PATH: path.dirname(executable),
+    PYTHONNOUSERSITE: "1",
+    PIP_CONFIG_FILE: process.platform === "win32" ? "NUL" : "/dev/null",
+    PIP_DISABLE_PIP_VERSION_CHECK: "1",
+    PIP_NO_CACHE_DIR: "1",
+    PIP_NO_INPUT: "1"
+  };
+  for (const key of [
+    "SYSTEMROOT",
+    "WINDIR",
+    "TEMP",
+    "TMP",
+    "USERPROFILE",
+    "LOCALAPPDATA",
+    "APPDATA",
+    "HOME",
+    "HTTPS_PROXY",
+    "HTTP_PROXY",
+    "NO_PROXY"
+  ] as const) {
+    const value = process.env[key];
+    if (value !== undefined) environment[key] = value;
+  }
+  return environment;
+}
+
 function probePythonRuntime(
   executable: string,
   workerScriptPath: string,
@@ -1115,6 +1550,14 @@ function unavailable(reasonCode: string, modelIdentity?: string): DesktopRuntime
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isRefreshablePythonPrerequisiteReason(
+  reasonCode: string | undefined
+): boolean {
+  return reasonCode === "PYTHON_RUNTIME_UNAVAILABLE"
+    || reasonCode === "PYTHON_RUNTIME_INCOMPATIBLE"
+    || reasonCode === "PYTHON_RUNTIME_DEPENDENCIES_MISSING";
 }
 
 function isAbortError(error: unknown): boolean {

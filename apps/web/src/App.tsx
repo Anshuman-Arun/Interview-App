@@ -28,6 +28,7 @@ import type { ProductPageId } from "./components/ProductFrame.js";
 import { ReviewReadPanel } from "./pages/ReviewReadPanel.js";
 import { QuantSessionWorkspace } from "./quant/QuantSessionWorkspace.js";
 import { useAppearance } from "./appearance/AppearanceProvider.js";
+import { DESKTOP_FIRST_RUN_SETUP_KEY } from "./desktop-runtime.js";
 import "./styles/app.css";
 import "./styles/transcript.css";
 
@@ -85,7 +86,27 @@ export const App: React.FC = () => {
   });
   const { route, navigate } = useProductNavigation();
   const routeRef = useRef(route);
+  const firstRunRedirectedRef = useRef(false);
   routeRef.current = route;
+
+  useEffect(() => {
+    if (
+      firstRunRedirectedRef.current
+      || !session.isTransportManaged
+      || route.page !== "home"
+    ) {
+      return;
+    }
+    firstRunRedirectedRef.current = true;
+    try {
+      if (globalThis.localStorage.getItem(DESKTOP_FIRST_RUN_SETUP_KEY) === "complete") {
+        return;
+      }
+    } catch {
+      // First-run routing is a convenience; transport authority never depends on storage.
+    }
+    navigate({ page: "settings" }, { replace: true });
+  }, [navigate, route.page, session.isTransportManaged]);
 
   const openDefaultReview = useCallback((targetSessionId: SessionId): void => {
     navigate({

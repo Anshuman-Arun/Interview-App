@@ -231,6 +231,50 @@ describe("desktop local model runtime", () => {
     expect(mutable.pythonExecutable).toBe(launcher);
   });
 
+  it("finds a standard per-user Windows Python install even when Python is absent from PATH", async () => {
+    if (process.platform !== "win32") return;
+
+    const localAppData = temporaryRoot("desktop-python-standard-localappdata-");
+    const standardExecutable = join(
+      localAppData,
+      "Programs",
+      "Python",
+      "Python313",
+      "python.exe"
+    );
+    mkdirSync(dirname(standardExecutable), { recursive: true });
+    writeFileSync(standardExecutable, "test executable placeholder");
+
+    const previousLocalAppData = process.env["LOCALAPPDATA"];
+    const previousPath = process.env["PATH"];
+    process.env["LOCALAPPDATA"] = localAppData;
+    process.env["PATH"] = "";
+    try {
+      const composition = new DesktopLocalRuntimeComposition({
+        appDataRoot: temporaryRoot("desktop-python-standard-appdata-"),
+        cwd: process.cwd(),
+        resourcesPath: process.cwd(),
+        isPackaged: false,
+        pythonExecutable: "python"
+      });
+      compositions.push(composition);
+
+      const mutable = composition as unknown as {
+        pythonExecutable?: string;
+        pythonRuntimeCompatible(executable: string, signal?: AbortSignal): boolean;
+      };
+      mutable.pythonRuntimeCompatible = () => true;
+      await expect(composition.start()).resolves.toBeUndefined();
+      expect(mutable.pythonExecutable).toBe(standardExecutable);
+      expect(composition.getPythonRuntimeStatus()).toEqual({ state: "READY" });
+    } finally {
+      if (previousLocalAppData === undefined) delete process.env["LOCALAPPDATA"];
+      else process.env["LOCALAPPDATA"] = previousLocalAppData;
+      if (previousPath === undefined) delete process.env["PATH"];
+      else process.env["PATH"] = previousPath;
+    }
+  });
+
   it("degrades voice without spawning when the configured Python runtime cannot be resolved", async () => {
     const composition = new DesktopLocalRuntimeComposition({
       appDataRoot: temporaryRoot("desktop-python-missing-"),
@@ -293,10 +337,470 @@ describe("desktop local model runtime", () => {
     };
 
     await expect(composition.installVoiceAssets()).rejects.toThrow(
-      "compatible Python runtime"
+      "pinned Python runtime"
     );
     expect(cleanupCalls).toBe(0);
     expect(installCalls).toBe(0);
+  });
+
+  it("distinguishes a supported Python interpreter with missing pinned dependencies", async () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-python-deps-missing-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+
+    const mutable = composition as unknown as {
+      pythonRuntimeCompatible(executable: string, signal?: AbortSignal): boolean;
+      pythonInterpreterCompatible(executable: string, signal?: AbortSignal): boolean;
+    };
+    mutable.pythonRuntimeCompatible = () => false;
+    mutable.pythonInterpreterCompatible = () => true;
+
+    await expect(composition.start()).resolves.toBeUndefined();
+    expect(composition.getCapabilityStatus()).toEqual({
+      speech: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+      },
+      tts: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+      },
+      vision: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+      }
+    });
+  });
+
+  it("revalidates a previously ready Python runtime instead of trusting cached readiness", async () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-python-ready-recheck-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+
+    const mutable = composition as unknown as {
+      pythonStatus: { readonly state: "READY" } | {
+        readonly state: "UNAVAILABLE";
+        readonly reasonCode: string;
+      };
+      workerScriptIsSafe(): Promise<boolean>;
+      resolveCompatiblePythonExecutable(signal?: AbortSignal): Promise<string | undefined>;
+      diagnosePythonRuntime(signal?: AbortSignal): Promise<
+        | "PYTHON_RUNTIME_UNAVAILABLE"
+        | "PYTHON_RUNTIME_INCOMPATIBLE"
+        | "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+      >;
+    };
+    mutable.pythonStatus = { state: "READY" };
+    mutable.workerScriptIsSafe = async () => true;
+    mutable.resolveCompatiblePythonExecutable = async () => undefined;
+    mutable.diagnosePythonRuntime = async () => "PYTHON_RUNTIME_UNAVAILABLE";
+
+    await expect(
+      composition.refreshPythonRuntimePrerequisite()
+    ).resolves.toBeUndefined();
+
+    expect(composition.getPythonRuntimeStatus()).toEqual({
+      state: "UNAVAILABLE",
+      reasonCode: "PYTHON_RUNTIME_UNAVAILABLE"
+    });
+  });
+
+  it("re-probes a previously missing Python prerequisite without restarting the app", async () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-python-recheck-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+
+    let pythonNowInstalled = false;
+    const mutable = composition as unknown as {
+      workerScriptIsSafe(): Promise<boolean>;
+      resolveCompatiblePythonExecutable(signal?: AbortSignal): Promise<string | undefined>;
+      diagnosePythonRuntime(signal?: AbortSignal): Promise<
+        | "PYTHON_RUNTIME_UNAVAILABLE"
+        | "PYTHON_RUNTIME_INCOMPATIBLE"
+        | "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+      >;
+    };
+    mutable.workerScriptIsSafe = async () => true;
+    mutable.resolveCompatiblePythonExecutable = async () => undefined;
+    mutable.diagnosePythonRuntime = async () => pythonNowInstalled
+      ? "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+      : "PYTHON_RUNTIME_UNAVAILABLE";
+
+    await expect(composition.start()).resolves.toBeUndefined();
+    expect(composition.getPythonRuntimeStatus()).toEqual({
+      state: "UNAVAILABLE",
+      reasonCode: "PYTHON_RUNTIME_UNAVAILABLE"
+    });
+
+    pythonNowInstalled = true;
+    await expect(
+      composition.refreshPythonRuntimePrerequisite()
+    ).resolves.toBeUndefined();
+
+    expect(composition.getPythonRuntimeStatus()).toEqual({
+      state: "UNAVAILABLE",
+      reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+    });
+    expect(composition.getCapabilityStatus()).toEqual({
+      speech: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+      },
+      tts: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+      },
+      vision: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+      }
+    });
+  });
+
+  it("does not use a compatible global Python as the packaged worker runtime", async () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-python-packaged-managed-only-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: true,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+
+    const mutable = composition as unknown as {
+      workerScriptIsSafe(): Promise<boolean>;
+      resolveManagedPythonExecutable(): Promise<string | undefined>;
+      resolveBootstrapPythonExecutable(): Promise<string | undefined>;
+      pythonRuntimeCompatible(executable: string, signal?: AbortSignal): boolean;
+      pythonInterpreterCompatible(executable: string, signal?: AbortSignal): boolean;
+      pythonExecutable?: string;
+    };
+    mutable.workerScriptIsSafe = async () => true;
+    mutable.resolveManagedPythonExecutable = async () => undefined;
+    mutable.resolveBootstrapPythonExecutable = async () => process.execPath;
+    mutable.pythonRuntimeCompatible = () => true;
+    mutable.pythonInterpreterCompatible = () => true;
+
+    await expect(composition.start()).resolves.toBeUndefined();
+    expect(mutable.pythonExecutable).toBeUndefined();
+    expect(composition.getPythonRuntimeStatus()).toEqual({
+      state: "UNAVAILABLE",
+      reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+    });
+  });
+
+  it("installs pinned Python dependencies into an app-owned environment and re-probes", async () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-python-deps-install-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+
+    const managedExecutable = join(
+      temporaryRoot("desktop-python-managed-fixture-"),
+      process.platform === "win32" ? "python.exe" : "python"
+    );
+    let managedCompatible = false;
+    const installs: string[] = [];
+    const createdFrom: string[] = [];
+    const mutable = composition as unknown as {
+      pythonRuntimeCompatible(executable: string, signal?: AbortSignal): boolean;
+      pythonInterpreterCompatible(executable: string, signal?: AbortSignal): boolean;
+      resolveManagedPythonExecutable(): Promise<string | undefined>;
+      resolveBootstrapPythonExecutable(): Promise<string | undefined>;
+      createManagedPythonEnvironment(
+        bootstrapExecutable: string,
+        signal?: AbortSignal
+      ): Promise<string>;
+      installPythonRequirements(executable: string, signal?: AbortSignal): Promise<void>;
+      pythonExecutable?: string;
+    };
+    mutable.resolveManagedPythonExecutable = async () => undefined;
+    mutable.resolveBootstrapPythonExecutable = async () => process.execPath;
+    mutable.pythonRuntimeCompatible = (executable) =>
+      executable === managedExecutable && managedCompatible;
+    mutable.pythonInterpreterCompatible = () => true;
+    mutable.createManagedPythonEnvironment = async (bootstrapExecutable) => {
+      createdFrom.push(bootstrapExecutable);
+      return managedExecutable;
+    };
+    mutable.installPythonRequirements = async (executable) => {
+      installs.push(executable);
+      managedCompatible = true;
+    };
+
+    await expect(composition.installPythonRuntimeDependencies()).resolves.toBeUndefined();
+    expect(createdFrom).toEqual([process.execPath]);
+    expect(installs).toEqual([managedExecutable]);
+    expect(installs).not.toContain(process.execPath);
+    expect(mutable.pythonExecutable).toBe(managedExecutable);
+  });
+
+  it("creates a real isolated managed Python environment instead of using base site-packages", async () => {
+    const bootstrap = spawnSync("python", [
+      "-I",
+      "-c",
+      "import sys; print(sys.executable)"
+    ], {
+      encoding: "utf8",
+      windowsHide: true
+    });
+    expect(bootstrap.status).toBe(0);
+    const bootstrapExecutable = bootstrap.stdout.trim();
+    expect(bootstrapExecutable.length).toBeGreaterThan(0);
+
+    const managedRoot = temporaryRoot("desktop-python-real-managed-");
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-python-real-appdata-"),
+      managedPythonRoot: managedRoot,
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: bootstrapExecutable
+    });
+    compositions.push(composition);
+
+    const mutable = composition as unknown as {
+      createManagedPythonEnvironment(
+        bootstrapExecutable: string,
+        signal?: AbortSignal
+      ): Promise<string>;
+    };
+    const managedExecutable = await mutable.createManagedPythonEnvironment(
+      bootstrapExecutable
+    );
+    expect(existsSync(managedExecutable)).toBe(true);
+
+    const probe = spawnSync(managedExecutable, [
+      "-I",
+      "-c",
+      "import sys; print(int(sys.prefix != sys.base_prefix))"
+    ], {
+      encoding: "utf8",
+      windowsHide: true
+    });
+    expect(probe.status).toBe(0);
+    expect(probe.stdout.trim()).toBe("1");
+  }, 30_000);
+
+  it("runs the real managed venv, pip, and production-style re-probe path without network access", async () => {
+    const bootstrap = spawnSync("python", [
+      "-I",
+      "-c",
+      "import sys; print(sys.executable)"
+    ], {
+      encoding: "utf8",
+      windowsHide: true
+    });
+    expect(bootstrap.status).toBe(0);
+    const bootstrapExecutable = bootstrap.stdout.trim();
+    expect(bootstrapExecutable.length).toBeGreaterThan(0);
+
+    const fixtureRoot = temporaryRoot("Interview App Ω Python Setup-");
+    const workerScriptPath = join(fixtureRoot, "worker.py");
+    const requirementsPath = join(fixtureRoot, "requirements.txt");
+    const managedPythonRoot = join(fixtureRoot, "managed-python");
+    writeFileSync(
+      workerScriptPath,
+      [
+        "import sys",
+        "if '--check-runtime' not in sys.argv:",
+        "    raise SystemExit(2)",
+        "print('{\"runtimeCompatible\":true}')"
+      ].join("\n")
+    );
+    writeFileSync(requirementsPath, "# intentionally empty offline setup fixture\n");
+
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("Interview App Ω Python AppData-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: bootstrapExecutable,
+      workerScriptPath,
+      requirementsPath,
+      managedPythonRoot
+    });
+    compositions.push(composition);
+
+    await expect(
+      composition.installPythonRuntimeDependencies()
+    ).resolves.toBeUndefined();
+
+    const mutable = composition as unknown as {
+      pythonExecutable?: string;
+    };
+    expect(mutable.pythonExecutable).toBeDefined();
+    expect(mutable.pythonExecutable).not.toBe(bootstrapExecutable);
+    expect(mutable.pythonExecutable?.startsWith(managedPythonRoot)).toBe(true);
+    expect(composition.getPythonRuntimeStatus()).toEqual({ state: "READY" });
+  }, 60_000);
+
+  it("repairs an existing app-owned Python environment without mutating bootstrap Python", async () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-python-managed-repair-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+
+    const managedExecutable = "managed-python";
+    let compatible = false;
+    const installs: string[] = [];
+    const mutable = composition as unknown as {
+      pythonRuntimeCompatible(executable: string, signal?: AbortSignal): boolean;
+      pythonInterpreterCompatible(executable: string, signal?: AbortSignal): boolean;
+      resolveManagedPythonExecutable(): Promise<string | undefined>;
+      resolveBootstrapPythonExecutable(): Promise<string | undefined>;
+      createManagedPythonEnvironment(
+        bootstrapExecutable: string,
+        signal?: AbortSignal
+      ): Promise<string>;
+      installPythonRequirements(executable: string, signal?: AbortSignal): Promise<void>;
+      pythonExecutable?: string;
+    };
+    mutable.resolveManagedPythonExecutable = async () => managedExecutable;
+    mutable.resolveBootstrapPythonExecutable = async () => process.execPath;
+    mutable.pythonInterpreterCompatible = (executable) => executable === managedExecutable;
+    mutable.pythonRuntimeCompatible = (executable) =>
+      executable === managedExecutable && compatible;
+    mutable.createManagedPythonEnvironment = async () => {
+      throw new Error("existing managed runtime should be repaired in place");
+    };
+    mutable.installPythonRequirements = async (executable) => {
+      installs.push(executable);
+      compatible = true;
+    };
+
+    await expect(composition.installPythonRuntimeDependencies()).resolves.toBeUndefined();
+    expect(installs).toEqual([managedExecutable]);
+    expect(mutable.pythonExecutable).toBe(managedExecutable);
+  });
+
+  it("removes a partially repaired app-owned Python environment after dependency failure", async () => {
+    const managedRoot = temporaryRoot("desktop-python-managed-failed-repair-");
+    const sentinel = join(managedRoot, "partial-install");
+    writeFileSync(sentinel, "partial");
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-python-managed-failed-appdata-"),
+      managedPythonRoot: managedRoot,
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+
+    const managedExecutable = "managed-python";
+    const mutable = composition as unknown as {
+      pythonRuntimeCompatible(executable: string, signal?: AbortSignal): boolean;
+      pythonInterpreterCompatible(executable: string, signal?: AbortSignal): boolean;
+      resolveManagedPythonExecutable(): Promise<string | undefined>;
+      installPythonRequirements(executable: string, signal?: AbortSignal): Promise<void>;
+    };
+    mutable.resolveManagedPythonExecutable = async () => managedExecutable;
+    mutable.pythonInterpreterCompatible = () => true;
+    mutable.pythonRuntimeCompatible = () => false;
+    mutable.installPythonRequirements = async () => {
+      throw new Error("simulated dependency failure");
+    };
+
+    await expect(composition.installPythonRuntimeDependencies())
+      .rejects.toThrow("simulated dependency failure");
+    expect(existsSync(sentinel)).toBe(false);
+    expect(existsSync(managedRoot)).toBe(false);
+  });
+
+  it("reports missing dependencies from a repairable managed Python even when bootstrap Python disappeared", async () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-python-managed-diagnosis-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: join(
+        temporaryRoot("desktop-python-managed-no-bootstrap-"),
+        process.platform === "win32" ? "python.exe" : "python"
+      )
+    });
+    compositions.push(composition);
+
+    const mutable = composition as unknown as {
+      resolveManagedPythonExecutable(): Promise<string | undefined>;
+      resolveBootstrapPythonExecutable(): Promise<string | undefined>;
+      pythonRuntimeCompatible(executable: string, signal?: AbortSignal): boolean;
+      pythonInterpreterCompatible(executable: string, signal?: AbortSignal): boolean;
+    };
+    mutable.resolveManagedPythonExecutable = async () => "managed-python";
+    mutable.resolveBootstrapPythonExecutable = async () => undefined;
+    mutable.pythonRuntimeCompatible = () => false;
+    mutable.pythonInterpreterCompatible = (executable) => executable === "managed-python";
+
+    await expect(composition.start()).resolves.toBeUndefined();
+    expect(composition.getCapabilityStatus()).toEqual({
+      speech: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+      },
+      tts: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+      },
+      vision: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+      }
+    });
+  });
+
+  it("prefers an admitted app-owned Python runtime over bootstrap Python", async () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-python-managed-priority-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+
+    const managedExecutable = "managed-python";
+    const probed: string[] = [];
+    const mutable = composition as unknown as {
+      resolveManagedPythonExecutable(): Promise<string | undefined>;
+      resolveBootstrapPythonExecutable(): Promise<string | undefined>;
+      resolveCompatiblePythonExecutable(signal?: AbortSignal): Promise<string | undefined>;
+      pythonRuntimeCompatible(executable: string, signal?: AbortSignal): boolean;
+      pythonExecutable?: string;
+    };
+    mutable.resolveManagedPythonExecutable = async () => managedExecutable;
+    mutable.resolveBootstrapPythonExecutable = async () => process.execPath;
+    mutable.pythonRuntimeCompatible = (executable) => {
+      probed.push(executable);
+      return executable === managedExecutable;
+    };
+
+    await expect(mutable.resolveCompatiblePythonExecutable()).resolves.toBe(managedExecutable);
+    expect(probed).toEqual([managedExecutable]);
+    expect(mutable.pythonExecutable).toBe(managedExecutable);
   });
 
   it("reports an incompatible Python runtime before model admission", async () => {
@@ -381,6 +885,43 @@ describe("desktop local model runtime", () => {
         reasonCode: "START_CANCELLED"
       }
     });
+    expect(composition.getPythonRuntimeStatus()).toEqual({
+      state: "UNAVAILABLE",
+      reasonCode: "START_CANCELLED"
+    });
+  });
+
+  it("does not claim Python readiness when asset-cache admission fails before interpreter probing", async () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-python-cache-admission-failure-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+
+    const mutable = composition as unknown as {
+      assetManager: { cleanupTemporary(): Promise<void> };
+      pythonRuntimeCompatible(executable: string, signal?: AbortSignal): boolean;
+    };
+    mutable.assetManager.cleanupTemporary = async () => {
+      throw new Error("synthetic cache admission failure");
+    };
+    mutable.pythonRuntimeCompatible = () => {
+      throw new Error("Python must not be probed after cache admission failed");
+    };
+
+    await expect(composition.start()).resolves.toBeUndefined();
+    expect(composition.getPythonRuntimeStatus()).toEqual({
+      state: "UNAVAILABLE",
+      reasonCode: "PYTHON_RUNTIME_UNVERIFIED"
+    });
+    expect(composition.getCapabilityStatus()).toEqual({
+      speech: { state: "FAILED", reasonCode: "ASSET_CACHE_UNSAFE" },
+      tts: { state: "FAILED", reasonCode: "ASSET_CACHE_UNSAFE" },
+      vision: { state: "FAILED", reasonCode: "ASSET_CACHE_UNSAFE" }
+    });
   });
 
   it("does not degrade to typed-only mode when worker cleanup is unverified", async () => {
@@ -447,6 +988,7 @@ describe("desktop local model runtime", () => {
         reasonCode: "VISION_ASSET_MISSING"
       }
     });
+    expect(composition.getPythonRuntimeStatus()).toEqual({ state: "READY" });
   });
 
   it("aborts and joins startup before local runtime shutdown can complete", async () => {

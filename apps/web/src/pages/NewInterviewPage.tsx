@@ -8,6 +8,11 @@ import {
   type ProviderLaunchOption,
   type SessionId
 } from "../../../../packages/domain/src/index.js";
+import {
+  getDesktopRuntimeBridge,
+  readDesktopRuntimeStatus,
+  type DesktopRuntimeStatus
+} from "../desktop-runtime.js";
 import "./NewInterviewPage.css";
 
 const MODE_LABELS: Readonly<Record<InterviewMode, string>> = {
@@ -88,6 +93,31 @@ export function NewInterviewPage({
   const [interventionPolicy, setInterventionPolicy] =
     useState<"MINIMAL" | "BALANCED" | "STRICT">("BALANCED");
   const [formError, setFormError] = useState<string | null>(null);
+  const desktopRuntime = useMemo(() => getDesktopRuntimeBridge(), []);
+  const [localRuntimeStatus, setLocalRuntimeStatus] =
+    useState<DesktopRuntimeStatus | undefined>();
+  const [localRuntimeStatusError, setLocalRuntimeStatusError] = useState(false);
+
+  useEffect(() => {
+    if (desktopRuntime === undefined) return;
+    let active = true;
+    void readDesktopRuntimeStatus(desktopRuntime)
+      .then((status) => {
+        if (active) {
+          setLocalRuntimeStatus(status);
+          setLocalRuntimeStatusError(false);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setLocalRuntimeStatus(undefined);
+          setLocalRuntimeStatusError(true);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [desktopRuntime]);
 
   useEffect(() => {
     void onRefreshCatalog().catch(() => undefined);
@@ -330,6 +360,26 @@ export function NewInterviewPage({
             </div>
           )}
         </section>
+
+        {desktopRuntime !== undefined && localRuntimeStatusError ? (
+          <div className="new-interview__capability-note" aria-live="polite">
+            <span>Local AI readiness could not be verified — typed input and drawing still work.</span>
+          </div>
+        ) : localRuntimeStatus !== undefined && (
+          localRuntimeStatus.speech.state !== "READY"
+          || localRuntimeStatus.tts.state !== "READY"
+          || localRuntimeStatus.vision.state !== "READY"
+        ) ? (
+          <div className="new-interview__capability-note" aria-live="polite">
+            {(localRuntimeStatus.speech.state !== "READY"
+              || localRuntimeStatus.tts.state !== "READY") && (
+              <span>Voice unavailable — typed input will be used.</span>
+            )}
+            {localRuntimeStatus.vision.state !== "READY" && (
+              <span>Whiteboard recognition unavailable — drawing still works.</span>
+            )}
+          </div>
+        ) : null}
 
         <section className="new-interview__section">
           <div className="new-interview__section-heading">
