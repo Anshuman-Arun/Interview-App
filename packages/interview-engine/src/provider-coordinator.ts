@@ -315,6 +315,7 @@ export class ProviderCoordinator {
         }
         if (raced.kind === "ERROR") {
           if (this.cancellationRequested(record.generationId)) {
+            finishObservation("CANCELLED");
             this.requestIteratorReturn(iterator);
             return await this.finishCancellation(record);
           }
@@ -427,6 +428,7 @@ export class ProviderCoordinator {
     }
 
     if (this.cancellationRequested(record.generationId)) {
+      finishObservation("CANCELLED");
       return await this.finishCancellation(record);
     }
     finishObservation("FAILED");
