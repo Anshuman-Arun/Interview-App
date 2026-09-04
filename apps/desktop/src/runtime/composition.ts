@@ -1405,7 +1405,9 @@ function pythonSetupEnvironment(executable: string): NodeJS.ProcessEnv {
   const environment: NodeJS.ProcessEnv = {
     PATH: path.dirname(executable),
     PYTHONNOUSERSITE: "1",
+    PIP_CONFIG_FILE: process.platform === "win32" ? "NUL" : "/dev/null",
     PIP_DISABLE_PIP_VERSION_CHECK: "1",
+    PIP_NO_CACHE_DIR: "1",
     PIP_NO_INPUT: "1"
   };
   for (const key of [
