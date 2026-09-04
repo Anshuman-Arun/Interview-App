@@ -1,0 +1,296 @@
+exploration','Combinatorial invariant']},
+    trading:{title:'Quant Trading',label:'Scenario',input:'Structured quotes',options:['Inventory shock · market making','Adverse selection · spread control','Fast fair-value updates']},
+    research:{title:'Quant Research',label:'Scenario',input:'Structured actions',options:['Sampling under contamination','Bayesian updating','Experimental allocation']}
+  };
+
+  function closeCustomSelects(except){
+    $$('.custom-select.open').forEach(el => { if (el !== except) el.classList.remove('open'); });
+  }
+
+  function bindCustomOptions(select){
+    if (!select) return;
+    const trigger = $('.custom-select-trigger', select);
+    if (trigger && !trigger.dataset.bound){
+      trigger.dataset.bound = '1';
+      trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const willOpen = !select.classList.contains('open');
+        closeCustomSelects(select);
+        select.classList.toggle('open', willOpen);
+        if (willOpen) requestAnimationFrame(() => updateScrollCue($('.custom-select-menu', select)));
+      });
+    }
+    $$('.custom-select-menu button', select).forEach(opt => {
+      if (opt.dataset.disabledModel === '1' || opt.dataset.bound) return;
+      opt.dataset.bound = '1';
+      opt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const value = opt.dataset.value || opt.textContent.trim();
+        select.dataset.value = value;
+        $$('.custom-select-menu button', select).forEach(x => x.classList.toggle('selected', x === opt));
+        const val = $('.custom-select-value', select);
+        if (val) val.textContent = value;
+        select.classList.remove('open');
+        if (select.id === 'targetCustom' && slipDesc) slipDesc.textContent = value;
+        if (select.id === 'modelCustom' && slipModel) slipModel.textContent = value;
+        if (select.id === 'voiceCustom' && slipInput){
+          slipInput.textContent = value === 'Local voice'
+            ? (selectedMode === 'oxford' ? 'Voice + tldraw + text' : 'Voice + structured input')
+            : 'Typed input';
+        }
+      });
+    });
+  }
+
+  function setCustomOptions(el, options){
+    if (!el) return;
+    const menu = $('.custom-select-menu', el);
+    menu.innerHTML = options.map((o,i)=>`<button type="button" data-value="${o}" class="${i===0?'selected':''}">${o}</button>`).join('');
+    el.dataset.value = options[0];
+    const v = $('.custom-select-value', el);
+    if (v) v.textContent = options[0];
+    bindCustomOptions(el);
+    if (slipDesc) slipDesc.textContent = options[0];
+  }
+
+  modeCards.forEach(card => card.addEventListener('click', () => {
+    selectedMode = card.dataset.mode;
+    modeCards.forEach(c => c.classList.toggle('selected', c === card));
+    const c = configs[selectedMode];
+    if (slipMode) slipMode.textContent = c.title;
+    if (targetLabel) targetLabel.textContent = c.label;
+    if (slipInput) slipInput.textContent = c.input;
+    setCustomOptions($('#targetCustom'), c.options);
+  }));
+
+  $$('.custom-select').forEach(bindCustomOptions);
+  $('#startConfigured')?.addEventListener('click', () => {
+    showScreen(selectedMode === 'oxford' ? 'live' : selectedMode);
+  });
+
+  // ----- Segmented controls -----
+  $$('.segment').forEach(btn => btn.addEventListener('click', () => {
+    const group = btn.parentElement;
+    [...group.children].forEach(x => x.classList.remove('selected'));
+    btn.classList.add('selected');
+  }));
+  $$('.setting-segments').forEach(group => {
+    $$('button', group).forEach(btn => btn.addEventListener('click', () => {
+      $$('button', group).forEach(x => x.classList.remove('selected'));
+      btn.classList.add('selected');
+    }));
+  });
+  $$('.swatches .swatch').forEach(btn => btn.addEventListener('click', () => {
+    $$('.swatches .swatch').forEach(x => x.classList.remove('selected'));
+    btn.classList.add('selected');
+  }));
+
+  // ----- tldraw-like tools -----
+  $$('.tl-tool').forEach(btn => btn.addEventListener('click', () => {
+    $$('.tl-tool').forEach(x => x.classList.remove('active'));
+    btn.classList.add('active');
+  }));
+
+  // ----- Review/replay controls -----
+  $$('[data-reviewtab]').forEach(btn => btn.addEventListener('click', () => {
+    $$('[data-reviewtab]').forEach(x => x.classList.remove('selected'));
+    btn.classList.add('selected');
+    $$('.review-panel').forEach(p => p.classList.toggle('active', p.id === `review-${btn.dataset.reviewtab}`));
+  }));
+  $$('.replay-filter button').forEach(btn => btn.addEventListener('click', () => {
+    $$('.replay-filter button').forEach(x => x.classList.remove('selected'));
+    btn.classList.add('selected');
+  }));
+  $$('.filters button').forEach(btn => btn.addEventListener('click', () => {
+    $$('.filters button').forEach(x => x.classList.remove('selected'));
+    btn.classList.add('selected');
+  }));
+
+  // ----- Theme -----
+  function applyTheme(theme){
+    let resolved = theme;
+    if (theme === 'system'){
+      resolved = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    document.body.dataset.theme = resolved;
+    document.body.dataset.themePreference = theme;
+    $$('[data-theme-choice]').forEach(b => b.classList.toggle('selected', b.dataset.themeChoice === theme));
+  }
+  applyTheme('light');
+  $$('[data-theme-toggle]').forEach(btn => btn.addEventListener('click', () => {
+    applyTheme(document.body.dataset.theme === 'dark' ? 'light' : 'dark');
+  }));
+  $$('[data-theme-choice]').forEach(btn => btn.addEventListener('click', () => applyTheme(btn.dataset.themeChoice)));
+
+  // ----- Oxford split divider -----
+  const splitRoot = $('#screen-live .live-main');
+  const divider = $('#oxfordSplitDivider');
+  if (splitRoot && divider){
+    const clampPct = pct => Math.max(26, Math.min(68, pct));
+    const setSplit = pct => {
+      const next = clampPct(pct);
+      splitRoot.style.setProperty('--oxford-left', `${next}%`);
+      divider.setAttribute('aria-valuenow', String(Math.round(next)));
+    };
+    const splitFromPointer = clientX => {
+      const rect = splitRoot.getBoundingClientRect();
+      if (rect.width > 0) setSplit(((clientX - rect.left) / rect.width) * 100);
+    };
+    divider.setAttribute('aria-valuemin','26');
+    divider.setAttribute('aria-valuemax','68');
+    divider.setAttribute('aria-valuenow','38');
+    divider.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      divider.dataset.dragging = 'true';
+      divider.setPointerCapture?.(e.pointerId);
+      splitFromPointer(e.clientX);
+    });
+    divider.addEventListener('pointermove', e => {
+      if (divider.dataset.dragging === 'true') splitFromPointer(e.clientX);
+    });
+    const stopDrag = e => {
+      divider.dataset.dragging = 'false';
+      try { divider.releasePointerCapture?.(e.pointerId); } catch {}
+    };
+    divider.addEventListener('pointerup', stopDrag);
+    divider.addEventListener('pointercancel', stopDrag);
+    divider.addEventListener('keydown', e => {
+      if (!['ArrowLeft','ArrowRight','Home'].includes(e.key)) return;
+      e.preventDefault();
+      if (e.key === 'Home'){ setSplit(38); return; }
+      const current = parseFloat(getComputedStyle(splitRoot).getPropertyValue('--oxford-left')) || 38;
+      setSplit(current + (e.key === 'ArrowRight' ? 2 : -2));
+    });
+  }
+
+  // ----- Pane focus / restore -----
+  $$('[data-focus-pane]').forEach(btn => btn.addEventListener('click', () => {
+    if (!splitRoot) return;
+    const pane = btn.dataset.focusPane;
+    const active = splitRoot.dataset.focus === pane;
+    splitRoot.dataset.focus = active ? '' : pane;
+    $$('[data-focus-pane]').forEach(x => {
+      const focused = !active && x.dataset.focusPane === pane;
+      x.textContent = focused ? '↔' : '⤢';
+      x.title = focused ? 'Restore split view' : `Focus ${x.dataset.focusPane === 'board' ? 'whiteboard' : 'transcript'}`;
+      x.setAttribute('aria-label', x.title);
+    });
+    requestAnimationFrame(refreshAllScrollCues);
+  }));
+
+  // ----- Jump to latest -----
+  const transcript = $('.transcript-feed');
+  const jumpLatest = $('[data-jump-latest]');
+  function updateJumpLatest(){
+    if (!transcript || !jumpLatest) return;
+    const distance = transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight;
+    jumpLatest.hidden = distance < 36;
+  }
+  if (transcript){
+    requestAnimationFrame(() => {
+      transcript.scrollTop = transcript.scrollHeight;
+      updateJumpLatest();
+    });
+    transcript.addEventListener('scroll', updateJumpLatest, {passive:true});
+  }
+  jumpLatest?.addEventListener('click', () => {
+    transcript?.scrollTo({top:transcript.scrollHeight, behavior:'smooth'});
+  });
+
+  // ----- End interview confirmation -----
+  const endControl = $('.end-control');
+  function closeEndPopover(){ endControl?.classList.remove('open'); }
+  $('[data-end-interview]')?.addEventListener('click', e => {
+    e.stopPropagation();
+    endControl?.classList.toggle('open');
+  });
+  $('[data-end-cancel]')?.addEventListener('click', closeEndPopover);
+  $('[data-end-confirm]')?.addEventListener('click', () => {
+    closeEndPopover();
+    showScreen('review');
+  });
+
+  // ----- Demo toast for non-navigational prototype actions -----
+  let toastTimer = null;
+  function showToast(message){
+    const toast = $('#prototypeToast');
+    if (!toast) return;
+    toast.textContent = message;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 1800);
+  }
+  $$('[data-demo-toast]').forEach(btn => btn.addEventListener('click', () => showToast(btn.dataset.demoToast)));
+
+  // ----- Scroll-edge cues -----
+  function updateScrollCue(el){
+    if (!el) return;
+    const max = Math.max(0, el.scrollHeight - el.clientHeight);
+    el.dataset.atTop = String(el.scrollTop <= 2);
+    el.dataset.atBottom = String(max - el.scrollTop <= 2);
+  }
+  function refreshAllScrollCues(){
+    $$('.scroll-cue').forEach(updateScrollCue);
+    updateJumpLatest();
+  }
+  $$('.scroll-cue').forEach(el => {
+    el.addEventListener('scroll', () => updateScrollCue(el), {passive:true});
+  });
+  if ('ResizeObserver' in window){
+    const ro = new ResizeObserver(refreshAllScrollCues);
+    $$('.scroll-cue').forEach(el => ro.observe(el));
+  }
+  requestAnimationFrame(refreshAllScrollCues);
+
+  // Close transient UI when clicking elsewhere / Escape.
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.custom-select')) closeCustomSelects();
+    if (!e.target.closest('.end-control')) closeEndPopover();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape'){
+      closeCustomSelects();
+      closeEndPopover();
+      if (splitRoot?.dataset.focus){
+        splitRoot.dataset.focus = '';
+        $$('[data-focus-pane]').forEach(x => x.textContent='⤢');
+      }
+    }
+  });
+})();
+
+</script>
+
+<script>
+(() => {
+  const hero = document.querySelector('#screen-home .home-hero');
+  const copy = document.querySelector('#screen-home .hero-copy');
+  const folio = document.querySelector('#screen-home .folio');
+  const sidebar = document.querySelector('#screen-home .side-rail');
+  if (!hero || !copy || !folio || !sidebar) return;
+
+  let raf = 0;
+
+  const correctHomeMidpoint = () => {
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(() => {
+      if (window.matchMedia('(max-width: 1060px)').matches) {
+        hero.style.setProperty('--home-midpoint-shift', '0px');
+        return;
+      }
+
+      hero.style.setProperty('--home-midpoint-shift', '0px');
+
+      requestAnimationFrame(() => {
+        const sidebarRect = sidebar.getBoundingClientRect();
+        const folioRect = folio.getBoundingClientRect();
+        const copyRect = copy.getBoundingClientRect();
+
+        const target = (sidebarRect.right + folioRect.left) / 2;
+        const center = (copyRect.left + copyRect.right) / 2;
+        const delta = target - center;
+
+        hero.style.setProperty('--home-midpoint-shift', `${delta.toFixed(3)}px`);
+      });
+    });
+ 
