@@ -106,6 +106,7 @@ export class DesktopLocalRuntimeComposition {
   private readonly pythonExecutableCandidate: string;
   private readonly enforcePackagedWorkerIntegrity: boolean;
   private pythonExecutable: string | undefined;
+  private pythonStatus: DesktopRuntimeCapabilityStatus = unavailable("NOT_STARTED");
   private speechStatus: DesktopRuntimeCapabilityStatus = unavailable("NOT_STARTED");
   private ttsStatus: DesktopRuntimeCapabilityStatus = unavailable("NOT_STARTED");
   private visionStatus: DesktopRuntimeCapabilityStatus = unavailable("NOT_STARTED");
@@ -199,6 +200,15 @@ export class DesktopLocalRuntimeComposition {
     });
   }
 
+  public getPythonRuntimeStatus(): DesktopRuntimeCapabilityStatus {
+    return Object.freeze({
+      state: this.pythonStatus.state,
+      ...(this.pythonStatus.reasonCode === undefined
+        ? {}
+        : { reasonCode: this.pythonStatus.reasonCode })
+    });
+  }
+
   public async installPythonRuntimeDependencies(signal?: AbortSignal): Promise<void> {
     if (!isProductionLocalModelPlatformSupported(process.platform, process.arch)) {
       throw new Error("Python runtime setup is unavailable on this platform");
@@ -218,6 +228,7 @@ export class DesktopLocalRuntimeComposition {
     ) {
       if (this.pythonRuntimeCompatible(managedExecutable, signal)) {
         this.pythonExecutable = managedExecutable;
+        this.pythonStatus = Object.freeze({ state: "READY" });
         return;
       }
       try {
@@ -226,6 +237,7 @@ export class DesktopLocalRuntimeComposition {
           throw new Error("Python runtime dependencies did not pass the production worker check");
         }
         this.pythonExecutable = managedExecutable;
+        this.pythonStatus = Object.freeze({ state: "READY" });
         return;
       } catch (error) {
         await rm(this.managedPythonRoot, { recursive: true, force: true }).catch(() => undefined);
@@ -252,6 +264,7 @@ export class DesktopLocalRuntimeComposition {
         throw new Error("Python runtime dependencies did not pass the production worker check");
       }
       this.pythonExecutable = isolatedExecutable;
+      this.pythonStatus = Object.freeze({ state: "READY" });
     } catch (error) {
       await rm(this.managedPythonRoot, { recursive: true, force: true }).catch(() => undefined);
       throw error;
@@ -409,6 +422,7 @@ export class DesktopLocalRuntimeComposition {
         this.markPendingCapabilitiesCancelled();
         return;
       }
+      this.pythonStatus = unavailable("PYTHON_RUNTIME_UNVERIFIED");
       this.speechStatus = failed("ASSET_CACHE_UNSAFE");
       this.ttsStatus = failed("ASSET_CACHE_UNSAFE");
       this.visionStatus = failed("ASSET_CACHE_UNSAFE");
@@ -420,6 +434,7 @@ export class DesktopLocalRuntimeComposition {
     }
 
     if (!isProductionLocalModelPlatformSupported(process.platform, process.arch)) {
+      this.pythonStatus = unavailable("UNSUPPORTED_RUNTIME_PLATFORM");
       this.speechStatus = unavailable("UNSUPPORTED_RUNTIME_PLATFORM");
       this.ttsStatus = unavailable("UNSUPPORTED_RUNTIME_PLATFORM");
       this.visionStatus = unavailable("UNSUPPORTED_RUNTIME_PLATFORM");
@@ -428,6 +443,7 @@ export class DesktopLocalRuntimeComposition {
 
     const workerAvailable = await this.workerScriptIsSafe();
     if (!workerAvailable) {
+      this.pythonStatus = unavailable("WORKER_EXECUTABLE_UNAVAILABLE");
       this.speechStatus = unavailable("WORKER_EXECUTABLE_UNAVAILABLE");
       this.ttsStatus = unavailable("WORKER_EXECUTABLE_UNAVAILABLE");
       this.visionStatus = unavailable("WORKER_EXECUTABLE_UNAVAILABLE");
@@ -445,6 +461,7 @@ export class DesktopLocalRuntimeComposition {
         this.markPendingCapabilitiesCancelled();
         return;
       }
+      this.pythonStatus = unavailable(reasonCode);
       this.speechStatus = unavailable(reasonCode);
       this.ttsStatus = unavailable(reasonCode);
       this.visionStatus = unavailable(reasonCode);
@@ -616,6 +633,7 @@ export class DesktopLocalRuntimeComposition {
       seen.add(executable);
       if (this.pythonRuntimeCompatible(executable, signal)) {
         this.pythonExecutable = executable;
+        this.pythonStatus = Object.freeze({ state: "READY" });
         return executable;
       }
       if (abortRequested(signal)) return undefined;
@@ -951,6 +969,9 @@ export class DesktopLocalRuntimeComposition {
   }
 
   private markPendingCapabilitiesCancelled(): void {
+    if (this.pythonStatus.reasonCode === "NOT_STARTED") {
+      this.pythonStatus = unavailable("START_CANCELLED");
+    }
     if (this.speechStatus.reasonCode === "NOT_STARTED") {
       this.speechStatus = unavailable("START_CANCELLED");
     }
