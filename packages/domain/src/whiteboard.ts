@@ -525,19 +525,79 @@ const NonnegativeSceneCountSchema = z.number().refine(
 
 export const BoardSceneContextSchema = z.object({
   boardRevision: BoardRevisionSchema,
-  studentShapeCount: NonnegativeSceneCountSchema.default(0),
-  includedStudentShapeCount: NonnegativeSceneCountSchema.default(0),
-  omittedStudentShapeCount: NonnegativeSceneCountSchema.default(0),
-  studentShapesTruncated: z.boolean().default(false),
-  aiAnnotationCount: NonnegativeSceneCountSchema.default(0),
-  includedAiAnnotationCount: NonnegativeSceneCountSchema.default(0),
-  aiAnnotationsTruncated: z.boolean().default(false),
+  studentShapeCount: NonnegativeSceneCountSchema,
+  includedStudentShapeCount: NonnegativeSceneCountSchema,
+  omittedStudentShapeCount: NonnegativeSceneCountSchema,
+  studentShapesTruncated: z.boolean(),
+  aiAnnotationCount: NonnegativeSceneCountSchema,
+  includedAiAnnotationCount: NonnegativeSceneCountSchema,
+  aiAnnotationsTruncated: z.boolean(),
   contentBounds: AuthoritativeBoardBoundsSchema.optional(),
   shapes: z.array(BoardSceneShapeSchema).max(MAX_BOARD_SCENE_SHAPES),
   semanticRelations: z.array(BoardSceneSemanticRelationSchema)
-    .max(MAX_BOARD_SCENE_SEMANTIC_RELATIONS)
-    .default([]),
+    .max(MAX_BOARD_SCENE_SEMANTIC_RELATIONS),
   aiAnnotations: z.array(BoardSceneAiAnnotationSchema).max(MAX_BOARD_SCENE_AI_ANNOTATIONS)
-}).strict();
+}).strict().superRefine((scene, context) => {
+  if (scene.includedStudentShapeCount !== scene.shapes.length) {
+    context.addIssue({
+      code: "custom",
+      path: ["includedStudentShapeCount"],
+      message: "Included student-shape count must equal the serialized shape count"
+    });
+  }
+  if (scene.studentShapeCount !== scene.includedStudentShapeCount + scene.omittedStudentShapeCount) {
+    context.addIssue({
+      code: "custom",
+      path: ["studentShapeCount"],
+      message: "Student-shape total must equal included plus omitted counts"
+    });
+  }
+  if (scene.studentShapesTruncated !== (scene.omittedStudentShapeCount > 0)) {
+    context.addIssue({
+      code: "custom",
+      path: ["studentShapesTruncated"],
+      message: "Student-shape truncation flag must match omitted shape count"
+    });
+  }
+  if (scene.includedAiAnnotationCount !== scene.aiAnnotations.length) {
+    context.addIssue({
+      code: "custom",
+      path: ["includedAiAnnotationCount"],
+      message: "Included AI-annotation count must equal the serialized annotation count"
+    });
+  }
+  if (scene.aiAnnotationCount < scene.includedAiAnnotationCount) {
+    context.addIssue({
+      code: "custom",
+      path: ["aiAnnotationCount"],
+      message: "AI-annotation total cannot be smaller than the included count"
+    });
+  }
+  if (scene.aiAnnotationsTruncated !== (scene.aiAnnotationCount > scene.includedAiAnnotationCount)) {
+    context.addIssue({
+      code: "custom",
+      path: ["aiAnnotationsTruncated"],
+      message: "AI-annotation truncation flag must match omitted annotation count"
+    });
+  }
+
+  const includedShapeIds = new Set(scene.shapes.map((shape) => shape.shapeId));
+  for (const [index, relation] of scene.semanticRelations.entries()) {
+    if (new Set(relation.relevantShapeIds).size !== relation.relevantShapeIds.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["semanticRelations", index, "relevantShapeIds"],
+        message: "Semantic relation shape IDs must be unique"
+      });
+    }
+    if (relation.relevantShapeIds.some((shapeId) => !includedShapeIds.has(shapeId))) {
+      context.addIssue({
+        code: "custom",
+        path: ["semanticRelations", index, "relevantShapeIds"],
+        message: "Semantic relations may reference only shapes included in the scene"
+      });
+    }
+  }
+});
 export type BoardSceneContext = z.infer<typeof BoardSceneContextSchema>;
 
