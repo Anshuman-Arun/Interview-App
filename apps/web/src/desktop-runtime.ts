@@ -143,15 +143,14 @@ export async function readDesktopRuntimeStatus(
   bridge: DesktopRuntimeBridge,
   options: { readonly refreshPrerequisites?: boolean } = {}
 ): Promise<DesktopRuntimeStatus> {
-  if (
-    options.refreshPrerequisites === true
-    && bridge.refreshLocalRuntimeStatus === undefined
-  ) {
-    throw new Error("Desktop runtime prerequisite refresh is unavailable");
+  let readStatus = bridge.getLocalRuntimeStatus;
+  if (options.refreshPrerequisites === true) {
+    const refreshStatus = bridge.refreshLocalRuntimeStatus;
+    if (refreshStatus === undefined) {
+      throw new Error("Desktop runtime prerequisite refresh is unavailable");
+    }
+    readStatus = refreshStatus;
   }
-  const readStatus = options.refreshPrerequisites === true
-    ? bridge.refreshLocalRuntimeStatus
-    : bridge.getLocalRuntimeStatus;
   const parsed = parseDesktopRuntimeStatus(
     await readStatus()
   );
