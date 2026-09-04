@@ -109,15 +109,18 @@ describe("Windows desktop packaging contract", () => {
     const preload = await source("apps/desktop/preload.cjs");
 
     expect(main).toContain("isAuthorizedDesktopInvoke(event)");
+    expect(main).toContain("runtime.installPythonRuntimeDependencies(startupAbort.signal)");
     expect(main).toContain("runtime.installVoiceAssets(startupAbort.signal)");
     expect(main).toContain("runtime.installVisionAssets(startupAbort.signal)");
     expect(main).toContain("--install-local-vision-models");
     expect(main).toContain("await activeModelInstall.catch(() => undefined)");
     expect(preload).toContain("getLocalRuntimeStatus");
+    expect(preload).toContain("installPythonRuntime");
     expect(preload).toContain("installVoiceModels");
     expect(preload).toContain("installVisionModel");
     expect(preload).toContain("restartApp");
     expect(main).toContain("activeModelInstallKind");
+    expect(main).toContain('beginLocalModelInstall("PYTHON")');
     expect(main).toContain('beginLocalModelInstall("VOICE")');
     expect(main).toContain('beginLocalModelInstall("VISION")');
     expect(main).toContain("app.relaunch()");
