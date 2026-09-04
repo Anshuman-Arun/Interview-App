@@ -698,7 +698,14 @@ export class InterpretationCoordinator {
         } catch {
           candidateAdmitted = false;
         }
-        if (!candidateAdmitted) continue;
+        if (!candidateAdmitted) {
+          return this.finishFailure(failed(
+            "NO_SUPPORTED_INTERPRETATION",
+            "NO_INTERPRETATION",
+            candidateCount,
+            request.requestId
+          ));
+        }
       }
 
       const normalizedKey = `[${JSON.stringify(protocolKey(candidate.protocol))},${evidenceKeyIdentity(candidate.target)},${JSON.stringify(statement.canonicalStatement)}]`;
