@@ -165,8 +165,18 @@ export function isOxfordFormalCandidateTargetAdmissible(input: {
     const parsed = RationalArithmeticInterpretationSchema.safeParse(rawStatement);
     if (!parsed.success) return false;
     const statementNumbers = new Set<string>();
-    collectRationalNumbers(parsed.data.claim.left, statementNumbers);
-    collectRationalNumbers(parsed.data.claim.right, statementNumbers);
+    const includeUnitDenominator =
+      profile.target.subject.claimId === "median-ratio-arithmetic";
+    collectRationalNumbers(
+      parsed.data.claim.left,
+      statementNumbers,
+      includeUnitDenominator
+    );
+    collectRationalNumbers(
+      parsed.data.claim.right,
+      statementNumbers,
+      includeUnitDenominator
+    );
     if (!numbersAreGrounded(statementNumbers, sourceNumbers)) {
       return false;
     }
@@ -334,12 +344,16 @@ function normalizeText(value: string): string {
 
 function collectRationalNumbers(
   expression: RationalExpression,
-  output: Set<string>
+  output: Set<string>,
+  includeUnitDenominator: boolean
 ): void {
   switch (expression.kind) {
     case "RATIONAL":
       output.add(expression.value.numerator);
-      if (expression.value.denominator !== "1") {
+      if (
+        includeUnitDenominator
+        || expression.value.denominator !== "1"
+      ) {
         output.add(expression.value.denominator);
       }
       return;
@@ -347,15 +361,17 @@ function collectRationalNumbers(
     case "SUBTRACT":
     case "MULTIPLY":
     case "DIVIDE":
-      collectRationalNumbers(expression.left, output);
-      collectRationalNumbers(expression.right, output);
+      collectRationalNumbers(expression.left, output, includeUnitDenominator);
+      collectRationalNumbers(expression.right, output, includeUnitDenominator);
       return;
     case "NEGATE":
-      collectRationalNumbers(expression.operand, output);
+      collectRationalNumbers(expression.operand, output, includeUnitDenominator);
       return;
     case "SUM":
     case "PRODUCT":
-      for (const term of expression.terms) collectRationalNumbers(term, output);
+      for (const term of expression.terms) {
+        collectRationalNumbers(term, output, includeUnitDenominator);
+      }
       return;
   }
 }
@@ -428,7 +444,10 @@ function extractMentionedIntegers(value: string): ReadonlySet<string> {
     if (token === undefined) continue;
     const denominator = FRACTION_DENOMINATORS[token];
     if (denominator !== undefined) {
-      output.add("1");
+      const previous = index > 0 ? tokens[index - 1] : undefined;
+      if (previous === undefined || !isEnglishNumberToken(previous)) {
+        output.add("1");
+      }
       output.add(String(denominator));
       continue;
     }
@@ -436,6 +455,13 @@ function extractMentionedIntegers(value: string): ReadonlySet<string> {
     if (implied !== undefined) output.add(String(implied));
   }
   return output;
+}
+
+function isEnglishNumberToken(token: string): boolean {
+  return SMALL_NUMBERS[token] !== undefined
+    || TENS_NUMBERS[token] !== undefined
+    || token === "hundred"
+    || token === "thousand";
 }
 
 function parseEnglishInteger(
