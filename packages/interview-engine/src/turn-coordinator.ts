@@ -155,9 +155,22 @@ export function validateProposalBoardReferences(
     return undefined;
   };
 
+  const annotations = new Set(
+    (scene?.aiAnnotations ?? []).map((annotation) => annotation.annotationId)
+  );
+
   for (const action of actions) {
-    if (action.operation === "erase_ai_annotation" && action.targetShapeId !== undefined) {
-      return "Provider cannot address an AI annotation by an untrusted canvas shape ID";
+    if (action.operation === "erase_ai_annotation") {
+      if (action.targetShapeId !== undefined) {
+        return "Provider cannot address an AI annotation by an untrusted canvas shape ID";
+      }
+      if (action.targetAnnotationId !== undefined) {
+        if (!annotations.has(action.targetAnnotationId)) {
+          return `AI annotation "${action.targetAnnotationId}" was not present in the compiled board scene`;
+        }
+      } else if (annotations.size === 0) {
+        return "No provider-visible AI annotation is available for targetless erase";
+      }
     }
     if (action.targetShapeId !== undefined) {
       const failure = requireSceneShape(
@@ -172,6 +185,14 @@ export function validateProposalBoardReferences(
         action.placement.anchorShapeId,
         action.placement.anchorRevision,
         "Board placement anchor"
+      );
+      if (failure !== undefined) return failure;
+    }
+    if (action.targetRegion !== undefined) {
+      const failure = requireSceneShape(
+        action.targetRegion.shapeId,
+        action.targetRegion.shapeRevision,
+        "Board target region"
       );
       if (failure !== undefined) return failure;
     }
@@ -271,6 +292,8 @@ function proposalWithinAdmissionBounds(value: unknown): boolean {
         "content",
         "targetShapeId",
         "expectedShapeRevision",
+        "targetAnnotationId",
+        "targetRegion",
         "placement",
         "points",
         "fromShapeId",
@@ -295,6 +318,10 @@ function proposalWithinAdmissionBounds(value: unknown): boolean {
         MAX_BOARD_ACTION_SHAPE_ID_CHARACTERS
       )
       || !boundedRuntimeString(
+        rawAction["targetAnnotationId"],
+        MAX_BOARD_ACTION_SHAPE_ID_CHARACTERS
+      )
+      || !boundedRuntimeString(
         rawAction["fromShapeId"],
         MAX_BOARD_ACTION_SHAPE_ID_CHARACTERS
       )
@@ -303,6 +330,25 @@ function proposalWithinAdmissionBounds(value: unknown): boolean {
         MAX_BOARD_ACTION_SHAPE_ID_CHARACTERS
       )
     ) return false;
+
+    const targetRegion = rawAction["targetRegion"];
+    if (isRuntimeRecord(targetRegion)) {
+      if (!hasOnlyRuntimeKeys(
+        targetRegion,
+        new Set([
+          "shapeId",
+          "shapeRevision",
+          "xFraction",
+          "yFraction",
+          "widthFraction",
+          "heightFraction"
+        ])
+      )) return false;
+      if (!boundedRuntimeString(
+        targetRegion["shapeId"],
+        MAX_BOARD_ACTION_SHAPE_ID_CHARACTERS
+      )) return false;
+    }
 
     const placement = rawAction["placement"];
     if (isRuntimeRecord(placement)) {
