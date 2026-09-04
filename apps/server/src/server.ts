@@ -58,10 +58,7 @@ export async function createAndStartServer(config: ServerConfig = {}) {
 
   const store = new SqliteEventStore(databasePath);
   const registry = new SessionRuntimeRegistry(store);
-  const observabilityDatabasePath = databasePath === ":memory:"
-    ? ":memory:"
-    : `${databasePath}.observability.sqlite`;
-  const observability = SessionObservability.create(observabilityDatabasePath);
+  const observabilityDatabasePath = databasePath === ":memory:"\n    ? ":memory:"\n    : `${databasePath}.observability.sqlite`;\n  const observability = SessionObservability.create(observabilityDatabasePath);
 
   let runtime: LocalInterviewTransportRuntime | undefined;
   let bound: Awaited<ReturnType<LocalInterviewTransportRuntime["start"]>>;
