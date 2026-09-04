@@ -1247,7 +1247,7 @@ async function installPinnedPythonRequirements(
     }, 300_000);
     signal?.addEventListener("abort", onAbort, { once: true });
     if (signal?.aborted === true) onAbort();
-    child.stderr?.on("data", (chunk: Buffer | string) => {
+    child.stderr.on("data", (chunk: Buffer | string) => {
       if (stderr.length >= 16 * 1024) return;
       stderr += String(chunk).slice(0, 16 * 1024 - stderr.length);
     });
