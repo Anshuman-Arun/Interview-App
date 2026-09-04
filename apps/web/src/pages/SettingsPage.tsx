@@ -432,7 +432,10 @@ export function SettingsPage({
               <small>
                 {desktopRuntime === undefined
                   ? "Local workers are configured only in the Electron desktop app."
-                  : runtimeStatusError ?? pythonDescription(runtimeStatus)}
+                  : runtimeStatusError
+                    ?? (runtimeStatus?.pythonSetup.restartRequired === true
+                      ? "Pinned Python components installed. Continue with model setup or restart Interview App."
+                      : pythonDescription(runtimeStatus))}
               </small>
             </div>
           </div>
