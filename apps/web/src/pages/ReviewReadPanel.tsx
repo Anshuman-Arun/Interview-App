@@ -306,11 +306,11 @@ function formatLatency(value: number | null): string {
   if (value === null) return "—";
   return value >= 1000
     ? `${(value / 1000).toFixed(2)} s`
-    : `${Math.round(value)} ms`;
+    : `${String(Math.round(value))} ms`;
 }
 
 function formatBytes(value: number): string {
-  if (value < 1024) return `${value} B`;
+  if (value < 1024) return `${String(value)} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KiB`;
   return `${(value / (1024 * 1024)).toFixed(1)} MiB`;
 }
