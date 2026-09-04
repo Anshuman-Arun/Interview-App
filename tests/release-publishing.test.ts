@@ -183,7 +183,9 @@ describe("versioned Windows release publishing", () => {
       path.join(repoRoot, "apps/web/src/desktop-runtime.ts"),
       "utf8"
     );
-    const settings = await readFile(path.join(repoRoot, "apps/web/src/pages/SettingsPage.tsx"), "utf8");
+    const settings = (
+      await readFile(path.join(repoRoot, "apps/web/src/pages/SettingsPage.tsx"), "utf8")
+    ).replace(/\r\n/gu, "\n");
 
     expect(packageJson.version).toMatch(/^\d+\.\d+\.\d+$/u);
     expect(builder).toContain("artifactName: InterviewApp-Setup-${version}.${ext}");
