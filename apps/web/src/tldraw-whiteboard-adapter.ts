@@ -289,9 +289,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     const validatedAction = BoardActionSchema.parse(action);
     const editor = this.requireEditor();
 
-    if (validatedAction.expectedShapeRevision !== undefined || validatedAction.targetShapeId !== undefined) {
-      this.validateTargetRevision(editor, validatedAction);
-    }
+    this.validateTargetRevision(editor, validatedAction);
 
     switch (validatedAction.operation) {
       case "circle":
@@ -311,6 +309,21 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
         break;
       case "write_equation":
         this.renderWriteEquationOverlay(editor, validatedAction, options);
+        break;
+      case "draw_segment":
+        this.renderSegmentOverlay(editor, validatedAction, options);
+        break;
+      case "draw_arrow_between":
+        this.renderArrowBetweenOverlay(editor, validatedAction, options);
+        break;
+      case "draw_polyline":
+        this.renderPolylineOverlay(editor, validatedAction, options);
+        break;
+      case "draw_rectangle":
+        this.renderBoxOverlay(editor, validatedAction, "rectangle", options);
+        break;
+      case "draw_ellipse":
+        this.renderBoxOverlay(editor, validatedAction, "ellipse", options);
         break;
       case "erase_ai_annotation":
         this.executeEraseAiAnnotation(editor, validatedAction);
@@ -600,24 +613,61 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
       if (action.expectedShapeRevision !== undefined) {
         throw new StaleShapeRevisionError("expectedShapeRevision was specified without targetShapeId");
       }
-      return;
-    }
-
-    const targetShape = editor.getShape(action.targetShapeId);
-    if (targetShape === undefined) {
-      throw new StaleShapeRevisionError(`Target shape "${action.targetShapeId}" not found`);
-    }
-
-    if (action.expectedShapeRevision !== undefined) {
-      const actualRevision = readShapeRevision(
-        targetShape.meta?.["shapeRevision"],
-        targetShape.id
+    } else {
+      this.validateShapeRevisionBinding(
+        editor,
+        action.targetShapeId,
+        action.expectedShapeRevision,
+        "Target shape"
       );
-      if (actualRevision !== action.expectedShapeRevision) {
-        throw new StaleShapeRevisionError(
-          `Target shape "${action.targetShapeId}" revision mismatch: expected ${String(action.expectedShapeRevision)}, got ${String(actualRevision)}`
+    }
+
+    if (action.placement?.anchorShapeId !== undefined) {
+      this.validateShapeRevisionBinding(
+        editor,
+        action.placement.anchorShapeId,
+        action.placement.anchorRevision,
+        "Placement anchor"
+      );
+    }
+
+    if (action.operation === "draw_arrow_between") {
+      if (action.fromShapeId === undefined || action.toShapeId === undefined) {
+        throw new UnsupportedBoardActionError(
+          "draw_arrow_between requires two target shapes"
         );
       }
+      this.validateShapeRevisionBinding(
+        editor,
+        action.fromShapeId,
+        action.fromShapeRevision,
+        "Arrow source"
+      );
+      this.validateShapeRevisionBinding(
+        editor,
+        action.toShapeId,
+        action.toShapeRevision,
+        "Arrow destination"
+      );
+    }
+  }
+
+  private validateShapeRevisionBinding(
+    editor: TldrawEditor,
+    shapeId: string,
+    expectedRevision: number | undefined,
+    label: string
+  ): void {
+    const shape = editor.getShape(shapeId);
+    if (shape === undefined) {
+      throw new StaleShapeRevisionError(`${label} "${shapeId}" not found`);
+    }
+    if (expectedRevision === undefined) return;
+    const actualRevision = readShapeRevision(shape.meta?.["shapeRevision"], shape.id);
+    if (actualRevision !== expectedRevision) {
+      throw new StaleShapeRevisionError(
+        `${label} "${shapeId}" revision mismatch: expected ${String(expectedRevision)}, got ${String(actualRevision)}`
+      );
     }
   }
 
@@ -749,23 +799,20 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
   }
 
   private renderWriteTextOverlay(editor: TldrawEditor, action: BoardAction, options?: ApplyAiOverlayOptions): void {
-    let x = 320;
-    let y = 120;
-
-    if (action.targetShapeId !== undefined) {
-      const targetBounds = this.resolveTargetBounds(editor, action.targetShapeId);
-      x = targetBounds.x + targetBounds.width + 16;
-      y = targetBounds.y;
-    }
-
+    const placement = this.resolveActionPlacement(
+      editor,
+      action,
+      { x: 320, y: 120 },
+      { width: 220, height: 96 }
+    );
     const meta = this.createAiMeta(action, options);
     const shapeId = allocateUniqueShapeId(editor, "ai_text");
 
     const textShape: TLShapePartialRecord = {
       id: shapeId,
       type: "note",
-      x,
-      y,
+      x: placement.x,
+      y: placement.y,
       props: {
         text: action.content ?? action.annotationPurpose,
         color: "violet",
@@ -779,15 +826,12 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
   }
 
   private renderWriteEquationOverlay(editor: TldrawEditor, action: BoardAction, options?: ApplyAiOverlayOptions): void {
-    let x = 320;
-    let y = 220;
-
-    if (action.targetShapeId !== undefined) {
-      const targetBounds = this.resolveTargetBounds(editor, action.targetShapeId);
-      x = targetBounds.x + targetBounds.width + 16;
-      y = targetBounds.y;
-    }
-
+    const placement = this.resolveActionPlacement(
+      editor,
+      action,
+      { x: 320, y: 220 },
+      { width: 220, height: 56 }
+    );
     const meta = {
       ...this.createAiMeta(action, options),
       isEquation: true
@@ -797,8 +841,8 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     const equationShape: TLShapePartialRecord = {
       id: shapeId,
       type: "text",
-      x,
-      y,
+      x: placement.x,
+      y: placement.y,
       props: {
         text: action.content ?? "",
         color: "violet",
@@ -809,6 +853,185 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     };
 
     editor.createShapes([equationShape]);
+  }
+
+  private renderSegmentOverlay(editor: TldrawEditor, action: BoardAction, options?: ApplyAiOverlayOptions): void {
+    const points = action.points;
+    if (points === undefined || points.length !== 2) {
+      throw new UnsupportedBoardActionError("draw_segment requires exactly two points");
+    }
+    const start = points[0];
+    const end = points[1];
+    if (start === undefined || end === undefined) {
+      throw new UnsupportedBoardActionError("draw_segment requires exactly two points");
+    }
+    this.renderStraightAnnotationSegment(
+      editor,
+      action,
+      start,
+      end,
+      false,
+      "ai_segment",
+      options
+    );
+  }
+
+  private renderArrowBetweenOverlay(editor: TldrawEditor, action: BoardAction, options?: ApplyAiOverlayOptions): void {
+    if (action.fromShapeId === undefined || action.toShapeId === undefined) {
+      throw new UnsupportedBoardActionError("draw_arrow_between requires two target shapes");
+    }
+    const from = this.resolveTargetBounds(editor, action.fromShapeId);
+    const to = this.resolveTargetBounds(editor, action.toShapeId);
+    this.renderStraightAnnotationSegment(
+      editor,
+      action,
+      { x: from.x + from.width / 2, y: from.y + from.height / 2 },
+      { x: to.x + to.width / 2, y: to.y + to.height / 2 },
+      true,
+      "ai_arrow_between",
+      options
+    );
+  }
+
+  private renderPolylineOverlay(editor: TldrawEditor, action: BoardAction, options?: ApplyAiOverlayOptions): void {
+    const points = action.points;
+    if (points === undefined || points.length < 2) {
+      throw new UnsupportedBoardActionError("draw_polyline requires at least two points");
+    }
+    for (let index = 0; index < points.length - 1; index += 1) {
+      const start = points[index];
+      const end = points[index + 1];
+      if (start === undefined || end === undefined) continue;
+      this.renderStraightAnnotationSegment(
+        editor,
+        action,
+        start,
+        end,
+        false,
+        `ai_polyline_${String(index)}`,
+        options,
+        index === 0
+      );
+    }
+  }
+
+  private renderStraightAnnotationSegment(
+    editor: TldrawEditor,
+    action: BoardAction,
+    start: { readonly x: number; readonly y: number },
+    end: { readonly x: number; readonly y: number },
+    arrowhead: boolean,
+    prefix: string,
+    options?: ApplyAiOverlayOptions,
+    includeText = true
+  ): void {
+    const meta = this.createAiMeta(action, options);
+    const shapeId = allocateUniqueShapeId(editor, prefix);
+    const shape: TLShapePartialRecord = {
+      id: shapeId,
+      type: "arrow",
+      x: start.x,
+      y: start.y,
+      props: {
+        start: { x: 0, y: 0 },
+        end: { x: end.x - start.x, y: end.y - start.y },
+        arrowheadStart: "none",
+        arrowheadEnd: arrowhead ? "arrow" : "none",
+        color: "violet",
+        dash: "draw",
+        size: "m",
+        text: includeText ? (action.content ?? "") : ""
+      },
+      meta: { ...meta }
+    };
+    editor.createShapes([shape]);
+  }
+
+  private renderBoxOverlay(
+    editor: TldrawEditor,
+    action: BoardAction,
+    geo: "rectangle" | "ellipse",
+    options?: ApplyAiOverlayOptions
+  ): void {
+    if (action.width === undefined || action.height === undefined) {
+      throw new UnsupportedBoardActionError(`draw_${geo} requires width and height`);
+    }
+    const placement = this.resolveActionPlacement(
+      editor,
+      action,
+      { x: 320, y: 320 },
+      { width: action.width, height: action.height }
+    );
+    const meta = this.createAiMeta(action, options);
+    const shapeId = allocateUniqueShapeId(editor, `ai_${geo}`);
+    editor.createShapes([{
+      id: shapeId,
+      type: "geo",
+      x: placement.x,
+      y: placement.y,
+      props: {
+        geo,
+        color: "violet",
+        dash: "draw",
+        fill: "none",
+        size: "m",
+        w: action.width,
+        h: action.height,
+        text: action.content ?? ""
+      },
+      meta: { ...meta }
+    }]);
+  }
+
+  private resolveActionPlacement(
+    editor: TldrawEditor,
+    action: BoardAction,
+    fallback: { readonly x: number; readonly y: number },
+    geometry: { readonly width: number; readonly height: number } = { width: 0, height: 0 }
+  ): { readonly x: number; readonly y: number } {
+    const placement = action.placement;
+    let x = fallback.x;
+    let y = fallback.y;
+
+    if (placement?.anchorShapeId !== undefined) {
+      const bounds = this.resolveTargetBounds(editor, placement.anchorShapeId);
+      switch (placement.position) {
+        case "LEFT":
+          x = bounds.x - geometry.width - 16;
+          y = bounds.y;
+          break;
+        case "RIGHT":
+          x = bounds.x + bounds.width + 16;
+          y = bounds.y;
+          break;
+        case "ABOVE":
+          x = bounds.x;
+          y = bounds.y - geometry.height - 16;
+          break;
+        case "BELOW":
+          x = bounds.x;
+          y = bounds.y + bounds.height + 16;
+          break;
+        case "CENTER":
+          x = bounds.x + (bounds.width - geometry.width) / 2;
+          y = bounds.y + (bounds.height - geometry.height) / 2;
+          break;
+        default:
+          throw new UnsupportedBoardActionError("Shape-relative placement requires a position");
+      }
+    } else if (placement?.x !== undefined && placement.y !== undefined) {
+      x = placement.x;
+      y = placement.y;
+    } else if (action.targetShapeId !== undefined) {
+      const targetBounds = this.resolveTargetBounds(editor, action.targetShapeId);
+      x = targetBounds.x + targetBounds.width + 16;
+      y = targetBounds.y;
+    }
+
+    return {
+      x: x + (placement?.offsetX ?? 0),
+      y: y + (placement?.offsetY ?? 0)
+    };
   }
 
   private executeEraseAiAnnotation(editor: TldrawEditor, action: BoardAction): void {
