@@ -4,6 +4,10 @@ import {
   type SessionId
 } from "../../../packages/domain/src/index.js";
 import {
+  SessionPerformanceReadResponseSchema,
+  type SessionPerformanceReadResponse
+} from "../../../packages/diagnostics/src/index.js";
+import {
   MAX_REPLAY_IDENTIFIER_CHARS,
   SessionEvaluationReadResponseSchema,
   SessionHistoryReadResponseSchema,
@@ -97,6 +101,21 @@ export class BrowserSessionReadClient {
     const result = await this.read(
       `/v1/read/sessions/${encodeReadSessionId(sessionId)}/evaluation`,
       (value) => SessionEvaluationReadResponseSchema.parse(value),
+      signal
+    );
+    if (result.sessionId !== sessionId) {
+      throw new BrowserSessionReadResponseError("CORRELATION_MISMATCH", 200);
+    }
+    return result;
+  }
+
+  public async getPerformance(
+    sessionId: SessionId,
+    signal?: AbortSignal
+  ): Promise<SessionPerformanceReadResponse> {
+    const result = await this.read(
+      `/v1/read/sessions/${encodeReadSessionId(sessionId)}/performance`,
+      (value) => SessionPerformanceReadResponseSchema.parse(value),
       signal
     );
     if (result.sessionId !== sessionId) {
