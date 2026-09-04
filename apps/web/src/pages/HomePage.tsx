@@ -71,7 +71,7 @@ export function HomePage({
     observer?.observe(folio);
     observer?.observe(rail);
     window.addEventListener("resize", measure, { passive: true });
-    void document.fonts?.ready.then(measure).catch(() => undefined);
+    void document.fonts.ready.then(measure).catch(() => undefined);
     measure();
 
     return () => {
@@ -81,10 +81,7 @@ export function HomePage({
   }, []);
 
   return (
-    <div
-      className="expressive-home"
-      data-has-settings-action={String(onOpenSettings !== undefined)}
-    >
+    <div className="expressive-home">
       <section className="expressive-home__hero" ref={heroRef}>
         <div className="expressive-home__marginalia" aria-hidden="true">
           <svg viewBox="0 0 1500 650" preserveAspectRatio="none">
