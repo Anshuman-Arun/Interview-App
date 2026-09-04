@@ -76,8 +76,8 @@ export function ReviewReadPanel({
         if (controller.signal.aborted) return;
         setError(
           view === "evaluation"
-            ? "The bounded evaluation read could not be loaded."
-            : "The bounded replay read could not be loaded."
+            ? "The evaluation could not be loaded."
+            : "The replay could not be loaded."
         );
         setLoading(false);
       });
@@ -98,8 +98,8 @@ export function ReviewReadPanel({
         <span>READING</span>
         <p>
           {view === "evaluation"
-            ? "Loading bounded evaluation…"
-            : "Loading bounded replay…"}
+            ? "Loading evaluation…"
+            : "Loading replay…"}
         </p>
       </div>
     );
