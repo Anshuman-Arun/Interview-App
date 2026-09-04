@@ -41,7 +41,7 @@ export function HomePage({
     const hero = heroRef.current;
     const copy = heroCopyRef.current;
     const folio = folioRef.current;
-    const rail = hero?.closest(".product-frame")?.querySelector<HTMLElement>("[data-product-rail]");
+    const rail = hero?.closest(".product-frame")?.querySelector<HTMLElement>("[data-product-rail]") ?? null;
     if (hero === null || copy === null || folio === null || rail === null) return;
 
     const measure = (): void => {
