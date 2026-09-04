@@ -62,14 +62,11 @@ function request(): FormalInterpretationRequest {
   });
 }
 
-function candidateResult(
+function modelCandidateResult(
   source: FormalInterpretationRequest = request()
-): InterpretationProviderResult {
+) {
   return {
-    protocolVersion: 1,
-    requestId: source.requestId,
     candidates: [{
-      protocolVersion: 1,
       candidateId: "candidate-1",
       protocol: source.allowedProtocols[0] ?? {
         protocol: "RATIONAL_ARITHMETIC",
@@ -90,7 +87,26 @@ function candidateResult(
           }
         }
       }),
-      confidence: 1,
+      confidence: 1
+    }]
+  };
+}
+
+function candidateResult(
+  source: FormalInterpretationRequest = request()
+): InterpretationProviderResult {
+  const model = modelCandidateResult(source);
+  const candidate = model.candidates[0];
+  if (candidate === undefined) throw new Error("Expected model candidate");
+  return {
+    protocolVersion: 1,
+    requestId: source.requestId,
+    candidates: [{
+      protocolVersion: 1,
+      candidateId: candidate.candidateId,
+      protocol: candidate.protocol,
+      formalStatement: candidate.formalStatement,
+      confidence: candidate.confidence,
       target: source.target,
       source: {
         requestId: source.requestId,
@@ -177,7 +193,7 @@ describe("Antigravity formal interpretation adapter", () => {
       runtime(async (execution) => {
         captured = execution;
         execution.onProcessStart();
-        return executionResult(formalStream(execution, candidateResult()));
+        return executionResult(formalStream(execution, modelCandidateResult()));
       })
     );
 
