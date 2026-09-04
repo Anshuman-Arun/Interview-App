@@ -2,11 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import {
   SessionIdSchema,
   type SessionId,
-  type VerificationStatus,
-  type ReasoningProvider,
-  type ReasoningSession,
-  type ReasoningTurnInput,
-  type InterviewerProposal
+  type VerificationStatus
 } from "../../../packages/domain/src/index.js";
 import {
   RemoteReasoningOutcomeSchema,
@@ -17,10 +13,13 @@ import {
   type SessionPerformanceReadResponse,
   type SessionPerformanceSummary
 } from "../../../packages/diagnostics/src/index.js";
+import type { ProviderCallObserver } from "../../../packages/interview-engine/src/provider-coordinator.js";
 
 const MAX_REMOTE_ATTEMPTS_PER_SESSION = 256;
 const MAX_LATENCY_SAMPLES_PER_KIND = 128;
 const MAX_PERSISTED_METRICS_BYTES = 512 * 1024;
+const MAX_PERSISTED_SESSIONS = 100;
+const MAX_CANDIDATE_TURN_IDS = 512;
 const MAX_IDENTIFIER_LENGTH = 128;
 
 type LocalTimingKind = "STT" | "TTS" | "VISION";
@@ -40,7 +39,16 @@ interface RemoteAttempt {
 interface SessionMetrics {
   partial: boolean;
   candidateSubstantiveTurns: number;
+  candidateTurnIds: string[];
   remoteAttempts: RemoteAttempt[];
+  remoteTotals: {
+    interviewerCalls: number;
+    formalInterpretationCalls: number;
+    outcomes: Record<RemoteReasoningOutcome, number>;
+    requestBytes: number;
+    compiledContextBytes: number;
+    responseBytes: number;
+  };
   formal: {
     attempts: number;
     accepted: number;
@@ -89,7 +97,25 @@ function emptyMetrics(partial = false): SessionMetrics {
   return {
     partial,
     candidateSubstantiveTurns: 0,
+    candidateTurnIds: [],
     remoteAttempts: [],
+    remoteTotals: {
+      interviewerCalls: 0,
+      formalInterpretationCalls: 0,
+      outcomes: {
+        SUCCESS: 0,
+        ABSTAINED: 0,
+        TIMEOUT: 0,
+        CANCELLED: 0,
+        POLICY_DENIED: 0,
+        PROVIDER_UNAVAILABLE: 0,
+        MALFORMED: 0,
+        FAILED: 0
+      },
+      requestBytes: 0,
+      compiledContextBytes: 0,
+      responseBytes: 0
+    },
     formal: {
       attempts: 0,
       accepted: 0,
@@ -150,7 +176,12 @@ function parsePersistedMetrics(value: unknown): SessionMetrics | undefined {
     typeof parsed.partial !== "boolean"
     || !Number.isSafeInteger(parsed.candidateSubstantiveTurns)
     || parsed.candidateSubstantiveTurns < 0
+    || !Array.isArray(parsed.candidateTurnIds)
+    || parsed.candidateTurnIds.length > MAX_CANDIDATE_TURN_IDS
+    || parsed.candidateTurnIds.some((turnId) => typeof turnId !== "string" || turnId.length === 0 || turnId.length > MAX_IDENTIFIER_LENGTH)
     || !Array.isArray(parsed.remoteAttempts)
+    || typeof parsed.remoteTotals !== "object"
+    || parsed.remoteTotals === null
     || typeof parsed.formal !== "object"
     || parsed.formal === null
     || typeof parsed.local !== "object"
@@ -161,6 +192,22 @@ function parsePersistedMetrics(value: unknown): SessionMetrics | undefined {
   try {
     const metrics = structuredClone(parsed) as SessionMetrics;
     if (metrics.remoteAttempts.length > MAX_REMOTE_ATTEMPTS_PER_SESSION) return undefined;
+    if (
+      !Number.isSafeInteger(metrics.remoteTotals.interviewerCalls)
+      || metrics.remoteTotals.interviewerCalls < 0
+      || !Number.isSafeInteger(metrics.remoteTotals.formalInterpretationCalls)
+      || metrics.remoteTotals.formalInterpretationCalls < 0
+      || !Number.isSafeInteger(metrics.remoteTotals.requestBytes)
+      || metrics.remoteTotals.requestBytes < 0
+      || !Number.isSafeInteger(metrics.remoteTotals.compiledContextBytes)
+      || metrics.remoteTotals.compiledContextBytes < 0
+      || !Number.isSafeInteger(metrics.remoteTotals.responseBytes)
+      || metrics.remoteTotals.responseBytes < 0
+    ) return undefined;
+    for (const outcome of RemoteReasoningOutcomeSchema.options) {
+      const count = metrics.remoteTotals.outcomes[outcome];
+      if (!Number.isSafeInteger(count) || count < 0) return undefined;
+    }
     for (const attempt of metrics.remoteAttempts) {
       RemoteReasoningOutcomeSchema.parse(attempt.outcome);
       if (
@@ -227,6 +274,15 @@ class SessionMetricsStore {
         metrics_json = excluded.metrics_json,
         updated_at = excluded.updated_at
     `).run(sessionId, json, new Date().toISOString());
+    this.#database.prepare(`
+      DELETE FROM session_observability
+      WHERE session_id NOT IN (
+        SELECT session_id
+        FROM session_observability
+        ORDER BY updated_at DESC
+        LIMIT ?
+      )
+    `).run(MAX_PERSISTED_SESSIONS);
   }
 
   public close(): void {
@@ -295,6 +351,21 @@ export class SessionObservability {
             compiledContextBytes,
             responseBytes
           };
+          if (input.operation === "INTERVIEWER_REALIZATION") {
+            metrics.remoteTotals.interviewerCalls =
+              addBounded(metrics.remoteTotals.interviewerCalls, 1);
+          } else {
+            metrics.remoteTotals.formalInterpretationCalls =
+              addBounded(metrics.remoteTotals.formalInterpretationCalls, 1);
+          }
+          metrics.remoteTotals.outcomes[attempt.outcome] =
+            addBounded(metrics.remoteTotals.outcomes[attempt.outcome], 1);
+          metrics.remoteTotals.requestBytes =
+            addBounded(metrics.remoteTotals.requestBytes, attempt.requestBytes);
+          metrics.remoteTotals.compiledContextBytes =
+            addBounded(metrics.remoteTotals.compiledContextBytes, attempt.compiledContextBytes);
+          metrics.remoteTotals.responseBytes =
+            addBounded(metrics.remoteTotals.responseBytes, attempt.responseBytes);
           if (metrics.remoteAttempts.length === MAX_REMOTE_ATTEMPTS_PER_SESSION) {
             metrics.remoteAttempts.shift();
             metrics.partial = true;
@@ -305,10 +376,53 @@ export class SessionObservability {
     };
   }
 
-  public recordCandidateSubstantiveTurn(sessionId: SessionId): void {
+  public recordCandidateSubstantiveTurn(sessionId: SessionId, turnIdInput: string): void {
+    const turnId = boundedIdentifier(turnIdInput);
     this.increment(sessionId, (metrics) => {
+      if (metrics.candidateTurnIds.includes(turnId)) return;
       metrics.candidateSubstantiveTurns = addBounded(metrics.candidateSubstantiveTurns, 1);
+      if (metrics.candidateTurnIds.length === MAX_CANDIDATE_TURN_IDS) {
+        metrics.candidateTurnIds.shift();
+        metrics.partial = true;
+      }
+      metrics.candidateTurnIds.push(turnId);
     });
+  }
+
+  public createInterviewerObserver(input: {
+    readonly sessionId: SessionId;
+    readonly providerId: string;
+    readonly modelId: string;
+  }): ProviderCallObserver {
+    const handles = new Map<string, RemoteOperationHandle>();
+    return {
+      onStarted: ({ generationId, context }) => {
+        const handle = this.beginRemoteOperation({
+          sessionId: input.sessionId,
+          operation: "INTERVIEWER_REALIZATION",
+          providerId: input.providerId,
+          modelId: input.modelId
+        });
+        handle.setSizes({
+          requestBytes: serializedApplicationBytes({
+            context,
+            generationId
+          }),
+          compiledContextBytes: serializedApplicationBytes(context)
+        });
+        handles.set(generationId, handle);
+      },
+      onProposal: ({ generationId, proposal }) => {
+        handles.get(generationId)?.setSizes({
+          responseBytes: serializedApplicationBytes(proposal)
+        });
+      },
+      onFinished: ({ generationId, outcome }) => {
+        const handle = handles.get(generationId);
+        handles.delete(generationId);
+        handle?.finish(outcome);
+      }
+    };
   }
 
   public recordFormalAttempt(sessionId: SessionId): void {
@@ -470,28 +584,23 @@ export class SessionObservability {
     const metrics = cloneMetrics(metricsInput);
     const interviewer = metrics.remoteAttempts.filter((a) => a.operation === "INTERVIEWER_REALIZATION");
     const formal = metrics.remoteAttempts.filter((a) => a.operation === "FORMAL_INTERPRETATION");
-    const outcomeCounts = {
-      SUCCESS: 0, ABSTAINED: 0, TIMEOUT: 0, CANCELLED: 0,
-      POLICY_DENIED: 0, PROVIDER_UNAVAILABLE: 0, MALFORMED: 0, FAILED: 0
-    };
-    for (const attempt of metrics.remoteAttempts) outcomeCounts[attempt.outcome] += 1;
-    const requestBytes = metrics.remoteAttempts.reduce((sum, a) => addBounded(sum, a.requestBytes), 0);
-    const contextBytes = metrics.remoteAttempts.reduce((sum, a) => addBounded(sum, a.compiledContextBytes), 0);
-    const responseBytes = metrics.remoteAttempts.reduce((sum, a) => addBounded(sum, a.responseBytes), 0);
     return SessionPerformanceSummarySchema.parse({
       measuredBy: "Interview App",
       partial: metrics.partial || this.persistenceUnavailable,
       candidateSubstantiveTurns: metrics.candidateSubstantiveTurns,
       remote: {
-        interviewerCalls: interviewer.length,
-        formalInterpretationCalls: formal.length,
-        totalCalls: metrics.remoteAttempts.length,
+        interviewerCalls: metrics.remoteTotals.interviewerCalls,
+        formalInterpretationCalls: metrics.remoteTotals.formalInterpretationCalls,
+        totalCalls: addBounded(
+          metrics.remoteTotals.interviewerCalls,
+          metrics.remoteTotals.formalInterpretationCalls
+        ),
         interviewerLatency: latencySummary(interviewer.map((a) => a.elapsedMs)),
         formalInterpretationLatency: latencySummary(formal.map((a) => a.elapsedMs)),
-        outcomes: outcomeCounts,
-        requestBytes,
-        compiledContextBytes: contextBytes,
-        responseBytes
+        outcomes: metrics.remoteTotals.outcomes,
+        requestBytes: metrics.remoteTotals.requestBytes,
+        compiledContextBytes: metrics.remoteTotals.compiledContextBytes,
+        responseBytes: metrics.remoteTotals.responseBytes
       },
       formalInterpretation: {
         attempts: metrics.formal.attempts,
@@ -554,73 +663,4 @@ export function serializedApplicationBytes(value: unknown): number {
   } catch {
     return 0;
   }
-}
-
-
-export function instrumentReasoningProvider(input: {
-  readonly provider: ReasoningProvider;
-  readonly observability: SessionObservability;
-  readonly sessionId: SessionId;
-  readonly providerId: string;
-  readonly modelId: string;
-}): ReasoningProvider {
-  const provider = input.provider;
-  return {
-    name: provider.name,
-    adapterVersion: provider.adapterVersion,
-    capabilities: provider.capabilities,
-    verifyBillingSafety: (verificationInput) =>
-      provider.verifyBillingSafety(verificationInput),
-    createSession: async (): Promise<ReasoningSession> => {
-      const session = await provider.createSession();
-      const cancelled = new Set<string>();
-      return {
-        sendTurn: (turnInput: ReasoningTurnInput): AsyncIterable<InterviewerProposal> => {
-          const handle = input.observability.beginRemoteOperation({
-            sessionId: input.sessionId,
-            operation: "INTERVIEWER_REALIZATION",
-            providerId: input.providerId,
-            modelId: input.modelId
-          });
-          handle.setSizes({
-            requestBytes: serializedApplicationBytes(turnInput),
-            compiledContextBytes: serializedApplicationBytes(turnInput.context)
-          });
-          const stream = session.sendTurn(turnInput);
-          return (async function* (): AsyncIterable<InterviewerProposal> {
-            let responseBytes = 0;
-            let finished = false;
-            try {
-              for await (const proposal of stream) {
-                responseBytes = addBounded(responseBytes, serializedApplicationBytes(proposal));
-                yield proposal;
-              }
-              handle.setSizes({ responseBytes });
-              handle.finish(cancelled.has(turnInput.generationId) ? "CANCELLED" : "SUCCESS");
-              finished = true;
-            } catch (error) {
-              handle.setSizes({ responseBytes });
-              handle.finish(cancelled.has(turnInput.generationId) ? "CANCELLED" : "FAILED");
-              finished = true;
-              throw error;
-            } finally {
-              if (!finished) {
-                handle.setSizes({ responseBytes });
-                handle.finish(cancelled.has(turnInput.generationId) ? "CANCELLED" : "SUCCESS");
-              }
-            }
-          })();
-        },
-        ...(session.cancelTurn === undefined
-          ? {}
-          : {
-              cancelTurn: async (generationId) => {
-                cancelled.add(generationId);
-                return session.cancelTurn?.(generationId) ?? { semantics: "NONE" as const };
-              }
-            }),
-        close: () => session.close()
-      };
-    }
-  };
 }
