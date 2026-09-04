@@ -17,6 +17,7 @@ import {
 import { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 import { SessionReadService } from "./session-read-service.js";
 import { ProviderRuntimeResolver } from "./provider-runtime.js";
+import type { SessionObservability } from "./session-observability.js";
 import { ServerTurnOrchestrator } from "./turn-orchestrator.js";
 import { WhiteboardVisionCoordinator } from "./whiteboard-vision-coordinator.js";
 import {
@@ -50,6 +51,7 @@ export interface LocalInterviewTransportRuntimeOptions {
   readonly readService?: SessionReadService;
   readonly visionBackend?: VisionInferenceBackend;
   readonly visionEvidenceInterpreter?: VisionEvidenceInterpreter;
+  readonly observability?: SessionObservability;
 }
 
 export interface BoundLocalInterviewTransport {
@@ -131,7 +133,8 @@ export class LocalInterviewTransportRuntime {
       : new VoiceSynthesisCoordinator(
         this.sessions,
         this.audioAssets,
-        ttsRuntime
+        ttsRuntime,
+        options.observability
       );
     this.orchestrator =
       options.orchestrator ??
@@ -140,7 +143,8 @@ export class LocalInterviewTransportRuntime {
         () => this.rendererStreamServer,
         undefined,
         providerRuntimeResolver,
-        options.formalInterpretationProvider
+        options.formalInterpretationProvider,
+        options.observability
       );
     this.sessions.setTurnRecoveryDelegate(this.orchestrator);
     this.readService = options.readService ?? new SessionReadService({
@@ -157,14 +161,18 @@ export class LocalInterviewTransportRuntime {
           ?? options.registry.eventCount(sessionId),
         loadEvents: (sessionId) =>
           options.store?.load(sessionId) ?? options.registry.loadEvents(sessionId)
-      }
+      },
+      ...(options.observability === undefined
+        ? {}
+        : { performanceSource: options.observability })
     });
     this.whiteboardVision = new WhiteboardVisionCoordinator({
       sessions: this.sessions,
       ...(options.visionBackend === undefined ? {} : { backend: options.visionBackend }),
       ...(options.visionEvidenceInterpreter === undefined
         ? {}
-        : { evidenceInterpreter: options.visionEvidenceInterpreter })
+        : { evidenceInterpreter: options.visionEvidenceInterpreter }),
+      ...(options.observability === undefined ? {} : { observability: options.observability })
     });
     this.commandServer = new LoopbackCommandServer({
       security: options.security,
@@ -202,7 +210,8 @@ export class LocalInterviewTransportRuntime {
         speechWorker,
         this.audioAssets,
         this.voiceSynthesis,
-        (sessionId) => this.rendererStreamServer.closeSession(sessionId)
+        (sessionId) => this.rendererStreamServer.closeSession(sessionId),
+        options.observability
       );
     this.voiceTransportServer = new VoiceTransportServer({
       security: options.security,
