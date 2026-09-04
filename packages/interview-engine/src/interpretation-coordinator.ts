@@ -392,18 +392,6 @@ export class InterpretationCoordinator {
     });
     this.maxInFlight = options.maxInFlight;
     this.maxCachedRequests = options.maxCachedRequests;
-    if (
-      input?.requestAdmission !== undefined
-      && typeof input.requestAdmission !== "function"
-    ) {
-      throw new Error("Interpretation request admission must be a function");
-    }
-    if (
-      input?.candidateAdmission !== undefined
-      && typeof input.candidateAdmission !== "function"
-    ) {
-      throw new Error("Interpretation candidate admission must be a function");
-    }
     this.requestAdmission = input?.requestAdmission;
     this.candidateAdmission = input?.candidateAdmission;
     this.router = input?.router ?? new FormalProtocolRoutingRegistry(scopes);
