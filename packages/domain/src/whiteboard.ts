@@ -417,6 +417,7 @@ export const BoardSceneAiAnnotationSchema = z.object({
   deliveryId: z.string().min(1).max(MAX_BOARD_ACTION_SHAPE_ID_CHARACTERS),
   operation: z.string().min(1).max(64),
   purpose: z.string().min(1).max(MAX_BOARD_SCENE_ANNOTATION_PURPOSE_CHARACTERS),
+  content: BoardSceneTextSchema.optional(),
   targetShapeId: BoardShapeIdSchema.optional(),
   targetShapeRevision: PositiveSafeBoardShapeRevisionSchema.optional()
 }).strict().superRefine((annotation, context) => {
