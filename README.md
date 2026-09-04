@@ -33,16 +33,19 @@ The production-wired interview path currently provides:
 - authenticated loopback command and renderer-stream transports;
 - Electron bootstrap/runtime support with a trusted renderer authentication bridge;
 - append-only SQLite session persistence, serialized writes, recovery, and delivery-state safety;
-- typed student input and Socratic text delivery for the current default Oxford Ramsey (R(3,3)=6) launch path;
-- authenticated read-only post-session evaluation, replay, and session-history review backed by authoritative event streams.
+- normal launch UI for configured Oxford Mathematics, Quant Trading, and Quant Research sessions using exact server-published problem/provider/model identities;
+- live Antigravity-backed reasoning when the supported local CLI/runtime is installed, authenticated, and launch-ready;
+- physical browser audio capture/playback with the managed local speech/TTS runtime when installed, while typed interviewing remains available without local models;
+- managed local whiteboard vision when installed, while drawing remains available without semantic vision;
+- authenticated read-only post-session evaluation, replay, session-history review, and application-measured usage/latency reporting.
 
 Important current limitations:
 
-- the secure end-to-end product path currently relies on the Electron trusted bootstrap; the bare browser app has no built-in way to acquire the server's client token;
-- the default main-UI new-session action still uses the legacy Ramsey compatibility start, while the server/session composition layer supports exact configured Oxford, Quant Trading, and Quant Research identities; selectable mode/problem launch UI is still deferred;
-- provider/model identity can be bound authoritatively to a session, but live non-mock provider execution is not wired; orchestration uses `MockModelAdapter` only for the registered mock/default path and otherwise fails closed rather than silently substituting mock execution;
-- browser audio primitives exist, but the interview UI does not yet install a physical audio player or expose end-to-end voice;
-- quant trading/research engines and curated quant problems are not exposed as selectable product modes in the main UI.
+- the secure end-to-end product path relies on the Electron trusted bootstrap; the bare browser app has no built-in way to acquire the server's client token;
+- live remote reasoning requires the supported Antigravity CLI/runtime to be installed and authenticated;
+- local speech and semantic vision require a supported 64-bit system CPython 3.12 or 3.13 prerequisite; Settings creates and manages an isolated Interview App Python environment plus pinned model assets after installation;
+- voice and semantic vision are optional capabilities and can remain unavailable while typed interviews continue to work;
+- the Windows installer is currently unsigned and auto-update is not enabled.
 
 ## Implementation-status vocabulary
 
@@ -89,23 +92,23 @@ tests/              unit, adversarial, property, replay, desktop, browser, and t
 
 | Capability | Status | Notes |
 | --- | --- | --- |
-| Typed Oxford interview shell | `PRODUCTION_WIRED` | Default launch remains the legacy Ramsey compatibility path; recovered/configured sessions use server-owned public session context rather than a browser-bundled private problem object. |
+| Typed Oxford interview shell | `PRODUCTION_WIRED` | Normal launch uses server-published Oxford problem/provider/model identities and keeps private problem authority outside the browser bundle. |
 | Real tldraw integration | `PRODUCTION_WIRED` | `WhiteboardCanvas` mounts the real `Tldraw` component through `RealTldrawEditorBridge`. |
 | Electron desktop bootstrap/runtime | `PRODUCTION_WIRED` | Starts the loopback backend, serves/loads the renderer, injects trusted auth, and applies permission/navigation policy. |
-| Browser audio capture/playback primitives | `RUNTIME_SEAM_ONLY` | Infrastructure exists; the session hook deliberately has no physical audio player installed. |
-| VAD/STT bounded worker core | `BACKEND_IMPLEMENTED` | Model-independent worker core with injected VAD/recognizer seams; no claim of live Silero/Moonshine inference. |
-| TTS bounded worker core | `BACKEND_IMPLEMENTED` | Synthesis protocol/worker core exists; no claim of live Kokoro inference. |
+| Browser audio capture/playback | `PRODUCTION_WIRED` | The session hook installs the physical audio path and uses the managed local runtime when speech/TTS are ready; typed fallback remains available. |
+| VAD/STT local runtime | `PRODUCTION_WIRED` | The managed local worker runs the pinned Silero/Moonshine speech path after verified Python/model setup. |
+| TTS local runtime | `PRODUCTION_WIRED` | The managed local worker runs the pinned Kokoro voice path after verified Python/model setup. |
 | Local process supervision | `BACKEND_IMPLEMENTED` | Bounded child-process manager, readiness, restart/shutdown, environment and diagnostic controls. |
 | Vision preprocessing + freshness/admission | `BACKEND_IMPLEMENTED` | Snapshot/preprocessing plus board/shape freshness and result admission exist. |
-| Vision semantic inference | `TEST/HARNESS_ONLY` | The current concrete semantic backend is deterministic fake inference; no live vision model is selected. |
+| Vision semantic inference | `PRODUCTION_WIRED` | The desktop composes the managed local vision backend with verified model assets; drawing remains usable when semantic vision is unavailable. |
 | Formal interpretation routing | `BACKEND_IMPLEMENTED` | Bounded proposal admission and deterministic protocol/verifier routing exist. |
 | Deterministic mathematical verification | `BACKEND_IMPLEMENTED` | Multiple verifier domains and coordinator/admission paths exist. |
 | Grounded session evaluation | `PRODUCTION_WIRED` | Authenticated read-only evaluation is reconstructed from exact authoritative session/problem provenance and surfaced in post-session/historical review UI. |
 | Replay/history projections | `PRODUCTION_WIRED` | Authenticated bounded replay/history/longitudinal read models are surfaced in product review UI without appending, acknowledging, or redelivering events. |
-| Quant Trading infrastructure | `BACKEND_IMPLEMENTED` | Market-making/trader scenario engine exists; no selectable main UI mode. |
-| Quant Research infrastructure | `BACKEND_IMPLEMENTED` | Deterministic research engine/coordinator/persistence coverage exists; no selectable main UI mode. |
-| Oxford and quant problem catalogs | `BACKEND_IMPLEMENTED` | Generic server composition/catalog commands resolve exact identities, but the main UI does not yet expose selectable mode/problem launch controls. |
-| Provider control plane | `BACKEND_IMPLEMENTED` | Bounded configuration/capability/secret-reference/policy machinery exists; session composition validates registered provider/model identity, while live non-mock execution remains deferred. |
+| Quant Trading | `PRODUCTION_WIRED` | Normal launch UI exposes reviewed trading scenarios and the production workspace supports action, restart, completion, and review flows. |
+| Quant Research | `PRODUCTION_WIRED` | Normal launch UI exposes reviewed research problems and the production workspace supports action, restart, completion, and review flows. |
+| Oxford and quant problem catalogs | `PRODUCTION_WIRED` | Server-published catalogs resolve exact identities and the main UI exposes selectable mode/problem launch controls. |
+| Provider control plane | `PRODUCTION_WIRED` | Session composition validates registered provider/model identity and routes launch-ready Antigravity execution through the supervised runtime. |
 | Gemini adapter | `RUNTIME_SEAM_ONLY` | Gated adapter exists and its identity can be represented in session configuration; it is not yet the live server reasoning provider. |
 
 See `docs/IMPLEMENTATION_MAP.md` for the detailed component map.
