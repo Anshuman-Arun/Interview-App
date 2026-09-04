@@ -71,6 +71,8 @@ export const App: React.FC = () => {
     useState<"split" | "transcript" | "whiteboard">("split");
   const [endConfirmOpen, setEndConfirmOpen] = useState(false);
   const liveWorkspaceRef = useRef<HTMLElement | null>(null);
+  const endControlRef = useRef<HTMLDivElement | null>(null);
+  const endCancelRef = useRef<HTMLButtonElement | null>(null);
   const [historyRead, setHistoryRead] = useState<SessionHistoryReadResponse | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -491,6 +493,58 @@ export const App: React.FC = () => {
     session.isPaused
   );
   const interviewBackgrounded = displayRoute.page !== "interview";
+
+  useEffect(() => {
+    if (!endConfirmOpen) return;
+
+    if (!hasActiveInterview || interviewBackgrounded || sessionTerminalPending) {
+      setEndConfirmOpen(false);
+      return;
+    }
+
+    const closeFromOutside = (event: PointerEvent): void => {
+      const root = endControlRef.current;
+      if (
+        root === null
+        || !(event.target instanceof Node)
+        || root.contains(event.target)
+      ) {
+        return;
+      }
+      setEndConfirmOpen(false);
+    };
+    const closeFromEscape = (event: KeyboardEvent): void => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setEndConfirmOpen(false);
+    };
+
+    document.addEventListener("pointerdown", closeFromOutside);
+    document.addEventListener("keydown", closeFromEscape);
+    queueMicrotask(() => endCancelRef.current?.focus());
+
+    return () => {
+      document.removeEventListener("pointerdown", closeFromOutside);
+      document.removeEventListener("keydown", closeFromEscape);
+    };
+  }, [
+    endConfirmOpen,
+    hasActiveInterview,
+    interviewBackgrounded,
+    sessionTerminalPending
+  ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const compact = window.matchMedia("(max-width: 960px)");
+    const resetFocusForCompactLayout = (): void => {
+      if (compact.matches) setPaneFocus("split");
+    };
+    resetFocusForCompactLayout();
+    compact.addEventListener("change", resetFocusForCompactLayout);
+    return () => compact.removeEventListener("change", resetFocusForCompactLayout);
+  }, []);
+
   const activeModeLabel =
     session.configuration?.mode === "QUANT_TRADING"
       ? "Quant Trading"
@@ -694,7 +748,13 @@ export const App: React.FC = () => {
           {hasActiveInterview && (
             <span className="app-header__board-state" data-synced={String(session.whiteboardSync.status === "SYNCED")}>
               <span aria-hidden="true" />
-              {session.whiteboardSync.status === "SYNCED" ? "Board synced" : "Board syncing"}
+              {session.whiteboardSync.status === "SYNCED"
+                ? "Board synced"
+                : session.whiteboardSync.status === "PENDING"
+                  ? "Board saving"
+                  : session.whiteboardSync.status === "UNSYNCHRONIZED"
+                    ? "Board unavailable"
+                    : "Board preparing"}
             </span>
           )}
 
@@ -715,22 +775,36 @@ export const App: React.FC = () => {
               >
                 Home
               </button>
-              <div className="live-end-control" data-open={String(endConfirmOpen)}>
+              <div
+                ref={endControlRef}
+                className="live-end-control"
+                data-open={String(endConfirmOpen)}
+              >
                 <button
                   type="button"
                   onClick={() => setEndConfirmOpen((open) => !open)}
                   disabled={sessionTerminalPending || sessionEntryPending}
                   className="app-header__end"
                   aria-expanded={endConfirmOpen}
+                  aria-controls={endConfirmOpen ? "live-end-confirmation" : undefined}
                 >
                   {sessionTerminalPending ? "Ending…" : "End interview"}
                 </button>
                 {endConfirmOpen && (
-                  <div className="live-end-popover" role="dialog" aria-label="Confirm end interview">
+                  <div
+                    id="live-end-confirmation"
+                    className="live-end-popover"
+                    role="dialog"
+                    aria-label="Confirm end interview"
+                  >
                     <strong>End this interview?</strong>
                     <p>You’ll go straight to the grounded review.</p>
                     <div>
-                      <button type="button" onClick={() => setEndConfirmOpen(false)}>
+                      <button
+                        ref={endCancelRef}
+                        type="button"
+                        onClick={() => setEndConfirmOpen(false)}
+                      >
                         Cancel
                       </button>
                       <button
@@ -835,7 +909,7 @@ export const App: React.FC = () => {
           paneFocus === "split"
             ? {
                 gridTemplateColumns:
-                  `minmax(360px, ${String(splitPercent)}%) 7px minmax(0, 1fr)`
+                  `minmax(0, ${String(splitPercent)}%) 7px minmax(0, 1fr)`
               }
             : undefined
         }
@@ -964,9 +1038,22 @@ export const App: React.FC = () => {
           aria-valuenow={Math.round(splitPercent)}
           tabIndex={0}
           onKeyDown={(event) => {
-            if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+            if (
+              event.key !== "ArrowLeft"
+              && event.key !== "ArrowRight"
+              && event.key !== "Home"
+              && event.key !== "End"
+            ) return;
             event.preventDefault();
             setPaneFocus("split");
+            if (event.key === "Home") {
+              setSplitPercent(26);
+              return;
+            }
+            if (event.key === "End") {
+              setSplitPercent(68);
+              return;
+            }
             setSplitPercent((current) =>
               Math.min(68, Math.max(26, current + (event.key === "ArrowRight" ? 2 : -2)))
             );
@@ -985,6 +1072,11 @@ export const App: React.FC = () => {
             setSplitFromClientX(event.clientX);
           }}
           onPointerUp={(event) => {
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+              event.currentTarget.releasePointerCapture(event.pointerId);
+            }
+          }}
+          onPointerCancel={(event) => {
             if (event.currentTarget.hasPointerCapture(event.pointerId)) {
               event.currentTarget.releasePointerCapture(event.pointerId);
             }
