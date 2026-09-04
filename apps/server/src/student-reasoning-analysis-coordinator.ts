@@ -22,6 +22,7 @@ import {
   isOxfordFormalAnalysisSourceRelevant,
   isOxfordFormalCandidateTargetAdmissible
 } from "./oxford-formal-candidate-admission.js";
+import type { SessionObservability } from "./session-observability.js";
 
 export const DEFAULT_STUDENT_REASONING_ANALYSIS_TIMEOUT_MS = 1_500 as const;
 export const MAX_STUDENT_REASONING_ANALYSIS_IN_FLIGHT = 2 as const;
@@ -70,7 +71,8 @@ export class StudentReasoningAnalysisCoordinator {
   public constructor(
     private readonly sessions: SessionRecoveryCoordinator,
     private readonly provider: FormalInterpretationProvider = new UnavailableFormalInterpretationProvider(),
-    private readonly timeoutMs: number = DEFAULT_STUDENT_REASONING_ANALYSIS_TIMEOUT_MS
+    private readonly timeoutMs: number = DEFAULT_STUDENT_REASONING_ANALYSIS_TIMEOUT_MS,
+    private readonly observability?: SessionObservability
   ) {
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30_000) {
       throw new Error("Student reasoning analysis timeout must be a bounded positive integer");
@@ -135,6 +137,7 @@ export class StudentReasoningAnalysisCoordinator {
       turnId: input.turnId,
       inputEpisodeId: input.inputEpisodeId
     });
+    this.observability?.recordFormalAttempt(input.sessionId);
 
     const execution = context.coordinator.interpretAndVerify(request);
     const trackedExecution = execution.finally(() => {
@@ -149,7 +152,7 @@ export class StudentReasoningAnalysisCoordinator {
     });
 
     try {
-      return await Promise.race([
+      const outcome = await Promise.race([
         trackedExecution.then((interpretation) => ({
           status: "ANALYZED" as const,
           interpretation
@@ -159,10 +162,47 @@ export class StudentReasoningAnalysisCoordinator {
         })),
         timeLimit
       ]);
+      this.recordObservabilityOutcome(input.sessionId, outcome);
+      return outcome;
     } finally {
       if (timeout !== undefined) clearTimeout(timeout);
       void trackedExecution.catch(() => undefined);
     }
+  }
+
+  private recordObservabilityOutcome(
+    sessionId: SessionId,
+    outcome: StudentReasoningAnalysisOutcome
+  ): void {
+    if (outcome.status === "SKIPPED") {
+      if (outcome.reason === "TIME_LIMIT") {
+        this.observability?.recordFormalResult(sessionId, { kind: "TIMEOUT" });
+      } else if (outcome.reason === "ANALYSIS_FAILURE") {
+        this.observability?.recordFormalResult(sessionId, { kind: "FAILED_OR_MALFORMED" });
+      } else if (outcome.reason === "SHUTDOWN" || outcome.reason === "STALE_SOURCE") {
+        this.observability?.recordFormalResult(sessionId, { kind: "CANCELLED" });
+      }
+      return;
+    }
+    if (outcome.interpretation.status === "ACCEPTED") {
+      this.observability?.recordFormalResult(sessionId, {
+        kind: "ACCEPTED",
+        verificationStatus: outcome.interpretation.verificationStatus
+      });
+      return;
+    }
+    if (
+      outcome.interpretation.status === "NO_SUPPORTED_INTERPRETATION"
+      || outcome.interpretation.reason === "NO_INTERPRETATION"
+    ) {
+      this.observability?.recordFormalResult(sessionId, { kind: "ABSTAINED" });
+      return;
+    }
+    if (outcome.interpretation.reason === "CANCELLED") {
+      this.observability?.recordFormalResult(sessionId, { kind: "CANCELLED" });
+      return;
+    }
+    this.observability?.recordFormalResult(sessionId, { kind: "FAILED_OR_MALFORMED" });
   }
 
   public supersedeStaleRequests(sessionId: SessionId): void {
