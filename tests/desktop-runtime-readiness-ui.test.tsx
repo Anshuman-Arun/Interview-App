@@ -91,7 +91,8 @@ describe("desktop local AI readiness UX", () => {
 
   it("rejects malformed or legacy shared runtime status payloads", () => {
     const valid = runtimeStatus();
-    const { vision: _vision, ...missingVision } = valid;
+    const missingVision: Record<string, unknown> = { ...valid };
+    delete missingVision["vision"];
     expect(parseDesktopRuntimeStatus(missingVision)).toBeUndefined();
 
     expect(parseDesktopRuntimeStatus({
