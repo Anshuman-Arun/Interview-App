@@ -43,6 +43,7 @@ interface SettingsPageProps {
   readonly providerOptions?: readonly ProviderLaunchOption[];
   readonly providerOptionsLoading?: boolean;
   readonly providerOptionsError?: string | null;
+  readonly activeSessionCount?: number;
   readonly onRefreshProviderOptions?: () => Promise<readonly ProviderLaunchOption[]>;
   readonly onStartInterview?: () => void;
 }
@@ -178,6 +179,7 @@ export function SettingsPage({
   providerOptions = [],
   providerOptionsLoading = false,
   providerOptionsError = null,
+  activeSessionCount = 0,
   onRefreshProviderOptions,
   onStartInterview
 }: SettingsPageProps) {
@@ -369,7 +371,11 @@ export function SettingsPage({
   }, [onRefreshProviderOptions, refreshRuntime]);
 
   const finishSetup = (): void => {
-    if (setupOperationInFlightRef.current || restarting) return;
+    if (
+      setupOperationInFlightRef.current
+      || restarting
+      || activeSessionCount > 0
+    ) return;
     try {
       globalThis.localStorage.setItem(DESKTOP_FIRST_RUN_SETUP_KEY, "complete");
     } catch {
@@ -378,13 +384,19 @@ export function SettingsPage({
     onStartInterview?.();
   };
 
-  const summary = reasoningReady
+  const summary = activeSessionCount > 0
     ? (
-      voiceReady && visionReady
-        ? "Ready to interview. Voice and whiteboard understanding are active."
-        : `Typed interviews are ready.${voiceReady ? "" : " Voice is unavailable."}${visionReady ? "" : " Whiteboard semantic understanding is unavailable."}`
+      activeSessionCount === 1
+        ? "An active interview already exists. Resume or resolve it before starting another."
+        : `${String(activeSessionCount)} active interviews need resolution before another can start.`
     )
-    : "A live AI interview needs a ready reasoning provider. Voice and whiteboard understanding remain optional.";
+    : reasoningReady
+      ? (
+        voiceReady && visionReady
+          ? "Ready to interview. Voice and whiteboard understanding are active."
+          : `Typed interviews are ready.${voiceReady ? "" : " Voice is unavailable."}${visionReady ? "" : " Whiteboard semantic understanding is unavailable."}`
+      )
+      : "A live AI interview needs a ready reasoning provider. Voice and whiteboard understanding remain optional.";
 
   return (
     <div className="expressive-settings">
@@ -659,7 +671,8 @@ export function SettingsPage({
                 className="expressive-settings__start"
                 onClick={finishSetup}
                 disabled={
-                  !reasoningReady
+                  activeSessionCount > 0
+                  || !reasoningReady
                   || restarting
                   || runtimeChecking
                   || providerOptionsLoading
