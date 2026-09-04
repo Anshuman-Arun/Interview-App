@@ -22,6 +22,7 @@ import {
   type SessionEvent
 } from "../packages/events/src/index.js";
 import {
+  ContextCoordinator,
   QuantResearchCoordinator,
   SessionRuntimeRegistry,
   SessionWriter,
@@ -46,7 +47,6 @@ import { sixPeopleProblem } from "../packages/problems/src/index.js";
 import {
   authorizeSafeProbe,
   createCoreHarness,
-  providerEnvelope,
   type CoreHarness
 } from "./harness.js";
 
@@ -248,11 +248,68 @@ async function queueAudio(harness: CoreHarness) {
 
 async function queueWhiteboard(harness: CoreHarness, action: unknown) {
   const boardAction = BoardActionSchema.parse(action);
+  let generationId = harness.generationId;
+
+  if (boardAction.targetShapeId !== undefined) {
+    if (boardAction.expectedShapeRevision === undefined) {
+      throw new Error("Replay whiteboard target fixture requires an exact shape revision");
+    }
+    const currentShape = harness.writer.getState().boardShapes[boardAction.targetShapeId];
+    if (currentShape === undefined) {
+      const mutation = await harness.turns.commitBoardMutation({
+        baseBoardRevision: harness.writer.getState().boardRevision,
+        added: [{
+          id: boardAction.targetShapeId,
+          type: "rectangle",
+          bounds: { x: 40, y: 40, width: 120, height: 60 },
+          revision: boardAction.expectedShapeRevision,
+          createdAt: 1,
+          lastModifiedAt: boardAction.expectedShapeRevision
+        }],
+        updated: [],
+        deleted: []
+      });
+      if (!mutation.committed) {
+        throw new Error(`Replay whiteboard target setup failed: ${mutation.reason}`);
+      }
+      await harness.turns.selectAction(harness.turnId, sixPeopleProblem);
+      generationId = (await harness.turns.startGeneration(
+        harness.inputEpisodeId,
+        harness.turnId,
+        "mock-model"
+      )).generationId;
+    } else if (currentShape.revision !== boardAction.expectedShapeRevision) {
+      throw new Error("Replay whiteboard target fixture revision mismatch");
+    }
+  }
+
+  const compilation = await new ContextCoordinator(harness.writer).compileForGeneration({
+    generationId,
+    problem: sixPeopleProblem
+  });
+  if (!compilation.value.compiled) {
+    throw new Error(`Replay whiteboard context compilation failed: ${compilation.value.reason}`);
+  }
+
+  const generation = harness.writer.getState().generations[generationId];
+  if (generation === undefined || generation.pedagogicalAction === undefined) {
+    throw new Error("Replay whiteboard generation fixture is unavailable");
+  }
   const result = await harness.turns.processProposal({
-    envelope: providerEnvelope(harness),
+    envelope: createCommandEnvelope({
+      sessionId: harness.sessionId,
+      producer: generation.provider,
+      ...(generation.basis.inputEpisodeId === undefined
+        ? {}
+        : { inputEpisodeId: generation.basis.inputEpisodeId }),
+      turnId: generation.basis.turnId,
+      generationId,
+      contextEpoch: generation.basis.contextEpoch,
+      sourceRevision: generation.basis.committedInputSequence
+    }),
     problem: sixPeopleProblem,
     proposal: {
-      realizedAction: "PROBE_JUSTIFICATION",
+      realizedAction: generation.pedagogicalAction.requiredAction,
       claimedDisclosureLevel: 0,
       claimedDisclosureIds: [],
       boardActions: [boardAction]
@@ -484,6 +541,7 @@ describe("replay/history projections", () => {
         operation: "circle",
         layer: "AI_ANNOTATION",
         targetShapeId: "student-shape-private-purpose",
+        expectedShapeRevision: 1,
         annotationPurpose: boardHarness.safeProbe
       });
       const coordinator = new DeliveryCoordinator(boardHarness.writer);
@@ -709,7 +767,7 @@ describe("replay/history projections", () => {
         operation: "circle",
         layer: "AI_ANNOTATION",
         targetShapeId: "student-shape-1",
-        expectedShapeRevision: 4,
+        expectedShapeRevision: 1,
         annotationPurpose: boardHarness.safeProbe
       });
       const coordinator = new DeliveryCoordinator(boardHarness.writer);
@@ -720,7 +778,7 @@ describe("replay/history projections", () => {
       expect(board?.delivery?.boardAction).toMatchObject({
         operation: "circle",
         targetShapeId: "student-shape-1",
-        expectedShapeRevision: 4
+        expectedShapeRevision: 1
       });
     } finally {
       boardHarness.store.close();
