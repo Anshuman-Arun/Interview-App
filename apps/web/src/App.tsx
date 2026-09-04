@@ -541,6 +541,12 @@ export const App: React.FC = () => {
   ]);
 
   useEffect(() => {
+    setEndConfirmOpen(false);
+    setCompactPane("interview");
+    setPaneFocus("split");
+  }, [session.sessionId]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     const compact = window.matchMedia("(max-width: 960px)");
     const resetFocusForCompactLayout = (): void => {
@@ -753,7 +759,10 @@ export const App: React.FC = () => {
           </span>
 
           {hasActiveInterview && (
-            <span className="app-header__board-state" data-synced={String(session.whiteboardSync.status === "SYNCED")}>
+            <span
+              className="app-header__board-state"
+              data-sync={session.whiteboardSync.status}
+            >
               <span aria-hidden="true" />
               {session.whiteboardSync.status === "SYNCED"
                 ? "Board synced"
@@ -794,6 +803,7 @@ export const App: React.FC = () => {
                   disabled={sessionTerminalPending || sessionEntryPending}
                   className="app-header__end"
                   aria-expanded={endConfirmOpen}
+                  aria-haspopup="dialog"
                   aria-controls={endConfirmOpen ? "live-end-confirmation" : undefined}
                 >
                   {sessionTerminalPending ? "Ending…" : "End interview"}
@@ -989,6 +999,7 @@ export const App: React.FC = () => {
                 void session.retrySubmission(itemId);
               }}
               retryDisabled={sessionEntryPending || sessionTerminalPending}
+              scrollContextKey={session.sessionId}
               focused={paneFocus === "transcript"}
               onToggleFocus={() =>
                 setPaneFocus((focus) =>
@@ -1113,12 +1124,17 @@ export const App: React.FC = () => {
             </div>
             <div className="board-appbar__actions">
               {paneFocus !== "split" && (
-                <button type="button" onClick={() => setPaneFocus("split")}>
+                <button
+                  type="button"
+                  className="board-appbar__layout-action"
+                  onClick={() => setPaneFocus("split")}
+                >
                   Restore split
                 </button>
               )}
               <button
                 type="button"
+                className="board-appbar__layout-action"
                 aria-pressed={paneFocus === "whiteboard"}
                 onClick={() =>
                   setPaneFocus((focus) =>
@@ -1130,6 +1146,7 @@ export const App: React.FC = () => {
               </button>
               <button
                 type="button"
+                className="board-appbar__clear-action"
                 onClick={() => void whiteboardAdapter.clearAiOverlay()}
               >
                 Clear AI marks
