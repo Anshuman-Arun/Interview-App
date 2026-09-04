@@ -21,6 +21,7 @@ export function ProductPageRouter({
   route,
   sessions,
   activeSessionId,
+  activeSessionCount,
   currentSessionId,
   activeProblemTitle,
   activeSessionPaused,
@@ -51,6 +52,7 @@ export function ProductPageRouter({
   readonly route: Exclude<ProductRoute, { readonly page: "interview" }>;
   readonly sessions: readonly StoredSessionSummary[];
   readonly activeSessionId: SessionId | null;
+  readonly activeSessionCount: number;
   readonly currentSessionId: SessionId | null;
   readonly activeProblemTitle?: string | null;
   readonly activeSessionPaused?: boolean;
@@ -105,6 +107,7 @@ export function ProductPageRouter({
       content = (
         <HomePage
           activeSessionId={activeSessionId}
+          activeSessionCount={activeSessionCount}
           activeProblemTitle={activeProblemTitle ?? null}
           activeSessionPaused={activeSessionPaused ?? false}
           sessions={sessions}
@@ -131,6 +134,7 @@ export function ProductPageRouter({
           providerOptionsLoading={providerOptionsLoading}
           providerOptionsError={providerOptionsError}
           activeSessionId={activeSessionId}
+          activeSessionCount={activeSessionCount}
           startPending={sessionEntryPending}
           onRefreshCatalog={onRefreshLaunchCatalog}
           onRefreshProviderOptions={onRefreshProviderOptions}
