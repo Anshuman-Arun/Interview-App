@@ -550,6 +550,61 @@ describe("Antigravity CLI one-turn protocol", () => {
     await session.close();
   });
 
+  it("sends board context and receives speech plus drawing in the same single provider execution", async () => {
+    const requests: SupervisedCliExecutionRequest[] = [];
+    const proposal: InterviewerProposal = {
+      realizedAction: "FOCUS_ATTENTION",
+      claimedDisclosureLevel: 0,
+      claimedDisclosureIds: [],
+      speechText: "What happens if x is zero?",
+      boardActions: [{
+        operation: "highlight",
+        layer: "AI_ANNOTATION",
+        targetShapeId: "shape:eq",
+        expectedShapeRevision: 3,
+        annotationPurpose: "focus the candidate on the current equality"
+      }]
+    };
+    const provider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async (request) => {
+        requests.push(request);
+        request.onProcessStart();
+        return executionResult(antigravityStream(proposal));
+      })
+    );
+    const session = await provider.createSession();
+    const context = {
+      problemPrompt: "Explore the equation.",
+      recentStudentWork: "I think this is useful.",
+      boardScene: {
+        boardRevision: 8,
+        shapes: [{
+          shapeId: "shape:eq",
+          shapeRevision: 3,
+          type: "formula",
+          bounds: { x: 10, y: 20, width: 180, height: 40 },
+          text: "x^2 + y^2 = 1"
+        }],
+        aiAnnotations: []
+      }
+    };
+
+    await expect(collectProposals(session.sendTurn(turnInput(context))))
+      .resolves.toEqual([proposal]);
+    expect(requests).toHaveLength(1);
+    const stdinMessage = JSON.parse((requests[0]?.stdin ?? "").trim()) as {
+      readonly message?: { readonly content?: unknown };
+    };
+    const prompt = stdinMessage.message?.content;
+    expect(typeof prompt).toBe("string");
+    if (typeof prompt !== "string") throw new Error("Expected string prompt content");
+    expect(prompt).toContain("untrusted candidate data");
+    expect(prompt).toContain("exact supplied revision");
+    expect(prompt).toContain("do not dump a solution");
+    expect(prompt).toContain('"shapeId":"shape:eq"');
+    await session.close();
+  });
+
   it("detaches nested context before the async iterator starts", async () => {
     let captured: SupervisedCliExecutionRequest | undefined;
     const provider = createAntigravityCliReasoningProvider(
@@ -713,7 +768,7 @@ describe("Antigravity CLI one-turn protocol", () => {
           operation: "write_text",
           layer: "AI_ANNOTATION",
           content: "bounded",
-          targetShapeId: "x".repeat(257),
+          targetShapeId: "x".repeat(161),
           annotationPurpose: "bounded annotation"
         }]
       }),
@@ -726,7 +781,39 @@ describe("Antigravity CLI one-turn protocol", () => {
           content: "bounded",
           annotationPurpose: "x".repeat(513)
         }]
-      })
+      }),
+      antigravityStream({
+        ...PROPOSAL,
+        speechText: undefined,
+        boardActions: [{
+          operation: "draw_polyline",
+          layer: "AI_ANNOTATION",
+          points: Array.from({ length: 9 }, (_, index) => ({ x: index, y: index })),
+          annotationPurpose: "too many points"
+        }]
+      } as InterviewerProposal),
+      antigravityStream({
+        ...PROPOSAL,
+        speechText: undefined,
+        boardActions: [{
+          operation: "draw_segment",
+          layer: "AI_ANNOTATION",
+          points: [{ x: 0, y: 0 }, { x: 1_000_001, y: 0 }],
+          annotationPurpose: "huge coordinate"
+        }]
+      } as InterviewerProposal),
+      antigravityStream({
+        ...PROPOSAL,
+        speechText: undefined,
+        boardActions: [{
+          operation: "draw_rectangle",
+          layer: "AI_ANNOTATION",
+          placement: { x: 0, y: 0 },
+          width: 10,
+          height: Number.POSITIVE_INFINITY,
+          annotationPurpose: "non-finite dimension"
+        }]
+      } as InterviewerProposal)
     ];
 
     for (const stdout of invalidStreams) {
@@ -772,7 +859,7 @@ describe("Antigravity CLI one-turn protocol", () => {
         operation: "write_text" as const,
         layer: "AI_ANNOTATION" as const,
         content: "\\".repeat(2_000),
-        targetShapeId: "\\".repeat(256),
+        targetShapeId: "\\".repeat(160),
         expectedShapeRevision: Number.MAX_SAFE_INTEGER,
         annotationPurpose: "\\".repeat(512)
       }))
