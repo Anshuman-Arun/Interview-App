@@ -98,7 +98,7 @@ describe("SessionObservability", () => {
     const read = metrics.read(sessionId);
     expect(read.available).toBe(true);
     if (!read.available || read.summary === undefined) throw new Error("expected metrics");
-    expect(read.summary.remote.totalCalls).toBe(256);
+    expect(read.summary.remote.totalCalls).toBe(300);
     expect(read.summary.partial).toBe(true);
   });
 
@@ -106,8 +106,12 @@ describe("SessionObservability", () => {
     const metrics = new SessionObservability();
     const sessionId = SessionIdSchema.parse("session-observability-4");
     metrics.recordVoiceInputSession(sessionId);
+    metrics.recordCandidateSubstantiveTurn(sessionId, "turn-1");
+    metrics.recordCandidateSubstantiveTurn(sessionId, "turn-1");
+
     const serialized = JSON.stringify(metrics.read(sessionId)).toLowerCase();
 
+    expect(metrics.read(sessionId).summary?.candidateSubstantiveTurns).toBe(1);
     expect(serialized).not.toContain("token");
     expect(serialized).not.toContain("quota");
     expect(serialized).not.toContain("billing");
