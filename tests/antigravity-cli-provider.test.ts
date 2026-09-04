@@ -578,6 +578,14 @@ describe("Antigravity CLI one-turn protocol", () => {
       recentStudentWork: "I think this is useful.",
       boardScene: {
         boardRevision: 8,
+        studentShapeCount: 70,
+        includedStudentShapeCount: 1,
+        omittedStudentShapeCount: 69,
+        studentShapesTruncated: true,
+        aiAnnotationCount: 1,
+        includedAiAnnotationCount: 1,
+        aiAnnotationsTruncated: false,
+        contentBounds: { x: 0, y: 0, width: 900, height: 600 },
         shapes: [{
           shapeId: "shape:eq",
           shapeRevision: 3,
@@ -585,7 +593,14 @@ describe("Antigravity CLI one-turn protocol", () => {
           bounds: { x: 10, y: 20, width: 180, height: 40 },
           text: "x^2 + y^2 = 1"
         }],
-        aiAnnotations: []
+        semanticRelations: [],
+        aiAnnotations: [{
+          annotationId: "delivery_prior_annotation",
+          operation: "circle",
+          purpose: "prior focus",
+          targetShapeId: "shape:eq",
+          targetShapeRevision: 3
+        }]
       }
     };
 
@@ -603,9 +618,53 @@ describe("Antigravity CLI one-turn protocol", () => {
     expect(prompt).toContain("fallible observations");
     expect(prompt).toContain("not authoritative correctness evidence");
     expect(prompt).toContain("exact supplied revision");
+    expect(prompt).toContain("targetAnnotationId");
+    expect(prompt).toContain("application-owned logical annotations");
+    expect(prompt).toContain("truncated board scene is only a selected subset");
+    expect(prompt).toContain("Do not infer that omitted space is empty");
+    expect(prompt).toContain("Use contentBounds as a coarse spatial frame");
+    expect(prompt).toContain("Use targetRegion only when");
     expect(prompt).toContain("do not encode a student target indirectly");
     expect(prompt).toContain("do not dump a solution");
     expect(prompt).toContain('"shapeId":"shape:eq"');
+    await session.close();
+  });
+
+  it("accepts bounded local-region targeting and logical annotation cleanup in one proposal", async () => {
+    const proposal: InterviewerProposal = {
+      ...PROPOSAL,
+      speechText: "Focus here, then remove the older mark.",
+      boardActions: [
+        {
+          operation: "point_at",
+          layer: "AI_ANNOTATION",
+          targetRegion: {
+            shapeId: "shape:eq",
+            shapeRevision: 3,
+            xFraction: 0.45,
+            yFraction: 0,
+            widthFraction: 0.2,
+            heightFraction: 1
+          },
+          annotationPurpose: "point at one term"
+        },
+        {
+          operation: "erase_ai_annotation",
+          layer: "AI_ANNOTATION",
+          targetAnnotationId: "delivery_prior_annotation" as never,
+          annotationPurpose: "remove obsolete prior circle"
+        }
+      ]
+    };
+    const provider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async (request) => {
+        request.onProcessStart();
+        return executionResult(antigravityStream(proposal));
+      })
+    );
+    const session = await provider.createSession();
+    await expect(collectProposals(session.sendTurn(turnInput({ safe: true }))))
+      .resolves.toEqual([proposal]);
     await session.close();
   });
 
@@ -816,6 +875,31 @@ describe("Antigravity CLI one-turn protocol", () => {
           width: 10,
           height: Number.POSITIVE_INFINITY,
           annotationPurpose: "non-finite dimension"
+        }]
+      }),
+      antigravityStream({
+        ...PROPOSAL,
+        speechText: undefined,
+        boardActions: [{
+          operation: "point_at",
+          layer: "AI_ANNOTATION",
+          targetRegion: {
+            shapeId: "shape:eq",
+            shapeRevision: 3,
+            xFraction: 1.1,
+            yFraction: 0
+          },
+          annotationPurpose: "out-of-range local target"
+        }]
+      }),
+      antigravityStream({
+        ...PROPOSAL,
+        speechText: undefined,
+        boardActions: [{
+          operation: "erase_ai_annotation",
+          layer: "AI_ANNOTATION",
+          targetAnnotationId: "x".repeat(161),
+          annotationPurpose: "oversized logical annotation ID"
         }]
       })
     ];
