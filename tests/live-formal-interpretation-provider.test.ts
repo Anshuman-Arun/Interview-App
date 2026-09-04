@@ -170,7 +170,7 @@ function formalStream(
 
 async function configuredHarness(
   selection: ProviderSelectionReference = ANTIGRAVITY_SELECTION,
-  studentText = "Thirty-two minus two equals thirty."
+  studentText = "Thirty-two black squares minus two removed black corners equals thirty black squares."
 ) {
   const store = new SqliteEventStore(":memory:");
   const registry = new SessionRuntimeRegistry(store);
@@ -283,7 +283,7 @@ describe("production formal interpretation provider", () => {
   it("preserves a false model-interpreted claim as deterministic contradiction, not correctness evidence", async () => {
     const harness = await configuredHarness(
       ANTIGRAVITY_SELECTION,
-      "Thirty-two minus two equals thirty-one."
+      "Thirty-two black squares minus two removed black corners equals thirty-one black squares."
     );
     const resolver = new ProviderRuntimeResolver({
       adapterRuntimeSource: {
@@ -710,7 +710,7 @@ describe("production formal interpretation provider", () => {
       });
 
       const second = await harness.turns.commitInput(
-        "Thirty-two minus two equals thirty."
+        "Thirty-two black squares minus two removed black corners equals thirty black squares."
       );
       await expect(analysis.analyze({
         sessionId: harness.sessionId,
@@ -722,7 +722,7 @@ describe("production formal interpretation provider", () => {
       });
 
       const third = await harness.turns.commitInput(
-        "Thirty-two minus two equals thirty."
+        "Thirty-two black squares minus two removed black corners equals thirty black squares."
       );
       const recovered = await analysis.analyze({
         sessionId: harness.sessionId,
