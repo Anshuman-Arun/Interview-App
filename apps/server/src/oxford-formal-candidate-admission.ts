@@ -231,9 +231,15 @@ export function isOxfordFormalCandidateTargetAdmissible(input: {
 
     switch (profile.target.subject.claimId) {
       case "listed-prime-remainder":
-        return isEuclidRemainderOneClaim(claim, sourceNumbers);
+        return isEuclidRemainderOneClaim(
+          claim,
+          request.source.span.text
+        );
       case "prefix-residue-arithmetic":
-        return isPrefixResidueArithmeticClaim(claim);
+        return isPrefixResidueArithmeticClaim(
+          claim,
+          request.source.span.text
+        );
       case "divisibility-step":
         return claim.kind === "DIVISIBILITY"
           && claim.dividend.kind === "INTEGER"
@@ -338,7 +344,7 @@ function collectRationalNumbers(
 
 function isEuclidRemainderOneClaim(
   claim: ReturnType<typeof ModularArithmeticInterpretationSchema.parse>["claim"],
-  sourceNumbers: ReadonlySet<string>
+  sourceText: string
 ): boolean {
   if (claim.kind !== "CONGRUENCE") return false;
   let constructedValue: string | undefined;
@@ -353,8 +359,78 @@ function isEuclidRemainderOneClaim(
   if (constructedValue === undefined || constructedValue === claim.modulus) {
     return false;
   }
-  const maximum = maximumPositiveInteger(sourceNumbers);
-  return maximum !== undefined && constructedValue === maximum;
+  return findExplicitEuclidConstructedValue(sourceText) === constructedValue;
+}
+
+function findExplicitEuclidConstructedValue(
+  sourceText: string
+): string | undefined {
+  const tokens = normalizeIntegerWords(sourceText)
+    .match(/[-+]?\d+|[a-z]+/gu) ?? [];
+
+  for (let index = 0; index < tokens.length - 2; index += 1) {
+    if (tokens[index] !== "plus" || tokens[index + 1] !== "one") continue;
+    const preceding = tokens.slice(Math.max(0, index - 12), index);
+    if (!preceding.includes("product")) continue;
+    const value = integerAfterAssignment(tokens, index + 2);
+    if (value !== undefined) return value;
+  }
+
+  for (let index = 0; index < tokens.length - 1; index += 1) {
+    const first = tokens[index];
+    const second = tokens[index + 1];
+    if (
+      !(
+        (first === "constructed" && second === "number")
+        || (first === "new" && second === "number")
+        || (first === "euclid" && second === "number")
+      )
+    ) {
+      continue;
+    }
+    const value = integerAfterAssignment(tokens, index + 2);
+    if (value !== undefined) return value;
+  }
+  return undefined;
+}
+
+function integerAfterAssignment(
+  tokens: readonly string[],
+  startIndex: number
+): string | undefined {
+  let sawAssignment = false;
+  for (
+    let index = startIndex;
+    index < tokens.length && index < startIndex + 6;
+    index += 1
+  ) {
+    const token = tokens[index];
+    if (token === undefined) return undefined;
+    if (/^[-+]?\d+$/u.test(token)) {
+      return sawAssignment ? token : undefined;
+    }
+    if (
+      token === "is"
+      || token === "equals"
+      || token === "equal"
+      || token === "gives"
+      || token === "becomes"
+      || token === "namely"
+    ) {
+      sawAssignment = true;
+      continue;
+    }
+    if (
+      token === "the"
+      || token === "number"
+      || token === "to"
+      || token === "which"
+    ) {
+      continue;
+    }
+    if (sawAssignment) return undefined;
+  }
+  return undefined;
 }
 
 function maximumPositiveInteger(
@@ -374,17 +450,92 @@ function maximumPositiveInteger(
 }
 
 function isPrefixResidueArithmeticClaim(
-  claim: ReturnType<typeof ModularArithmeticInterpretationSchema.parse>["claim"]
+  claim: ReturnType<typeof ModularArithmeticInterpretationSchema.parse>["claim"],
+  sourceText: string
 ): boolean {
+  const pair = findExplicitPrefixSumPair(sourceText);
+  if (pair === undefined) return false;
+
   if (claim.kind === "CONGRUENCE") {
-    return claim.left.kind === "INTEGER"
-      && claim.right.kind === "INTEGER"
-      && claim.left.value !== claim.right.value;
+    if (claim.left.kind !== "INTEGER" || claim.right.kind !== "INTEGER") {
+      return false;
+    }
+    const samePair =
+      (claim.left.value === pair[0] && claim.right.value === pair[1])
+      || (claim.left.value === pair[1] && claim.right.value === pair[0]);
+    return samePair && sourceExpressesModulo(sourceText, claim.modulus);
   }
-  return claim.dividend.kind === "SUBTRACT"
-    && claim.dividend.left.kind === "INTEGER"
-    && claim.dividend.right.kind === "INTEGER"
-    && claim.dividend.left.value !== claim.dividend.right.value;
+
+  if (
+    claim.dividend.kind !== "SUBTRACT"
+    || claim.dividend.left.kind !== "INTEGER"
+    || claim.dividend.right.kind !== "INTEGER"
+  ) {
+    return false;
+  }
+  const samePair =
+    (claim.dividend.left.value === pair[0]
+      && claim.dividend.right.value === pair[1])
+    || (claim.dividend.left.value === pair[1]
+      && claim.dividend.right.value === pair[0]);
+  return samePair && sourceExpressesDivisibleBy(sourceText, claim.divisor);
+}
+
+function findExplicitPrefixSumPair(
+  sourceText: string
+): readonly [string, string] | undefined {
+  const tokens = normalizeIntegerWords(sourceText)
+    .match(/[-+]?\d+|[a-z]+/gu) ?? [];
+
+  for (let index = 0; index < tokens.length - 1; index += 1) {
+    const isPrefix =
+      tokens[index] === "prefix"
+      && (tokens[index + 1] === "sum" || tokens[index + 1] === "sums");
+    const isPartial =
+      tokens[index] === "partial"
+      && (tokens[index + 1] === "sum" || tokens[index + 1] === "sums");
+    if (!isPrefix && !isPartial) continue;
+
+    const scanStart = index + 2;
+    const scanEnd = Math.min(tokens.length, scanStart + 10);
+    for (let cursor = scanStart; cursor < scanEnd - 2; cursor += 1) {
+      const left = tokens[cursor];
+      if (left === undefined || !/^[-+]?\d+$/u.test(left)) continue;
+      if (tokens[cursor + 1] !== "and") continue;
+      const right = tokens[cursor + 2];
+      if (right !== undefined && /^[-+]?\d+$/u.test(right)) {
+        return [left, right];
+      }
+    }
+  }
+  return undefined;
+}
+
+function sourceExpressesModulo(
+  sourceText: string,
+  modulus: string
+): boolean {
+  const tokens = normalizeIntegerWords(sourceText)
+    .match(/[-+]?\d+|[a-z]+/gu) ?? [];
+  return tokens.some(
+    (token, index) =>
+      (token === "mod" || token === "modulo")
+      && tokens[index + 1] === modulus
+  );
+}
+
+function sourceExpressesDivisibleBy(
+  sourceText: string,
+  divisor: string
+): boolean {
+  const tokens = normalizeIntegerWords(sourceText)
+    .match(/[-+]?\d+|[a-z]+/gu) ?? [];
+  return tokens.some(
+    (token, index) =>
+      token === "divisible"
+      && tokens[index + 1] === "by"
+      && tokens[index + 2] === divisor
+  );
 }
 
 function sourceExpressesTargetDivisibility(
