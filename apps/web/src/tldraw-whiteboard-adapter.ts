@@ -1359,8 +1359,12 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
       ...(options?.deliveryId !== undefined ? { deliveryId: options.deliveryId } : {}),
       ...(options?.turnId !== undefined ? { turnId: options.turnId } : {}),
       ...(options?.generationId !== undefined ? { generationId: options.generationId } : {}),
-      ...(action.targetShapeId !== undefined ? { targetShapeId: action.targetShapeId } : {}),
-      ...(action.expectedShapeRevision !== undefined ? { targetShapeRevision: action.expectedShapeRevision } : {}),
+      ...((action.targetShapeId ?? action.targetRegion?.shapeId) === undefined
+        ? {}
+        : { targetShapeId: action.targetShapeId ?? action.targetRegion?.shapeId }),
+      ...((action.expectedShapeRevision ?? action.targetRegion?.shapeRevision) === undefined
+        ? {}
+        : { targetShapeRevision: action.expectedShapeRevision ?? action.targetRegion?.shapeRevision }),
       annotationPurpose: action.annotationPurpose,
       operation: action.operation,
       createdAt: new Date().toISOString()
