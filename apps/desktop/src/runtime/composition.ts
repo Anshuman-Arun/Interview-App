@@ -213,6 +213,35 @@ export class DesktopLocalRuntimeComposition {
     });
   }
 
+  public async refreshPythonRuntimePrerequisite(signal?: AbortSignal): Promise<void> {
+    if (
+      !isRefreshablePythonPrerequisiteReason(this.pythonStatus.reasonCode)
+      || this.stopping
+      || this.stopped
+    ) {
+      return;
+    }
+    if (abortRequested(signal)) throw abortError();
+
+    if (!isProductionLocalModelPlatformSupported(process.platform, process.arch)) {
+      this.pythonStatus = unavailable("UNSUPPORTED_RUNTIME_PLATFORM");
+      return;
+    }
+    if (!await this.workerScriptIsSafe()) {
+      this.pythonStatus = unavailable("WORKER_EXECUTABLE_UNAVAILABLE");
+      return;
+    }
+
+    const compatibleExecutable = await this.resolveCompatiblePythonExecutable(signal);
+    if (compatibleExecutable !== undefined) return;
+    if (abortRequested(signal)) throw abortError();
+
+    const reasonCode = await this.diagnosePythonRuntime(signal);
+    if (abortRequested(signal)) throw abortError();
+    this.pythonStatus = unavailable(reasonCode);
+    this.refreshPythonDependentCapabilityReasons(reasonCode);
+  }
+
   public async installPythonRuntimeDependencies(signal?: AbortSignal): Promise<void> {
     if (!isProductionLocalModelPlatformSupported(process.platform, process.arch)) {
       throw new Error("Python runtime setup is unavailable on this platform");
@@ -592,6 +621,18 @@ export class DesktopLocalRuntimeComposition {
     }
   }
 
+
+  private refreshPythonDependentCapabilityReasons(reasonCode: string): void {
+    if (isRefreshablePythonPrerequisiteReason(this.speechStatus.reasonCode)) {
+      this.speechStatus = unavailable(reasonCode);
+    }
+    if (isRefreshablePythonPrerequisiteReason(this.ttsStatus.reasonCode)) {
+      this.ttsStatus = unavailable(reasonCode);
+    }
+    if (isRefreshablePythonPrerequisiteReason(this.visionStatus.reasonCode)) {
+      this.visionStatus = unavailable(reasonCode);
+    }
+  }
 
   private pythonRuntimeCompatible(
     executable: string,
@@ -1503,6 +1544,14 @@ function unavailable(reasonCode: string, modelIdentity?: string): DesktopRuntime
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isRefreshablePythonPrerequisiteReason(
+  reasonCode: string | undefined
+): boolean {
+  return reasonCode === "PYTHON_RUNTIME_UNAVAILABLE"
+    || reasonCode === "PYTHON_RUNTIME_INCOMPATIBLE"
+    || reasonCode === "PYTHON_RUNTIME_DEPENDENCIES_MISSING";
 }
 
 function isAbortError(error: unknown): boolean {
