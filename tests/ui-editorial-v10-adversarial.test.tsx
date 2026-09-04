@@ -127,7 +127,7 @@ describe("editorial v10 adversarial UI states", () => {
         sessionEntryPending={false}
       />
     );
-    expect(home).toContain("Resolve active sessions");
+    expect(home).toContain("Choose active session");
     expect(home).not.toContain('data-testid="start-session-btn"');
 
     const configure = renderToStaticMarkup(
