@@ -455,6 +455,7 @@ export const App: React.FC = () => {
     hasActiveInterview,
     session.isPaused
   );
+  const interviewBackgrounded = displayRoute.page !== "interview";
   const activeModeLabel =
     session.configuration?.mode === "QUANT_TRADING"
       ? "Quant Trading"
@@ -617,8 +618,13 @@ export const App: React.FC = () => {
     <>
       {productPage}
       <div
-        hidden={displayRoute.page !== "interview"}
-        className="interview-app-container flex flex-col h-screen w-screen bg-slate-100 font-sans text-slate-900 overflow-hidden"
+        aria-hidden={interviewBackgrounded}
+        data-backgrounded={String(interviewBackgrounded)}
+        className={
+          interviewBackgrounded
+            ? "interview-app-container interview-app-container--backgrounded flex flex-col h-screen w-screen bg-slate-100 font-sans text-slate-900 overflow-hidden"
+            : "interview-app-container flex flex-col h-screen w-screen bg-slate-100 font-sans text-slate-900 overflow-hidden"
+        }
       >
       {/* Focused live interview header */}
       <header className="app-header">

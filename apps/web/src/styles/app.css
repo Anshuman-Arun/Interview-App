@@ -43,6 +43,14 @@ body, html {
   overflow: hidden;
 }
 
+.interview-app-container--backgrounded {
+  position: fixed !important;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
+  overflow: hidden;
+}
+
 .app-header {
   background-color: #ffffff;
   border-bottom: 1px solid var(--color-slate-200);

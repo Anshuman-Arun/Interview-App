@@ -326,6 +326,84 @@ function boardStateResponse(
 }
 
 describe("browser authoritative board synchronization", () => {
+  it("holds quiescence until an already-admitted mutation is acknowledged", async () => {
+    const sessionId = newSessionId();
+    type CommitResponse = Awaited<ReturnType<SyncClient["commitBoardMutation"]>>;
+    const acknowledgement = deferred<CommitResponse>();
+    let requestId: ReturnType<typeof newRequestId> | undefined;
+
+    const client: SyncClient = {
+      getBoardState: async () =>
+        boardStateResponse(sessionId, BoardRevisionSchema.parse(0), []),
+      commitBoardMutation: async (_targetSessionId, _mutation, options) => {
+        requestId = options?.requestId ?? newRequestId();
+        return acknowledgement.promise;
+      }
+    };
+    const sync = new AuthoritativeBoardSyncCoordinator(client);
+    await sync.synchronize(sessionId, []);
+
+    const pending = sync.submit(studentChange("ADD", 10));
+    const barrier = sync.awaitQuiescence();
+    let settled = false;
+    void barrier.then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+
+    expect(settled).toBe(false);
+    expect(sync.snapshot()).toMatchObject({
+      status: "PENDING",
+      pendingMutationCount: 1
+    });
+
+    if (requestId === undefined) throw new Error("Expected pending whiteboard request ID");
+    acknowledgement.resolve({
+      protocolVersion: 1,
+      ok: true,
+      type: "BOARD_MUTATION_COMMITTED",
+      requestId,
+      sessionId,
+      committed: true,
+      boardRevision: BoardRevisionSchema.parse(1)
+    });
+
+    await pending;
+    await expect(barrier).resolves.toMatchObject({
+      status: "SYNCED",
+      authoritativeRevision: BoardRevisionSchema.parse(1),
+      pendingMutationCount: 0
+    });
+  });
+
+  it("rejects quiescence waiters when the synchronization lifecycle resets", async () => {
+    const sessionId = newSessionId();
+    type CommitResponse = Awaited<ReturnType<SyncClient["commitBoardMutation"]>>;
+    const acknowledgement = deferred<CommitResponse>();
+
+    const client: SyncClient = {
+      getBoardState: async () =>
+        boardStateResponse(sessionId, BoardRevisionSchema.parse(0), []),
+      commitBoardMutation: async () => acknowledgement.promise
+    };
+    const sync = new AuthoritativeBoardSyncCoordinator(client);
+    await sync.synchronize(sessionId, []);
+
+    const pending = sync.submit(studentChange("ADD", 10));
+    const barrier = sync.awaitQuiescence();
+    const pendingRejection = expect(pending).rejects.toThrow(/reset/u);
+    const barrierRejection = expect(barrier).rejects.toThrow(/reset/u);
+
+    sync.reset();
+
+    await pendingRejection;
+    await barrierRejection;
+    expect(sync.snapshot()).toMatchObject({
+      status: "UNINITIALIZED",
+      pendingMutationCount: 0
+    });
+  });
+
   it("serializes two edits before the first acknowledgement and deduplicates a repeated callback", async () => {
     const sessionId = newSessionId();
     type CommitResponse = Awaited<ReturnType<SyncClient["commitBoardMutation"]>>;

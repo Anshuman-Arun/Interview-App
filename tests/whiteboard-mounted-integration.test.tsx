@@ -1056,6 +1056,184 @@ describe("Real tldraw mounted browser integration", () => {
     container.remove();
   });
 
+  it("keeps two freehand strokes writable across a pause-resume authority barrier", async () => {
+    const container = document.createElement("div");
+    container.style.width = "800px";
+    container.style.height = "600px";
+    document.body.appendChild(container);
+
+    const sessionId = newSessionId();
+    let authoritativeRevision = BoardRevisionSchema.parse(0);
+    const authoritativeShapes: Record<string, AuthoritativeStudentShape> = {};
+    let committedMutationCount = 0;
+    let releaseFirstCommit!: () => void;
+    const firstCommitGate = new Promise<void>((resolve) => {
+      releaseFirstCommit = resolve;
+    });
+
+    type SyncClient = ConstructorParameters<typeof AuthoritativeBoardSyncCoordinator>[0];
+    const syncClient: SyncClient = {
+      getBoardState: async (_targetSessionId, options) => ({
+        protocolVersion: 1,
+        ok: true,
+        type: "BOARD_STATE",
+        requestId: options?.requestId ?? newRequestId(),
+        sessionId,
+        boardRevision: authoritativeRevision,
+        shapeAuthorityKnown: true,
+        shapeRevisions: Object.values(authoritativeShapes)
+          .map((shape) => ({
+            shapeId: shape.id,
+            revision: shape.revision,
+            contentSha256: createHash("sha256")
+              .update(authoritativeBoardShapeCanonicalJson(shape), "utf8")
+              .digest("hex")
+          }))
+          .sort((left, right) => left.shapeId.localeCompare(right.shapeId))
+      }),
+      commitBoardMutation: async (_targetSessionId, mutation, options) => {
+        const requestId = options?.requestId ?? newRequestId();
+        if (committedMutationCount === 0) {
+          await firstCommitGate;
+        }
+        if (mutation.baseBoardRevision !== authoritativeRevision) {
+          return {
+            protocolVersion: 1,
+            ok: true,
+            type: "BOARD_MUTATION_COMMITTED",
+            requestId,
+            sessionId,
+            committed: false,
+            boardRevision: authoritativeRevision,
+            reason: "STALE_CLIENT" as const
+          };
+        }
+        for (const shape of mutation.added) authoritativeShapes[shape.id] = shape;
+        for (const entry of mutation.updated) authoritativeShapes[entry.shape.id] = entry.shape;
+        for (const entry of mutation.deleted) Reflect.deleteProperty(authoritativeShapes, entry.shapeId);
+        authoritativeRevision = BoardRevisionSchema.parse(authoritativeRevision + 1);
+        committedMutationCount += 1;
+        return {
+          protocolVersion: 1,
+          ok: true,
+          type: "BOARD_MUTATION_COMMITTED",
+          requestId,
+          sessionId,
+          committed: true,
+          boardRevision: authoritativeRevision
+        };
+      }
+    };
+
+    const sync = new AuthoritativeBoardSyncCoordinator(syncClient);
+    const adapter = new TldrawWhiteboardAdapter();
+    const pendingMutations: Promise<void>[] = [];
+    let authoritativeBridgeEnabled = false;
+    const handle = createWhiteboardCanvasMount({
+      adapter,
+      onNormalizedBoardChange: (change) => {
+        if (authoritativeBridgeEnabled) {
+          pendingMutations.push(sync.submit(change));
+        }
+      }
+    });
+
+    const drawStroke = async (name: string, x: number): Promise<void> => {
+      const bridge = requireRealTldrawBridge(handle);
+      const editor = bridge.getNativeEditor();
+      const id = createShapeId(name);
+      await act(async () => {
+        editor.createShapes([{
+          id,
+          type: "draw",
+          x,
+          y: 40,
+          props: {
+            segments: [{
+              type: "free",
+              path: b64Vecs.encodePoints([
+                { x: 0, y: 0, z: 0.5 },
+                { x: 16, y: 10, z: 0.5 }
+              ])
+            }],
+            color: "black",
+            fill: "none",
+            dash: "draw",
+            size: "m",
+            isComplete: false,
+            isClosed: false,
+            isPen: false,
+            scale: 1,
+            scaleX: 1,
+            scaleY: 1
+          }
+        }]);
+        editor.updateShapes([{
+          id,
+          type: "draw",
+          props: { isComplete: true }
+        }]);
+      });
+    };
+
+    try {
+      await act(async () => {
+        handle.mount(container);
+      });
+      const bridge = requireRealTldrawBridge(handle);
+      await sync.synchronize(sessionId, adapter.getNormalizedStudentShapes());
+      authoritativeBridgeEnabled = true;
+
+      await drawStroke("pause-race-first", 20);
+      expect(sync.snapshot()).toMatchObject({
+        status: "PENDING",
+        pendingMutationCount: 1
+      });
+      expect(bridge.getNativeEditor().getIsReadonly()).toBe(false);
+
+      // This is the Home -> Resume race: resume waits at the authority barrier
+      // instead of comparing the completed local stroke with the older server
+      // snapshot while its pointer-up mutation is still in flight.
+      const resumeBarrier = sync.awaitQuiescence();
+      releaseFirstCommit();
+      await Promise.all(pendingMutations.splice(0));
+      await expect(resumeBarrier).resolves.toMatchObject({
+        status: "SYNCED",
+        authoritativeRevision: BoardRevisionSchema.parse(1),
+        pendingMutationCount: 0
+      });
+      await expect(
+        sync.synchronize(sessionId, adapter.getNormalizedStudentShapes())
+      ).resolves.toMatchObject({
+        status: "SYNCED",
+        authoritativeRevision: BoardRevisionSchema.parse(1)
+      });
+
+      expect(bridge.getNativeEditor().getIsReadonly()).toBe(false);
+      expect(adapter.getBoardRevision()).toBe(1);
+      expect(committedMutationCount).toBe(1);
+
+      await drawStroke("pause-race-second", 80);
+      await Promise.all(pendingMutations.splice(0));
+
+      expect(sync.snapshot()).toMatchObject({
+        status: "SYNCED",
+        authoritativeRevision: BoardRevisionSchema.parse(2),
+        pendingMutationCount: 0
+      });
+      expect(adapter.getBoardRevision()).toBe(2);
+      expect(committedMutationCount).toBe(2);
+      expect(bridge.getNativeEditor().getIsReadonly()).toBe(false);
+      expect(Object.keys(authoritativeShapes)).toHaveLength(2);
+    } finally {
+      sync.reset();
+      await act(async () => {
+        handle.unmount();
+      });
+      container.remove();
+    }
+  });
+
   it("routes a real mounted tldraw student mutation into authoritative BoardRevision exactly once", async () => {
     const container = document.createElement("div");
     container.style.width = "800px";
