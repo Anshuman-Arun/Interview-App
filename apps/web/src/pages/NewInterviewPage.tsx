@@ -67,6 +67,7 @@ export function NewInterviewPage({
   providerOptionsLoading,
   providerOptionsError,
   activeSessionId,
+  activeSessionCount,
   startPending,
   onRefreshCatalog,
   onRefreshProviderOptions,
@@ -80,6 +81,7 @@ export function NewInterviewPage({
   readonly providerOptionsLoading: boolean;
   readonly providerOptionsError: string | null;
   readonly activeSessionId: SessionId | null;
+  readonly activeSessionCount: number;
   readonly startPending: boolean;
   readonly onRefreshCatalog: () => Promise<readonly InterviewCatalogEntry[]>;
   readonly onRefreshProviderOptions: () => Promise<readonly ProviderLaunchOption[]>;
@@ -169,6 +171,10 @@ export function NewInterviewPage({
   const submit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     setFormError(null);
+    if (activeSessionCount > 1) {
+      setFormError("Multiple interviews are active. Resolve them from Sessions before starting another.");
+      return;
+    }
     if (activeSessionId !== null) {
       setFormError("An interview is already active. Resume it before starting another.");
       return;
@@ -235,7 +241,15 @@ export function NewInterviewPage({
 
   return (
     <div className="new-interview" data-testid="new-interview-page">
-      {activeSessionId !== null && (
+      {activeSessionCount > 1 ? (
+        <section className="new-interview__active" role="alert">
+          <div>
+            <span>ACTIVE SESSION CONFLICT</span>
+            <strong>{activeSessionCount} active sessions are stored.</strong>
+            <p>Starting another room is disabled until the conflict is resolved from Sessions.</p>
+          </div>
+        </section>
+      ) : activeSessionId !== null && (
         <section className="new-interview__active" aria-live="polite">
           <div><span>ACTIVE SESSION</span><strong>Finish or resume the current interview first.</strong><p>Starting a second authoritative session is disabled.</p></div>
           {onResumeActive !== null && <button type="button" onClick={onResumeActive}>Resume interview</button>}
@@ -330,8 +344,8 @@ export function NewInterviewPage({
             <div><span>Input</span><strong>{mode === "OXFORD_MATHEMATICS" ? "Voice + tldraw + text" : "Structured"}</strong></div>
             <div><span>Duration</span><strong>{durationText.trim().length === 0 ? "Open" : `${durationText} min`}</strong></div>
           </div>
-          <button className="new-interview__start" type="submit" disabled={activeSessionId !== null || startPending || catalogLoading || providerOptionsLoading || metadataUnavailable || selectedTarget === null || selectedProvider?.availability !== "AVAILABLE"} data-testid="start-configured-session-btn"><span>{startPending ? "Starting…" : "Start interview"}</span><em aria-hidden="true">→</em></button>
-          <div className="new-interview__ready-note"><i aria-hidden="true" /><span>{activeSessionId !== null ? "Current interview owns session authority." : metadataUnavailable ? "Resolve launch readiness first." : "Server revalidates this configuration on start."}</span></div>
+          <button className="new-interview__start" type="submit" disabled={activeSessionCount > 0 || startPending || catalogLoading || providerOptionsLoading || metadataUnavailable || selectedTarget === null || selectedProvider?.availability !== "AVAILABLE"} data-testid="start-configured-session-btn"><span>{startPending ? "Starting…" : "Start interview"}</span><em aria-hidden="true">→</em></button>
+          <div className="new-interview__ready-note"><i aria-hidden="true" /><span>{activeSessionCount > 1 ? "Resolve the active-session conflict from Sessions." : activeSessionId !== null ? "Current interview owns session authority." : metadataUnavailable ? "Resolve launch readiness first." : "Server revalidates this configuration on start."}</span></div>
         </aside>
       </form>
     </div>
