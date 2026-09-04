@@ -351,6 +351,16 @@ function mapStatementFailure(
   return failed("INVALID_PROPOSAL", reason, candidateCount, requestId);
 }
 
+function invokeApplicationAdmission(
+  operation: () => boolean
+): boolean {
+  try {
+    return operation();
+  } catch {
+    return false;
+  }
+}
+
 export class InterpretationCoordinator {
   private readonly verification: VerificationCoordinator;
   private readonly router: FormalProtocolRoutingRegistry;
@@ -521,14 +531,11 @@ export class InterpretationCoordinator {
     }
 
     if (this.requestAdmission !== undefined) {
-      let admitted = false;
-      try {
-        admitted = this.requestAdmission(
+      const admitted = invokeApplicationAdmission(() =>
+        this.requestAdmission?.(
           deepFreeze(structuredClone(request))
-        );
-      } catch {
-        admitted = false;
-      }
+        ) === true
+      );
       if (!admitted) {
         return this.finishFailure(failed(
           "NO_SUPPORTED_INTERPRETATION",
@@ -689,15 +696,12 @@ export class InterpretationCoordinator {
       }
 
       if (this.candidateAdmission !== undefined) {
-        let candidateAdmitted = false;
-        try {
-          candidateAdmitted = this.candidateAdmission(
+        const candidateAdmitted = invokeApplicationAdmission(() =>
+          this.candidateAdmission?.(
             deepFreeze(structuredClone(request)),
             deepFreeze(structuredClone(candidate))
-          );
-        } catch {
-          candidateAdmitted = false;
-        }
+          ) === true
+        );
         if (!candidateAdmitted) {
           return this.finishFailure(failed(
             "NO_SUPPORTED_INTERPRETATION",
