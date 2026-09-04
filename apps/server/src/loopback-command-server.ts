@@ -298,7 +298,9 @@ export class LoopbackCommandServer {
 
     const result = route.kind === "EVALUATION"
       ? reads.readEvaluation(route.sessionId)
-      : reads.readReplay(route.sessionId);
+      : route.kind === "REPLAY"
+        ? reads.readReplay(route.sessionId)
+        : reads.readPerformance(route.sessionId);
     if (result === null) {
       throw new ProtocolHttpError(404, "NOT_FOUND", "Session not found");
     }
@@ -762,7 +764,8 @@ export class LoopbackCommandServer {
 type ReadRoute =
   | { readonly kind: "HISTORY" }
   | { readonly kind: "EVALUATION"; readonly sessionId: SessionId }
-  | { readonly kind: "REPLAY"; readonly sessionId: SessionId };
+  | { readonly kind: "REPLAY"; readonly sessionId: SessionId }
+  | { readonly kind: "PERFORMANCE"; readonly sessionId: SessionId };
 
 function parseReadRoute(rawUrl: string | undefined): ReadRoute | undefined {
   if (rawUrl === undefined || rawUrl.includes("?") || rawUrl.includes("#")) {
@@ -772,7 +775,7 @@ function parseReadRoute(rawUrl: string | undefined): ReadRoute | undefined {
     return { kind: "HISTORY" };
   }
 
-  const match = /^\/v1\/read\/sessions\/([^/]+)\/(evaluation|replay)$/u.exec(rawUrl);
+  const match = /^\/v1\/read\/sessions\/([^/]+)\/(evaluation|replay|performance)$/u.exec(rawUrl);
   if (match === null) return undefined;
 
   let decoded: string;
@@ -795,7 +798,9 @@ function parseReadRoute(rawUrl: string | undefined): ReadRoute | undefined {
   if (!parsed.success) return undefined;
   return match[2] === "evaluation"
     ? { kind: "EVALUATION", sessionId: parsed.data }
-    : { kind: "REPLAY", sessionId: parsed.data };
+    : match[2] === "replay"
+      ? { kind: "REPLAY", sessionId: parsed.data }
+      : { kind: "PERFORMANCE", sessionId: parsed.data };
 }
 
 function containsUnsafeReadPathCharacter(value: string): boolean {
