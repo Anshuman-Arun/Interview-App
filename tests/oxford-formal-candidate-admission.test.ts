@@ -122,9 +122,12 @@ describe("Oxford formal target admission", () => {
     const irrelevant = [
       ["oxford-domino-chessboard", "One half equals two fourths."],
       ["oxford-euclid-primes", "Four leaves remainder one modulo three."],
+      ["oxford-euclid-primes", "Two plus one is three."],
       ["oxford-prefix-sums-mod-n", "Four has residue zero."],
+      ["oxford-prefix-sums-mod-n", "The prefix sums are two and four."],
       ["oxford-triangle-medians", "The ratio is two to one."],
-      ["oxford-divisibility-chain", "Three divides twelve."]
+      ["oxford-divisibility-chain", "Three divides twelve."],
+      ["oxford-divisibility-chain", "The powers of two here are two and four."]
     ] as const;
 
     for (const [problemId, text] of relevant) {
