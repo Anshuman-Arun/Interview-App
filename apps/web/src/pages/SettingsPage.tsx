@@ -235,6 +235,9 @@ export function SettingsPage({
   const restartRequired = runtimeStatus?.pythonSetup.restartRequired === true
     || runtimeStatus?.voiceSetup.restartRequired === true
     || runtimeStatus?.visionSetup.restartRequired === true;
+  const runtimeVerificationUnavailable = desktopRuntime !== undefined
+    && runtimeStatus === undefined
+    && runtimeStatusError !== undefined;
 
   const installPythonRuntime = useCallback(async (): Promise<void> => {
     if (
@@ -319,7 +322,6 @@ export function SettingsPage({
   }, [onRefreshProviderOptions, refreshRuntime]);
 
   const finishSetup = (): void => {
-    if (setupOperationInFlightRef.current) return;
     try {
       globalThis.localStorage.setItem(DESKTOP_FIRST_RUN_SETUP_KEY, "complete");
     } catch {
@@ -354,7 +356,7 @@ export function SettingsPage({
           <button
             type="button"
             onClick={() => void recheckAll()}
-            disabled={runtimeChecking || providerOptionsLoading || anyInstallActive}
+            disabled={runtimeChecking || providerOptionsLoading || anyInstallActive || restarting}
           >
             {runtimeChecking || providerOptionsLoading ? "Checking…" : "Re-check"}
           </button>
@@ -395,7 +397,9 @@ export function SettingsPage({
               <b data-state={capabilityTone(runtimeStatus?.speech, runtimeStatus?.voiceSetup)}>
                 {desktopRuntime === undefined
                   ? "DESKTOP ONLY"
-                  : capabilityLabel(runtimeStatus?.speech, runtimeStatus?.voiceSetup)}
+                  : runtimeVerificationUnavailable
+                    ? "UNAVAILABLE"
+                    : capabilityLabel(runtimeStatus?.speech, runtimeStatus?.voiceSetup)}
               </b>
             </div>
           </div>
@@ -409,7 +413,9 @@ export function SettingsPage({
               <b data-state={capabilityTone(runtimeStatus?.tts, runtimeStatus?.voiceSetup)}>
                 {desktopRuntime === undefined
                   ? "DESKTOP ONLY"
-                  : capabilityLabel(runtimeStatus?.tts, runtimeStatus?.voiceSetup)}
+                  : runtimeVerificationUnavailable
+                    ? "UNAVAILABLE"
+                    : capabilityLabel(runtimeStatus?.tts, runtimeStatus?.voiceSetup)}
               </b>
             </div>
           </div>
@@ -423,7 +429,9 @@ export function SettingsPage({
               <b data-state={capabilityTone(runtimeStatus?.vision, runtimeStatus?.visionSetup)}>
                 {desktopRuntime === undefined
                   ? "DESKTOP ONLY"
-                  : capabilityLabel(runtimeStatus?.vision, runtimeStatus?.visionSetup)}
+                  : runtimeVerificationUnavailable
+                    ? "UNAVAILABLE"
+                    : capabilityLabel(runtimeStatus?.vision, runtimeStatus?.visionSetup)}
               </b>
             </div>
           </div>
@@ -437,7 +445,9 @@ export function SettingsPage({
               <b data-state={capabilityTone(runtimeStatus?.python, runtimeStatus?.pythonSetup)}>
                 {desktopRuntime === undefined
                   ? "DESKTOP ONLY"
-                  : runtimeStatus?.python.reasonCode === "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
+                  : runtimeVerificationUnavailable
+                    ? "UNAVAILABLE"
+                    : runtimeStatus?.python.reasonCode === "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
                     && !runtimeStatus.pythonSetup.restartRequired
                     ? "SETUP REQUIRED"
                     : capabilityLabel(runtimeStatus?.python, runtimeStatus?.pythonSetup)}
@@ -475,7 +485,8 @@ export function SettingsPage({
                   type="button"
                   onClick={() => void installPythonRuntime()}
                   disabled={
-                    anyInstallActive
+                    restarting
+                    || anyInstallActive
                     || runtimeStatus.python.reasonCode !== "PYTHON_RUNTIME_DEPENDENCIES_MISSING"
                     || runtimeStatus.pythonSetup.restartRequired
                   }
@@ -509,7 +520,8 @@ export function SettingsPage({
                 type="button"
                 onClick={() => void runInstall("VOICE")}
                 disabled={
-                  anyInstallActive
+                  restarting
+                  || anyInstallActive
                   || runtimeStatus === undefined
                   || !pythonUsableForModelInstall
                   || voiceReady
@@ -540,7 +552,8 @@ export function SettingsPage({
                 type="button"
                 onClick={() => void runInstall("VISION")}
                 disabled={
-                  anyInstallActive
+                  restarting
+                  || anyInstallActive
                   || runtimeStatus === undefined
                   || !pythonUsableForModelInstall
                   || visionReady
@@ -593,7 +606,7 @@ export function SettingsPage({
                 type="button"
                 className="expressive-settings__start"
                 onClick={finishSetup}
-                disabled={!reasoningReady || providerOptionsLoading}
+                disabled={!reasoningReady || providerOptionsLoading || restarting}
               >
                 Start interview
               </button>
