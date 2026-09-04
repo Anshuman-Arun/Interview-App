@@ -64,6 +64,29 @@ describe("bounded provider board scene", () => {
     expect(buildBoardSceneContext(state, state.boardRevision)).toBeUndefined();
   });
 
+  it("rejects internally inconsistent board-scene completeness metadata", () => {
+    expect(BoardSceneContextSchema.safeParse({
+      boardRevision: 1,
+      studentShapeCount: 0,
+      includedStudentShapeCount: 0,
+      omittedStudentShapeCount: 0,
+      studentShapesTruncated: false,
+      aiAnnotationCount: 0,
+      includedAiAnnotationCount: 0,
+      aiAnnotationsTruncated: false,
+      aiAnnotationStateUncertain: false,
+      shapes: [{
+        shapeId: "shape:unexpected",
+        shapeRevision: 1,
+        type: "text",
+        bounds: { x: 0, y: 0, width: 100, height: 40 },
+        text: "present despite zero included count"
+      }],
+      semanticRelations: [],
+      aiAnnotations: []
+    }).success).toBe(false);
+  });
+
   it("binds the scene to the exact authoritative board revision", () => {
     const state = stateWithShapes([shape("shape:eq", 2, "x^2 + y^2 = 1", 1, "formula")], 3);
     expect(() =>
