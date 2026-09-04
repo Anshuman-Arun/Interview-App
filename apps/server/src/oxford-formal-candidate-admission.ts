@@ -236,8 +236,12 @@ export function isOxfordFormalCandidateTargetAdmissible(input: {
         return isPrefixResidueArithmeticClaim(claim);
       case "divisibility-step":
         return claim.kind === "DIVISIBILITY"
-          && sourceNumbers.size === 2
-          && statementNumbers.size === 2;
+          && claim.dividend.kind === "INTEGER"
+          && sourceExpressesDirectDivisibility(
+            request.source.span.text,
+            claim.divisor,
+            claim.dividend.value
+          );
       default:
         return false;
     }
@@ -374,14 +378,58 @@ function isPrefixResidueArithmeticClaim(
   if (claim.kind === "CONGRUENCE") {
     return claim.left.kind === "INTEGER"
       && claim.right.kind === "INTEGER"
-      && claim.left.value !== claim.right.value
-      && claim.left.value !== claim.modulus
-      && claim.right.value !== claim.modulus;
+      && claim.left.value !== claim.right.value;
   }
   return claim.dividend.kind === "SUBTRACT"
     && claim.dividend.left.kind === "INTEGER"
     && claim.dividend.right.kind === "INTEGER"
     && claim.dividend.left.value !== claim.dividend.right.value;
+}
+
+function sourceExpressesDirectDivisibility(
+  sourceText: string,
+  divisor: string,
+  dividend: string
+): boolean {
+  const normalized = normalizeIntegerWords(sourceText);
+  const escapedDivisor = escapeRegExp(divisor);
+  const escapedDividend = escapeRegExp(dividend);
+  return new RegExp(
+    "(?:^|\\s)" + escapedDivisor + "\\s+divides\\s+" + escapedDividend + "(?:$|\\s|[.,;:!?])",
+    "u"
+  ).test(normalized);
+}
+
+function normalizeIntegerWords(value: string): string {
+  const normalized = normalizeText(value);
+  const tokens = normalized.match(/[-+]?\\d+|[a-z]+|[^\\s]/gu) ?? [];
+  const output: string[] = [];
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token === undefined) continue;
+    if (/^[a-z]+$/u.test(token)) {
+      const wordRun: string[] = [];
+      let cursor = index;
+      while (cursor < tokens.length) {
+        const candidate = tokens[cursor];
+        if (candidate === undefined || !/^[a-z]+$/u.test(candidate)) break;
+        wordRun.push(candidate);
+        cursor += 1;
+      }
+      const parsed = parseEnglishInteger(wordRun, 0);
+      if (parsed !== undefined) {
+        output.push(String(parsed.value));
+        index += parsed.endIndex;
+        continue;
+      }
+    }
+    output.push(token);
+  }
+  return output.join(" ").replace(/\\s+([.,;:!?])/gu, "$1");
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^$\\{}()|[\\]\\]/gu, "\\$&");
 }
 
 function collectIntegerNumbers(
