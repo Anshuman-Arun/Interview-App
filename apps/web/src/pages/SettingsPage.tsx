@@ -614,7 +614,7 @@ export function SettingsPage({
                 type="button"
                 className="expressive-settings__start"
                 onClick={finishSetup}
-                disabled={!reasoningReady || providerOptionsLoading || restarting}
+                disabled={!reasoningReady || restarting}
               >
                 Start interview
               </button>
