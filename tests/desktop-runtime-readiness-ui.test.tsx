@@ -530,6 +530,82 @@ describe("desktop local AI readiness UX", () => {
     expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Start interview<\/button>/u);
   });
 
+  it("serializes same-frame Re-check against Python setup", async () => {
+    Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
+    const current = runtimeStatus({
+      speech: { state: "UNAVAILABLE", reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING" },
+      tts: { state: "UNAVAILABLE", reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING" },
+      vision: { state: "UNAVAILABLE", reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING" },
+      python: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_DEPENDENCIES_MISSING",
+        strategy: "SYSTEM_CPYTHON",
+        supportedVersions: ["3.12", "3.13"]
+      }
+    });
+    let resolveRefresh!: (value: DesktopRuntimeStatus) => void;
+    const refreshPending = new Promise<DesktopRuntimeStatus>((resolve) => {
+      resolveRefresh = resolve;
+    });
+    const getLocalRuntimeStatus = vi.fn(async () => current);
+    const refreshLocalRuntimeStatus = vi.fn(() => refreshPending);
+    const installPythonRuntime = vi.fn(async () => current);
+    vi.stubGlobal("interviewDesktop", {
+      getLocalRuntimeStatus,
+      refreshLocalRuntimeStatus,
+      installPythonRuntime
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const findButton = (label: string): HTMLButtonElement => {
+      const match = Array.from(container.querySelectorAll("button"))
+        .find((button) => button.textContent.trim() === label);
+      if (!(match instanceof HTMLButtonElement)) {
+        throw new Error(`Missing button: ${label}`);
+      }
+      return match;
+    };
+
+    await act(async () => {
+      root.render(
+        <AppearanceProvider>
+          <SettingsPage
+            providerOptions={[READY_PROVIDER]}
+            providerOptionsLoading={false}
+            providerOptionsError={null}
+            onRefreshProviderOptions={vi.fn(async () => [READY_PROVIDER])}
+            onStartInterview={vi.fn()}
+          />
+        </AppearanceProvider>
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      findButton("Re-check").click();
+      findButton("Install Python components").click();
+      await Promise.resolve();
+    });
+
+    expect(refreshLocalRuntimeStatus).toHaveBeenCalledTimes(1);
+    expect(installPythonRuntime).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveRefresh(current);
+      await refreshPending;
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      root.unmount();
+    });
+    Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT");
+  });
+
   it("walks Python, voice, vision, and restart setup through live renderer state", async () => {
     Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
     const baseUnavailable = runtimeStatus({
