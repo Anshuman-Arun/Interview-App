@@ -64,14 +64,13 @@ function acceptedObservationStillApplies(
   accepted: NonNullable<SessionState["visionRequests"][string]["acceptedObservation"]>
 ): boolean {
   if (
-    accepted.admittedAtBoardRevision > expectedBoardRevision
+    accepted.admittedAtBoardRevision !== expectedBoardRevision
     || accepted.observation.confidence < MIN_BOARD_SCENE_SEMANTIC_CONFIDENCE
   ) {
     return false;
   }
   if (accepted.freshnessProof === "EXACT_BOARD_REVISION") {
-    return accepted.admittedAtBoardRevision === expectedBoardRevision
-      && accepted.observation.sourceBoardRevision === expectedBoardRevision;
+    return accepted.observation.sourceBoardRevision === expectedBoardRevision;
   }
   if (accepted.shapeRevisionBindings.length === 0) return false;
   for (const binding of accepted.shapeRevisionBindings) {
