@@ -1298,10 +1298,13 @@ async function createIsolatedPythonEnvironment(
 ): Promise<string> {
   if (abortRequested(signal)) throw abortError();
   await rm(root, { recursive: true, force: true });
+  const setupBootstrapExecutable = process.platform === "win32"
+    ? bootstrapExecutable
+    : await realpath(bootstrapExecutable);
   await runPythonSetupProcess(
-    bootstrapExecutable,
-    ["-I", "-m", "venv", root],
-    pythonSetupEnvironment(bootstrapExecutable),
+    setupBootstrapExecutable,
+    ["-I", "-m", "venv", "--copies", root],
+    pythonSetupEnvironment(setupBootstrapExecutable),
     signal,
     60_000,
     "Python isolated runtime creation"
