@@ -2,6 +2,7 @@ import { types as utilTypes } from "node:util";
 import { z } from "zod";
 import {
   FormalInterpretationRequestSchema,
+  FormalProtocolRefSchema,
   InterpretationProviderResultSchema,
   MAX_FORMAL_INTERPRETATION_STATEMENT_CHARACTERS,
   type FormalInterpretationRequest,
@@ -102,6 +103,28 @@ const ResultEventSchema = z.looseObject({
   })
 });
 
+
+const ModelFormalCandidateSchema = z.object({
+  candidateId: z.string()
+    .min(1)
+    .max(128)
+    .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/u),
+  protocol: FormalProtocolRefSchema,
+  formalStatement: z.string()
+    .min(1)
+    .max(MAX_PROVIDER_FORMAL_STATEMENT_CHARACTERS),
+  confidence: z.literal(1)
+}).strict();
+
+const ModelFormalInterpretationResultSchema = z.object({
+  candidates: z.array(ModelFormalCandidateSchema)
+    .max(MAX_PRODUCTION_FORMAL_INTERPRETATION_CANDIDATES)
+}).strict();
+
+type ModelFormalInterpretationResult = z.infer<
+  typeof ModelFormalInterpretationResultSchema
+>;
+
 export function createAntigravityCliFormalInterpretationAdapter(
   runtime: unknown,
   modelId: string = ANTIGRAVITY_CLI_MODEL_ID
@@ -170,7 +193,7 @@ export function createAntigravityCliFormalInterpretationAdapter(
         execution.stdout,
         modelId,
         schemaArgument,
-        request.data.requestId
+        request.data
       );
     }
   });
