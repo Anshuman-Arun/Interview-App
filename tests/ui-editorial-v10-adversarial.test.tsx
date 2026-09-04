@@ -5,6 +5,7 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { SessionIdSchema } from "../packages/domain/src/index.js";
 import { AppearanceProvider } from "../apps/web/src/appearance/AppearanceProvider.js";
 import { ProductFrame } from "../apps/web/src/components/ProductFrame.js";
 import {
@@ -231,8 +232,12 @@ describe("editorial v10 adversarial UI states", () => {
 
 
   it("does not expose dead Sessions or review navigation while an attached interview is paused", () => {
-    const activeSession = "session_00000000-0000-4000-8000-000000000301" as never;
-    const completedSession = "session_00000000-0000-4000-8000-000000000302" as never;
+    const activeSession = SessionIdSchema.parse(
+      "session_00000000-0000-4000-8000-000000000301"
+    );
+    const completedSession = SessionIdSchema.parse(
+      "session_00000000-0000-4000-8000-000000000302"
+    );
 
     const frame = renderToStaticMarkup(
       <AppearanceProvider>
