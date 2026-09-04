@@ -6,7 +6,9 @@ const CHANNEL = "interview-desktop:get-bootstrap";
 const ZOOM_CHANNEL = "interview-desktop:set-zoom";
 const ZOOM_CHANGED_CHANNEL = "interview-desktop:zoom-changed";
 const LOCAL_RUNTIME_STATUS_CHANNEL = "interview-desktop:get-local-runtime-status";
-const INSTALL_LOCAL_MODELS_CHANNEL = "interview-desktop:install-local-models";
+const INSTALL_VOICE_MODELS_CHANNEL = "interview-desktop:install-voice-models";
+const INSTALL_VISION_MODEL_CHANNEL = "interview-desktop:install-vision-model";
+const RESTART_APP_CHANNEL = "interview-desktop:restart-app";
 const AUTH_HEADER_VALUE = "desktop-managed-v1";
 const MIN_ZOOM_FACTOR = 0.25;
 const MAX_ZOOM_FACTOR = 5;
@@ -124,25 +126,66 @@ function validateCapabilityStatus(value) {
   });
 }
 
+function validateSetupStatus(value) {
+  if (
+    typeof value !== "object"
+    || value === null
+    || !hasExactKeys(value, ["state", "restartRequired"])
+    || !MODEL_SETUP_STATES.has(value.state)
+    || typeof value.restartRequired !== "boolean"
+  ) {
+    throw new Error("Desktop local runtime status is malformed");
+  }
+  return Object.freeze({
+    state: value.state,
+    restartRequired: value.restartRequired
+  });
+}
+
+function validatePythonStatus(value) {
+  if (typeof value !== "object" || value === null) {
+    throw new Error("Desktop local runtime status is malformed");
+  }
+  const reasonCodePresent = value.reasonCode !== undefined;
+  const expectedKeys = reasonCodePresent
+    ? ["reasonCode", "state", "strategy", "supportedVersions"]
+    : ["state", "strategy", "supportedVersions"];
+  if (
+    !hasExactKeys(value, expectedKeys)
+    || !RUNTIME_STATES.has(value.state)
+    || (reasonCodePresent
+      && (typeof value.reasonCode !== "string"
+        || !/^[A-Z0-9_]{1,96}$/.test(value.reasonCode)))
+    || value.strategy !== "SYSTEM_CPYTHON"
+    || !Array.isArray(value.supportedVersions)
+    || value.supportedVersions.length !== 2
+    || value.supportedVersions[0] !== "3.12"
+    || value.supportedVersions[1] !== "3.13"
+  ) {
+    throw new Error("Desktop local runtime status is malformed");
+  }
+  return Object.freeze({
+    state: value.state,
+    ...(reasonCodePresent ? { reasonCode: value.reasonCode } : {}),
+    strategy: "SYSTEM_CPYTHON",
+    supportedVersions: Object.freeze(["3.12", "3.13"])
+  });
+}
+
 function validateLocalRuntimeStatus(value) {
   if (
     typeof value !== "object"
     || value === null
-    || !hasExactKeys(value, ["protocolVersion", "speech", "tts", "vision", "python", "modelSetup"])
+    || !hasExactKeys(value, [
+      "protocolVersion",
+      "speech",
+      "tts",
+      "vision",
+      "python",
+      "voiceSetup",
+      "visionSetup"
+    ])
     || value.protocolVersion !== 1
-    || typeof value.python !== "object"
-    || value.python === null
-    || !hasExactKeys(value.python, ["strategy", "supportedVersions"])
-    || value.python.strategy !== "SYSTEM_CPYTHON"
-    || !Array.isArray(value.python.supportedVersions)
-    || value.python.supportedVersions.length !== 2
-    || value.python.supportedVersions[0] !== "3.12"
-    || value.python.supportedVersions[1] !== "3.13"
-    || typeof value.modelSetup !== "object"
-    || value.modelSetup === null
-    || !hasExactKeys(value.modelSetup, ["state", "restartRequired"])
-    || !MODEL_SETUP_STATES.has(value.modelSetup.state)
-    || typeof value.modelSetup.restartRequired !== "boolean"
   ) {
     throw new Error("Desktop local runtime status is malformed");
   }
@@ -151,14 +194,9 @@ function validateLocalRuntimeStatus(value) {
     speech: validateCapabilityStatus(value.speech),
     tts: validateCapabilityStatus(value.tts),
     vision: validateCapabilityStatus(value.vision),
-    python: Object.freeze({
-      strategy: "SYSTEM_CPYTHON",
-      supportedVersions: Object.freeze(["3.12", "3.13"])
-    }),
-    modelSetup: Object.freeze({
-      state: value.modelSetup.state,
-      restartRequired: value.modelSetup.restartRequired
-    })
+    python: validatePythonStatus(value.python),
+    voiceSetup: validateSetupStatus(value.voiceSetup),
+    visionSetup: validateSetupStatus(value.visionSetup)
   });
 }
 
@@ -178,8 +216,15 @@ contextBridge.exposeInMainWorld("interviewDesktop", Object.freeze({
   },
   getLocalRuntimeStatus: async () =>
     validateLocalRuntimeStatus(await ipcRenderer.invoke(LOCAL_RUNTIME_STATUS_CHANNEL)),
-  installLocalModels: async () =>
-    validateLocalRuntimeStatus(await ipcRenderer.invoke(INSTALL_LOCAL_MODELS_CHANNEL)),
+  installVoiceModels: async () =>
+    validateLocalRuntimeStatus(await ipcRenderer.invoke(INSTALL_VOICE_MODELS_CHANNEL)),
+  installVisionModel: async () =>
+    validateLocalRuntimeStatus(await ipcRenderer.invoke(INSTALL_VISION_MODEL_CHANNEL)),
+  restartApp: async () => {
+    if (await ipcRenderer.invoke(RESTART_APP_CHANNEL) !== true) {
+      throw new Error("Desktop restart request was rejected");
+    }
+  },
   onZoomFactorChanged: (listener) => {
     if (typeof listener !== "function") {
       throw new Error("Desktop zoom listener must be a function");
