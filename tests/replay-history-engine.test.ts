@@ -270,7 +270,7 @@ async function queueWhiteboard(harness: CoreHarness, action: unknown) {
         deleted: []
       });
       if (!mutation.committed) {
-        throw new Error(`Replay whiteboard target setup failed: ${mutation.reason}`);
+        throw new Error(`Replay whiteboard target setup failed: ${mutation.reason ?? "unknown"}`);
       }
       await harness.turns.selectAction(harness.turnId, sixPeopleProblem);
       generationId = (await harness.turns.startGeneration(
