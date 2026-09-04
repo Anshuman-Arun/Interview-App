@@ -68,13 +68,11 @@ function formalContext(execution: SupervisedCliExecutionRequest) {
   const index = content.indexOf(marker);
   if (index < 0) throw new Error("Missing formal context marker");
   return JSON.parse(content.slice(index + marker.length)) as {
-    readonly requestIdentity: {
-      readonly requestId: string;
+    readonly source: {
+      readonly span: FormalInterpretationRequest["source"]["span"];
     };
-    readonly source: FormalInterpretationRequest["source"];
     readonly target: FormalInterpretationRequest["target"];
     readonly allowedProtocols: FormalInterpretationRequest["allowedProtocols"];
-    readonly exactCandidateSourceToEcho: unknown;
   };
 }
 
@@ -91,12 +89,9 @@ function formalStream(
   if (protocol === undefined) throw new Error("Expected allowed protocol");
 
   const result = {
-    protocolVersion: 1,
-    requestId: context.requestIdentity.requestId,
     candidates: mode === "ABSTAIN"
       ? []
       : [{
-          protocolVersion: 1,
           candidateId: "candidate-1",
           protocol,
           formalStatement: JSON.stringify({
@@ -136,9 +131,7 @@ function formalStream(
                   }
                 }
           }),
-          confidence: 1,
-          target: context.target,
-          source: context.exactCandidateSourceToEcho
+          confidence: 1
         }]
   };
 
