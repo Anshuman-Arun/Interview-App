@@ -71,6 +71,8 @@ export const App: React.FC = () => {
     useState<"split" | "transcript" | "whiteboard">("split");
   const [endConfirmOpen, setEndConfirmOpen] = useState(false);
   const liveWorkspaceRef = useRef<HTMLElement | null>(null);
+  const compactInterviewTabRef = useRef<HTMLButtonElement | null>(null);
+  const compactWhiteboardTabRef = useRef<HTMLButtonElement | null>(null);
   const endControlRef = useRef<HTMLDivElement | null>(null);
   const endButtonRef = useRef<HTMLButtonElement | null>(null);
   const endCancelRef = useRef<HTMLButtonElement | null>(null);
@@ -885,19 +887,47 @@ export const App: React.FC = () => {
         aria-label="Compact interview workspace"
       >
         <button
+          ref={compactInterviewTabRef}
+          id="compact-tab-interview"
           type="button"
           role="tab"
           aria-selected={compactPane === "interview"}
+          aria-controls="compact-pane-interview"
+          tabIndex={compactPane === "interview" ? 0 : -1}
           onClick={() => setCompactPane("interview")}
+          onKeyDown={(event) => {
+            if (
+              event.key !== "ArrowRight"
+              && event.key !== "ArrowDown"
+              && event.key !== "End"
+            ) return;
+            event.preventDefault();
+            setCompactPane("whiteboard");
+            queueMicrotask(() => compactWhiteboardTabRef.current?.focus());
+          }}
         >
           Interview
         </button>
         <button
+          ref={compactWhiteboardTabRef}
+          id="compact-tab-whiteboard"
           type="button"
           role="tab"
           aria-selected={compactPane === "whiteboard"}
+          aria-controls="compact-pane-whiteboard"
+          tabIndex={compactPane === "whiteboard" ? 0 : -1}
           onClick={() => {
             setCompactPane("whiteboard");
+          }}
+          onKeyDown={(event) => {
+            if (
+              event.key !== "ArrowLeft"
+              && event.key !== "ArrowUp"
+              && event.key !== "Home"
+            ) return;
+            event.preventDefault();
+            setCompactPane("interview");
+            queueMicrotask(() => compactInterviewTabRef.current?.focus());
           }}
         >
           Whiteboard
@@ -936,7 +966,11 @@ export const App: React.FC = () => {
             : undefined
         }
       >
-        <section className="left-panel reasoning-pane">
+        <section
+          id="compact-pane-interview"
+          className="left-panel reasoning-pane"
+          aria-labelledby="compact-tab-interview"
+        >
           {!session.isSessionStarted && (
             <div className="live-session-entry">
               <div>
@@ -1108,7 +1142,11 @@ export const App: React.FC = () => {
           <span aria-hidden="true" />
         </div>
 
-        <section className="right-panel board-pane">
+        <section
+          id="compact-pane-whiteboard"
+          className="right-panel board-pane"
+          aria-labelledby="compact-tab-whiteboard"
+        >
           <div className="board-appbar">
             <div className="board-appbar__left">
               <strong data-testid="tab-whiteboard">Whiteboard</strong>
