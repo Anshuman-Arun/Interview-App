@@ -47,6 +47,10 @@ import {
 import type { SessionState } from "../../../packages/events/src/index.js";
 import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 import type { ServerTurnOrchestrator } from "./turn-orchestrator.js";
+import type {
+  LocalTimingHandle,
+  SessionObservability
+} from "./session-observability.js";
 
 const MAX_EPHEMERAL_AUDIO_ASSETS = 32;
 const MAX_EPHEMERAL_AUDIO_BYTES = 32 * 1024 * 1024;
@@ -258,13 +262,15 @@ interface TtsAssembly {
 
 export class VoiceSynthesisCoordinator {
   private readonly activeBySession = new Map<SessionId, Set<string>>();
+  private readonly cancelledRequests = new Set<string>();
   private readonly inFlightSourceDeliveries = new Map<SessionId, Set<DeliveryId>>();
   private readonly runtime: VoiceTtsRuntimeSnapshot;
 
   public constructor(
     private readonly sessions: SessionRecoveryCoordinator,
     private readonly assets: EphemeralAudioAssetStore,
-    config: VoiceTtsRuntimeConfiguration
+    config: VoiceTtsRuntimeConfiguration,
+    private readonly observability?: SessionObservability
   ) {
     this.runtime = snapshotVoiceTtsRuntimeConfiguration(config);
   }
@@ -282,6 +288,8 @@ export class VoiceSynthesisCoordinator {
     this.inFlightSourceDeliveries.set(sessionId, inFlightForSession);
 
     let registeredAudioRef: string | undefined;
+    let ttsTiming: LocalTimingHandle | undefined;
+    let ttsRequestId: string | undefined;
     try {
       await this.sessions.ensureRecovered(sessionId);
       const writer = this.sessions.getWriter(sessionId);
@@ -325,6 +333,7 @@ export class VoiceSynthesisCoordinator {
         sampleRate: this.runtime.sampleRate,
         outputFormat: "PCM_F32LE"
       });
+      ttsRequestId = request.requestId;
       const plan = planTtsRequest(request);
       const assembly: TtsAssembly = {
         begin: undefined,
@@ -334,6 +343,8 @@ export class VoiceSynthesisCoordinator {
         totalChunkFrames: 0
       };
       this.rememberActive(sessionId, request.requestId);
+      this.observability?.recordTtsRequest(sessionId);
+      ttsTiming = this.observability?.beginLocalTiming(sessionId, "TTS");
 
       try {
         const summary = await this.runtime.worker.handle(request, async (messageInput) => {
@@ -392,7 +403,13 @@ export class VoiceSynthesisCoordinator {
           assembly.end = message;
         });
 
-        if (summary.kind !== "SYNTHESIS" || summary.summary.outcome !== "DONE") return undefined;
+        if (summary.kind !== "SYNTHESIS" || summary.summary.outcome !== "DONE") {
+          ttsTiming?.finish(
+            this.cancelledRequests.has(request.requestId) ? "CANCELLED" : "FAILURE"
+          );
+          return undefined;
+        }
+        ttsTiming?.finish("SUCCESS");
 
         // This is still only an early resource guard. The authoritative
         // queueAudioDeliveryFromValidatedText() transaction below rechecks the
@@ -473,9 +490,15 @@ export class VoiceSynthesisCoordinator {
         this.forgetActive(sessionId, request.requestId);
       }
     } catch {
+      ttsTiming?.finish(
+        ttsRequestId !== undefined && this.cancelledRequests.has(ttsRequestId)
+          ? "CANCELLED"
+          : "FAILURE"
+      );
       if (registeredAudioRef !== undefined) this.assets.remove(registeredAudioRef);
       return undefined;
     } finally {
+      if (ttsRequestId !== undefined) this.cancelledRequests.delete(ttsRequestId);
       const inFlightForSession = this.inFlightSourceDeliveries.get(sessionId);
       inFlightForSession?.delete(sourceDeliveryId);
       if (inFlightForSession?.size === 0) {
@@ -484,9 +507,15 @@ export class VoiceSynthesisCoordinator {
     }
   }
 
+  public hasActiveSession(sessionIdInput: SessionId): boolean {
+    const sessionId = SessionIdSchema.parse(sessionIdInput);
+    return (this.activeBySession.get(sessionId)?.size ?? 0) > 0;
+  }
+
   public async cancelSession(sessionIdInput: SessionId): Promise<void> {
     const sessionId = SessionIdSchema.parse(sessionIdInput);
     const requestIds = [...(this.activeBySession.get(sessionId) ?? [])];
+    for (const requestId of requestIds) this.cancelledRequests.add(requestId);
     await Promise.all(requestIds.map(async (requestId) => {
       try {
         await this.runtime.worker.handle({
@@ -544,6 +573,7 @@ interface VoiceStreamContext {
   authoritativeUtteranceId: UtteranceId | undefined;
   workerUtteranceId: UtteranceId | undefined;
   finalizedBasis: SourceAudioBasis | undefined;
+  sttTiming: LocalTimingHandle | undefined;
   pcmLedger: AdmittedPcmLedgerFrame[];
   pcmLedgerBytes: number;
   idleTimer: ReturnType<typeof setTimeout> | undefined;
@@ -571,7 +601,8 @@ export class VoiceInputCoordinator {
     private readonly speechWorker: SpeechWorkerCore,
     private readonly assets: EphemeralAudioAssetStore,
     private readonly synthesis: VoiceSynthesisCoordinator,
-    private readonly interruptPhysicalPlayback?: (sessionId: SessionId) => void
+    private readonly interruptPhysicalPlayback?: (sessionId: SessionId) => void,
+    private readonly observability?: SessionObservability
   ) {}
 
   public async openStream(
@@ -617,12 +648,14 @@ export class VoiceInputCoordinator {
       authoritativeUtteranceId: undefined,
       workerUtteranceId: undefined,
       finalizedBasis: undefined,
+      sttTiming: undefined,
       pcmLedger: [],
       pcmLedgerBytes: 0,
       idleTimer: undefined
     };
     this.streams.set(streamId, context);
     this.sessionStreams.set(sessionId, streamId);
+    this.observability?.recordVoiceInputSession(sessionId);
     this.refreshIdleLease(context);
   }
 
@@ -707,6 +740,10 @@ export class VoiceInputCoordinator {
     if (context === undefined || context.sessionId !== sessionId) return;
     context.active = false;
     this.releaseStreamBinding(context);
+    if (context.sttTiming !== undefined) {
+      context.sttTiming.finish("CANCELLED");
+      context.sttTiming = undefined;
+    }
 
     // Revoke and clean authoritative capture before awaiting fallible worker
     // cancellation. A dropped transport must not leave CAPTURING state alive
@@ -739,6 +776,10 @@ export class VoiceInputCoordinator {
     // cancellation. Any late worker callback fails the current-context checks.
     context.active = false;
     this.releaseStreamBinding(context);
+    if (context.sttTiming !== undefined) {
+      context.sttTiming.finish("CANCELLED");
+      context.sttTiming = undefined;
+    }
 
     await this.discardCapturingUtterance(
       context,
@@ -762,6 +803,10 @@ export class VoiceInputCoordinator {
     for (const context of contexts) {
       context.active = false;
       this.releaseStreamBinding(context);
+      if (context.sttTiming !== undefined) {
+        context.sttTiming.finish("CANCELLED");
+        context.sttTiming = undefined;
+      }
       await this.discardCapturingUtterance(context, "Voice runtime shutdown");
     }
     await this.speechWorker.shutdown();
@@ -819,7 +864,11 @@ export class VoiceInputCoordinator {
         // request's response so a dropped response cannot leave old audio
         // physically playing.
         try {
+          const synthesisWasActive = this.synthesis.hasActiveSession(context.sessionId);
           this.interruptPhysicalPlayback?.(context.sessionId);
+          if (synthesisWasActive) {
+            this.observability?.recordBargeIn(context.sessionId);
+          }
         } catch {
           // Physical interruption is best-effort. Never roll back or obscure
           // the authoritative transition if renderer teardown itself fails.
@@ -849,6 +898,8 @@ export class VoiceInputCoordinator {
         ) {
           throw new Error("Speech discard refers to a different utterance");
         }
+        context.sttTiming?.finish("CANCELLED");
+        context.sttTiming = undefined;
         await this.discardCapturingUtterance(context, `Speech worker discarded utterance: ${event.reason}`);
         terminal = true;
         await this.terminateContext(context);
@@ -868,6 +919,7 @@ export class VoiceInputCoordinator {
         }
         this.validateFinalizedAudioBasis(context, basis);
         context.finalizedBasis = basis;
+        context.sttTiming = this.observability?.beginLocalTiming(context.sessionId, "STT");
         context.pcmLedger = [];
         context.pcmLedgerBytes = 0;
         admittedEvents.push(event);
@@ -923,6 +975,9 @@ export class VoiceInputCoordinator {
           turnId,
           text: candidate.text
         };
+        context.sttTiming?.finish("SUCCESS");
+        context.sttTiming = undefined;
+        this.observability?.recordCommittedUtterance(context.sessionId);
         void this.orchestrator.orchestrateTurn({
           sessionId: context.sessionId,
           turnId,
@@ -938,6 +993,12 @@ export class VoiceInputCoordinator {
       }
 
       if (event.type === "SPEECH_WORKER_ERROR") {
+        if (context.sttTiming === undefined) {
+          this.observability?.recordSttFailure(context.sessionId);
+        } else {
+          context.sttTiming.finish("FAILURE");
+          context.sttTiming = undefined;
+        }
         await this.discardCapturingUtterance(context, "Speech worker failed before a committed transcript");
         terminal = true;
         await this.terminateContext(context);
@@ -1139,6 +1200,10 @@ export class VoiceInputCoordinator {
     }
     context.active = false;
     this.releaseStreamBinding(context);
+    if (context.sttTiming !== undefined) {
+      context.sttTiming.finish("CANCELLED");
+      context.sttTiming = undefined;
+    }
     await this.discardCapturingUtterance(
       context,
       "Speech stream expired after bounded transport inactivity"
