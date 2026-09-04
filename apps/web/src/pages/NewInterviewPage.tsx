@@ -238,6 +238,9 @@ export function NewInterviewPage({
     || providerOptionsError !== null
     || modes.length === 0
     || availableProviders.length === 0;
+  const sessionAuthorityBlocked =
+    activeSessionId !== null || activeSessionCount > 0;
+  const launchBlocked = metadataUnavailable || sessionAuthorityBlocked;
 
   return (
     <div className="new-interview" data-testid="new-interview-page">
@@ -335,7 +338,7 @@ export function NewInterviewPage({
         </div>
 
         <aside className="new-interview__slip">
-          <div className="new-interview__slip-kicker"><span>{metadataUnavailable ? "CHECK" : "READY"}</span><span>LOCAL</span></div>
+          <div className="new-interview__slip-kicker"><span data-ready={String(!launchBlocked)}>{launchBlocked ? "CHECK" : "READY"}</span><span>LOCAL</span></div>
           <h3>{selectedTarget === null ? "Interview" : MODE_LABELS[selectedTarget.mode]}</h3>
           <p>{selectedTarget?.title ?? "Choose an available target"}</p>
           <div className="new-interview__slip-list">
@@ -344,8 +347,8 @@ export function NewInterviewPage({
             <div><span>Input</span><strong>{mode === "OXFORD_MATHEMATICS" ? "Voice + tldraw + text" : "Structured"}</strong></div>
             <div><span>Duration</span><strong>{durationText.trim().length === 0 ? "Open" : `${durationText} min`}</strong></div>
           </div>
-          <button className="new-interview__start" type="submit" disabled={activeSessionId !== null || activeSessionCount > 0 || startPending || catalogLoading || providerOptionsLoading || metadataUnavailable || selectedTarget === null || selectedProvider?.availability !== "AVAILABLE"} data-testid="start-configured-session-btn"><span>{startPending ? "Starting…" : "Start interview"}</span><em aria-hidden="true">→</em></button>
-          <div className="new-interview__ready-note"><i aria-hidden="true" /><span>{activeSessionCount > 1 ? "Resolve the active-session conflict from Sessions." : activeSessionId !== null ? "Current interview owns session authority." : metadataUnavailable ? "Resolve launch readiness first." : "Server revalidates this configuration on start."}</span></div>
+          <button className="new-interview__start" type="submit" disabled={sessionAuthorityBlocked || startPending || catalogLoading || providerOptionsLoading || metadataUnavailable || selectedTarget === null || selectedProvider?.availability !== "AVAILABLE"} data-testid="start-configured-session-btn"><span>{startPending ? "Starting…" : "Start interview"}</span><em aria-hidden="true">→</em></button>
+          <div className="new-interview__ready-note"><i data-ready={String(!launchBlocked)} aria-hidden="true" /><span>{activeSessionCount > 1 ? "Resolve the active-session conflict from Sessions." : activeSessionId !== null ? "Current interview owns session authority." : metadataUnavailable ? "Resolve launch readiness first." : "Server revalidates this configuration on start."}</span></div>
         </aside>
       </form>
     </div>
