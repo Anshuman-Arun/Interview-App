@@ -217,6 +217,33 @@ export function validateProposalBoardReferences(
   return undefined;
 }
 
+export function bindTargetlessAiAnnotationErases(
+  proposal: InterviewerProposal,
+  scene: BoardSceneContext | undefined
+): InterviewerProposal {
+  if ((proposal.boardActions?.length ?? 0) === 0) return proposal;
+  const remainingAnnotationIds = (scene?.aiAnnotations ?? [])
+    .map((annotation) => annotation.annotationId);
+  const boardActions = proposal.boardActions?.map((action) => {
+    if (action.operation !== "erase_ai_annotation") return action;
+    if (action.targetAnnotationId !== undefined) {
+      const existingIndex = remainingAnnotationIds.indexOf(action.targetAnnotationId);
+      if (existingIndex >= 0) remainingAnnotationIds.splice(existingIndex, 1);
+      return action;
+    }
+    const latestAnnotationId = remainingAnnotationIds.shift();
+    if (latestAnnotationId === undefined) return action;
+    return {
+      ...action,
+      targetAnnotationId: latestAnnotationId
+    };
+  });
+  return InterviewerProposalSchema.parse({
+    ...proposal,
+    ...(boardActions === undefined ? {} : { boardActions })
+  });
+}
+
 function commandIdentityValue(value: unknown): CommandIdentityValue {
   return CommandIdentityValueSchema.parse(JSON.parse(JSON.stringify(value)));
 }
@@ -1568,6 +1595,10 @@ export class TurnCoordinator {
           return rejectDrafts(generationId, proposal, boardReferenceFailure);
         }
       }
+      const deliveryProposal = bindTargetlessAiAnnotationErases(
+        proposal,
+        boardSceneForValidation
+      );
       const currentRequest = selectPedagogicalAction(
         state,
         generation.basis.turnId,
@@ -1577,7 +1608,7 @@ export class TurnCoordinator {
         return rejectAndSupersedeDrafts(generationId, proposal, "Application-selected pedagogical action is stale");
       }
       const validation = input.validator.validate({
-        proposal,
+        proposal: deliveryProposal,
         request: parsedRequest.data,
         protectedDisclosures: input.problem.interviewer.protectedDisclosures,
         ...(boardSceneForValidation === undefined
@@ -1586,7 +1617,7 @@ export class TurnCoordinator {
       });
       if (!validation.accepted) return rejectDrafts(generationId, proposal, validation.reason);
       const atoms: DeliveryAtom[] = [];
-      if (proposal.speechText !== undefined) {
+      if (deliveryProposal.speechText !== undefined) {
         const speechAnalysis = validation.realizations.speech;
         if (speechAnalysis === null) {
           return rejectDrafts(
@@ -1597,13 +1628,13 @@ export class TurnCoordinator {
         }
         atoms.push(DeliveryAtomSchema.parse({
           deliveryId: newDeliveryId(), generationId,
-          content: { medium: "TEXT", text: proposal.speechText },
+          content: { medium: "TEXT", text: deliveryProposal.speechText },
           disclosureIds: speechAnalysis.effectiveDisclosureIds,
           effectiveDisclosureLevel: speechAnalysis.effectiveDisclosureLevel,
           status: "VALIDATED"
         }));
       }
-      const boardActions = proposal.boardActions ?? [];
+      const boardActions = deliveryProposal.boardActions ?? [];
       if (validation.realizations.boardActions.length !== boardActions.length) {
         return rejectDrafts(
           generationId,
