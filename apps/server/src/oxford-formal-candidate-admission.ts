@@ -402,7 +402,7 @@ function sourceExpressesDirectDivisibility(
 }
 
 function normalizeIntegerWords(value: string): string {
-  const normalized = normalizeText(value);
+  const normalized = normalizeText(value).replace(/-/gu, " ");
   const tokens = normalized.match(/[-+]?\d+|[a-z]+|[^\s]/gu) ?? [];
   const output: string[] = [];
   for (let index = 0; index < tokens.length; index += 1) {
