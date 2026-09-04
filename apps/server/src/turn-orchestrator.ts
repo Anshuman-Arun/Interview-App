@@ -383,14 +383,15 @@ export class ServerTurnOrchestrator {
 
     // 5. ProviderCoordinator owns policy/billing admission, context compilation,
     // provider execution, proposal admission, and delivery validation.
-    const coordinator = new ProviderCoordinator(
-      writer,
-      this.observability?.createInterviewerObserver({
-        sessionId: input.sessionId,
-        providerId: runtimeResolution.providerId,
-        modelId: runtimeResolution.modelId
-      })
-    );
+    const remoteCallObserver =
+      runtimeResolution.provider.capabilities.dataUse === "LOCAL_ONLY"
+        ? undefined
+        : this.observability?.createInterviewerObserver({
+            sessionId: input.sessionId,
+            providerId: runtimeResolution.providerId,
+            modelId: runtimeResolution.modelId
+          });
+    const coordinator = new ProviderCoordinator(writer, remoteCallObserver);
     let execution: Awaited<ReturnType<ProviderCoordinator["start"]>>;
     try {
       execution = await coordinator.start({
