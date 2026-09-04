@@ -240,7 +240,9 @@ export function NewInterviewPage({
     || availableProviders.length === 0;
   const sessionAuthorityBlocked =
     activeSessionId !== null || activeSessionCount > 0;
-  const launchBlocked = metadataUnavailable || sessionAuthorityBlocked;
+  const launchChecking = catalogLoading || providerOptionsLoading;
+  const launchBlocked =
+    metadataUnavailable || sessionAuthorityBlocked || launchChecking;
 
   return (
     <div className="new-interview" data-testid="new-interview-page">
@@ -295,7 +297,7 @@ export function NewInterviewPage({
           <section className="new-interview__section">
             <div className="new-interview__section-heading"><span>02</span><div><h2>Model</h2></div></div>
             <div className="new-interview__provider-card">
-              <header><div><strong>Reasoning</strong><small>Current runtime catalog</small></div><span className="new-interview__availability" data-ready={String(selectedProvider?.availability === "AVAILABLE")}><i aria-hidden="true" />{providerOptionsLoading ? "CHECKING" : selectedProvider?.availability === "AVAILABLE" ? "READY" : "SETUP"}</span></header>
+              <header><div><strong>Reasoning</strong><small>Current runtime catalog</small></div><span className="new-interview__availability" data-ready={String(!providerOptionsLoading && selectedProvider?.availability === "AVAILABLE")}><i aria-hidden="true" />{providerOptionsLoading ? "CHECKING" : selectedProvider?.availability === "AVAILABLE" ? "READY" : "SETUP"}</span></header>
               {providerOptionsLoading ? <p className="new-interview__status">Checking providers…</p> : providerOptionsError !== null ? (
                 <div className="new-interview__error" role="alert"><p>{providerOptionsError}</p><button type="button" onClick={() => void onRefreshProviderOptions().catch(() => undefined)}>Retry providers</button></div>
               ) : (
@@ -348,7 +350,7 @@ export function NewInterviewPage({
             <div><span>Duration</span><strong>{durationText.trim().length === 0 ? "Open" : `${durationText} min`}</strong></div>
           </div>
           <button className="new-interview__start" type="submit" disabled={sessionAuthorityBlocked || startPending || catalogLoading || providerOptionsLoading || metadataUnavailable || selectedTarget === null || selectedProvider?.availability !== "AVAILABLE"} data-testid="start-configured-session-btn"><span>{startPending ? "Starting…" : "Start interview"}</span><em aria-hidden="true">→</em></button>
-          <div className="new-interview__ready-note"><i data-ready={String(!launchBlocked)} aria-hidden="true" /><span>{activeSessionCount > 1 ? "Resolve the active-session conflict from Sessions." : activeSessionId !== null ? "Current interview owns session authority." : metadataUnavailable ? "Resolve launch readiness first." : "Server revalidates this configuration on start."}</span></div>
+          <div className="new-interview__ready-note"><i data-ready={String(!launchBlocked)} aria-hidden="true" /><span>{activeSessionCount > 1 ? "Resolve the active-session conflict from Sessions." : activeSessionId !== null ? "Current interview owns session authority." : launchChecking ? "Revalidating launch readiness…" : metadataUnavailable ? "Resolve launch readiness first." : "Server revalidates this configuration on start."}</span></div>
         </aside>
       </form>
     </div>
