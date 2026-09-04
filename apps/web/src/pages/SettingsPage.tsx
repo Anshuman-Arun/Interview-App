@@ -30,11 +30,28 @@ interface DesktopRuntimeStatus {
 }
 
 interface DesktopRuntimeBridge {
+  readonly getBootstrap?: () => unknown;
   readonly getLocalRuntimeStatus?: () => Promise<unknown>;
   readonly installLocalModels?: () => Promise<unknown>;
 }
 
-function getDesktopRuntimeBridge(): Required<DesktopRuntimeBridge> | undefined {
+type DesktopRuntimeOperations = DesktopRuntimeBridge &
+  Required<Pick<DesktopRuntimeBridge, "getLocalRuntimeStatus" | "installLocalModels">>;
+
+function readDesktopAppVersion(): string | undefined {
+  const bridge = (globalThis as typeof globalThis & {
+    readonly interviewDesktop?: DesktopRuntimeBridge;
+  }).interviewDesktop;
+  if (bridge === undefined || typeof bridge.getBootstrap !== "function") return undefined;
+  const bootstrap = bridge.getBootstrap();
+  if (typeof bootstrap !== "object" || bootstrap === null) return undefined;
+  const appVersion = (bootstrap as Record<string, unknown>)["appVersion"];
+  return typeof appVersion === "string" && appVersion.trim().length > 0
+    ? appVersion
+    : undefined;
+}
+
+function getDesktopRuntimeBridge(): DesktopRuntimeOperations | undefined {
   const bridge = (globalThis as typeof globalThis & {
     readonly interviewDesktop?: DesktopRuntimeBridge;
   }).interviewDesktop;
@@ -45,7 +62,7 @@ function getDesktopRuntimeBridge(): Required<DesktopRuntimeBridge> | undefined {
   ) {
     return undefined;
   }
-  return bridge as Required<DesktopRuntimeBridge>;
+  return bridge as DesktopRuntimeOperations;
 }
 
 function parseDesktopRuntimeStatus(value: unknown): DesktopRuntimeStatus | undefined {
@@ -183,6 +200,7 @@ export function SettingsPage({
 }) {
   const [draftBaseUrl, setDraftBaseUrl] = useState(connection?.baseUrl ?? "");
   const desktopRuntime = getDesktopRuntimeBridge();
+  const desktopAppVersion = readDesktopAppVersion();
   const [runtimeStatus, setRuntimeStatus] = useState<DesktopRuntimeStatus | undefined>();
   const [runtimeStatusError, setRuntimeStatusError] = useState<string | undefined>();
   const [installingModels, setInstallingModels] = useState(false);
@@ -489,6 +507,9 @@ export function SettingsPage({
                   : describeVoiceRuntime(runtimeStatus))}
             </div>
             <div className="expressive-settings__runtime-meta">
+              {desktopAppVersion !== undefined && (
+                <span>Interview App {desktopAppVersion}</span>
+              )}
               <span>Python: system CPython 3.12–3.13 (standard install or PATH)</span>
               <span>Typed interviews do not require Python or model files.</span>
             </div>
