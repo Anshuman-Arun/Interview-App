@@ -136,6 +136,42 @@ export class DeliveryCoordinator {
     });
   }
 
+  public async acknowledgeNotExposed(
+    deliveryId: DeliveryId,
+    reason: string,
+    envelope?: CommandEnvelope
+  ): Promise<boolean> {
+    const normalizedReason = reason.trim().slice(0, 512) || "Renderer confirmed presentation did not begin";
+    const command = CommandEnvelopeSchema.parse(
+      envelope ?? createDeliveryEnvelope(this.writer.sessionId, "renderer")
+    );
+    const result = await this.writer.execute(
+      command,
+      {
+        operation: "ACK_DELIVERY_NOT_EXPOSED",
+        payload: { deliveryId, reason: normalizedReason }
+      },
+      z.boolean(),
+      (state): StateTransition<boolean> => {
+        const atom = state.deliveries[deliveryId];
+        if (atom === undefined) throw new Error("Unknown delivery acknowledgement");
+        if (atom.status === "CANCELLED") return { drafts: [], result: true };
+        if (atom.status !== "DELIVERING") {
+          throw new Error(`Cannot confirm non-exposure for delivery in ${atom.status}`);
+        }
+        return {
+          drafts: [{
+            source: "RENDERER",
+            type: "DELIVERY_CANCELLED",
+            payload: { deliveryId, reason: normalizedReason }
+          }],
+          result: true
+        };
+      }
+    );
+    return result.value;
+  }
+
   public async recoverUncertainDeliveries(): Promise<readonly DeliveryId[]> {
     const inFlight = Object.values(this.writer.getState().deliveries)
       .filter((atom) => atom.status === "DELIVERING")
