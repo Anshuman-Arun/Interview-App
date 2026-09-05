@@ -177,7 +177,7 @@ export const cantorFunctionFamiliesB: readonly CantorFamilyAuthoring[] = [
       {
         id: "master-scaling",
         description: "Show Q_a(x)=a²Q_1(x/sqrt(a)) and interpret the horizontal and vertical scaling.",
-        skills: cantorSkills(["generalization", "primary"], ["function-transformations", "supporting"] as never),
+        skills: cantorSkills(["generalization", "primary"], ["representation-switching", "supporting"]),
         concepts: ["function-transformations", "parameter-dependent-curves"]
       }
     ],
@@ -572,7 +572,7 @@ export const cantorFunctionFamiliesB: readonly CantorFamilyAuthoring[] = [
       {
         id: "exceptional-degeneration",
         description: "Show T_{-1}(x)=-1 for x≠-1, so the hyperbola and involution collapse; explain why blindly canceling a+1 hides this case.",
-        skills: cantorSkills(["precision-checking", "primary"], ["error-recovery", "supporting"] as never),
+        skills: cantorSkills(["precision-checking", "primary"], ["case-analysis", "supporting"]),
         concepts: ["parameter-dependent-curves", "qualitative-function-behavior", "fixed-point-constraints"]
       }
     ],
