@@ -192,6 +192,7 @@ export const oxfordDMidpointClosedResiduesSpec: CuratedProblemSpec = {
     novelty: "moderate",
     abstraction: "high",
     introducesNewDefinition: true,
+    provenance: { originType: "classic-problem", sourceCategory: "classic-mathematics" },
     stages: [
       { id: "midpoint-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["number-theory", "set-theory"], contentConcepts: ["modular-reasoning", "relations-operations"], skillEvidence: [evidence("small-case-exploration", "primary")], milestones: [{ milestoneId: "test-small-residue-sets", skillEvidence: [evidence("small-case-exploration", "primary")], contentConcepts: ["modular-reasoning"] }], extensionIds: [], difficulty: "introductory-plus", introducesNewDefinition: true },
       { id: "midpoint-core", role: "core", prerequisiteStageIds: ["midpoint-opening"], domains: ["number-theory", "set-theory"], contentConcepts: ["modular-reasoning", "relations-operations"], skillEvidence: [evidence("abstraction", "primary"), evidence("proof-construction", "primary")], milestones: [
