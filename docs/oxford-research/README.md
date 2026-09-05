@@ -41,7 +41,10 @@ For the Interview App, preserve these rules:
 | OX-VIS-2026 | https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/visualisation | Current official visualisation guidance and a problem explicitly adapted from a question James Munro used in Oxford Maths interviews. |
 | OX-VIS-SOL-2026 | https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/visualisation-solutions | Progression of the adapted interview problem from sketching to iteration and proof. |
 | OX-DEMO-2023 | https://www.youtube.com/watch?v=nietXNrjKD8 | Official Undergraduate Study at Oxford Mathematics demonstration interview with tutor prompting and post-interview commentary. |
-| OX-LIVE-2025-INTERVIEW | https://youtube.com/live/PaD9Yr7_zKo | Official Oxford Mathematics Plus livestream devoted to interview questions and interviewer practice. |
+| OX-LIVE-2025-INTERVIEW | https://youtube.com/live/PaD9Yr7_zKo | Official Oxford Mathematics Plus livestream devoted to sample/used interview questions and interviewer practice. |
+| OX-OOMC | https://www.maths.ox.ac.uk/outreach/oxford-online-maths-club | First-party Mathematical Institute archive with several explicitly identified Oxford interview questions and admissions-oriented problem discussions. |
+| OX-OOMC-RECTANGLES | https://www.maths.ox.ac.uk/outreach/oxford-online-maths-club/season-2-episode-9 | First-party page identifying a Tom Crawford question as used in interviews and recording related tiling/invariant material. |
+| OX-OOMC-CUBICS | https://www.maths.ox.ac.uk/outreach/oxford-online-maths-club/episode-0 | First-party page describing an Oxford maths interview question about constructing cubics from endpoint conditions and its spline continuation. |
 
 ### Tier B — authoritative Oxford subject-adjacent evidence
 
@@ -50,14 +53,17 @@ For the Interview App, preserve these rules:
 | OX-MATHCS-KANADE | https://www.cs.ox.ac.uk/people/varun.kanade/website/post/2022/06/28/interview-questions.html | Oxford academic describing actual Maths/CS interviews. Useful for interaction structure and the fact that some interviews switch between questions; not evidence that pure Mathematics interviews always do so. |
 | OX-MATHCS-Q1 | https://www.cs.ox.ac.uk/people/varun.kanade/website/post/2022/09/15/interview-question1-discussion.html | Actual Maths/CS interview question with detailed tutor commentary on small cases, connections, prompts, and extensions. |
 | OX-MATHCS-Q2 | https://www.cs.ox.ac.uk/people/varun.kanade/website/post/2022/12/04/interview-question2-discussion.html | Actual Maths/CS question showing procedural experimentation, mathematical reformulation, subtle reasoning, and generalisation. |
+| OX-CRAWFORD | https://tomrocksmaths.com/tag/oxford-interview-question/ | Oxford mathematician/interviewer Tom Crawford's public archive includes multiple questions he explicitly identifies as used in Oxford admissions. Treat interviewer self-report as authoritative for provenance of those specific families, but distinguish it from central departmental policy. |
+| OX-SJC-INTERVIEW-RESOURCES | https://www.sjc.ox.ac.uk/discover/news/maths-study-day-2021/ | St John's College explains that interviews are discussions rather than tests and links Crawford's interview videos as remote-interview-style resources. |
 
 ### Tier C — secondary navigation/transcript aid only
 
 The 2023 demonstration interview was cross-checked against a transcript mirror for navigation:
 
 - https://sozai.app/transcript/mathematics-demonstration-interview/
+- a third-party timestamped transcript of the 2025 Oxford Mathematics Plus interview livestream was used only to navigate the official recording when identifying stages of the confirmed-used addition-cost family.
 
-Do **not** treat the transcript provider as Oxford authority. Claims about Oxford practice should point back to the official video or first-party pages.
+Do **not** treat transcript providers as Oxford authority. Claims about Oxford practice should point back to the official video or first-party pages.
 
 ### Deep corpus vs broader reference inventory
 
