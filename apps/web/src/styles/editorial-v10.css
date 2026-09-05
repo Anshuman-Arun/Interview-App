@@ -3119,6 +3119,14 @@ summary:focus-visible,
   border-color: var(--accent);
 }
 
+.new-interview__select-shell select:focus-visible,
+.new-interview__select-wrap select:focus-visible,
+.new-interview__duration input:focus-visible {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px;
+}
+
 .new-interview__duration small {
   position: absolute;
   top: 50%;
