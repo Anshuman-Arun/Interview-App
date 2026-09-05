@@ -506,16 +506,19 @@ export const App: React.FC = () => {
 
   const hasActiveInterview =
     session.isSessionStarted && session.sessionStatus === "ACTIVE";
-  const storedActiveSessions = session.availableSessions.filter(
+  const productSessions = session.availableSessions.filter(
     (storedSession) =>
-      storedSession.status === "ACTIVE"
-      && !(
-        storedSession.sessionId === session.sessionId
+      !(
+        storedSession.status === "ACTIVE"
+        && storedSession.sessionId === session.sessionId
         && (
           session.sessionStatus === "COMPLETED"
           || session.sessionStatus === "ARCHIVED"
         )
       )
+  );
+  const storedActiveSessions = productSessions.filter(
+    (storedSession) => storedSession.status === "ACTIVE"
   );
   const storedActiveSession =
     storedActiveSessions.length === 1 ? storedActiveSessions[0] ?? null : null;
@@ -635,7 +638,7 @@ export const App: React.FC = () => {
     : (
       <ProductPageRouter
         route={displayRoute}
-        sessions={session.availableSessions}
+        sessions={productSessions}
         activeSessionId={resumableActiveSessionId}
         activeSessionCount={knownActiveSessionCount}
         currentSessionId={hasActiveInterview ? session.sessionId : null}
@@ -939,7 +942,9 @@ export const App: React.FC = () => {
           }}
           onKeyDown={(event) => {
             if (
-              event.key !== "ArrowRight"
+              event.key !== "ArrowLeft"
+              && event.key !== "ArrowRight"
+              && event.key !== "ArrowUp"
               && event.key !== "ArrowDown"
               && event.key !== "End"
             ) return;
@@ -966,7 +971,9 @@ export const App: React.FC = () => {
           onKeyDown={(event) => {
             if (
               event.key !== "ArrowLeft"
+              && event.key !== "ArrowRight"
               && event.key !== "ArrowUp"
+              && event.key !== "ArrowDown"
               && event.key !== "Home"
             ) return;
             event.preventDefault();
