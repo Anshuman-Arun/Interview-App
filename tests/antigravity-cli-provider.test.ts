@@ -240,7 +240,7 @@ describe("Antigravity CLI provider registration and policy truthfulness", () => 
 
     expect(provider).toMatchObject({
       id: ANTIGRAVITY_CLI_PROVIDER_ID,
-      kind: "LOCAL_PROCESS",
+      kind: "OTHER",
       adapterVersion: ANTIGRAVITY_CLI_ADAPTER_VERSION,
       credentialRequirement: "NONE"
     });
