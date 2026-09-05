@@ -603,6 +603,24 @@ describe("editorial v10 adversarial UI states", () => {
     expect(markup).not.toContain(">READY<");
   });
 
+  it("cancels stale default-review auto-upgrades after route intent changes", () => {
+    const app = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+
+    expect(app).toContain("const reviewAutoUpgradePendingRef = useRef");
+    expect(app).toMatch(
+      /const atIntendedReplay =[\s\S]{0,220}route\.page === "review"[\s\S]{0,180}route\.view === "replay";[\s\S]{0,220}if \(!atIntendedReplay\) \{[\s\S]{0,160}reviewAutoUpgradeEpochRef\.current \+= 1;[\s\S]{0,120}reviewAutoUpgradePendingRef\.current = null;/u
+    );
+    expect(app).toMatch(
+      /pending\.resolvedOxford = true;[\s\S]{0,260}currentRoute\.page !== "review"[\s\S]{0,180}return;[\s\S]{0,180}reviewAutoUpgradePendingRef\.current = null;[\s\S]{0,180}view: "evaluation"/u
+    );
+    expect(app).toMatch(
+      /reviewAutoUpgradeEpochRef\.current \+= 1;\s*reviewAutoUpgradePendingRef\.current = null;\s*navigate\(/u
+    );
+  });
+
   it("retries a transient bounded review read in place", async () => {
     const sessionId = SessionIdSchema.parse(
       "session_00000000-0000-4000-8000-000000000401"
