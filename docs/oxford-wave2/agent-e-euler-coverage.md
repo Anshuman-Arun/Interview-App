@@ -156,7 +156,7 @@ All other families still require full independent correctness review; this list 
 
 ## Calibration notes for Agent G
 
-Every survivor now has a distinct family timing estimate and five stage-ID-specific timing estimates. All remain deliberately **low confidence**, and all calibration statuses remain `unreviewed`.
+Every survivor has an explicitly owned family timing estimate and five stage-ID-specific timing estimates; independently calibrated families may legitimately share the same numeric range. All remain deliberately **low confidence**, and all calibration statuses remain `unreviewed`.
 
 Particular calibration traps:
 
