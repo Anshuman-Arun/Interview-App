@@ -95,16 +95,16 @@ describe("Oxford originality/fidelity audit records", () => {
       }>;
     };
 
-    expect(document.summary.totalFamilies).toBe(49);
-    expect(document.summary.survivingTotal).toBe(49);
+    expect(document.summary.totalFamilies).toBe(47);
+    expect(document.summary.survivingTotal).toBe(47);
     expect(document.summary.replacementCount).toBe(0);
-    expect(document.audits).toHaveLength(49);
-    expect(new Set(document.audits.map((audit) => audit.familyId)).size).toBe(49);
+    expect(document.audits).toHaveLength(47);
+    expect(new Set(document.audits.map((audit) => audit.familyId)).size).toBe(47);
 
     const expected = new Map<number, { head: string; surviving: number }>([
-      [132, { head: "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9", surviving: 20 }],
+      [132, { head: "0d4941ab3197b2297ab389d7438df39f599b2ad5", surviving: 18 }],
       [133, { head: "ecece22058c997d37c4b352fa5ed32bd1daf5243", surviving: 12 }],
-      [134, { head: "ee52c053f0c38d7874be2bfdb5a506e0426d341f", surviving: 17 }]
+      [134, { head: "165bb3100fb894158969abb808caad5bc9150807", surviving: 17 }]
     ]);
 
     for (const [pr, expectedState] of expected) {
