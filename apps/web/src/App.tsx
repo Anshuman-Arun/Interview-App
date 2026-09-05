@@ -396,7 +396,11 @@ export const App: React.FC = () => {
             setSessionAuthorityChecking(false);
           }
         });
-      return;
+      return () => {
+        if (sessionAuthorityCheckEpochRef.current === checkEpoch) {
+          sessionAuthorityCheckEpochRef.current += 1;
+        }
+      };
     }
     sessionAuthorityCheckEpochRef.current += 1;
     setSessionAuthorityChecking(false);
