@@ -266,7 +266,6 @@ const EULER_SIMILARITY_CLUSTERS: Readonly<Record<string, string>> = Object.freez
   "oxford-euler-circle-sweep": "euler-distance-loci",
   "oxford-euler-triangle-midpoint-cycle": "euler-affine-dynamics",
   "oxford-euler-diagonal-blend-transform": "euler-affine-dynamics",
-  "oxford-euler-corner-balanced-tables": "euler-local-balance",
   "oxford-euler-periodic-queue-model": "euler-discrete-dynamics-model",
   "oxford-euler-cooling-data-model": "euler-discrete-dynamics-model",
   "oxford-euler-random-subset-blocks": "euler-local-indicator-expectation"
