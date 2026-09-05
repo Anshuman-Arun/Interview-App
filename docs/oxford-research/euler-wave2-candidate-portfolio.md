@@ -7,7 +7,7 @@ This document is the author-side coverage, fingerprint, and risk handoff for the
 ## Completion-pass system rewrite
 
 - Removed Hilbert hard rejects: `rectangle-area-table` and `difference-closed-sets`.
-- Reclassified `quadrilateral-balance` provenance to `structural-adaptation / classic-mathematics`.
+- Reclassified `quadrilateral-balance` provenance to `structural-adaptation / classic-mathematics` with internal `referenceFamilyId: british-flag-theorem`.
 - Replaced generic timing tables with explicit family-ID and stage-ID timing profiles for all 17 survivors.
 - Replaced difficulty-driven core inference with explicit stage-ID roles; each survivor has exactly one authored `core`.
 - Applied Gauss calibration/taxonomy findings to `circle-sweep` and `self-averaging-sets`.
@@ -93,7 +93,7 @@ Searches included combinations around: squared-distance quadrilateral loci; midp
 
 **Agent G:** every survivor now has its own low-confidence family timing plus stage-ID-specific timing and an explicit authored core stage. These are calibration hypotheses only; independently recalibrate them rather than inheriting them as approval.
 
-**Agent H:** treat every surviving originality/fidelity state as pending. `quadrilateral-balance` now uses `structural-adaptation / classic-mathematics` provenance per H's REVISE finding. Re-audit all 17 survivors, especially locally balanced labels, corner-balanced tables, and the indicator-expectation probability families. Verify diagram topology against visual benchmark neighbors as well as algebraic kernels.
+**Agent H:** treat every surviving originality/fidelity state as pending. `quadrilateral-balance` now uses `structural-adaptation / classic-mathematics` provenance with `referenceFamilyId: british-flag-theorem` per H's REVISE finding. Re-audit all 17 survivors, especially locally balanced labels, corner-balanced tables, and the indicator-expectation probability families. Verify diagram topology against visual benchmark neighbors as well as algebraic kernels.
 
 **Agent I:** prioritize geometry degeneracies/boundaries (`circle-sweep`, `box-diagonal-bisector`, quadrilateral exceptional cases), probability sample spaces and exceptional configurations, and modelling identifiability assumptions. `periodic-queue-model` now fixes integer parameter domains, q_0, odd starting phase, and arrivals-before-service, and derives an exact emptying criterion. Candidate solutions and verification notes are author drafts, not correctness approvals.
 
