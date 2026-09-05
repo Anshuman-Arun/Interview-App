@@ -218,10 +218,6 @@ export function projectOxfordStudentProfile(
   sourceSessions: readonly OxfordProfileSessionEvidence[],
   options: OxfordStudentProfileOptions = {}
 ): OxfordStudentProfile {
-  if (!Array.isArray(sourceSessions)) {
-    throw new TypeError("Oxford profile source sessions must be an array");
-  }
-
   const domainState = createStateMap(OXFORD_MATH_DOMAINS);
   const contentState = createStateMap(OXFORD_CONTENT_CONCEPTS);
   const skillState = createStateMap(OXFORD_REASONING_SKILLS);
