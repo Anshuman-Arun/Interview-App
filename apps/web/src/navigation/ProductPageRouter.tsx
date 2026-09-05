@@ -120,6 +120,7 @@ export function ProductPageRouter({
           canReview={canReview}
           sessionEntryPending={sessionEntryPending}
           sessionAuthorityChecking={sessionAuthorityChecking}
+          sessionAuthorityUnavailable={sessionAuthorityUnavailable}
           onReview={(sessionId) => onReview(sessionId, "evaluation")}
         />
       );
@@ -140,6 +141,7 @@ export function ProductPageRouter({
           activeSessionCount={activeSessionCount}
           startPending={sessionEntryPending}
           sessionAuthorityChecking={sessionAuthorityChecking}
+          sessionAuthorityUnavailable={sessionAuthorityUnavailable}
           onRefreshCatalog={onRefreshLaunchCatalog}
           onRefreshProviderOptions={onRefreshProviderOptions}
           onStart={onStartConfiguredInterview}
@@ -167,6 +169,7 @@ export function ProductPageRouter({
           historyLoading={historyLoading}
           historyError={historyError}
           sessionEntryPending={sessionEntryPending}
+          sessionAuthorityChecking={sessionAuthorityChecking}
         />
       );
       break;
@@ -182,6 +185,7 @@ export function ProductPageRouter({
           providerOptionsError={providerOptionsError}
           activeSessionCount={activeSessionCount}
           sessionAuthorityChecking={sessionAuthorityChecking}
+          sessionAuthorityUnavailable={sessionAuthorityUnavailable}
           onRefreshProviderOptions={onRefreshProviderOptions}
           onStartInterview={onEnterInterview}
         />
