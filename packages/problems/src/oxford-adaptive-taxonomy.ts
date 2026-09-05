@@ -283,7 +283,7 @@ export function assertOxfordAdaptiveMetadataIntegrity(
 ): void {
   const schemaVersion: number = metadata.schemaVersion;
   if (schemaVersion !== OXFORD_ADAPTIVE_METADATA_SCHEMA_VERSION) {
-    throw new Error(`Unsupported Oxford adaptive metadata schema version "${schemaVersion}"`);
+    throw new Error(`Unsupported Oxford adaptive metadata schema version "${String(schemaVersion)}"`);
   }
   const taxonomyVersion: string = metadata.taxonomyVersion;
   if (taxonomyVersion !== OXFORD_TAXONOMY_VERSION) {
