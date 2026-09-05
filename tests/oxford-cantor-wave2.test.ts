@@ -159,7 +159,7 @@ describe("Agent C — Cantor Wave 2 Oxford candidates", () => {
 
   it("applies Hilbert and Gauss findings without self-certifying them", () => {
     expect(entry("oxford-cantor-moving-v-envelope").metadata.oxfordAdaptive?.provenance).toEqual({
-      originType: "structural-adaptation",
+      originType: "classic-problem",
       sourceCategory: "classic-mathematics"
     });
     expect(entry("oxford-cantor-moving-v-envelope").metadata.oxfordAdaptive?.similarityClusterId)
