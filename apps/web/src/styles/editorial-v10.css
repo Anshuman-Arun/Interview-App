@@ -3434,7 +3434,23 @@ summary:focus-visible,
   }
 
   .expressive-settings__swatches {
+    display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .expressive-settings__range {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+
+  .expressive-settings__zoom-stepper {
+    grid-template-columns: 28px minmax(0, 1fr) 28px;
+  }
+
+  .expressive-settings__zoom-stepper .expressive-settings__zoom-reset {
+    grid-column: 1 / -1;
+    min-height: 26px;
   }
 }
 
