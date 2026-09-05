@@ -39,7 +39,10 @@ describe("Agent D — Dirichlet Oxford candidate bank", () => {
     for (const entry of dirichletCandidateEntries) {
       const metadata = entry.metadata.oxfordAdaptive;
       expect(metadata).toBeDefined();
-      assertOxfordAdaptiveMetadataIntegrity(metadata!, entry.problem);
+      if (metadata === undefined) {
+        throw new Error(`Missing Oxford adaptive metadata for ${entry.problem.id}`);
+      }
+      assertOxfordAdaptiveMetadataIntegrity(metadata, entry.problem);
       expect(entry.problem.interviewer.protectedDisclosures).toHaveLength(5);
     }
   });
@@ -48,7 +51,10 @@ describe("Agent D — Dirichlet Oxford candidate bank", () => {
     for (const entry of dirichletCandidateEntries) {
       const metadata = entry.metadata.oxfordAdaptive;
       expect(metadata).toBeDefined();
-      for (const stage of metadata!.stages) {
+      if (metadata === undefined) {
+        throw new Error(`Missing Oxford adaptive metadata for ${entry.problem.id}`);
+      }
+      for (const stage of metadata.stages) {
         for (const milestone of stage.milestones) {
           for (const evidence of milestone.skillEvidence) {
             expect(OXFORD_SKILL_EVIDENCE_BASIS[evidence.skill]).toBe(
@@ -76,7 +82,11 @@ describe("Agent D — Dirichlet Oxford candidate bank", () => {
 
   it("assigns every reasoning milestone and extension to exactly one Oxford stage", () => {
     for (const entry of dirichletCandidateEntries) {
-      const metadata = entry.metadata.oxfordAdaptive!;
+      const metadata = entry.metadata.oxfordAdaptive;
+      expect(metadata).toBeDefined();
+      if (metadata === undefined) {
+        throw new Error(`Missing Oxford adaptive metadata for ${entry.problem.id}`);
+      }
       const stagedMilestones = metadata.stages.flatMap((stage) =>
         stage.milestones.map((milestone) => milestone.milestoneId)
       );
