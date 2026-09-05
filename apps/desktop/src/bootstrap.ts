@@ -1,6 +1,8 @@
 export const DESKTOP_BOOTSTRAP_CHANNEL = "interview-desktop:get-bootstrap";
 export const DESKTOP_ZOOM_CHANNEL = "interview-desktop:set-zoom";
 export const DESKTOP_ZOOM_CHANGED_CHANNEL = "interview-desktop:zoom-changed";
+export const DESKTOP_APPEARANCE_READ_CHANNEL = "interview-desktop:get-appearance";
+export const DESKTOP_APPEARANCE_WRITE_CHANNEL = "interview-desktop:set-appearance";
 export const DESKTOP_LOCAL_RUNTIME_STATUS_CHANNEL = "interview-desktop:get-local-runtime-status";
 export const DESKTOP_INSTALL_PYTHON_RUNTIME_CHANNEL = "interview-desktop:install-python-runtime";
 export const DESKTOP_INSTALL_VOICE_MODELS_CHANNEL = "interview-desktop:install-voice-models";
