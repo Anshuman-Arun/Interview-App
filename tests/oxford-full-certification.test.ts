@@ -113,20 +113,20 @@ describe("Agent G full C/D/E certification", () => {
   it("covers every current survivor exactly once at the reviewed author heads", () => {
     expect(artifact.agent).toBe("G — Gauss");
     expect(artifact.summary).toEqual({
-      reviewed: 47,
-      surviving: 47,
-      byAuthor: { cantor: 18, dirichlet: 12, euler: 17 },
-      taxonomy: { approved: 45, changesRequired: 2 },
-      difficulty: { approved: 43, changesRequired: 4 },
-      timing: { approved: 35, changesRequired: 12 }
+      reviewed: 46,
+      surviving: 46,
+      byAuthor: { cantor: 17, dirichlet: 12, euler: 17 },
+      taxonomy: { approved: 44, changesRequired: 2 },
+      difficulty: { approved: 43, changesRequired: 3 },
+      timing: { approved: 34, changesRequired: 12 }
     });
 
     expect(artifact.authorPullRequests).toEqual([
       expect.objectContaining({
         agent: "C — Cantor",
         prNumber: 132,
-        headSha: "794fe2282c2c8ef265869ccf84bb955695fbaa7f",
-        survivingFamilyCount: 18
+        headSha: "8b22dc5df99111fb95e27a2c006d5e74544dd385",
+        survivingFamilyCount: 17
       }),
       expect.objectContaining({
         agent: "D — Dirichlet",
@@ -143,7 +143,7 @@ describe("Agent G full C/D/E certification", () => {
     ]);
 
     const ids = artifact.records.map((record) => record.familyId);
-    expect(new Set(ids).size).toBe(47);
+    expect(new Set(ids).size).toBe(46);
     const listedIds = artifact.authorPullRequests.flatMap((entry) => entry.familiesReviewed);
     expect(new Set(listedIds)).toEqual(new Set(ids));
 
@@ -158,11 +158,11 @@ describe("Agent G full C/D/E certification", () => {
   });
 
   it("keeps decision summary counts derived from the records", () => {
-    expect(countDecision("taxonomy", "approved")).toBe(45);
+    expect(countDecision("taxonomy", "approved")).toBe(44);
     expect(countDecision("taxonomy", "changes-required")).toBe(2);
     expect(countDecision("difficulty", "approved")).toBe(43);
-    expect(countDecision("difficulty", "changes-required")).toBe(4);
-    expect(countDecision("timing", "approved")).toBe(35);
+    expect(countDecision("difficulty", "changes-required")).toBe(3);
+    expect(countDecision("timing", "approved")).toBe(34);
     expect(countDecision("timing", "changes-required")).toBe(12);
   });
 
