@@ -268,8 +268,10 @@ describe("Oxford adaptive metadata contract", () => {
       weight: "supporting"
     });
     (
-      requireStage(processTarget, 1).skillEvidence
-      as unknown as Array<{ skill: string; weight: string }>
+      requireStage(processTarget, 1).skillEvidence as unknown as Array<{
+        skill: string;
+        weight: string;
+      }>
     ).push({
       skill: "guided-adaptation",
       weight: "supporting"
@@ -277,8 +279,10 @@ describe("Oxford adaptive metadata contract", () => {
     expect(() => assertOxfordAdaptiveMetadataIntegrity(processTarget)).not.toThrow();
 
     (
-      requireMilestone(requireStage(processTarget, 1), 0).skillEvidence
-      as unknown as Array<{ skill: string; weight: string }>
+      requireMilestone(requireStage(processTarget, 1), 0).skillEvidence as unknown as Array<{
+        skill: string;
+        weight: string;
+      }>
     ).push({
       skill: "guided-adaptation",
       weight: "supporting"
@@ -293,15 +297,19 @@ describe("Oxford adaptive metadata contract", () => {
       weight: "supporting"
     });
     (
-      requireStage(precision, 1).skillEvidence
-      as unknown as Array<{ skill: string; weight: string }>
+      requireStage(precision, 1).skillEvidence as unknown as Array<{
+        skill: string;
+        weight: string;
+      }>
     ).push({
       skill: "precision-checking",
       weight: "supporting"
     });
     (
-      requireMilestone(requireStage(precision, 1), 0).skillEvidence
-      as unknown as Array<{ skill: string; weight: string }>
+      requireMilestone(requireStage(precision, 1), 0).skillEvidence as unknown as Array<{
+        skill: string;
+        weight: string;
+      }>
     ).push({
       skill: "precision-checking",
       weight: "supporting"
@@ -324,8 +332,7 @@ describe("Oxford adaptive metadata contract", () => {
 
     const missingAtStage = cloneMetadata();
     (
-      requireMilestone(requireStage(missingAtStage, 0), 0).contentConcepts
-      as unknown as string[]
+      requireMilestone(requireStage(missingAtStage, 0), 0).contentConcepts as unknown as string[]
     ).push("parity");
     expect(() => assertOxfordAdaptiveMetadataIntegrity(missingAtStage)).toThrow(
       /content concept "parity" is not declared at stage level/
