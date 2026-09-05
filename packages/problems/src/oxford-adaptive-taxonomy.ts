@@ -184,6 +184,7 @@ export interface OxfordStageMetadata {
   readonly domains: readonly OxfordMathDomain[];
   readonly skillEvidence: readonly OxfordSkillEvidence[];
   readonly milestones: readonly OxfordMilestoneEvidence[];
+  readonly extensionIds: readonly string[];
   readonly difficulty: OxfordDifficultyBand;
   readonly timing: OxfordTimingEstimate;
   readonly novelty: OxfordQualitativeLevel;
@@ -412,9 +413,13 @@ function assertAuthoredStages(
   const familyDomains = new Set<string>(metadata.domains);
   const problemSkills = new Set<string>(metadata.skillEvidence.map((item) => item.skill));
   const milestoneOwners = new Map<string, string>();
+  const extensionOwners = new Map<string, string>();
   const milestoneIds = problem === undefined
     ? undefined
     : new Set(problem.interviewer.reasoningGraph.milestones.map((milestone) => milestone.id));
+  const extensionIds = problem === undefined
+    ? undefined
+    : new Set(problem.interviewer.reasoningGraph.extensions.map((extension) => extension.id));
 
   for (const stage of metadata.stages) {
     assertCanonicalId(stage.id, "Oxford stage id");
@@ -498,6 +503,22 @@ function assertAuthoredStages(
         }
       }
     }
+
+    assertUniqueCanonicalIds(stage.extensionIds, `Oxford stage "${stage.id}" extension`);
+    for (const extensionId of stage.extensionIds) {
+      const existingOwner = extensionOwners.get(extensionId);
+      if (existingOwner !== undefined) {
+        throw new Error(
+          `Reasoning extension "${extensionId}" is assigned to multiple Oxford stages`
+        );
+      }
+      extensionOwners.set(extensionId, stage.id);
+      if (extensionIds !== undefined && !extensionIds.has(extensionId)) {
+        throw new Error(
+          `Oxford stage "${stage.id}" references unknown reasoning extension "${extensionId}"`
+        );
+      }
+    }
   }
 
   if (!metadata.stages.some((stage) => stage.role === "core")) {
@@ -533,6 +554,13 @@ function assertAuthoredStages(
       if (!milestoneOwners.has(milestoneId)) {
         throw new Error(
           `Authored Oxford metadata does not assign reasoning milestone "${milestoneId}" to a stage`
+        );
+      }
+    }
+    for (const extensionId of extensionIds ?? []) {
+      if (!extensionOwners.has(extensionId)) {
+        throw new Error(
+          `Authored Oxford metadata does not assign reasoning extension "${extensionId}" to a stage`
         );
       }
     }
