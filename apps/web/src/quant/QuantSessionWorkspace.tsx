@@ -50,7 +50,8 @@ export const QuantSessionWorkspace: React.FC<QuantSessionWorkspaceProps> = ({
   onSubmitResearch
 }) => {
   const presentationActive =
-    !productHidden
+    connected
+    && !productHidden
     && !paused
     && sessionStatus === "ACTIVE";
   const actionPendingRef = useRef(quantActionPending);
