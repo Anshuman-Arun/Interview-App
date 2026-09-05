@@ -76,6 +76,20 @@ function capabilityLabel(
   }
 }
 
+function capabilityNeedsActivationRestart(
+  capability: DesktopRuntimeCapabilityStatus | undefined
+): boolean {
+  if (capability?.state === "READY" || capability?.reasonCode === undefined) return false;
+  return new Set([
+    "START_CANCELLED",
+    "WORKER_START_FAILED",
+    "WORKER_FAILED",
+    "WORKER_STOPPED",
+    "WORKER_RESTARTING",
+    "VOICE_RUNTIME_INCOMPLETE"
+  ]).has(capability.reasonCode);
+}
+
 function capabilityTone(
   capability: DesktopRuntimeCapabilityStatus | undefined,
   setup?: DesktopModelSetupStatus
@@ -302,6 +316,13 @@ export function SettingsPage({
   const voiceReady = runtimeStatus?.speech.state === "READY"
     && runtimeStatus.tts.state === "READY";
   const visionReady = runtimeStatus?.vision.state === "READY";
+  const voiceActivationNeedsRestart = !voiceReady
+    && (
+      capabilityNeedsActivationRestart(runtimeStatus?.speech)
+      || capabilityNeedsActivationRestart(runtimeStatus?.tts)
+    );
+  const visionActivationNeedsRestart = !visionReady
+    && capabilityNeedsActivationRestart(runtimeStatus?.vision);
   const anyInstallActive = installingPython
     || installingVoice
     || installingVision
@@ -313,7 +334,9 @@ export function SettingsPage({
     || runtimeStatus?.pythonSetup.restartRequired === true;
   const restartRequired = runtimeStatus?.pythonSetup.restartRequired === true
     || runtimeStatus?.voiceSetup.restartRequired === true
-    || runtimeStatus?.visionSetup.restartRequired === true;
+    || runtimeStatus?.visionSetup.restartRequired === true
+    || voiceActivationNeedsRestart
+    || visionActivationNeedsRestart;
   const runtimeVerificationUnavailable = desktopRuntime !== undefined
     && runtimeStatus === undefined
     && runtimeStatusError !== undefined;
@@ -623,9 +646,11 @@ export function SettingsPage({
                 <small>
                   {runtimeStatus?.voiceSetup.restartRequired === true
                     ? "Installed. Restart Interview App to activate the running workers."
-                    : voiceReady
-                      ? "Speech input and voice output are active."
-                      : "Silero, Moonshine, and Kokoro are optional verified local models."}
+                    : voiceActivationNeedsRestart
+                      ? "Models are installed, but the local workers did not finish activating. Restart Interview App to retry activation."
+                      : voiceReady
+                        ? "Speech input and voice output are active."
+                        : "Silero, Moonshine, and Kokoro are optional verified local models."}
                 </small>
                 {voiceInstallError !== undefined && (
                   <small className="expressive-settings__setup-error">{voiceInstallError}</small>
@@ -641,11 +666,14 @@ export function SettingsPage({
                   || !pythonUsableForModelInstall
                   || voiceReady
                   || runtimeStatus.voiceSetup.restartRequired
+                  || voiceActivationNeedsRestart
                 }
               >
                 {installingVoice
                   ? "INSTALLING…"
-                  : setupActionLabel("voice models", runtimeStatus?.voiceSetup, voiceReady)}
+                  : voiceActivationNeedsRestart
+                    ? "Installed — restart to retry"
+                    : setupActionLabel("voice models", runtimeStatus?.voiceSetup, voiceReady)}
               </button>
             </div>
 
@@ -655,9 +683,11 @@ export function SettingsPage({
                 <small>
                   {runtimeStatus?.visionSetup.restartRequired === true
                     ? "Installed. Restart Interview App to activate local vision."
-                    : visionReady
-                      ? "Whiteboard semantic recognition is active."
-                      : "Drawing remains available even when local vision is not installed."}
+                    : visionActivationNeedsRestart
+                      ? "The model is installed, but local vision did not finish activating. Restart Interview App to retry activation."
+                      : visionReady
+                        ? "Whiteboard semantic recognition is active."
+                        : "Drawing remains available even when local vision is not installed."}
                 </small>
                 {visionInstallError !== undefined && (
                   <small className="expressive-settings__setup-error">{visionInstallError}</small>
@@ -673,11 +703,14 @@ export function SettingsPage({
                   || !pythonUsableForModelInstall
                   || visionReady
                   || runtimeStatus.visionSetup.restartRequired
+                  || visionActivationNeedsRestart
                 }
               >
                 {installingVision
                   ? "INSTALLING…"
-                  : setupActionLabel("vision model", runtimeStatus?.visionSetup, visionReady)}
+                  : visionActivationNeedsRestart
+                    ? "Installed — restart to retry"
+                    : setupActionLabel("vision model", runtimeStatus?.visionSetup, visionReady)}
               </button>
             </div>
 
