@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState, type SyntheticEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type SyntheticEvent } from "react";
 import {
   InterviewSessionConfigurationSchema,
   type InterviewCatalogEntry,
   type InterviewMode,
   type InterviewSessionConfiguration,
-  type ProviderLaunchAvailabilityReason,
   type ProviderLaunchOption,
   type SessionId
 } from "../../../../packages/domain/src/index.js";
@@ -35,30 +34,6 @@ function providerKey(option: ProviderLaunchOption): string {
   return `${option.providerId}:${option.modelId}`;
 }
 
-function providerReason(reason: ProviderLaunchAvailabilityReason | undefined): string {
-  switch (reason) {
-    case "CREDENTIALS_REQUIRED":
-      return "Authentication is not configured";
-    case "DISABLED":
-      return "Disabled by runtime configuration";
-    case "RUNTIME_CONFIGURATION_UNAVAILABLE":
-      return "Runtime configuration is unavailable";
-    case "RUNTIME_DEPENDENCY_UNAVAILABLE":
-      return "Local runtime dependency is unavailable";
-    case "POLICY_UNAVAILABLE":
-      return "Safety policy could not be verified";
-    case "POLICY_DENIED":
-      return "Denied by the current safety policy";
-    case "CAPABILITY_UNAVAILABLE":
-      return "Required reasoning capability is unavailable";
-    case "PROVIDER_UNAVAILABLE":
-      return "Provider is not currently executable";
-    case "UNKNOWN":
-    default:
-      return "Readiness could not be verified";
-  }
-}
-
 function providerRouteLabel(option: ProviderLaunchOption | null): string {
   switch (option?.providerKind) {
     case "LOCAL_PROCESS":
@@ -72,6 +47,83 @@ function providerRouteLabel(option: ProviderLaunchOption | null): string {
     case undefined:
       return "—";
   }
+}
+
+const ANTIGRAVITY_FLASH_MODEL =
+  /^gemini-(3\.[78])-flash-(high|medium|low)$/u;
+
+function antigravityFlashParts(
+  option: ProviderLaunchOption | null
+): { readonly version: string; readonly tier: "high" | "medium" | "low" } | null {
+  if (option?.providerId !== "antigravity-cli") return null;
+  const match = ANTIGRAVITY_FLASH_MODEL.exec(option.modelId);
+  if (match === null) return null;
+  const version = match[1];
+  const tier = match[2];
+  if (
+    version === undefined
+    || (tier !== "high" && tier !== "medium" && tier !== "low")
+  ) {
+    return null;
+  }
+  return { version, tier };
+}
+
+function providerModelFamilyKey(option: ProviderLaunchOption): string {
+  const antigravity = antigravityFlashParts(option);
+  return antigravity === null
+    ? providerKey(option)
+    : `${option.providerId}:gemini-${antigravity.version}-flash`;
+}
+
+function providerModelFamilyLabel(option: ProviderLaunchOption | null): string {
+  if (option === null) return "Not selected";
+  const antigravity = antigravityFlashParts(option);
+  if (antigravity !== null) return `Gemini ${antigravity.version} Flash`;
+  return option.modelDisplayName;
+}
+
+function providerReasoningTier(option: ProviderLaunchOption | null): string {
+  const antigravity = antigravityFlashParts(option);
+  if (antigravity === null) return "default";
+  return antigravity.tier;
+}
+
+function reasoningTierLabel(tier: string): string {
+  return tier.length === 0
+    ? "Default"
+    : `${tier[0]?.toUpperCase() ?? ""}${tier.slice(1)}`;
+}
+
+function providerContextTokens(option: ProviderLaunchOption | null): string {
+  if (option === null) return "—";
+  if (
+    antigravityFlashParts(option) !== null
+    || option.modelId === "gemini-2.5-flash"
+  ) {
+    return "1,048,576";
+  }
+  return "Unknown";
+}
+
+function providerOutputTokens(option: ProviderLaunchOption | null): string {
+  if (option === null) return "—";
+  if (
+    antigravityFlashParts(option) !== null
+    || option.modelId === "gemini-2.5-flash"
+  ) {
+    return "65,536";
+  }
+  return "Unknown";
+}
+
+function providerUsageLabel(option: ProviderLaunchOption | null): string {
+  if (option?.providerId === "antigravity-cli") {
+    return "Account quota · credit fallback off";
+  }
+  if (option?.providerId === "gemini-api") return "Gemini API metered";
+  if (option?.providerKind === "MOCK") return "No remote tokens";
+  return "Not reported";
 }
 
 
@@ -100,6 +152,36 @@ function EditorialSelect({
   readonly onChange: (value: string) => void;
 }) {
   const selected = options.find((option) => option.value === value);
+  const detailsRef = useRef<HTMLDetailsElement | null>(null);
+
+  useEffect(() => {
+    const closeOnOutsidePointer = (event: PointerEvent): void => {
+      const details = detailsRef.current;
+      const target = event.target;
+      if (
+        details === null
+        || !details.open
+        || !(target instanceof Node)
+        || details.contains(target)
+      ) {
+        return;
+      }
+      details.removeAttribute("open");
+    };
+    const closeOnEscape = (event: KeyboardEvent): void => {
+      if (event.key !== "Escape") return;
+      const details = detailsRef.current;
+      if (details?.open !== true) return;
+      details.removeAttribute("open");
+      details.querySelector("summary")?.focus();
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer, true);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer, true);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, []);
 
   return (
     <>
@@ -120,6 +202,7 @@ function EditorialSelect({
         ))}
       </select>
       <details
+        ref={detailsRef}
         className={
           model
             ? "new-interview__custom-select new-interview__custom-select--model"
@@ -141,7 +224,7 @@ function EditorialSelect({
             <strong>{selected?.label ?? placeholder}</strong>
             {selected?.meta !== undefined && <small>{selected.meta}</small>}
           </span>
-          <i aria-hidden="true">⌄</i>
+          <i className="new-interview__select-caret" aria-hidden="true" />
         </summary>
         <div className="new-interview__custom-menu" role="listbox">
           {options.map((option) => (
@@ -282,20 +365,54 @@ export function NewInterviewPage({
     () => providerOptions.filter((option) => option.availability === "AVAILABLE"),
     [providerOptions]
   );
+  const selectableProviders = useMemo(() => {
+    const realProviders = availableProviders.filter(
+      (option) => option.providerKind !== "MOCK"
+    );
+    return realProviders.length > 0 ? realProviders : availableProviders;
+  }, [availableProviders]);
 
   useEffect(() => {
     if (
-      availableProviders.some((option) => providerKey(option) === selectedProviderKey)
+      selectableProviders.some((option) => providerKey(option) === selectedProviderKey)
     ) return;
-    setSelectedProviderKey(
-      availableProviders[0] === undefined ? "" : providerKey(availableProviders[0])
-    );
-  }, [availableProviders, selectedProviderKey]);
+    const preferred = selectableProviders.find(
+      (option) => option.modelId === "gemini-3.8-flash-medium"
+    ) ?? selectableProviders[0];
+    setSelectedProviderKey(preferred === undefined ? "" : providerKey(preferred));
+  }, [selectableProviders, selectedProviderKey]);
+
+  const modelFamilies = useMemo(() => {
+    const families: Array<{
+      readonly key: string;
+      readonly label: string;
+      readonly options: ProviderLaunchOption[];
+    }> = [];
+    for (const option of selectableProviders) {
+      const key = providerModelFamilyKey(option);
+      const existing = families.find((family) => family.key === key);
+      if (existing !== undefined) {
+        existing.options.push(option);
+        continue;
+      }
+      families.push({
+        key,
+        label: providerModelFamilyLabel(option),
+        options: [option]
+      });
+    }
+    return families;
+  }, [selectableProviders]);
 
   const selectedTarget =
     targets.find((entry) => targetKey(entry) === selectedTargetKey) ?? null;
   const selectedProvider =
-    providerOptions.find((option) => providerKey(option) === selectedProviderKey) ?? null;
+    selectableProviders.find((option) => providerKey(option) === selectedProviderKey) ?? null;
+  const selectedModelFamilyKey =
+    selectedProvider === null ? "" : providerModelFamilyKey(selectedProvider);
+  const selectedModelFamily =
+    modelFamilies.find((family) => family.key === selectedModelFamilyKey) ?? null;
+  const selectedReasoningTier = providerReasoningTier(selectedProvider);
   const durationCandidate =
     durationText.trim().length === 0 ? null : Number(durationText);
   const durationInvalid =
@@ -540,29 +657,83 @@ export function NewInterviewPage({
                 <div className="new-interview__error" role="alert"><p>{providerOptionsError}</p><button type="button" onClick={() => void onRefreshProviderOptions().catch(() => undefined)}>Retry providers</button></div>
               ) : (
                 <div className="new-interview__provider-main">
-                  <div className="new-interview__field">
-                    <span>Model</span>
-                    <EditorialSelect
-                      value={selectedProviderKey}
-                      options={providerOptions.map((option) => ({
-                        value: providerKey(option),
-                        label: `${option.providerDisplayName} · ${option.modelDisplayName}`,
-                        meta: option.availability === "AVAILABLE"
-                          ? `${providerRouteLabel(option)} · READY`
-                          : providerReason(option.reason),
-                        disabled: option.availability !== "AVAILABLE"
-                      }))}
-                      placeholder="No launch-ready provider"
-                      disabled={startPending || availableProviders.length === 0}
-                      testId="provider-select"
-                      model
-                      onChange={setSelectedProviderKey}
-                    />
+                  <select
+                    className="new-interview__test-select"
+                    value={selectedProviderKey}
+                    disabled={startPending || selectableProviders.length === 0}
+                    onChange={(event) => setSelectedProviderKey(event.target.value)}
+                    data-testid="provider-select"
+                    tabIndex={-1}
+                    aria-hidden="true"
+                  >
+                    {selectableProviders.map((option) => (
+                      <option key={providerKey(option)} value={providerKey(option)}>
+                        {option.modelDisplayName}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="new-interview__provider-controls">
+                    <div className="new-interview__field">
+                      <span>Model</span>
+                      <EditorialSelect
+                        value={selectedModelFamilyKey}
+                        options={modelFamilies.map((family) => ({
+                          value: family.key,
+                          label: family.label,
+                          meta: family.options[0] === undefined
+                            ? undefined
+                            : `${family.options[0].providerDisplayName} · ${providerRouteLabel(family.options[0])}`
+                        }))}
+                        placeholder="No launch-ready provider"
+                        disabled={startPending || modelFamilies.length === 0}
+                        testId="provider-model-select"
+                        model
+                        onChange={(familyKey) => {
+                          const family = modelFamilies.find(
+                            (candidate) => candidate.key === familyKey
+                          );
+                          if (family === undefined) return;
+                          const preferred = family.options.find(
+                            (option) => providerReasoningTier(option) === "medium"
+                          ) ?? family.options[0];
+                          if (preferred !== undefined) {
+                            setSelectedProviderKey(providerKey(preferred));
+                          }
+                        }}
+                      />
+                    </div>
+                    <div className="new-interview__field">
+                      <span>Reasoning</span>
+                      <EditorialSelect
+                        value={selectedProviderKey}
+                        options={(selectedModelFamily?.options ?? []).map((option) => ({
+                          value: providerKey(option),
+                          label: reasoningTierLabel(providerReasoningTier(option)),
+                          meta: option.providerId === "antigravity-cli"
+                            ? "Antigravity effort"
+                            : "Provider default"
+                        }))}
+                        placeholder="Default"
+                        disabled={
+                          startPending
+                          || selectedModelFamily === null
+                          || selectedModelFamily.options.length === 0
+                        }
+                        testId="provider-reasoning-select"
+                        onChange={setSelectedProviderKey}
+                      />
+                    </div>
                   </div>
-                  {selectedProvider !== null && <div className="new-interview__provider-facts"><span><b>PROVIDER</b>{selectedProvider.providerDisplayName}</span><span><b>MODEL</b>{selectedProvider.modelDisplayName}</span><span><b>ROUTE</b>{selectedProvider.providerId}</span></div>}
-                  {providerOptions.some((option) => option.availability === "UNAVAILABLE") && <details className="new-interview__unavailable"><summary>Registered but unavailable</summary><ul>
-                    {providerOptions.filter((option) => option.availability === "UNAVAILABLE").map((option) => <li key={providerKey(option)}><strong>{option.providerDisplayName} · {option.modelDisplayName}</strong><span>{providerReason(option.reason)}</span></li>)}
-                  </ul></details>}
+                  {selectedProvider !== null && (
+                    <div className="new-interview__provider-facts">
+                      <span><b>PROVIDER</b>{selectedProvider.providerDisplayName}</span>
+                      <span><b>MODEL</b>{providerModelFamilyLabel(selectedProvider)}</span>
+                      <span><b>REASONING</b>{reasoningTierLabel(selectedReasoningTier)}</span>
+                      <span><b>CONTEXT</b>{providerContextTokens(selectedProvider)} tokens</span>
+                      <span><b>MAX OUTPUT</b>{providerOutputTokens(selectedProvider)} tokens</span>
+                      <span><b>USAGE</b>{providerUsageLabel(selectedProvider)}</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -601,7 +772,7 @@ export function NewInterviewPage({
           <h3>{selectedTarget === null ? "Interview" : MODE_LABELS[selectedTarget.mode]}</h3>
           <p>{selectedTarget?.title ?? "Choose an available target"}</p>
           <div className="new-interview__slip-list">
-            <div><span>Model</span><strong>{selectedProvider === null ? "Not selected" : `${selectedProvider.providerDisplayName} · ${selectedProvider.modelDisplayName}`}</strong></div>
+            <div><span>Model</span><strong>{selectedProvider === null ? "Not selected" : `${providerModelFamilyLabel(selectedProvider)} · ${reasoningTierLabel(selectedReasoningTier)}`}</strong></div>
             <div><span>Intervention</span><strong>{INTERVENTION_LABELS[interventionPolicy]}</strong></div>
             <div><span>Input</span><strong>{mode === "OXFORD_MATHEMATICS" ? "Voice + tldraw + text" : "Structured"}</strong></div>
             <div><span>Duration</span><strong>{durationInvalid ? "Invalid" : durationText.trim().length === 0 ? "Open" : `${durationText} min`}</strong></div>
