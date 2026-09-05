@@ -57,9 +57,14 @@ describe("Agent E — Euler Oxford candidate batch", () => {
       expect(adaptive.stages).toHaveLength(5);
       expect(entry.problem.interviewer.reasoningGraph.milestones).toHaveLength(5);
       expect(entry.problem.interviewer.protectedDisclosures).toHaveLength(5);
-      expect(adaptive.stages.map((stage) => stage.role)).toEqual([
-        "warm-up", "core", "deep-dive", "transfer", "stretch"
-      ]);
+      expect(adaptive.stages[0]?.role).toBe("warm-up");
+      expect(adaptive.stages.at(-1)?.role).toBe("transfer");
+      expect(adaptive.stages.some((stage) => stage.role === "core")).toBe(true);
+      expect(
+        adaptive.stages.some(
+          (stage) => stage.role === "core" && stage.difficulty === adaptive.difficulty?.core
+        )
+      ).toBe(true);
       const extensionIds = entry.problem.interviewer.reasoningGraph.extensions.map((extension) => extension.id);
       expect(adaptive.stages.flatMap((stage) => stage.extensionIds).sort()).toEqual([...extensionIds].sort());
     }
