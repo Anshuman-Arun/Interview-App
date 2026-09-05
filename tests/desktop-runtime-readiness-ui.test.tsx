@@ -633,7 +633,15 @@ describe("desktop local AI readiness UX", () => {
     const installPythonRuntime = vi.fn(async () => {
       current = {
         ...current,
-        pythonSetup: { state: "INSTALLED", restartRequired: true }
+        python: {
+          state: "READY",
+          strategy: "SYSTEM_CPYTHON",
+          supportedVersions: ["3.12", "3.13"]
+        },
+        speech: { state: "MISSING_ASSET", reasonCode: "SPEECH_ASSET_MISSING" },
+        tts: { state: "MISSING_ASSET", reasonCode: "TTS_ASSET_MISSING" },
+        vision: { state: "MISSING_ASSET", reasonCode: "VISION_ASSET_MISSING" },
+        pythonSetup: { state: "IDLE", restartRequired: false }
       };
       return current;
     });
@@ -695,7 +703,10 @@ describe("desktop local AI readiness UX", () => {
     expect(installPythonRuntime).toHaveBeenCalledTimes(1);
     expect(findButton("Install voice models").disabled).toBe(false);
     expect(findButton("Install vision model").disabled).toBe(false);
-    expect(findButton("Restart Interview App").disabled).toBe(false);
+    expect(
+      Array.from(container.querySelectorAll("button"))
+        .some((button) => button.textContent.trim() === "Restart Interview App")
+    ).toBe(false);
 
     const voiceButton = findButton("Install voice models");
     const visionButton = findButton("Install vision model");
@@ -721,6 +732,54 @@ describe("desktop local AI readiness UX", () => {
       root.unmount();
     });
     Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT");
+  });
+
+  it("does not offer model reinstall after a prepared worker activation timeout", async () => {
+    Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
+    const current = runtimeStatus({
+      speech: { state: "UNAVAILABLE", reasonCode: "VOICE_RUNTIME_INCOMPLETE" },
+      tts: { state: "UNAVAILABLE", reasonCode: "START_CANCELLED" },
+      vision: { state: "UNAVAILABLE", reasonCode: "START_CANCELLED" }
+    });
+    const restartApp = vi.fn(async () => undefined);
+    vi.stubGlobal("interviewDesktop", {
+      getLocalRuntimeStatus: vi.fn(async () => current),
+      installPythonRuntime: vi.fn(async () => current),
+      installVoiceModels: vi.fn(async () => current),
+      installVisionModel: vi.fn(async () => current),
+      restartApp
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <AppearanceProvider>
+          <SettingsPage
+            providerOptions={[READY_PROVIDER]}
+            providerOptionsLoading={false}
+            providerOptionsError={null}
+          />
+        </AppearanceProvider>
+      );
+    });
+
+    expect(container.textContent).toContain("Installed — restart to retry");
+    expect(container.textContent).not.toContain("Install voice models");
+    expect(container.textContent).not.toContain("Install vision model");
+    const restart = Array.from(container.querySelectorAll("button"))
+      .find((button) => button.textContent.trim() === "Restart Interview App");
+    expect(restart).toBeInstanceOf(HTMLButtonElement);
+
+    await act(async () => {
+      (restart as HTMLButtonElement).click();
+    });
+    expect(restartApp).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root.unmount();
+    });
   });
 
   it("treats Antigravity as ready when a later published model is launch-ready", () => {
