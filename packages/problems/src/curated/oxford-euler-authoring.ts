@@ -234,7 +234,7 @@ export function makeEulerCandidateSpec(family: EulerFamilyDefinition): CuratedPr
     stages: family.stages.map((stage, index) => ({
       id: stage.id,
       role: stageRoleFor(family, index),
-      prerequisiteStageIds: index === 0 ? [] : [family.stages[index - 1]!.id],
+      prerequisiteStageIds: index === 0 ? [] : [stageIdAt(family, index - 1)],
       domains: family.domains,
       contentConcepts: stage.contentConcepts,
       skillEvidence: evidenceFor(stage.skills),
