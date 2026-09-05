@@ -889,6 +889,9 @@ describe("editorial v10 adversarial UI states", () => {
     );
     expect(frame).toMatch(/<button[^>]*disabled=""[^>]*>[^<]*<span[^>]*>02<\/span>[^<]*<span[^>]*>Sessions<\/span>/u);
     expect(frame).toMatch(/<button[^>]*disabled=""[^>]*>[^<]*<span[^>]*>03<\/span>[^<]*<span[^>]*>Settings<\/span>/u);
+    expect(frame).toMatch(
+      /class="product-frame__new"[^>]*disabled=""[^>]*title="Resume or finish the paused interview before starting a new interview\."/u
+    );
 
     const home = renderToStaticMarkup(
       <HomePage
