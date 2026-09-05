@@ -22,7 +22,7 @@ The authored timing estimates are low-confidence planning metadata only. They ar
 ## Completion-pass changes
 
 - Hilbert hard rejects `rectangle-area-table` and `difference-closed-sets` were removed, leaving **17 survivors**.
-- `quadrilateral-balance` provenance is now `structural-adaptation / classic-mathematics`.
+- `quadrilateral-balance` provenance is now `structural-adaptation / classic-mathematics` with internal `referenceFamilyId: british-flag-theorem`.
 - Core roles are explicit by stage ID rather than inferred from difficulty.
 - Family and stage timing is individually authored for every survivor; no generic cross-portfolio timing table remains.
 - `circle-sweep` is now `introductory / strong / stretch`, with `circle-equation` as `technique-check` and `parameter-test` as `core`.
