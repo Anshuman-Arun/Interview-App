@@ -345,6 +345,11 @@ export interface OxfordDifficultyProfile {
 export interface OxfordMilestoneEvidence {
   readonly milestoneId: string;
   readonly skillEvidence: readonly OxfordSkillEvidence[];
+  /**
+   * Fine mathematical content directly exercised by this milestone.
+   * Empty is valid when the milestone is purely a reasoning/process checkpoint.
+   */
+  readonly contentConcepts: readonly OxfordContentConcept[];
 }
 
 export interface OxfordStageMetadata {
@@ -352,6 +357,7 @@ export interface OxfordStageMetadata {
   readonly role: OxfordStageRole;
   readonly prerequisiteStageIds: readonly string[];
   readonly domains: readonly OxfordMathDomain[];
+  readonly contentConcepts: readonly OxfordContentConcept[];
   readonly skillEvidence: readonly OxfordSkillEvidence[];
   readonly milestones: readonly OxfordMilestoneEvidence[];
   readonly extensionIds: readonly string[];
@@ -388,6 +394,7 @@ export interface OxfordAdaptiveMetadata {
   readonly familyId: string;
   readonly similarityClusterId?: string;
   readonly domains: readonly OxfordMathDomain[];
+  readonly contentConcepts: readonly OxfordContentConcept[];
   readonly prerequisiteConcepts: readonly OxfordPrerequisiteConcept[];
   readonly skillEvidence: readonly OxfordSkillEvidence[];
   readonly difficulty?: OxfordDifficultyProfile;
@@ -401,6 +408,7 @@ export interface OxfordAdaptiveMetadata {
 }
 
 const DOMAIN_SET = new Set<string>(OXFORD_MATH_DOMAINS);
+const CONTENT_CONCEPT_SET = new Set<string>(OXFORD_CONTENT_CONCEPTS);
 const SKILL_SET = new Set<string>(OXFORD_REASONING_SKILLS);
 const PREREQUISITE_SET = new Set<string>(OXFORD_PREREQUISITE_CONCEPTS);
 const STAGE_ROLE_SET = new Set<string>(OXFORD_STAGE_ROLES);
@@ -426,6 +434,7 @@ export function createProvisionalLegacyOxfordMetadata(
     status: "provisional-legacy",
     familyId: problemId,
     domains: [],
+    contentConcepts: [],
     prerequisiteConcepts: [],
     skillEvidence: [],
     novelty: "unknown",
@@ -467,6 +476,12 @@ export function assertOxfordAdaptiveMetadataIntegrity(
 
   assertCanonicalMembers(metadata.domains, DOMAIN_SET, "Oxford mathematical domain");
   assertCanonicalMembers(
+    metadata.contentConcepts,
+    CONTENT_CONCEPT_SET,
+    "Oxford content concept"
+  );
+  assertContentConceptHierarchy(metadata.contentConcepts, metadata.domains, "Oxford problem");
+  assertCanonicalMembers(
     metadata.prerequisiteConcepts,
     PREREQUISITE_SET,
     "Oxford prerequisite concept"
@@ -495,6 +510,9 @@ export function assertOxfordAdaptiveMetadataIntegrity(
 
   if (metadata.domains.length === 0) {
     throw new Error("Authored Oxford metadata must define at least one mathematical domain");
+  }
+  if (metadata.contentConcepts.length === 0) {
+    throw new Error("Authored Oxford metadata must define at least one assessed content concept");
   }
   if (metadata.skillEvidence.length === 0) {
     throw new Error("Authored Oxford metadata must define at least one problem-level reasoning skill");
@@ -548,6 +566,7 @@ export function assertOxfordAdaptiveMetadataIntegrity(
 function assertProvisionalLegacyMetadata(metadata: OxfordAdaptiveMetadata): void {
   if (
     metadata.domains.length !== 0
+    || metadata.contentConcepts.length !== 0
     || metadata.prerequisiteConcepts.length !== 0
     || metadata.skillEvidence.length !== 0
     || metadata.stages.length !== 0
