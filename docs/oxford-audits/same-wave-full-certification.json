@@ -11,7 +11,7 @@
       {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5",
+        "head": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
         "surviving": 18,
         "prunedSinceInitial": 2
       },
@@ -25,7 +25,7 @@
       {
         "agent": "E — Euler",
         "number": 134,
-        "head": "165bb3100fb894158969abb808caad5bc9150807",
+        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
         "surviving": 17,
         "prunedSinceInitial": 2
       }
@@ -109,12 +109,12 @@
   "audits": [
     {
       "familyId": "oxford-cantor-moving-v-envelope",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
+        "head": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -174,7 +174,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -268,12 +268,12 @@
     },
     {
       "familyId": "oxford-cantor-reciprocal-root-parabolas",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
+        "head": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -333,7 +333,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -431,12 +431,12 @@
     },
     {
       "familyId": "oxford-cantor-cubic-two-thresholds",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
+        "head": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -495,7 +495,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -593,12 +593,12 @@
     },
     {
       "familyId": "oxford-cantor-cubic-divided-difference",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
+        "head": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -657,7 +657,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -756,12 +756,12 @@
     },
     {
       "familyId": "oxford-cantor-integral-sign-landscape",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
+        "head": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -817,7 +817,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -910,12 +910,12 @@
     },
     {
       "familyId": "oxford-cantor-reciprocal-paired-inputs",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
+        "head": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -972,7 +972,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -1070,12 +1070,12 @@
     },
     {
       "familyId": "oxford-cantor-exponential-rotating-line",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
+        "head": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -1134,7 +1134,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -1228,12 +1228,12 @@
     },
     {
       "familyId": "oxford-cantor-mobius-recurrence",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
+        "head": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -1292,7 +1292,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -1386,12 +1386,12 @@
     },
     {
       "familyId": "oxford-cantor-squared-error-recurrence",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
+        "head": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -1449,7 +1449,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -1543,12 +1543,12 @@
     },
     {
       "familyId": "oxford-cantor-absolute-quadratic-crossings",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
+        "head": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -1605,7 +1605,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -1698,12 +1698,12 @@
     },
     {
       "familyId": "oxford-cantor-radical-asymptote",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
+        "head": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -1761,7 +1761,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -1854,12 +1854,12 @@
     },
     {
       "familyId": "oxford-cantor-shifted-cubic-intersections",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
+        "head": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -1919,7 +1919,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -2017,12 +2017,12 @@
     },
     {
       "familyId": "oxford-cantor-moving-integral-window",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
+        "head": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -2080,7 +2080,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -2173,12 +2173,12 @@
     },
     {
       "familyId": "oxford-cantor-reciprocal-implicit-curve",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
+        "head": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -2236,7 +2236,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -2330,12 +2330,12 @@
     },
     {
       "familyId": "oxford-cantor-three-cycle-map",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
+        "head": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -2394,7 +2394,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -2493,12 +2493,12 @@
     },
     {
       "familyId": "oxford-cantor-quartic-horizontal-levels",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
+        "head": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -2556,7 +2556,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -2649,12 +2649,12 @@
     },
     {
       "familyId": "oxford-cantor-reciprocal-increment-recurrence",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
+        "head": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -2712,7 +2712,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -2806,12 +2806,12 @@
     },
     {
       "familyId": "oxford-cantor-mobius-involution",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
+        "head": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -2869,7 +2869,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -3026,7 +3026,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -3178,7 +3178,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -3336,7 +3336,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -3488,7 +3488,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -3640,7 +3640,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -3797,7 +3797,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -3949,7 +3949,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -4106,7 +4106,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -4258,7 +4258,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -4410,7 +4410,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -4562,7 +4562,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -4714,7 +4714,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -4812,12 +4812,12 @@
     },
     {
       "familyId": "oxford-euler-box-diagonal-bisector",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-box-diagonal-bisector.ts @ 165bb3100fb894158969abb808caad5bc9150807",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-box-diagonal-bisector.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "165bb3100fb894158969abb808caad5bc9150807"
+        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -4877,7 +4877,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -4971,12 +4971,12 @@
     },
     {
       "familyId": "oxford-euler-circle-sweep",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-circle-sweep.ts @ 165bb3100fb894158969abb808caad5bc9150807",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-circle-sweep.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "165bb3100fb894158969abb808caad5bc9150807"
+        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -5036,7 +5036,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -5134,12 +5134,12 @@
     },
     {
       "familyId": "oxford-euler-cooling-data-model",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-cooling-data-model.ts @ 165bb3100fb894158969abb808caad5bc9150807",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-cooling-data-model.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "165bb3100fb894158969abb808caad5bc9150807"
+        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -5199,7 +5199,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -5293,12 +5293,12 @@
     },
     {
       "familyId": "oxford-euler-corner-balanced-tables",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-corner-balanced-tables.ts @ 165bb3100fb894158969abb808caad5bc9150807",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-corner-balanced-tables.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "165bb3100fb894158969abb808caad5bc9150807"
+        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -5359,7 +5359,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -5452,12 +5452,12 @@
     },
     {
       "familyId": "oxford-euler-diagonal-blend-transform",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-diagonal-blend-transform.ts @ 165bb3100fb894158969abb808caad5bc9150807",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-diagonal-blend-transform.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "165bb3100fb894158969abb808caad5bc9150807"
+        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -5518,7 +5518,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -5616,12 +5616,12 @@
     },
     {
       "familyId": "oxford-euler-kiosk-grid-model",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-kiosk-grid-model.ts @ 165bb3100fb894158969abb808caad5bc9150807",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-kiosk-grid-model.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "165bb3100fb894158969abb808caad5bc9150807"
+        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -5682,7 +5682,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -5775,12 +5775,12 @@
     },
     {
       "familyId": "oxford-euler-locally-balanced-labels",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-locally-balanced-labels.ts @ 165bb3100fb894158969abb808caad5bc9150807",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-locally-balanced-labels.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "165bb3100fb894158969abb808caad5bc9150807"
+        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -5841,7 +5841,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -5934,12 +5934,12 @@
     },
     {
       "familyId": "oxford-euler-periodic-queue-model",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-periodic-queue-model.ts @ 165bb3100fb894158969abb808caad5bc9150807",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-periodic-queue-model.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "165bb3100fb894158969abb808caad5bc9150807"
+        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -6001,7 +6001,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -6095,12 +6095,12 @@
     },
     {
       "familyId": "oxford-euler-quadrilateral-balance",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-quadrilateral-balance.ts @ 165bb3100fb894158969abb808caad5bc9150807",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-quadrilateral-balance.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "165bb3100fb894158969abb808caad5bc9150807"
+        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -6161,7 +6161,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -6260,12 +6260,12 @@
     },
     {
       "familyId": "oxford-euler-random-adjacent-consecutives",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-random-adjacent-consecutives.ts @ 165bb3100fb894158969abb808caad5bc9150807",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-random-adjacent-consecutives.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "165bb3100fb894158969abb808caad5bc9150807"
+        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -6326,7 +6326,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -6419,12 +6419,12 @@
     },
     {
       "familyId": "oxford-euler-random-chord-midpoint",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-random-chord-midpoint.ts @ 165bb3100fb894158969abb808caad5bc9150807",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-random-chord-midpoint.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "165bb3100fb894158969abb808caad5bc9150807"
+        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -6484,7 +6484,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -6577,12 +6577,12 @@
     },
     {
       "familyId": "oxford-euler-random-halving-interval",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-random-halving-interval.ts @ 165bb3100fb894158969abb808caad5bc9150807",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-random-halving-interval.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "165bb3100fb894158969abb808caad5bc9150807"
+        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -6644,7 +6644,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -6737,12 +6737,12 @@
     },
     {
       "familyId": "oxford-euler-random-subset-blocks",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-random-subset-blocks.ts @ 165bb3100fb894158969abb808caad5bc9150807",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-random-subset-blocks.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "165bb3100fb894158969abb808caad5bc9150807"
+        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -6802,7 +6802,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -6896,12 +6896,12 @@
     },
     {
       "familyId": "oxford-euler-self-averaging-sets",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-self-averaging-sets.ts @ 165bb3100fb894158969abb808caad5bc9150807",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-self-averaging-sets.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "165bb3100fb894158969abb808caad5bc9150807"
+        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -6961,7 +6961,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -7054,12 +7054,12 @@
     },
     {
       "familyId": "oxford-euler-stop-on-change",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-stop-on-change.ts @ 165bb3100fb894158969abb808caad5bc9150807",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-stop-on-change.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "165bb3100fb894158969abb808caad5bc9150807"
+        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -7120,7 +7120,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -7214,12 +7214,12 @@
     },
     {
       "familyId": "oxford-euler-tank-gauge-model",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-tank-gauge-model.ts @ 165bb3100fb894158969abb808caad5bc9150807",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-tank-gauge-model.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "165bb3100fb894158969abb808caad5bc9150807"
+        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -7279,7 +7279,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -7372,12 +7372,12 @@
     },
     {
       "familyId": "oxford-euler-triangle-midpoint-cycle",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-triangle-midpoint-cycle.ts @ 165bb3100fb894158969abb808caad5bc9150807",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-triangle-midpoint-cycle.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "165bb3100fb894158969abb808caad5bc9150807"
+        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -7437,7 +7437,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=29ae86d5bccfa10eb91987bfaccc94adfbd57fcf, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
