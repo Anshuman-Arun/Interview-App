@@ -55,6 +55,7 @@ export const oxfordDThreeReversalPermutationsSpec: CuratedProblemSpec = {
     novelty: "high",
     abstraction: "low",
     introducesNewDefinition: false,
+    provenance: { originType: "classic-problem", sourceCategory: "classic-mathematics" },
     stages: [
       { id: "three-reversal-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["combinatorics"], contentConcepts: ["parity"], skillEvidence: [evidence("small-case-exploration", "primary"), evidence("invariants", "supporting")], milestones: [{ milestoneId: "inspect-single-reversal", skillEvidence: [evidence("small-case-exploration", "primary")], contentConcepts: ["parity"] }], extensionIds: [], difficulty: "introductory" },
       { id: "three-reversal-core", role: "core", prerequisiteStageIds: ["three-reversal-opening"], domains: ["combinatorics"], contentConcepts: ["parity", "counting-structure"], skillEvidence: [evidence("invariants", "primary"), evidence("representation-switching", "primary"), evidence("proof-construction", "primary")], milestones: [
@@ -123,6 +124,7 @@ export const oxfordDDivisorStepGeometrySpec: CuratedProblemSpec = {
     novelty: "high",
     abstraction: "moderate",
     introducesNewDefinition: true,
+    provenance: { originType: "classic-problem", sourceCategory: "classic-mathematics" },
     stages: [
       { id: "divisor-geometry-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["number-theory", "graph-theory", "combinatorics"], contentConcepts: ["prime-structure", "divisibility", "paths-cycles-connectivity"], skillEvidence: [evidence("visualization", "primary"), evidence("small-case-exploration", "supporting")], milestones: [{ milestoneId: "draw-small-divisor-graphs", skillEvidence: [evidence("visualization", "primary"), evidence("small-case-exploration", "supporting")], contentConcepts: ["divisibility", "paths-cycles-connectivity"] }], extensionIds: [], difficulty: "introductory", introducesNewDefinition: true },
       { id: "divisor-geometry-core", role: "core", prerequisiteStageIds: ["divisor-geometry-opening"], domains: ["number-theory", "graph-theory", "combinatorics"], contentConcepts: ["prime-structure", "divisibility", "paths-cycles-connectivity", "counting-structure"], skillEvidence: [evidence("representation-switching", "primary"), evidence("proof-construction", "primary"), evidence("technique", "supporting")], milestones: [
