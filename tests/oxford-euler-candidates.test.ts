@@ -154,7 +154,8 @@ describe("Agent E — Euler Oxford candidate batch", () => {
     )?.metadata.oxfordAdaptive;
     expect(quadrilateral?.provenance).toEqual({
       originType: "structural-adaptation",
-      sourceCategory: "classic-mathematics"
+      sourceCategory: "classic-mathematics",
+      referenceFamilyId: "british-flag-theorem"
     });
     expect(quadrilateral?.review.originality).toBe("in-review");
     expect(quadrilateral?.review.fidelity).toBe("in-review");
