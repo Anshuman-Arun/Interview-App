@@ -42,7 +42,7 @@ export function ProductFrame({
   useEffect(() => {
     if (initialHeadingRef.current) {
       initialHeadingRef.current = false;
-      globalThis.getSelection?.()?.removeAllRanges();
+      globalThis.getSelection()?.removeAllRanges();
       return;
     }
     headingRef.current?.focus({ preventScroll: true });
