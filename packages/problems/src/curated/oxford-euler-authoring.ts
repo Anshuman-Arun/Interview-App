@@ -128,7 +128,7 @@ const EULER_AUTHORING_PROFILES: Readonly<Record<string, EulerFamilyAuthoringProf
     })
   }),
   "oxford-euler-random-chord-midpoint": Object.freeze({
-    familyTiming: timing([0.5, 2], [13, 22], [10, 18], 20, [4, 7]),
+    familyTiming: timing([0.5, 2], [14, 22], [10, 18], 20, [4, 7]),
     stages: Object.freeze({
       "opening": Object.freeze({ role: "warm-up", timing: timing([0.5, 1.5], [2, 3], [1, 2.5], 3.5) }),
       "local-formula": Object.freeze({ role: "technique-check", timing: timing([0.5, 1.5], [2, 4], [1.5, 3], 4) }),
