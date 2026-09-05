@@ -253,19 +253,64 @@
         8
       ]
     },
-    "timing_warning": "Stage ranges are internal low-confidence authoring heuristics, not Oxford-published expected times."
+    "timing_warning": "Stage ranges are internal low-confidence authoring heuristics, not Oxford-published expected times.",
+    "timing_semantics": {
+      "authority": "internal-planning-estimate-only",
+      "mandatory_stage_targets": false,
+      "hard_runtime_cutoffs": false,
+      "natural_transition_priority": true,
+      "family_specific_deviation": "expected-and-allowed",
+      "note": "Oxford anchors whole-interview duration, not per-stage pacing. One core development may occupy most of an interview; stages should change at mathematically natural points rather than nominal minute boundaries."
+    },
+    "internal_stage_planning_minutes_semantics": "soft-default-authoring-heuristics-not-required-ranges"
   },
   "agent_a_mapping": {
-    "branch_commit_reviewed": "6fd99b418b92e6b754b9f4f3138af420480ab730",
+    "branch_commit_reviewed": "00824aebdc7392c9c83a2c1cd29bb02c93b73487",
     "contract_fit": "strong",
     "requested_additions_only": [
       {
         "proposed_skill": "guided-adaptation",
-        "reason": "Official evidence repeatedly treats absorbing and using tutor prompts/new ideas as an assessment signal."
+        "status_at_reviewed_head": "absent",
+        "reason": "Separates the amount of tutor assistance needed from the quality of mathematical uptake after a prompt/new idea. Distinct from error-recovery, transfer, and independence."
       },
       {
         "proposed_skill": "precision-checking",
-        "reason": "Official sample and preparation material explicitly value checking omitted cases, assumptions, and argument sufficiency."
+        "status_at_reviewed_head": "absent",
+        "reason": "Captures deliberate checking of cases, assumptions, domain restrictions, signs, graphical sufficiency, and proof completeness even when no error has yet occurred."
+      }
+    ],
+    "pr_number": 126,
+    "reconciliation_status": "two-evidence-driven-skills-still-absent"
+  },
+  "frequency_semantics": "coverage-only-not-empirical",
+  "portfolio_semantics": {
+    "purpose": "coverage-capacity targets for bank construction",
+    "not_interpretable_as": [
+      "historical Oxford question frequencies",
+      "empirical Oxford topic percentages",
+      "recommendation sampling weights",
+      "recommendation priors"
+    ],
+    "recommendation_inputs_should_include": [
+      "student need / grounded weakness evidence",
+      "uncertainty / evidence scarcity",
+      "difficulty fit",
+      "prerequisite readiness",
+      "recent topic and family exposure",
+      "familyId repetition control",
+      "similarityClusterId repetition control",
+      "calibrated content availability"
+    ],
+    "constraint": "Domain counts constrain authored breadth/capacity only. A future recommender must not sample families in proportion to these counts."
+  },
+  "evidence_cutoff": {
+    "local_date": "2026-09-04",
+    "timezone": "America/Los_Angeles",
+    "future_material_not_used": [
+      {
+        "source": "Oxford Maths Admissions Test Livestream 2026 — Precision",
+        "scheduled_date": "2026-09-17",
+        "rule": "Title/schedule may be noted; unpublished session content is not substantive evidence."
       }
     ]
   }
