@@ -394,7 +394,7 @@ export function NewInterviewPage({
               ) : (
                 <div className="new-interview__provider-main">
                   <label className="new-interview__field"><span>Model</span><div className="new-interview__select-wrap new-interview__select-wrap--model">
-                    <select value={selectedProviderKey} onChange={(event) => setSelectedProviderKey(event.target.value)} disabled={startPending || providerOptionsLoading || availableProviders.length === 0} data-testid="provider-select">
+                    <select value={selectedProviderKey} onChange={(event) => setSelectedProviderKey(event.target.value)} disabled={startPending || availableProviders.length === 0} data-testid="provider-select">
                       {availableProviders.length === 0 && <option value="">No launch-ready provider</option>}
                       {availableProviders.map((option) => <option key={providerKey(option)} value={providerKey(option)}>{option.providerDisplayName} · {option.modelDisplayName}</option>)}
                     </select><i aria-hidden="true">⌄</i>
