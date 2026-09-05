@@ -225,6 +225,7 @@ export function ProductPageRouter({
       }
       reasoningChecking={providerOptionsLoading}
       navigationLocked={(activeSessionPaused ?? false) && activeSessionId !== null}
+      transitionLocked={sessionEntryPending}
       notice={notice}
       onDismissNotice={onDismissNotice}
     >

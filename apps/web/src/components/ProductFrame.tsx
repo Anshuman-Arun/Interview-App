@@ -16,7 +16,8 @@ export function ProductFrame({
   onDismissNotice,
   reasoningReady = true,
   reasoningChecking = false,
-  navigationLocked = false
+  navigationLocked = false,
+  transitionLocked = false
 }: {
   readonly activePage: ProductPageId | null;
   readonly title: string;
@@ -29,6 +30,7 @@ export function ProductFrame({
   readonly reasoningReady?: boolean;
   readonly reasoningChecking?: boolean;
   readonly navigationLocked?: boolean;
+  readonly transitionLocked?: boolean;
 }) {
   const headingRef = useRef<HTMLHeadingElement | null>(null);
 
@@ -43,12 +45,14 @@ export function ProductFrame({
   ];
 
   return (
-    <div className="product-frame">
+    <div className="product-frame" aria-busy={transitionLocked}>
       <aside className="product-frame__rail" data-product-rail>
         <button
           type="button"
           className="product-frame__brand"
           onClick={() => onNavigate("home")}
+          disabled={transitionLocked}
+          title={transitionLocked ? "Session transition in progress." : undefined}
           aria-label="Open Home"
         >
           <BrandMark size={24} title="Interview" />
@@ -59,6 +63,8 @@ export function ProductFrame({
           type="button"
           className="product-frame__new"
           onClick={() => onNavigate("new")}
+          disabled={transitionLocked}
+          title={transitionLocked ? "Session transition in progress." : undefined}
         >
           <span>New interview</span>
           <span aria-hidden="true">↗</span>
@@ -76,11 +82,16 @@ export function ProductFrame({
                   : "product-frame__nav-item"
               }
               aria-current={activePage === item.id ? "page" : undefined}
-              disabled={navigationLocked && item.id !== "home"}
+              disabled={
+                transitionLocked
+                || (navigationLocked && item.id !== "home")
+              }
               title={
-                navigationLocked && item.id !== "home"
-                  ? "Resume or finish the paused interview before opening this page."
-                  : undefined
+                transitionLocked
+                  ? "Session transition in progress."
+                  : navigationLocked && item.id !== "home"
+                    ? "Resume or finish the paused interview before opening this page."
+                    : undefined
               }
               onClick={() => onNavigate(item.id)}
             >

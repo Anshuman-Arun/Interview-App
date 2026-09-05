@@ -1121,4 +1121,35 @@ describe("editorial v10 adversarial UI states", () => {
     expect(app).toContain("session.verifyAvailableSessions()");
   });
 
+  it("locks shared product navigation while a session entry transition is pending", async () => {
+    await act(async () => {
+      root?.render(
+        <AppearanceProvider>
+          <ProductFrame
+            activePage={null}
+            title="New interview"
+            kicker="Configure the room"
+            onNavigate={vi.fn()}
+            transitionLocked
+          >
+            content
+          </ProductFrame>
+        </AppearanceProvider>
+      );
+    });
+
+    const railButtons = Array.from(
+      document.querySelectorAll(".product-frame__rail button")
+    );
+    expect(railButtons.length).toBeGreaterThan(0);
+    for (const button of railButtons) {
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error("Product rail action was not a button");
+      }
+      expect(button.disabled).toBe(true);
+    }
+    expect(document.querySelector(".product-frame")?.getAttribute("aria-busy"))
+      .toBe("true");
+  });
+
 });
