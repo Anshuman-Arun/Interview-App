@@ -1,6 +1,7 @@
 export * from "./problem-integrity.js";
 export * from "./curated-authoring.js";
 export * from "./oxford-adaptive-taxonomy.js";
+export * from "./oxford-calibration-review.js";
 export * from "./six-people.js";
 export * from "./hilbert-hotel.js";
 export * from "./prisoner-hats.js";
