@@ -4,7 +4,7 @@ Agent: E — Euler
 
 ## Status
 
-This batch contributes **17 surviving candidate Oxford Mathematics interview families** through the existing curated authoring path. Every candidate is deliberately quarantined as `expert-review`; none is added to the live Oxford catalog and none is recommendation-ready.
+This batch contributes **13 surviving candidate Oxford Mathematics interview families** through the existing curated authoring path. Every candidate is deliberately quarantined as `expert-review`; none is added to the live Oxford catalog and none is recommendation-ready.
 
 The frozen Oxford adaptive taxonomy/schema from PR #126 is used unchanged. No domain, content-concept, prerequisite, stage-role, difficulty-band, reasoning-skill, provenance, or review-status tags are added by this work.
 
@@ -19,27 +19,25 @@ All independent gates remain pending:
 
 The authored timing estimates are low-confidence planning metadata only. They are never candidate-visible.
 
-## Completion-pass changes
+## Final synchronization changes
 
-- Hilbert hard rejects `rectangle-area-table` and `difference-closed-sets` were removed, leaving **17 survivors**.
-- `quadrilateral-balance` provenance is now `structural-adaptation / classic-mathematics` with internal `referenceFamilyId: british-flag-theorem`.
-- Core roles are explicit by stage ID rather than inferred from difficulty.
-- Family and stage timing is individually authored for every survivor; no generic cross-portfolio timing table remains.
-- `circle-sweep` is now `introductory / strong / stretch`, with `circle-equation` as `technique-check` and `parameter-test` as `core`.
-- `self-averaging-sets` now uses `set-theory / set-maps / set-notation` and places the finite-orbit contraction argument at the strong core.
-- `periodic-queue-model` now fixes nonnegative integer `a,b,q_0`, positive integer `s`, odd starting phase, and arrivals-before-service.
-- Candidate-visible range/independence/nondegeneracy assumptions were tightened across other surviving visual, probability, definition-led, and modelling families.
+- Removed Hilbert hard rejects `locally-balanced-labels`, `random-adjacent-consecutives`, `stop-on-change`, and `random-subset-blocks`; final count is **13**.
+- No replacement families were added.
+- Preserved all Gauss-approved taxonomy/difficulty metadata.
+- Applied the four exact Gauss timing corrections to circle sweep, box diagonal bisector, periodic queue, and kiosk grid.
+- Added structural-adaptation/classic-mathematics provenance for corner-balanced tables, periodic queue, cooling data, and random halving interval.
+- Did not change any surviving mathematical prompt, solution, protected hint, recurrence, or extension.
 
 ## Portfolio coverage
 
-The 17 surviving families include:
+The 13 surviving families include:
 
 - **7 visualization-heavy families**;
 - **4 modelling-tagged families**;
-- **5 unfamiliar-definition / mini-theory families**;
-- **5 probability-domain families**;
-- **17 representation-switching families**;
-- **16 transfer-tagged families**.
+- **4 unfamiliar-definition / mini-theory families**;
+- **2 probability-domain families**;
+- **13 representation-switching families**;
+- **12 transfer-tagged families**.
 
 The batch is intentionally biased toward gaps identified in the Wave 1 portfolio: Euclidean/coordinate visualization, whiteboard-native structure, modelling, unfamiliar definitions, converse/boundary work, and elementary probability.
 
@@ -52,11 +50,9 @@ The strongest whiteboard-native families are:
 4. `oxford-euler-circle-sweep`;
 5. `oxford-euler-triangle-midpoint-cycle`;
 6. `oxford-euler-box-diagonal-bisector`;
-7. `oxford-euler-locally-balanced-labels`;
 8. `oxford-euler-diagonal-blend-transform`;
 10. `oxford-euler-corner-balanced-tables`;
 11. `oxford-euler-kiosk-grid-model`;
-12. `oxford-euler-random-subset-blocks`;
 13. `oxford-euler-random-halving-interval`.
 
 These are designed so an interviewer can learn from what the candidate chooses to draw, how they label it, whether they test boundary configurations, and whether they can replace a suggestive sketch with an exact algebraic/combinatorial model.
@@ -70,7 +66,6 @@ These are designed so an interviewer can learn from what the candidate chooses t
 | `circle-sweep` | diameter-circle equation -> linear parameter elimination -> between-endpoints criterion -> sign-product region -> parameter transfer | positive coordinate axes, moving endpoints A/B, one-parameter family of diameter circles, two endpoint boundary circles |
 | `triangle-midpoint-cycle` | three midpoint maps -> one affine cycle map -> weighted fixed point -> exact contraction -> order transfer | triangle ABC plus moving P and three successive midpoint moves |
 | `box-diagonal-bisector` | equidistance plane -> scaled cube -> edge-validity inequalities -> 4/6-vertex topology transition | rectangular box, opposite body-diagonal vertices, central oblique plane, edge-intersection polygon |
-| `locally-balanced-labels` | local average definition -> equal first differences on paths -> arithmetic progression -> cycle maximum principle -> graph transfer | path/cycle graph with numeric labels; local triples are the primitive visual unit |
 | `diagonal-blend-transform` | custom coordinate transform -> second iterate is scalar -> uniform metric scaling -> invariant-direction equation -> parameter family | coordinate axes, sample points/simple shapes, image vectors and candidate invariant lines |
 | `self-averaging-sets` | unfamiliar averaging rule -> affine self-map on finite set -> contraction around mean -> orbit contradiction -> definition variant | diagram not essential; optional number line showing mean and contracted images |
 | `corner-balanced-tables` | adjacent 2x2 diagonal-sum rule -> propagated differences -> row+column decomposition -> converse -> degrees of freedom | m-by-n cell table; adjacent 2x2 blocks and first-row/first-column boundary data |
@@ -78,9 +73,6 @@ These are designed so an interviewer can learn from what the candidate chooses t
 | `periodic-queue-model` | reflected queue recurrence -> period compression -> net drift -> stability vs exact emptying -> longer-period transfer | optional staircase/time table or queue bars; exact event order should be written |
 | `kiosk-grid-model` | square-cell reduction -> expected Manhattan access distance -> 1/m versus m^2 objective -> continuous relaxation -> discrete/assumption audit | square tessellated into m-by-m cells with one center kiosk per cell |
 | `cooling-data-model` | raw data -> recenter at ambient -> geometric gap recurrence -> prediction/sanity check -> changed ambient | temperature-time points plus an ambient reference line |
-| `random-adjacent-consecutives` | random permutation -> value-pair adjacency indicators -> linearity of expectation -> circular transfer -> difference-d transfer | row/circle of permuted values; candidate can mark adjacent value-pair events |
-| `stop-on-change` | initial-run process -> exact stopping distribution -> expectation recursion -> condition on first face -> bias analysis | optional small outcome tree; diagram not mathematically essential |
-| `random-subset-blocks` | random binary occupancy -> block-start indicators -> line expectation -> circular transition correction -> biased inclusion | binary occupancy marks on a line/cycle; blocks and 0-to-1 starts are visible |
 | `random-halving-interval` | repeated halving -> binary word -> dyadic cell index -> discrete-uniform midpoint moments -> biased-digit transfer | interval binary tree and dyadic subdivision of [0,1] |
 
 ## Originality work performed by Agent E
@@ -135,9 +127,7 @@ Same-wave near-neighbor mechanisms are explicitly clustered so a later recommend
 
 - `euler-distance-loci`: quadrilateral balance; circle sweep;
 - `euler-affine-dynamics`: triangle midpoint cycle; diagonal blend transform;
-- `euler-local-balance`: locally balanced labels; corner-balanced tables;
 - `euler-discrete-dynamics-model`: periodic queue; cooling data;
-- `euler-local-indicator-expectation`: random adjacent consecutives; random subset blocks.
 
 A similarity cluster is not an originality failure; it is a conservative curriculum-separation signal.
 
@@ -146,9 +136,8 @@ A similarity cluster is not an originality failure; it is a conservative curricu
 Highest-priority external retrieval:
 
 - **quadrilateral balance** — contains the classical rectangle squared-distance identity as an exceptional subcase; the full quadrilateral classification needs independent novelty scrutiny;
-- **locally balanced labels / corner-balanced tables** — local harmonic/additive-separability mechanisms have many classical neighbors;
+- **corner-balanced tables** — additive-separability / vanishing mixed-difference structure is standard, so provenance now reflects structural adaptation;
 - **diagonal blend transform** — changing coefficients in a linear map is not itself originality; compare the full progression and invariant-line mechanism;
-- **random adjacent consecutives** and **stop on change** — elementary probability kernels are likely to have many textbook near-neighbors;
 - **cooling data model** — multiplicative decay about an ambient level is classical, so fidelity/originality must rest on the interview progression and model-revision work rather than the recurrence alone;
 - **random chord midpoint** — the zero-sum regular-polygon vector trick may have direct expectation variants.
 
@@ -161,7 +150,6 @@ Priority checks:
 - **quadrilateral balance**: equivalence of opposite-vertex vector sum with the parallelogram case and rectangle characterization;
 - **periodic queue**: event-order convention, reflecting boundary, zero-drift periodic cases, and any statement about emptying;
 - **random chord midpoint**: ordered-vs-unordered conditioning and with-replacement treatment;
-- **random subset blocks**: circular all-selected correction and n=1/n=2 conventions;
 - **random halving interval**: dyadic endpoint conventions and biased-bit expectation;
 
 All other families still require full independent correctness review; this list is only triage.
@@ -173,7 +161,7 @@ Every survivor now has a distinct family timing estimate and five stage-ID-speci
 Particular calibration traps:
 
 - visually simple openings can have a high proof ceiling (`circle-sweep`, `box-diagonal-bisector`);
-- unfamiliar definitions have low prerequisite burden but can become abstract quickly (`self-averaging-sets`, `locally-balanced-labels`);
+- unfamiliar definitions have low prerequisite burden but can become abstract quickly (`self-averaging-sets`, `diagonal-blend-transform`);
 - modelling stages may consume time in assumption negotiation rather than algebra (`tank-gauge-model`, `periodic-queue-model`, `kiosk-grid-model`);
 - elementary probability openings can be fast while the transfer/boundary discussion is the real discriminator.
 
@@ -197,4 +185,4 @@ Adaptive metadata, stage difficulty/timing, skill evidence, provenance, review s
 
 **Agent I:** independently verify all mathematics, degeneracies, endpoint/sample-space conventions, parameter ranges, converses, and extensions. Do not promote `mathematicalCorrectness` based on Agent E's verification notes alone.
 
-Until all required gates pass, these 17 surviving families must remain in the expert-review quarantine and outside recommendation eligibility.
+Until G/H/I re-pin the final synchronization head, these 13 surviving families remain in expert-review quarantine and outside recommendation eligibility.
