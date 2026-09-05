@@ -3614,3 +3614,312 @@ summary:focus-visible,
 .new-interview__ready-note i[data-ready="false"] {
   background: var(--warning);
 }
+
+
+/* -------------------------------------------------------------------------- */
+/* Approved v10 fidelity pass — installed desktop feedback                    */
+/* -------------------------------------------------------------------------- */
+
+/* Match the appearance control to the adjacent readiness chip. */
+.product-frame__header .appearance-dock__trigger {
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  border: 1px solid var(--rule-soft);
+  background: color-mix(in srgb, var(--paper-hi) 55%, transparent);
+  box-shadow: none;
+}
+.product-frame__header .appearance-dock__trigger:hover,
+.product-frame__header .appearance-dock[open] > .appearance-dock__trigger {
+  background: var(--paper-hi);
+}
+
+/* Keep the entire landing composition a little higher without disturbing the
+   horizontal midpoint measurement used by the hero copy. */
+.expressive-home__hero-copy,
+.expressive-home__folio {
+  top: -26px;
+}
+.expressive-home__secondary {
+  min-height: 0;
+  padding: 7px 0 4px;
+  border: 0 !important;
+  border-bottom: 1px solid var(--rule) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--muted);
+}
+
+/* New Interview follows the compact v10 mock rather than generic form spacing. */
+.new-interview {
+  width: min(100%, 1260px);
+}
+.new-interview__layout {
+  grid-template-columns: minmax(0, 1fr) 305px;
+  gap: 48px;
+  padding: 18px 0 70px;
+}
+.new-interview__section {
+  padding: 17px 0 21px;
+}
+.new-interview__mode-choice {
+  gap: 0;
+  margin: 13px 0 0 46px;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  background: var(--paper-hi);
+}
+.new-interview__choice {
+  min-height: 62px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 9px 14px 8px;
+  border: 0;
+  border-right: 1px solid var(--rule-soft);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.new-interview__choice:last-child {
+  border-right: 0;
+}
+.new-interview__choice:hover:not(:disabled) {
+  border-color: var(--rule-soft);
+  background: var(--rule-faint);
+}
+.new-interview__choice[aria-pressed="true"] {
+  border-color: var(--rule-soft);
+  background: var(--accent-soft);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.new-interview__choice > span {
+  font-size: 6.3px;
+}
+.new-interview__choice strong {
+  margin-top: 5px;
+  font-size: 15px;
+}
+.new-interview__basics {
+  grid-template-columns: minmax(0, 1fr) 150px;
+  gap: 0;
+  margin: 8px 0 0 46px;
+  border: 1px solid var(--rule);
+  background: var(--paper-hi);
+}
+.new-interview__basics > .new-interview__field {
+  position: relative;
+  gap: 3px;
+  padding: 9px 12px 8px;
+}
+.new-interview__basics > .new-interview__field:first-child {
+  border-right: 1px solid var(--rule-soft);
+}
+.new-interview__duration {
+  min-height: 31px;
+}
+.new-interview__duration input {
+  height: 31px;
+  padding: 0 30px 0 0;
+  border: 0;
+  background: transparent;
+}
+.new-interview__duration-help {
+  margin-top: 2px;
+  font-size: 6.4px;
+  line-height: 1.28;
+}
+.new-interview__provider-card {
+  margin: 13px 0 0 46px;
+  overflow: visible;
+}
+.new-interview__provider-card > header {
+  padding: 10px 12px;
+}
+.new-interview__provider-main {
+  gap: 10px;
+  padding: 11px 12px 12px;
+}
+.new-interview__session-fields {
+  margin-top: 13px;
+}
+.new-interview__slip {
+  top: 17px;
+  padding: 18px 18px 20px;
+}
+.new-interview__slip h3 {
+  margin-top: 22px;
+}
+.new-interview__slip-list {
+  margin-top: 22px;
+}
+
+/* Custom editorial select. A hidden native select remains solely as the
+   deterministic form/test event seam; this is the user-facing control. */
+.new-interview__custom-select {
+  position: static;
+  min-width: 0;
+}
+.new-interview__custom-select > summary {
+  display: flex;
+  min-height: 31px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0;
+  list-style: none;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+.new-interview__custom-select > summary::-webkit-details-marker {
+  display: none;
+}
+.new-interview__custom-select > summary[aria-disabled="true"] {
+  cursor: default;
+  opacity: .5;
+}
+.new-interview__custom-select > summary > span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+.new-interview__custom-select > summary strong {
+  overflow: hidden;
+  font: 500 10px/1.25 var(--font-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.new-interview__custom-select > summary small {
+  overflow: hidden;
+  color: var(--faint);
+  font: 500 6.3px/1.25 var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.new-interview__custom-select > summary > i {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font: 500 11px/1 var(--font-ui);
+  font-style: normal;
+}
+.new-interview__custom-select[open] > summary {
+  color: var(--accent);
+}
+.new-interview__custom-menu {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 1px);
+  right: -12px;
+  left: -12px;
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  border-radius: 0 0 3px 3px;
+  background: var(--paper-hi);
+  box-shadow: 0 18px 34px rgba(37, 29, 19, .15);
+}
+.new-interview__custom-menu button {
+  display: grid;
+  min-height: 38px;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--rule-faint);
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+  text-align: left;
+}
+.new-interview__custom-menu button:last-child {
+  border-bottom: 0;
+}
+.new-interview__custom-menu button:hover:not(:disabled),
+.new-interview__custom-menu button[aria-selected="true"] {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+.new-interview__custom-menu button:disabled {
+  cursor: default;
+  opacity: .48;
+}
+.new-interview__custom-menu button > span {
+  font: 500 9px/1.25 var(--font-ui);
+}
+.new-interview__custom-menu button > small {
+  color: var(--faint);
+  font: 500 6.3px/1.3 var(--font-mono);
+}
+.new-interview__provider-main > .new-interview__field {
+  position: relative;
+}
+.new-interview__custom-select--model > summary {
+  min-height: 58px;
+  padding: 0 10px;
+  border: 1px solid var(--rule);
+  background: transparent;
+}
+.new-interview__custom-select--model > summary strong {
+  font: 500 13px/1.25 var(--font-display);
+}
+.new-interview__custom-select--model .new-interview__custom-menu {
+  top: calc(100% + 5px);
+  right: 0;
+  left: 0;
+}
+
+/* Readiness uses the same inset runtime-card rhythm as the approved settings
+   mock rather than placing copy directly on the border. */
+.expressive-settings__readiness-heading {
+  padding: 0 2px;
+}
+.expressive-settings__status-list {
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  background: var(--paper-hi);
+}
+.expressive-settings__status-row {
+  gap: 26px;
+  padding: 13px 14px;
+}
+.expressive-settings__status-row > div:last-child {
+  padding-left: 8px;
+}
+.expressive-settings__setup-actions {
+  padding: 16px 2px 0;
+}
+.expressive-settings__finish {
+  padding: 18px 2px 0;
+}
+
+@media (max-width: 1050px) {
+  .new-interview__layout {
+    grid-template-columns: 1fr;
+  }
+  .new-interview__slip {
+    position: static;
+  }
+}
+@media (max-width: 820px) {
+  .new-interview__basics {
+    grid-template-columns: 1fr;
+  }
+  .new-interview__basics > .new-interview__field:first-child {
+    border-right: 0;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+}
+@media (max-width: 760px) {
+  .expressive-home__hero-copy,
+  .expressive-home__folio {
+    top: -10px;
+  }
+  .new-interview__mode-choice,
+  .new-interview__basics,
+  .new-interview__provider-card {
+    margin-left: 0;
+  }
+}
