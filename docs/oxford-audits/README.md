@@ -63,6 +63,8 @@ This audit does not infer either process-grounded skill from milestone completio
 
 `current-bank-baseline.json` covers all 13 default Oxford fixtures plus the isolated Catalan expert-review fixture at main commit `454a2fe993c8fd70676d04e5d262a1780161f0d6`.
 
+`same-wave-high-risk-batch.json` adds a risk-prioritized 12-family audit across Agent C — Cantor PR #132, Agent D — Dirichlet PR #133, and Agent E — Euler PR #134. It is not an exhaustive audit of all 61 authored proposals; it satisfies the Wave 2 requirement to inspect a reasonable available batch while concentrating independent review on the highest collision risks.
+
 The baseline deliberately does **not** edit production problem metadata. It is an independent review artifact. A later migration must update provenance/review fields through the existing curated-problem path and must still satisfy Agent G calibration and Agent I correctness review.
 
 ## Validation
@@ -72,5 +74,7 @@ Run:
 ```bash
 node scripts/validate-oxford-audits.mjs
 ```
+
+With no path argument, the validator checks both retained audit documents. A specific audit JSON path can be supplied to validate only that file.
 
 The validator fails closed on incomplete fingerprints, missing retrieval pools, missing external search evidence, invalid decision enums, out-of-range similarity scores, originality passes that conflict with Wave 1 hard-fail score combinations, duplicate family IDs, or audit keys that attempt to store full source/problem/solution text.
