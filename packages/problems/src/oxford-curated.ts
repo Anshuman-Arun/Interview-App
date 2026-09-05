@@ -1,3 +1,6 @@
+import { oxfordCantorReviewEntries } from "./oxford-cantor.js";
+import { dirichletCandidateEntries } from "./curated/agent-d-dirichlet/index.js";
+import { eulerOxfordCandidateEntries } from "./curated/oxford-euler-candidates.js";
 import { oxfordDominoChessboardEntry } from "./curated/oxford-domino-chessboard.js";
 import { oxfordDivisorsSquareParityEntry } from "./curated/oxford-divisors-square-parity.js";
 import { oxfordEuclidPrimesEntry } from "./curated/oxford-euclid-primes.js";
@@ -9,6 +12,17 @@ import { oxfordDivisibilityChainEntry } from "./curated/oxford-divisibility-chai
 import { oxfordContinuousFixedPointEntry } from "./curated/oxford-continuous-fixed-point.js";
 import { oxfordPrefixSumsModNEntry } from "./curated/oxford-prefix-sums-mod-n.js";
 import { oxfordTriangleMediansEntry } from "./curated/oxford-triangle-medians.js";
+import { promoteCertifiedWave2OxfordEntries } from "./oxford-wave2-promotion.js";
+
+const wave2RawEntries = Object.freeze([
+  ...oxfordCantorReviewEntries,
+  ...dirichletCandidateEntries,
+  ...eulerOxfordCandidateEntries
+] as const);
+
+export const oxfordWave2CertifiedEntries = promoteCertifiedWave2OxfordEntries(
+  wave2RawEntries
+);
 
 export const oxfordCuratedReviewEntries = Object.freeze([
   oxfordCatalanPathsEntry
@@ -24,7 +38,8 @@ export const oxfordCuratedEntries = Object.freeze([
   oxfordDivisibilityChainEntry,
   oxfordContinuousFixedPointEntry,
   oxfordPrefixSumsModNEntry,
-  oxfordTriangleMediansEntry
+  oxfordTriangleMediansEntry,
+  ...oxfordWave2CertifiedEntries
 ] as const);
 
 export const oxfordCuratedProblems = Object.freeze(
