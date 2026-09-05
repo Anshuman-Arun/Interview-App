@@ -515,10 +515,14 @@ export const App: React.FC = () => {
   );
   const storedActiveSession =
     storedActiveSessions.length === 1 ? storedActiveSessions[0] ?? null : null;
-  const knownActiveSessionCount = Math.max(
-    storedActiveSessions.length,
-    hasActiveInterview ? 1 : 0
-  );
+  const attachedActiveMissingFromStored =
+    hasActiveInterview
+    && session.sessionId !== null
+    && !storedActiveSessions.some(
+      (storedSession) => storedSession.sessionId === session.sessionId
+    );
+  const knownActiveSessionCount =
+    storedActiveSessions.length + (attachedActiveMissingFromStored ? 1 : 0);
   const resumableActiveSessionId =
     hasActiveInterview && session.sessionId !== null
       ? session.sessionId
