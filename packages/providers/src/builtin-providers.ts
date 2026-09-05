@@ -536,7 +536,7 @@ function antigravityModelDisplayName(modelId: string): string {
 const ANTIGRAVITY_CLI_PROVIDER_INPUT: ProviderDefinitionInput = {
   id: ANTIGRAVITY_CLI_PROVIDER_ID,
   displayName: "Antigravity CLI",
-  kind: "LOCAL_PROCESS",
+  kind: "OTHER",
   definitionVersion: "2",
   capabilityVersion: "2",
   adapterVersion: ANTIGRAVITY_CLI_ADAPTER_VERSION,
