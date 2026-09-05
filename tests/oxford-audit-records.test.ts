@@ -38,6 +38,9 @@ describe("Oxford originality/fidelity audit records", () => {
       expect(Object.values(audit.retrieval).every((pool) => pool.completed)).toBe(true);
       expect(audit.externalSearchQueries.length).toBeGreaterThan(0);
       expect(audit.nearestMatches.some((match) => match.pool === "E")).toBe(true);
+
+      expect(["PASS", "PASS_WITH_NOTES"]).toContain((audit as any).originalityDecision);
+      expect(["PASS", "PASS_WITH_NOTES"]).toContain((audit as any).fidelityDecision);
     }
   });
   it("validates the retained high-risk same-wave C/D/E batch", () => {
@@ -95,16 +98,16 @@ describe("Oxford originality/fidelity audit records", () => {
       }>;
     };
 
-    expect(document.summary.totalFamilies).toBe(47);
-    expect(document.summary.survivingTotal).toBe(47);
+    expect(document.summary.totalFamilies).toBe(41);
+    expect(document.summary.survivingTotal).toBe(41);
     expect(document.summary.replacementCount).toBe(0);
-    expect(document.audits).toHaveLength(47);
-    expect(new Set(document.audits.map((audit) => audit.familyId)).size).toBe(47);
+    expect(document.audits).toHaveLength(41);
+    expect(new Set(document.audits.map((audit) => audit.familyId)).size).toBe(41);
 
     const expected = new Map<number, { head: string; surviving: number }>([
-      [132, { head: "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1", surviving: 18 }],
-      [133, { head: "ecece22058c997d37c4b352fa5ed32bd1daf5243", surviving: 12 }],
-      [134, { head: "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6", surviving: 17 }]
+      [132, { head: "8b22dc5df99111fb95e27a2c006d5e74544dd385", surviving: 17 }],
+      [133, { head: "65d570a1f6dad3773edb7eea4568d9399f3164c8", surviving: 11 }],
+      [134, { head: "1ce96b5b89be971399cab5080d4487a908ea294d", surviving: 13 }]
     ]);
 
     for (const [pr, expectedState] of expected) {
