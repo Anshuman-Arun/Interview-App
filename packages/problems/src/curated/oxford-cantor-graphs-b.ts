@@ -398,6 +398,7 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
     finalRole: "transfer",
     novelty: "high",
     abstraction: "moderate",
+    similarityClusterId: "cantor-cubic-graph-structure",
     originalityRisk: "medium",
     correctnessRisk: "low",
     calibrationRisk: "high"
@@ -535,139 +536,6 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
     originalityRisk: "low",
     correctnessRisk: "low",
     calibrationRisk: "medium"
-  },
-  {
-    id: "oxford-cantor-reciprocal-implicit-curve",
-    title: "An Implicit Quartic Curve",
-    category: "graph sketching and coordinate geometry",
-    topics: ["implicit curves","graphs","coordinate geometry","algebra"],
-    prompt:
-      "Sketch the real curve x²y²=x²+y² as completely as possible. Account for every component, then determine the points on the nonzero branches closest to the origin. Your sketch should include the curve's symmetries and asymptotes. Find a representation that makes the geometry simpler.",
-    givenInformation: [],
-    approaches: [
-      { id: "reciprocal-coordinates", label: "Use u=1/x and v=1/y to reveal a unit circle" },
-      { id: "solve-for-y-squared", label: "Solve for y² to discover domain and asymptotes directly" }
-    ],
-    milestones: [
-      {
-        id: "exclude-axes-and-symmetry",
-        description: "Identify (0,0) as an isolated solution; then show every other point has x and y nonzero and record the sign-change and coordinate-swap symmetries.",
-        skills: cantorSkills(["precision-checking", "primary"], ["visualization", "supporting"]),
-        concepts: ["analytic-curve-geometry", "symmetry-periodicity"]
-      },
-      {
-        id: "reciprocal-circle",
-        description: "Divide by x²y² and transform the equation into 1/x²+1/y²=1.",
-        skills: cantorSkills(["representation-switching", "primary"], ["strategic-simplification", "primary"]),
-        concepts: ["analytic-curve-geometry", "loci-coordinate-constraints"]
-      },
-      {
-        id: "branch-domain",
-        description: "Derive y²=x²/(x²-1), hence |x|>1 and by symmetry |y|>1.",
-        skills: cantorSkills(["proof-construction", "supporting"], ["case-analysis", "supporting"]),
-        concepts: ["roots-intersections", "qualitative-function-behavior"]
-      },
-      {
-        id: "asymptotes-and-closest",
-        description: "Complete the four-branch asymptotic sketch, then minimize x²+y² on the nonzero branches and distinguish those closest branch points from the globally closest isolated origin.",
-        skills: cantorSkills(["graph-sketching", "primary"], ["proof-construction", "primary"], ["strategic-simplification", "supporting"], ["precision-checking", "primary"]),
-        concepts: ["asymptotic-behavior", "qualitative-function-behavior", "inequalities-bounds", "analytic-curve-geometry"]
-      },
-      {
-        id: "scaled-reciprocal-transfer",
-        description: "Transfer the reciprocal-coordinate analysis to x²y²=c(x²+y²), c>0, and relate the scaled branches to a reciprocal-circle parametrization.",
-        skills: cantorSkills(["generalization", "primary"], ["transfer", "primary"], ["representation-switching", "supporting"]),
-        concepts: ["analytic-curve-geometry", "parameter-dependent-curves", "asymptotic-behavior"]
-      }
-    ],
-    commonErrors: [
-      {
-        id: "include-axis-points",
-        description: "Divides by x²y² before checking the axes, thereby deleting the isolated solution (0,0)."
-      },
-      {
-        id: "circle-in-original-plane",
-        description: "Concludes the original curve itself is a circle rather than recognizing the circle lives in reciprocal coordinates."
-      }
-    ],
-    followUps: [
-      "How do points near the coordinate axes of the reciprocal circle correspond to asymptotic behavior of the original curve?",
-      "What changes in x²y²=c(x²+y²) for c>0?"
-    ],
-    extensions: [
-      {
-        id: "scaled-implicit-family",
-        prompt: "For c>0, analyze x²y²=c(x²+y²), including every component, asymptotes, and the closest points on the nonzero branches."
-      },
-      {
-        id: "reciprocal-circle-parametrization",
-        prompt: "Use u=cos θ, v=sin θ to parametrize branches of the original curve and interpret excluded values."
-      }
-    ],
-    hints: [
-      {
-        text: "First test whether x=0 or y=0 is possible; then record the sign and swap symmetries.",
-        formulations: ["justify division before using reciprocals", "the equation is even in each coordinate"]
-      },
-      {
-        text: "Divide the equation by x²y².",
-        formulations: ["reciprocal squares simplify the product", "look for a familiar locus in new coordinates"]
-      },
-      {
-        text: "Solving for y² gives y²=x²/(x²-1), so the denominator must be positive.",
-        formulations: ["the branches live only outside |x|=1", "domain information gives vertical asymptotes"]
-      },
-      {
-        text: "Use the solved form for the asymptotes, then let A=x² and B=y² to minimize distance on the nonzero branches; keep the isolated origin separate.",
-        formulations: ["finish the global sketch before optimizing branch distance", "A+B≥4 identifies closest nonzero branch points, not the global closest point"]
-      },
-      {
-        text: "For x²y²=c(x²+y²), divide only after preserving the origin; the reciprocal equation rescales by c.",
-        formulations: ["the asymptotes and closest nonzero branch points scale with sqrt(c)", "the reciprocal circle can then be parametrized without deleting the isolated component"]
-      }
-    ],
-    canonicalSolution:
-      "If x=0 then the equation forces y=0, but (0,0) satisfies both sides; however dividing by x²y² would lose it. Thus the original curve consists of the isolated origin together with nonzero branches. For nonzero points, divide to get 1/x²+1/y²=1. Solving gives y²=x²/(x²-1), so |x|>1 and similarly |y|>1. The equation is invariant under independent sign changes and swapping x,y, giving four symmetric branches. As |x|→1+ we have |y|→∞, so x=±1 are vertical asymptotes; as |x|→∞, |y|→1, so y=±1 are horizontal asymptotes. For nonzero points let A=x²,B=y²; then 1/A+1/B=1, so A+B=AB and by (A+B)²≥4AB=4(A+B), A+B≥4. Equality gives A=B=2, hence four closest nonzero branch points (±sqrt(2),±sqrt(2)) at distance 2 from the origin. But globally the isolated origin itself is of course the closest point. For c>0, the nonzero reciprocal equation becomes c/x²+c/y²=1, giving asymptotes ±sqrt(c) and branch closest points with x²=y²=2c.",
-    verificationNotes:
-      "Important correction to the tempting reciprocal-only analysis: (0,0) DOES satisfy the original equation and is an isolated component. The four sqrt(2) points are the closest points on the nonzero branches. Preserve the origin before division and keep the global component sketch separate from the branch-distance question.",
-    domains: ["graph-sketching", "coordinate-geometry", "functions", "algebra", "elementary-analysis"],
-    contentConcepts: [
-      "analytic-curve-geometry",
-      "symmetry-periodicity",
-      "loci-coordinate-constraints",
-      "roots-intersections",
-      "qualitative-function-behavior",
-      "asymptotic-behavior",
-      "inequalities-bounds",
-      "parameter-dependent-curves"
-    ],
-    prerequisiteConcepts: ["algebraic-manipulation", "equations-inequalities", "coordinate-geometry-basics", "functions-graphs"],
-    skills: cantorSkills(
-      ["precision-checking", "primary"],
-      ["visualization", "supporting"],
-      ["representation-switching", "primary"],
-      ["strategic-simplification", "primary"],
-      ["proof-construction", "primary"],
-      ["case-analysis", "supporting"],
-      ["graph-sketching", "primary"],
-      ["generalization", "supporting"],
-      ["error-recovery", "supporting"],
-      ["transfer", "primary"]
-    ),
-    difficulty: { entry: "introductory-plus", core: "strong", ceiling: "stretch" },
-    timing: cantorTiming([3, 6], [18, 27], [14, 23], [5, 9], 25),
-    stageTiming: [
-      cantorTiming([1, 3], [4, 7], [3, 6], undefined, 7),
-      cantorTiming([2, 5], [9, 16], [7, 13], undefined, 16),
-      cantorTiming([2, 4], [5, 10], [4, 8], [3, 7], 10)
-    ],
-    openingRole: "warm-up",
-    finalRole: "stretch",
-    novelty: "high",
-    abstraction: "high",
-    originalityRisk: "low",
-    correctnessRisk: "medium",
-    calibrationRisk: "high"
   }
 ];
 
