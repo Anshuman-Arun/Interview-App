@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   dirichletCandidateEntries
 } from "../packages/problems/src/curated/agent-d-dirichlet/index.js";
+import { CURATED_DISCLOSURE_LEVELS } from "../packages/problems/src/curated-disclosure-levels.js";
 import {
   assertOxfordAdaptiveMetadataIntegrity,
   isOxfordRecommendationReady,
@@ -32,6 +33,32 @@ describe("Agent D — Dirichlet Oxford candidate bank", () => {
       expect(metadata?.review.mathematicalCorrectness).toBe("unreviewed");
       expect(metadata?.review.difficultyCalibration).toBe("unreviewed");
       expect(metadata?.review.timingCalibration).toBe("unreviewed");
+    }
+  });
+
+  it("owns explicit semantic disclosure levels for every candidate hint", () => {
+    for (const entry of dirichletCandidateEntries) {
+      const levels = CURATED_DISCLOSURE_LEVELS[entry.problem.id];
+      expect(levels).toBeDefined();
+      if (levels === undefined) {
+        throw new Error(`Missing disclosure levels for ${entry.problem.id}`);
+      }
+      expect(Object.keys(levels)).toEqual(["1", "2", "3", "4", "5"]);
+      for (const stage of [1, 2, 3, 4, 5] as const) {
+        const suffix = `_hint_${String(stage)}`;
+        const disclosure = entry.problem.interviewer.protectedDisclosures.find(
+          (candidate) => candidate.id.endsWith(suffix)
+        );
+        expect(disclosure).toBeDefined();
+        if (disclosure === undefined) {
+          throw new Error(
+            `Missing protected disclosure ${entry.problem.id} stage ${String(stage)}`
+          );
+        }
+        expect(disclosure.minimumDisclosureLevel).toBe(levels[stage]);
+        expect(disclosure.equivalentFormulations.length).toBeGreaterThan(0);
+      }
+      expect(levels[5]).toBe(5);
     }
   });
 
