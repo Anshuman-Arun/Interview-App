@@ -1064,3 +1064,31 @@ summary:focus-visible {
 .board-appbar{display:flex;min-height:36px;flex:0 0 auto;align-items:center;justify-content:space-between;gap:10px;padding:0 10px;border-bottom:1px solid #d6d5d1;background:#f4f4f1;color:#464744}.board-appbar__left,.board-appbar__actions{display:flex;align-items:center;gap:7px}.board-appbar strong{font:600 9px/1 var(--font-ui)}.board-sync{display:flex;align-items:center;gap:6px;color:#777975;font:500 7px/1 var(--font-mono);text-transform:lowercase}.board-sync i{width:6px;height:6px;border-radius:50%;background:var(--warning)}.board-sync i[data-sync=SYNCED]{background:#6b8861}.board-appbar__actions button{min-height:24px;padding:0 7px;border:1px solid #d6d5d1;border-radius:2px;background:#fff;color:#6e6e6b;cursor:pointer;font:500 7px/1 var(--font-ui)}.board-appbar__actions button[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}.board-appbar__actions button:disabled{cursor:default;opacity:.48}.tldraw-wrap{min-height:0;flex:1 1 auto;padding:10px;background:#e8e7e3}.tldraw-frame{width:100%;height:100%;min-height:0;overflow:hidden;border:1px solid #d8d8d5!important;border-radius:7px!important;background:#fbfbfa!important;box-shadow:0 1px 2px rgba(0,0,0,.03)!important}
 :root[data-theme=dark] .interview-app-container,:root[data-theme=dark] .live-main{background:#2d2b28!important}:root[data-theme=dark] .board-pane,:root[data-theme=dark] .tldraw-wrap{background:#363633!important}:root[data-theme=dark] .board-appbar{border-color:#4d4d49;background:#383835;color:#e9e8e2}:root[data-theme=dark] .board-appbar__actions button{border-color:#555550;background:#444440;color:#d1cec6}:root[data-theme=dark] .tldraw-frame{border-color:#53534e!important;background:#474743!important}
 @media(max-width:960px){.live-main{position:relative;display:block!important}.split-divider{display:none!important}.live-main .reasoning-pane,.live-main .board-pane{width:100%!important;min-width:0;height:100%!important}.live-main[data-focus] .reasoning-pane,.live-main[data-focus] .board-pane{display:flex}.live-main[data-compact-pane=interview] .board-pane,.live-main[data-compact-pane=whiteboard] .reasoning-pane{display:none!important}}
+
+
+/* Non-blocking configured-duration reminder. */
+.session-duration-notice {
+  position: fixed;
+  top: 64px;
+  right: 16px;
+  z-index: 58;
+  display: grid;
+  max-width: min(360px, calc(100vw - 32px));
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--warning) 35%, var(--border-subtle));
+  border-radius: var(--radius-control);
+  background: var(--surface-panel);
+  box-shadow: var(--shadow-popover);
+  color: var(--text-primary);
+  pointer-events: none;
+}
+
+.session-duration-notice strong {
+  font: 650 12px/1.35 var(--font-ui);
+}
+
+.session-duration-notice span {
+  color: var(--text-muted);
+  font: 500 11px/1.4 var(--font-ui);
+}
