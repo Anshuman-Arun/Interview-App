@@ -1,0 +1,897 @@
+{
+  "schema_version": 1,
+  "agent": "C — Cantor",
+  "purpose": "Source-independent mathematical fingerprints for downstream Agent H originality/fidelity audit. These are author claims, not approval decisions.",
+  "families": [
+    {
+      "family_id": "oxford-cantor-moving-v-envelope",
+      "primary_domain": "graph-sketching",
+      "secondary_domains": [
+        "functions",
+        "calculus",
+        "algebra"
+      ],
+      "surface_objects": [
+        "one-parameter absolute-value graphs",
+        "lower envelope"
+      ],
+      "constraints": [
+        "g_t(x)=|x-t|+t^2",
+        "t real",
+        "pointwise minimum over t"
+      ],
+      "target_type": "derive and sketch the pointwise lower envelope, then scale the penalty",
+      "central_mechanism": "split by t<=x/t>=x and minimize two constrained quadratics in the parameter",
+      "secondary_mechanisms": [
+        "moving-vertex visualization",
+        "branch-feasibility thresholds",
+        "smooth join checking"
+      ],
+      "critical_representation_change": "freeze x and reinterpret t as the optimization variable",
+      "diagram_topology": "many V-shaped graphs whose vertices lie on a parabola, with a three-piece lower boundary",
+      "small_case_signature": [
+        "t=-1",
+        "t=0",
+        "t=1"
+      ],
+      "progression_signature": {
+        "opening": "sketch moving V-shapes",
+        "first_deepening": "switch optimization variable",
+        "core": "constrained quadratic minima",
+        "transfer": "replace t^2 by lambda t^2",
+        "stretch": "analyze differentiability of joins"
+      },
+      "solution_dependency_graph_summary": "sample family -> parameter-as-variable -> two branch minima -> branch validity -> assembled envelope -> scaled family",
+      "distinctive_features": [
+        "quadratic central envelope with linear tails",
+        "switch points arise from optimizer feasibility rather than curve intersections"
+      ],
+      "known_classic_overlap": "Generic envelope/convex-optimization structure; no exact classic match identified in author spot-check.",
+      "author_provenance": "Independently designed from target graph-sketching + parameter-optimization behaviors; originality pending Agent H."
+    },
+    {
+      "family_id": "oxford-cantor-reciprocal-root-parabolas",
+      "primary_domain": "algebra",
+      "secondary_domains": [
+        "functions",
+        "graph-sketching"
+      ],
+      "surface_objects": [
+        "monic parabolas",
+        "reciprocal root pair",
+        "vertex locus"
+      ],
+      "constraints": [
+        "roots a and 1/a",
+        "a>0"
+      ],
+      "target_type": "classify distinct graphs and derive the locus of vertices",
+      "central_mechanism": "compress a and 1/a into s=a+1/a and eliminate s from the vertex coordinates",
+      "secondary_mechanisms": [
+        "AM-GM/square inequality",
+        "surjectivity of reciprocal-sum parameter",
+        "root-product generalization"
+      ],
+      "critical_representation_change": "parameter a -> effective coefficient s -> vertex coordinates",
+      "diagram_topology": "family of upward parabolas sharing constant term 1, with vertices tracing half of a downward parabola",
+      "small_case_signature": [
+        "a=1",
+        "a=2",
+        "a=1/2"
+      ],
+      "progression_signature": {
+        "opening": "compare reciprocal parameters",
+        "first_deepening": "expand polynomial",
+        "core": "range of effective parameter and vertex locus",
+        "transfer": "fixed root product c",
+        "stretch": "parameter double-cover interpretation"
+      },
+      "solution_dependency_graph_summary": "examples -> coefficient compression -> s-range -> vertex formula -> eliminate s -> general product",
+      "distinctive_features": [
+        "a and 1/a generate identical curves",
+        "vertex locus y=1-x^2 restricted to x>=1"
+      ],
+      "known_classic_overlap": "Reciprocal-root and Vieta ideas are standard; exact interview family not identified.",
+      "author_provenance": "Independently assembled kernel and progression; pending Agent H."
+    },
+    {
+      "family_id": "oxford-cantor-cubic-two-thresholds",
+      "primary_domain": "functions",
+      "secondary_domains": [
+        "algebra",
+        "graph-sketching",
+        "calculus"
+      ],
+      "surface_objects": [
+        "parameterized cubic",
+        "roots",
+        "critical points"
+      ],
+      "constraints": [
+        "f_a(x)=x(x^2+ax+1)",
+        "a real"
+      ],
+      "target_type": "separate the parameter threshold for turning points from the threshold for extra real roots",
+      "central_mechanism": "compare discriminants of the quadratic factor and derivative",
+      "secondary_mechanisms": [
+        "origin-reflection parameter symmetry",
+        "boundary case sketches",
+        "scaled constant c"
+      ],
+      "critical_representation_change": "one cubic graph -> two independent quadratic discriminant problems",
+      "diagram_topology": "odd-degree S-curves with regimes: monotone, two extrema/one crossing, repeated root, three crossings",
+      "small_case_signature": [
+        "a=0",
+        "a=sqrt(3)",
+        "a=2",
+        "a=3"
+      ],
+      "progression_signature": {
+        "opening": "use a<->-a reflection",
+        "first_deepening": "root discriminant",
+        "core": "derivative discriminant and intermediate regime",
+        "transfer": "replace constant 1 by c",
+        "stretch": "sign of extrema in intermediate regime"
+      },
+      "solution_dependency_graph_summary": "symmetry -> root threshold |a|=2 -> critical threshold |a|=sqrt(3) -> regime synthesis -> scaled thresholds",
+      "distinctive_features": [
+        "two geometrically different merger thresholds in the same cubic family"
+      ],
+      "known_classic_overlap": "Discriminant-based cubic sketching is standard; no exact source family identified.",
+      "author_provenance": "Independently designed threshold-comparison family; pending Agent H."
+    },
+    {
+      "family_id": "oxford-cantor-cubic-divided-difference",
+      "primary_domain": "algebra",
+      "secondary_domains": [
+        "functions",
+        "calculus",
+        "graph-sketching"
+      ],
+      "surface_objects": [
+        "cubic",
+        "divided difference",
+        "horizontal level sets"
+      ],
+      "constraints": [
+        "f(x)=x^3-x",
+        "q_a(x)=(f(x)-f(a))/(x-a)"
+      ],
+      "target_type": "fill a removable hole and classify distinct equal-height inputs",
+      "central_mechanism": "factor the cubic difference to a quadratic whose discriminant and value at x=a control distinct preimages",
+      "secondary_mechanisms": [
+        "derivative as diagonal divided-difference value",
+        "horizontal-line geometry",
+        "scaled cubic"
+      ],
+      "critical_representation_change": "equal function values -> roots of a parameterized divided-difference quadratic",
+      "diagram_topology": "single S-shaped cubic intersected by horizontal lines, with tangent/merger cases",
+      "small_case_signature": [
+        "a=0",
+        "a=1/sqrt(3)",
+        "a=2/sqrt(3)"
+      ],
+      "progression_signature": {
+        "opening": "factor difference",
+        "first_deepening": "fill hole with derivative",
+        "core": "discriminant plus distinct-root counting",
+        "transfer": "x^3-cx",
+        "stretch": "secant-slope sign structure"
+      },
+      "solution_dependency_graph_summary": "factorization -> diagonal value -> discriminant -> exclude cancelled input -> graph interpretation -> scale c",
+      "distinctive_features": [
+        "two separate special a-values: stationary basepoint and merger of the other two preimages"
+      ],
+      "known_classic_overlap": "Divided differences and cubic level sets are standard tools; exact combination not identified.",
+      "author_provenance": "Independently designed kernel; correctness/calibration intentionally flagged for Agent I/G."
+    },
+    {
+      "family_id": "oxford-cantor-integral-sign-landscape",
+      "primary_domain": "calculus",
+      "secondary_domains": [
+        "functions",
+        "graph-sketching",
+        "algebra",
+        "elementary-analysis"
+      ],
+      "surface_objects": [
+        "accumulation function",
+        "factored quartic derivative"
+      ],
+      "constraints": [
+        "F(x)=integral_0^x (t^2-1)(t^2-9) dt"
+      ],
+      "target_type": "sketch from derivative structure first, then count and locate zeros",
+      "central_mechanism": "use even integrand -> odd F and derivative sign intervals before evaluating an antiderivative",
+      "secondary_mechanisms": [
+        "strategic turning-point evaluation",
+        "quadratic in x^2 for exact zeros"
+      ],
+      "critical_representation_change": "integral definition -> derivative sign chart -> polynomial only at the final exact-root stage",
+      "diagram_topology": "odd quintic-like accumulation graph with extrema at ±1,±3 and five axis crossings",
+      "small_case_signature": [
+        "F(0)",
+        "F(1)",
+        "F(3)"
+      ],
+      "progression_signature": {
+        "opening": "symmetry and derivative roots",
+        "first_deepening": "monotonicity sketch",
+        "core": "turning heights and zero count",
+        "transfer": "two-parameter even quartic derivative",
+        "stretch": "prove count without exact roots"
+      },
+      "solution_dependency_graph_summary": "oddness -> derivative signs -> key heights -> uniqueness of crossings -> integrate/factor for exact roots",
+      "distinctive_features": [
+        "deliberately delays antiderivative calculation until qualitative sketch is complete"
+      ],
+      "known_classic_overlap": "Standard FTC/graph-from-derivative pedagogy; exact polynomial family not identified.",
+      "author_provenance": "Independently selected derivative factorization and progression; pending H."
+    },
+    {
+      "family_id": "oxford-cantor-reciprocal-paired-inputs",
+      "primary_domain": "functions",
+      "secondary_domains": [
+        "graph-sketching",
+        "algebra",
+        "elementary-analysis"
+      ],
+      "surface_objects": [
+        "positive rational function",
+        "two inverse branches"
+      ],
+      "constraints": [
+        "f(x)=x/(1+x)^2",
+        "x>0"
+      ],
+      "target_type": "find range and characterize all equal-output input pairs",
+      "central_mechanism": "reciprocal invariance f(1/x)=f(x), sharp denominator inequality, and factorization of f(x)=f(y)",
+      "secondary_mechanisms": [
+        "two-valued inverse relation",
+        "scaled denominator family"
+      ],
+      "critical_representation_change": "graph symmetry in log-like reciprocal coordinates -> algebraic pair condition xy=1",
+      "diagram_topology": "single positive hump tending to 0 at both ends, paired across x<1 and x>1",
+      "small_case_signature": [
+        "x=1/2",
+        "x=1",
+        "x=2"
+      ],
+      "progression_signature": {
+        "opening": "endpoint behavior",
+        "first_deepening": "discover reciprocal pairing",
+        "core": "range + equal-output classification",
+        "transfer": "x/(a+x)^2",
+        "stretch": "inverse-branch interpretation"
+      },
+      "solution_dependency_graph_summary": "limits -> reciprocal invariance -> max -> factor equal outputs -> scale parameter",
+      "distinctive_features": [
+        "non-Euclidean reciprocal pairing replaces ordinary reflection symmetry"
+      ],
+      "known_classic_overlap": "Elementary reciprocal symmetry is plausible textbook material; no exact family located in spot-check.",
+      "author_provenance": "Independently designed progression; pending H."
+    },
+    {
+      "family_id": "oxford-cantor-tangent-intersection-locus",
+      "primary_domain": "calculus",
+      "secondary_domains": [
+        "coordinate-geometry",
+        "graph-sketching",
+        "functions",
+        "algebra"
+      ],
+      "surface_objects": [
+        "parabola",
+        "two moving tangents",
+        "intersection locus"
+      ],
+      "constraints": [
+        "y=x^2",
+        "contact parameters u and u+h",
+        "h fixed positive"
+      ],
+      "target_type": "derive locus of intersections for fixed separation of tangency parameters",
+      "central_mechanism": "tangents at u,v intersect at ((u+v)/2,uv), then fixed gap converts product to midpoint square minus h^2/4",
+      "secondary_mechanisms": [
+        "parameter elimination",
+        "slope verification",
+        "scaled parabola"
+      ],
+      "critical_representation_change": "pair of tangent equations -> midpoint/product coordinates -> eliminated locus",
+      "diagram_topology": "two tangents to one parabola whose intersection traces a vertically shifted parallel parabola",
+      "small_case_signature": [
+        "u=0,h=1",
+        "u=1,h=1"
+      ],
+      "progression_signature": {
+        "opening": "general tangent line",
+        "first_deepening": "symmetric intersection formula",
+        "core": "fixed-gap locus",
+        "transfer": "arbitrary h",
+        "stretch": "scaled parabola"
+      },
+      "solution_dependency_graph_summary": "tangent equation -> intersect -> set v=u+h -> complete square -> surjectivity -> scaled curve",
+      "distinctive_features": [
+        "fixed tangency-parameter separation yields a parallel parabola with exact shift h^2/4"
+      ],
+      "known_classic_overlap": "Parabola tangent-intersection geometry is classical; exact fixed-gap formulation not confirmed. High originality risk.",
+      "author_provenance": "Author-created formulation from classical tangent geometry; should receive aggressive Agent H search."
+    },
+    {
+      "family_id": "oxford-cantor-exponential-rotating-line",
+      "primary_domain": "functions",
+      "secondary_domains": [
+        "graph-sketching",
+        "calculus",
+        "elementary-analysis",
+        "algebra"
+      ],
+      "surface_objects": [
+        "exponential curve",
+        "line through origin",
+        "parameter slope"
+      ],
+      "constraints": [
+        "e^x=a x",
+        "a>0"
+      ],
+      "target_type": "classify root count and tangency threshold, then scale exponent",
+      "central_mechanism": "minimize e^x/x on x>0 or equivalently find tangent line through the origin",
+      "secondary_mechanisms": [
+        "sign domain restriction",
+        "convex/monotone ratio reasoning",
+        "b-scaling"
+      ],
+      "critical_representation_change": "parameterized intersection equation -> slope function a=e^x/x",
+      "diagram_topology": "rotating rays through origin meeting convex exponential zero/one/two times",
+      "small_case_signature": [
+        "a=1",
+        "a=e",
+        "a=3"
+      ],
+      "progression_signature": {
+        "opening": "graph intersections",
+        "first_deepening": "restrict x>0",
+        "core": "ratio minimum threshold e",
+        "transfer": "e^(bx)=ax",
+        "stretch": "simultaneous value/derivative tangency"
+      },
+      "solution_dependency_graph_summary": "sign -> ratio -> derivative -> threshold cases -> geometric tangency -> scale b",
+      "distinctive_features": [
+        "threshold line slope equals e at contact x=1"
+      ],
+      "known_classic_overlap": "Exact kernel is widely documented as a calculus root-count exercise.",
+      "author_provenance": "Classic kernel; interview progression independently authored. Metadata labels classic-problem/secondary-reference; H still owns fidelity/originality gate."
+    },
+    {
+      "family_id": "oxford-cantor-mobius-recurrence",
+      "primary_domain": "sequences-recurrences",
+      "secondary_domains": [
+        "functions",
+        "elementary-analysis"
+      ],
+      "surface_objects": [
+        "fractional-linear recurrence",
+        "fixed point",
+        "error variable"
+      ],
+      "constraints": [
+        "x_{n+1}=1/(2-x_n)",
+        "x_0<1"
+      ],
+      "target_type": "conjecture convergence then linearize recurrence exactly",
+      "central_mechanism": "reciprocal fixed-point error y_n=1/(1-x_n) obeys y_{n+1}=y_n+1",
+      "secondary_mechanisms": [
+        "cobweb intuition",
+        "explicit monotonicity",
+        "domain-failure classification above 1"
+      ],
+      "critical_representation_change": "nonlinear x-recurrence -> affine recurrence in reciprocal error",
+      "diagram_topology": "optional cobweb against y=x for a fractional-linear map tangent at its fixed point",
+      "small_case_signature": [
+        "x_0=0",
+        "x_0=1/2"
+      ],
+      "progression_signature": {
+        "opening": "compute orbits",
+        "first_deepening": "fixed-point error",
+        "core": "linearizing substitution and exact formula",
+        "transfer": "starts above 1",
+        "stretch": "construct shifted fixed-point analogue"
+      },
+      "solution_dependency_graph_summary": "examples -> fixed point -> error identity -> reciprocal transform -> explicit solution -> domain extension",
+      "distinctive_features": [
+        "parabolic fixed point becomes translation y->y+1 under a reciprocal-error coordinate"
+      ],
+      "known_classic_overlap": "Möbius-iteration linearization is classical in spirit; exact recurrence not matched in spot-check.",
+      "author_provenance": "Independently selected recurrence/progression; correctness edge case above 1 flagged for I."
+    },
+    {
+      "family_id": "oxford-cantor-squared-error-recurrence",
+      "primary_domain": "sequences-recurrences",
+      "secondary_domains": [
+        "functions",
+        "elementary-analysis",
+        "algebra"
+      ],
+      "surface_objects": [
+        "quadratic recurrence",
+        "fixed-point error"
+      ],
+      "constraints": [
+        "x_{n+1}=x_n(2-x_n)",
+        "0<x_0<1"
+      ],
+      "target_type": "prove convergence then expose exact convergence rate",
+      "central_mechanism": "error identity 1-x_{n+1}=(1-x_n)^2",
+      "secondary_mechanisms": [
+        "monotone bounded convergence",
+        "basin extension to (0,2)",
+        "tolerance bound"
+      ],
+      "critical_representation_change": "state variable x_n -> error e_n=1-x_n",
+      "diagram_topology": "optional recurrence/cobweb approaching fixed point 1 rapidly",
+      "small_case_signature": [
+        "x_0=1/2",
+        "x_0=3/2"
+      ],
+      "progression_signature": {
+        "opening": "numerical terms",
+        "first_deepening": "monotone/bounded proof",
+        "core": "square error and exact formula",
+        "transfer": "basin [0,2]",
+        "stretch": "iteration count for tolerance"
+      },
+      "solution_dependency_graph_summary": "examples -> invariant interval -> limit -> error square -> exponent 2^n -> basin/tolerance",
+      "distinctive_features": [
+        "each step doubles the exponent of the initial error"
+      ],
+      "known_classic_overlap": "Exact recurrence and error-squaring solution are published as a standard convergence exercise.",
+      "author_provenance": "Classic kernel; progression independently authored. Metadata labels classic-problem/secondary-reference."
+    },
+    {
+      "family_id": "oxford-cantor-absolute-quadratic-crossings",
+      "primary_domain": "graph-sketching",
+      "secondary_domains": [
+        "algebra",
+        "functions"
+      ],
+      "surface_objects": [
+        "quadratic",
+        "absolute-value fold",
+        "horizontal levels"
+      ],
+      "constraints": [
+        "|(x-1)(x+2)|=c"
+      ],
+      "target_type": "classify distinct intersection counts across horizontal levels",
+      "central_mechanism": "fold only the negative quadratic arc and use its reflected vertex height as the transition",
+      "secondary_mechanisms": [
+        "discriminant cross-check",
+        "general root-gap formula"
+      ],
+      "critical_representation_change": "unfolded signed quadratic -> folded nonnegative graph",
+      "diagram_topology": "two outer upward arms plus a central downward arch touching zero at two roots",
+      "small_case_signature": [
+        "c=0",
+        "c=1",
+        "c=9/4",
+        "c=3"
+      ],
+      "progression_signature": {
+        "opening": "sketch base quadratic",
+        "first_deepening": "absolute-value fold",
+        "core": "level-count regimes",
+        "transfer": "roots a<b",
+        "stretch": "discriminant proof"
+      },
+      "solution_dependency_graph_summary": "roots/vertex -> fold -> cap height -> case count -> root-gap generalization",
+      "distinctive_features": [
+        "4/3/2 crossing transition around an internal reflected cap"
+      ],
+      "known_classic_overlap": "Absolute-value graph folding is standard; exact coefficients/generalization not identified.",
+      "author_provenance": "Independently chosen kernel and progression; pending H."
+    },
+    {
+      "family_id": "oxford-cantor-radical-asymptote",
+      "primary_domain": "functions",
+      "secondary_domains": [
+        "graph-sketching",
+        "elementary-analysis",
+        "calculus",
+        "algebra"
+      ],
+      "surface_objects": [
+        "parameterized radical curve",
+        "quadratic radicand"
+      ],
+      "constraints": [
+        "R_a(x)=sqrt(x^2+a x+1)-x",
+        "-2<a<2 initially"
+      ],
+      "target_type": "derive domain, monotonicity, asymmetric end behavior, range, then cross parameter boundary",
+      "central_mechanism": "rationalize one end and control derivative sign by comparing (2x+a)^2 with 4 radicand",
+      "secondary_mechanisms": [
+        "|x| behavior at negative infinity",
+        "discriminant/domain topology",
+        "perfect-square boundary cases"
+      ],
+      "critical_representation_change": "radical difference -> conjugate quotient / squared derivative comparison",
+      "diagram_topology": "strictly decreasing full-real curve approaching a horizontal asymptote on the right and diverging linearly on the left",
+      "small_case_signature": [
+        "a=0",
+        "a=1",
+        "a=2"
+      ],
+      "progression_signature": {
+        "opening": "radicand discriminant",
+        "first_deepening": "right asymptote",
+        "core": "left behavior + strict monotonicity",
+        "transfer": "a=±2",
+        "stretch": "|a|>2 disconnected domain"
+      },
+      "solution_dependency_graph_summary": "domain -> conjugate limit -> left |x| limit -> derivative sign -> range -> boundary/domain bifurcation",
+      "distinctive_features": [
+        "same square-root term creates finite one-sided asymptote and divergent opposite end"
+      ],
+      "known_classic_overlap": "Rationalized radical limits are common; exact parameterized interview family not identified.",
+      "author_provenance": "Independently designed; correctness/calibration high-risk handoff to I/G."
+    },
+    {
+      "family_id": "oxford-cantor-shifted-cubic-intersections",
+      "primary_domain": "functions",
+      "secondary_domains": [
+        "graph-sketching",
+        "algebra",
+        "calculus",
+        "elementary-analysis"
+      ],
+      "surface_objects": [
+        "cubic",
+        "horizontal translate of itself",
+        "intersection points"
+      ],
+      "constraints": [
+        "f(x)=x^3-x",
+        "compare f(x) and f(x-h)",
+        "h>0"
+      ],
+      "target_type": "classify intersection count by shift and connect small shifts to stationary points",
+      "central_mechanism": "cubic difference cancels to a quadratic with discriminant 3(4-h^2)",
+      "secondary_mechanisms": [
+        "tangency at double intersection",
+        "difference quotient -> derivative limit",
+        "scaled cubic"
+      ],
+      "critical_representation_change": "two graph intersection problem -> finite-difference quadratic -> derivative as h->0",
+      "diagram_topology": "two congruent S-curves horizontally separated, with two/one/no intersections",
+      "small_case_signature": [
+        "h=1",
+        "h=2",
+        "h=3"
+      ],
+      "progression_signature": {
+        "opening": "sketch translations",
+        "first_deepening": "factor difference",
+        "core": "discriminant threshold",
+        "transfer": "x^3-cx",
+        "stretch": "finite-difference derivative interpretation"
+      },
+      "solution_dependency_graph_summary": "graph conjecture -> algebraic cancellation -> discriminant -> tangent equality -> h->0 stationary limit",
+      "distinctive_features": [
+        "critical shift 2 and small-shift intersection limit at ±1/sqrt(3)"
+      ],
+      "known_classic_overlap": "Finite-difference ideas and translated-curve intersections are standard; exact family not located.",
+      "author_provenance": "Independently designed; calibration high-risk."
+    },
+    {
+      "family_id": "oxford-cantor-moving-integral-window",
+      "primary_domain": "calculus",
+      "secondary_domains": [
+        "functions",
+        "graph-sketching",
+        "elementary-analysis"
+      ],
+      "surface_objects": [
+        "positive even integrand",
+        "integral over [x,2x]",
+        "moving/dilating window"
+      ],
+      "constraints": [
+        "W(x)=integral_x^{2x} 1/(1+t^2) dt"
+      ],
+      "target_type": "sketch without antiderivative and generalize dilation factor",
+      "central_mechanism": "FTC gives endpoint-weighted derivative whose numerator reduces to 1-2x^2",
+      "secondary_mechanisms": [
+        "oddness from even integrand + orientation",
+        "comparison with 1/t^2",
+        "k-parameter factorization"
+      ],
+      "critical_representation_change": "moving area window -> endpoint derivative",
+      "diagram_topology": "odd graph with one positive hump, one negative trough, and both tails tending to zero",
+      "small_case_signature": [
+        "x=0",
+        "x=1/sqrt(2)",
+        "large x"
+      ],
+      "progression_signature": {
+        "opening": "symmetry/sign as area",
+        "first_deepening": "variable-limit derivative",
+        "core": "turning point + tail comparison",
+        "transfer": "factor k>1",
+        "stretch": "maximum-value behavior as k changes"
+      },
+      "solution_dependency_graph_summary": "oddness -> sign -> derivative -> tail bound -> parameter derivative factorization",
+      "distinctive_features": [
+        "nonzero window length grows while integral still tends to zero"
+      ],
+      "known_classic_overlap": "Variable-limit integral differentiation is standard; exact window/integrand family not identified.",
+      "author_provenance": "Independently designed; pending H."
+    },
+    {
+      "family_id": "oxford-cantor-reciprocal-implicit-curve",
+      "primary_domain": "graph-sketching",
+      "secondary_domains": [
+        "coordinate-geometry",
+        "functions",
+        "algebra",
+        "elementary-analysis"
+      ],
+      "surface_objects": [
+        "implicit quartic curve",
+        "isolated origin",
+        "reciprocal-coordinate circle"
+      ],
+      "constraints": [
+        "x^2 y^2=x^2+y^2"
+      ],
+      "target_type": "fully sketch components/asymptotes and locate closest nonzero branch points",
+      "central_mechanism": "separate origin, then divide nonzero branch equation to 1/x^2+1/y^2=1",
+      "secondary_mechanisms": [
+        "solve y^2 for branch domain",
+        "symmetries",
+        "positive-variable inequality for branch distance"
+      ],
+      "critical_representation_change": "original (x,y) plane -> reciprocal coordinates (1/x,1/y) on a circle",
+      "diagram_topology": "isolated origin plus four outer hyperbola-like branches with asymptotes x=±1,y=±1",
+      "small_case_signature": [
+        "(0,0)",
+        "diagonal points with |x|=|y|",
+        "large |x|"
+      ],
+      "progression_signature": {
+        "opening": "test axes and symmetries",
+        "first_deepening": "reciprocal circle",
+        "core": "domain/asymptotes and complete sketch",
+        "transfer": "scaled c",
+        "stretch": "circle parametrization/branch closest points"
+      },
+      "solution_dependency_graph_summary": "origin check -> legal division -> reciprocal circle -> solved branch equation -> asymptotes -> branch-distance inequality",
+      "distinctive_features": [
+        "tempting division deletes an isolated component, making precision/error recovery mathematically substantive"
+      ],
+      "known_classic_overlap": "Reciprocal-coordinate implicit-curve transformation is a general technique; exact equation not identified.",
+      "author_provenance": "Independently designed; correctness/calibration flagged because of isolated-component trap."
+    },
+    {
+      "family_id": "oxford-cantor-three-cycle-map",
+      "primary_domain": "functions",
+      "secondary_domains": [
+        "functional-equations",
+        "algebra"
+      ],
+      "surface_objects": [
+        "fractional-linear map",
+        "iterates",
+        "periodic orbits"
+      ],
+      "constraints": [
+        "f(x)=1-1/x",
+        "safe iteration set R\\\\{0,1}"
+      ],
+      "target_type": "find invariant domain and prove every real orbit has exact period three",
+      "central_mechanism": "direct composition gives f^2(x)=1/(1-x), f^3(x)=x",
+      "secondary_mechanisms": [
+        "invariant-domain proof",
+        "no-real-fixed-point discriminant",
+        "translation conjugacy"
+      ],
+      "critical_representation_change": "one-step rational function -> composition cycle / orbit structure",
+      "diagram_topology": "optional functional iteration/cycle rather than a necessary Cartesian sketch",
+      "small_case_signature": [
+        "orbit from x=2",
+        "orbit from x=3"
+      ],
+      "progression_signature": {
+        "opening": "safe-domain check",
+        "first_deepening": "sample cycles",
+        "core": "compute iterates and exact period",
+        "transfer": "shifted exceptional points",
+        "stretch": "symmetric orbit relations"
+      },
+      "solution_dependency_graph_summary": "iteration domain -> examples -> f^2 -> f^3=id -> no fixed points -> exact period -> conjugate shift",
+      "distinctive_features": [
+        "all admissible real points partition into 3-cycles"
+      ],
+      "known_classic_overlap": "Exact map f(x)=1-1/x as a period-three example is explicitly documented online.",
+      "author_provenance": "Classic kernel; progression/domain emphasis independently authored. Metadata labels classic-problem/secondary-reference."
+    },
+    {
+      "family_id": "oxford-cantor-quartic-horizontal-levels",
+      "primary_domain": "graph-sketching",
+      "secondary_domains": [
+        "functions",
+        "calculus",
+        "algebra"
+      ],
+      "surface_objects": [
+        "even quartic",
+        "horizontal level lines"
+      ],
+      "constraints": [
+        "Q_a(x)=x^4-2a x^2",
+        "a>0"
+      ],
+      "target_type": "classify distinct level-set cardinalities and normalize the parameter",
+      "central_mechanism": "double-well graph plus substitution u=x^2>=0",
+      "secondary_mechanisms": [
+        "critical-point heights",
+        "even symmetry",
+        "horizontal/vertical scaling"
+      ],
+      "critical_representation_change": "quartic in x -> quadratic in nonnegative u=x^2",
+      "diagram_topology": "symmetric W-shaped quartic with central local maximum at zero and two equal minima",
+      "small_case_signature": [
+        "c=-a^2",
+        "c=0",
+        "c>0"
+      ],
+      "progression_signature": {
+        "opening": "symmetry/roots",
+        "first_deepening": "critical points",
+        "core": "level counts with u>=0 proof",
+        "transfer": "master scaling",
+        "stretch": "predict effect of linear tilt"
+      },
+      "solution_dependency_graph_summary": "factor/symmetry -> derivative extrema -> graph count -> u-substitution proof -> scale x by sqrt(a)",
+      "distinctive_features": [
+        "distinct-root counts 0,2,4,3,2 across ordered level regimes"
+      ],
+      "known_classic_overlap": "Even quartic/double-well analysis is standard; exact family not matched.",
+      "author_provenance": "Independently parameterized progression; pending H."
+    },
+    {
+      "family_id": "oxford-cantor-reciprocal-increment-recurrence",
+      "primary_domain": "sequences-recurrences",
+      "secondary_domains": [
+        "elementary-analysis",
+        "algebra"
+      ],
+      "surface_objects": [
+        "positive nonlinear recurrence",
+        "squared growth"
+      ],
+      "constraints": [
+        "a_{n+1}=a_n+1/a_n",
+        "a_0>0"
+      ],
+      "target_type": "prove divergence and sharp leading asymptotic a_n~sqrt(2n)",
+      "central_mechanism": "square update to obtain a_{n+1}^2-a_n^2=2+1/a_n^2 and control the summed error",
+      "secondary_mechanisms": [
+        "linear lower bound",
+        "reciprocal-linear/harmonic upper bound",
+        "scaled c/a_n transfer"
+      ],
+      "critical_representation_change": "state recurrence -> telescoping recurrence for squares plus cumulative error",
+      "diagram_topology": "sequence table/bounds rather than essential Cartesian graph",
+      "small_case_signature": [
+        "a_0=1",
+        "first several squared increments"
+      ],
+      "progression_signature": {
+        "opening": "positivity/monotonicity",
+        "first_deepening": "square identity",
+        "core": "lower bound + summed error",
+        "transfer": "c/a_n",
+        "stretch": "second-order logarithmic correction discussion"
+      },
+      "solution_dependency_graph_summary": "positive growth -> square -> lower bound -> exact sum -> harmonic comparison -> normalized squeeze",
+      "distinctive_features": [
+        "constant leading squared increment with logarithmically accumulated correction"
+      ],
+      "known_classic_overlap": "Related asymptotic recurrences are classical; exact author spot-check did not identify this progression.",
+      "author_provenance": "Independently chosen recurrence/progression; I/G high-risk review requested."
+    },
+    {
+      "family_id": "oxford-cantor-line-envelope",
+      "primary_domain": "graph-sketching",
+      "secondary_domains": [
+        "functions",
+        "calculus",
+        "algebra",
+        "elementary-analysis"
+      ],
+      "surface_objects": [
+        "one-parameter lines",
+        "upper envelope parabola"
+      ],
+      "constraints": [
+        "L_t(x)=t x-t^2-t",
+        "t real"
+      ],
+      "target_type": "derive pointwise envelope and prove each family member is tangent",
+      "central_mechanism": "for fixed x maximize a concave quadratic in t, then rewrite envelope-minus-line as a square",
+      "secondary_mechanisms": [
+        "slope/contact check",
+        "dual tangent reconstruction",
+        "alpha,beta generalization"
+      ],
+      "critical_representation_change": "family of lines -> optimization in parameter t -> envelope graph",
+      "diagram_topology": "fan of lines tangent from below to a single upward parabola",
+      "small_case_signature": [
+        "t=-1",
+        "t=0",
+        "t=1"
+      ],
+      "progression_signature": {
+        "opening": "draw lines and conjecture boundary",
+        "first_deepening": "fix x/optimize t",
+        "core": "complete square + global inequality",
+        "transfer": "alpha,beta family",
+        "stretch": "derive line family back from parabola tangents"
+      },
+      "solution_dependency_graph_summary": "samples -> parameter optimization -> envelope -> square-difference proof -> tangency -> general coefficients",
+      "distinctive_features": [
+        "parameter equals tangent slope and contact coordinate is 2t+1"
+      ],
+      "known_classic_overlap": "Envelope-of-lines methodology is classical; exact line family not confirmed. High originality risk.",
+      "author_provenance": "Author-created simple envelope family from generic classical technique; aggressive H review requested."
+    },
+    {
+      "family_id": "oxford-cantor-mobius-involution",
+      "primary_domain": "functions",
+      "secondary_domains": [
+        "functional-equations",
+        "graph-sketching",
+        "coordinate-geometry",
+        "algebra"
+      ],
+      "surface_objects": [
+        "parameterized fractional-linear function",
+        "translated reciprocal hyperbola"
+      ],
+      "constraints": [
+        "T_a(x)=(a-x)/(1+x)",
+        "x!=-1"
+      ],
+      "target_type": "connect graph symmetry, self-inverse composition, fixed-point regimes, and exceptional degeneration",
+      "central_mechanism": "rewrite as (x+1)(y+1)=a+1 and keep a+1 visible through composition",
+      "secondary_mechanisms": [
+        "graph inverse symmetry",
+        "fixed-point square equation",
+        "a=-1 constant-map degeneration"
+      ],
+      "critical_representation_change": "explicit rational function -> symmetric implicit hyperbola",
+      "diagram_topology": "rectangular hyperbola centered (-1,-1), symmetric about y=x, collapsing at a=-1",
+      "small_case_signature": [
+        "a=0",
+        "a=3",
+        "a=-2",
+        "a=-1"
+      ],
+      "progression_signature": {
+        "opening": "implicit factorization",
+        "first_deepening": "hyperbola sketch",
+        "core": "involution + fixed points",
+        "transfer": "inverse-graph explanation",
+        "stretch": "exceptional degeneration / shifted involution"
+      },
+      "solution_dependency_graph_summary": "implicit equation -> asymptotes/symmetry -> composition -> fixed-point count -> exceptional parameter audit",
+      "distinctive_features": [
+        "same parameter boundary simultaneously destroys hyperbola, image-domain closure, and involution"
+      ],
+      "known_classic_overlap": "Fractional-linear involutions are classical; exact one-parameter interview family not identified.",
+      "author_provenance": "Independently designed parameterized progression; correctness/calibration flagged for I/G."
+    }
+  ]
+}
