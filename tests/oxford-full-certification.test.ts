@@ -175,16 +175,22 @@ describe("Agent G full C/D/E certification", () => {
       expect(entryRank, record.familyId).toBeDefined();
       expect(coreRank, record.familyId).toBeDefined();
       expect(ceilingRank, record.familyId).toBeDefined();
-      expect(entryRank!).toBeLessThanOrEqual(coreRank!);
-      expect(coreRank!).toBeLessThanOrEqual(ceilingRank!);
+      if (entryRank === undefined || coreRank === undefined || ceilingRank === undefined) {
+        throw new Error(`Unknown difficulty band in ${record.familyId}`);
+      }
+      expect(entryRank).toBeLessThanOrEqual(coreRank);
+      expect(coreRank).toBeLessThanOrEqual(ceilingRank);
 
       expect(record.difficulty.stageBands.length).toBeGreaterThan(0);
       let sawCore = false;
       for (const stage of record.difficulty.stageBands) {
         const stageRank = difficultyRank.get(stage.recommendedDifficulty as never);
         expect(stageRank, `${record.familyId}/${stage.stageId}`).toBeDefined();
-        expect(stageRank!).toBeGreaterThanOrEqual(entryRank!);
-        expect(stageRank!).toBeLessThanOrEqual(ceilingRank!);
+        if (stageRank === undefined) {
+          throw new Error(`Unknown stage difficulty in ${record.familyId}/${stage.stageId}`);
+        }
+        expect(stageRank).toBeGreaterThanOrEqual(entryRank);
+        expect(stageRank).toBeLessThanOrEqual(ceilingRank);
         if (stage.role === "core") {
           sawCore = true;
           expect(stage.recommendedDifficulty).toBe(core);
