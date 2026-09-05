@@ -265,22 +265,22 @@
     "internal_stage_planning_minutes_semantics": "soft-default-authoring-heuristics-not-required-ranges"
   },
   "agent_a_mapping": {
-    "branch_commit_reviewed": "00824aebdc7392c9c83a2c1cd29bb02c93b73487",
+    "branch_commit_reviewed": "c065fe6e9c874ea06a5733b2e594751f1ab06400",
     "contract_fit": "strong",
     "requested_additions_only": [
       {
         "proposed_skill": "guided-adaptation",
-        "status_at_reviewed_head": "absent",
+        "status_at_reviewed_head": "present",
         "reason": "Separates the amount of tutor assistance needed from the quality of mathematical uptake after a prompt/new idea. Distinct from error-recovery, transfer, and independence."
       },
       {
         "proposed_skill": "precision-checking",
-        "status_at_reviewed_head": "absent",
+        "status_at_reviewed_head": "present",
         "reason": "Captures deliberate checking of cases, assumptions, domain restrictions, signs, graphical sufficiency, and proof completeness even when no error has yet occurred."
       }
     ],
     "pr_number": 126,
-    "reconciliation_status": "two-evidence-driven-skills-still-absent"
+    "reconciliation_status": "resolved-both-research-requested-skills-present"
   },
   "frequency_semantics": "coverage-only-not-empirical",
   "portfolio_semantics": {
