@@ -9,8 +9,8 @@ import {
 } from "../packages/problems/src/oxford-adaptive-taxonomy.js";
 
 describe("Agent D — Dirichlet Oxford candidate bank", () => {
-  it("contains exactly 18 distinct expert-review candidates", () => {
-    expect(dirichletCandidateEntries).toHaveLength(18);
+  it("contains exactly 22 distinct expert-review candidates", () => {
+    expect(dirichletCandidateEntries).toHaveLength(22);
     const ids = dirichletCandidateEntries.map((entry) => entry.problem.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids.every((id) => id.startsWith("oxford-d-"))).toBe(true);
