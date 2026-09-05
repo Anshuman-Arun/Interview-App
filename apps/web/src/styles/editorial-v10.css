@@ -412,10 +412,11 @@ summary:focus-visible,
   flex: 0 0 20px;
   place-items: center;
   margin: 0;
+  padding: 0;
   background: transparent;
   color: var(--muted);
   font-size: 0;
-  line-height: 1;
+  line-height: 0;
 }
 
 .appearance-dock__trigger-mark::after {
@@ -423,9 +424,10 @@ summary:focus-visible,
   width: 14px;
   height: 14px;
   box-sizing: border-box;
+  margin: 0;
   border: 1px solid currentColor;
   border-radius: 50%;
-  background: linear-gradient(to right, currentColor 0 50%, transparent 50% 100%);
+  background: linear-gradient(90deg, currentColor 0 50%, transparent 50% 100%);
   content: "";
 }
 
