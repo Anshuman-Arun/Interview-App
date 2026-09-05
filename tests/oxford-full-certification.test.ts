@@ -125,7 +125,7 @@ describe("Agent G full C/D/E certification", () => {
       expect.objectContaining({
         agent: "C — Cantor",
         prNumber: 132,
-        headSha: "0d4941ab3197b2297ab389d7438df39f599b2ad5",
+        headSha: "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
         survivingFamilyCount: 18
       }),
       expect.objectContaining({
@@ -137,7 +137,7 @@ describe("Agent G full C/D/E certification", () => {
       expect.objectContaining({
         agent: "E — Euler",
         prNumber: 134,
-        headSha: "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
+        headSha: "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
         survivingFamilyCount: 17
       })
     ]);
