@@ -16,6 +16,8 @@ export function ProductFrame({
   onDismissNotice,
   reasoningReady = true,
   reasoningChecking = false,
+  authorityChecking = false,
+  authorityUnavailable = false,
   navigationLocked = false,
   transitionLocked = false
 }: {
@@ -29,6 +31,8 @@ export function ProductFrame({
   readonly onDismissNotice?: (() => void) | undefined;
   readonly reasoningReady?: boolean;
   readonly reasoningChecking?: boolean;
+  readonly authorityChecking?: boolean;
+  readonly authorityUnavailable?: boolean;
   readonly navigationLocked?: boolean;
   readonly transitionLocked?: boolean;
 }) {
@@ -37,6 +41,17 @@ export function ProductFrame({
   useEffect(() => {
     headingRef.current?.focus();
   }, [title]);
+
+  const readinessChecking = reasoningChecking || authorityChecking;
+  const readinessReady =
+    reasoningReady && !authorityChecking && !authorityUnavailable;
+  const readinessLabel = readinessChecking
+    ? "Checking"
+    : authorityUnavailable
+      ? "Session check needed"
+      : reasoningReady
+        ? "Ready"
+        : "Setup needed";
 
   const items: readonly { id: ProductPageId; label: string; index: string }[] = [
     { id: "home", label: "Home", index: "01" },
@@ -104,17 +119,21 @@ export function ProductFrame({
         <div className="product-frame__rail-note" aria-label="Interview readiness">
           <span className="product-frame__readiness-title">
             <i
-              data-ready={String(reasoningReady)}
-              data-checking={String(reasoningChecking)}
+              data-ready={String(readinessReady)}
+              data-checking={String(readinessChecking)}
               aria-hidden="true"
             />
-            {reasoningChecking ? "Checking" : reasoningReady ? "Ready" : "Setup needed"}
+            {readinessLabel}
           </span>
           <span className="product-frame__readiness-row"><span>Voice</span><b>LOCAL</b></span>
           <span className="product-frame__readiness-row"><span>Board</span><b>LOCAL</b></span>
           <span className="product-frame__readiness-row">
             <span>Reasoning</span>
             <b>{reasoningChecking ? "CHECKING" : reasoningReady ? "READY" : "SETUP"}</b>
+          </span>
+          <span className="product-frame__readiness-row">
+            <span>Sessions</span>
+            <b>{authorityChecking ? "CHECKING" : authorityUnavailable ? "RETRY" : "VERIFIED"}</b>
           </span>
           <span className="product-frame__rail-rule" aria-hidden="true" />
           <span className="product-frame__readiness-foot">VOICE · BOARD · REPLAY</span>
@@ -131,11 +150,11 @@ export function ProductFrame({
             {aside}
             <span
               className="product-frame__status-chip"
-              data-ready={String(reasoningReady)}
-              data-checking={String(reasoningChecking)}
+              data-ready={String(readinessReady)}
+              data-checking={String(readinessChecking)}
             >
               <i aria-hidden="true" />
-              {reasoningChecking ? "CHECKING" : reasoningReady ? "READY" : "CHECK SETUP"}
+              {readinessChecking ? "CHECKING" : readinessReady ? "READY" : authorityUnavailable ? "CHECK SESSIONS" : "CHECK SETUP"}
             </span>
             <AppearanceDock />
           </div>
