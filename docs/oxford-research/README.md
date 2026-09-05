@@ -18,7 +18,7 @@ For the Interview App, preserve these rules:
 4. **Use follow-ups to test learning and transfer.** A good extension often changes one parameter, dimension, representation, definition, or constraint while preserving the conceptual thread.
 5. **Do not make completion the objective.** Official sources explicitly support interviews in which candidates receive help, make mistakes, or do not finish.
 6. **Do not equate fidelity with copying.** Reuse broad pedagogical shapes; change the mathematical kernel, central mechanism, progression details, diagram structure, and extension path.
-7. **Treat timing below the whole-interview level as internal calibration.** Oxford gives a roughly 20–30 minute interview anchor, not official per-stage expected times.
+7. **Treat timing below the whole-interview level as internal, non-scripted calibration.** Oxford gives a roughly 20–30 minute whole-interview anchor, not official per-stage expected times. Stage ranges are soft planning estimates only: individual families may deviate substantially, one core development may occupy most of an interview, and transitions should occur for mathematical reasons rather than because a nominal timer expired.
 8. **Treat difficulty as a profile, not one number.** Entry, core, and ceiling should be calibrated separately.
 9. **Adapt primarily between interviews.** Within an interview, prefer deeper exploration, prompts, reframing, and extensions within a coherent family. This is a product policy consistent with several official examples, not a claim that every real Oxford interview uses exactly one family.
 
@@ -58,6 +58,24 @@ The 2023 demonstration interview was cross-checked against a transcript mirror f
 - https://sozai.app/transcript/mathematics-demonstration-interview/
 
 Do **not** treat the transcript provider as Oxford authority. Claims about Oxford practice should point back to the official video or first-party pages.
+
+### Deep corpus vs broader reference inventory
+
+Agent B now maintains two deliberately different source layers:
+
+- [`official-benchmark-corpus.json`](./official-benchmark-corpus.json): **20 deeply annotated** benchmark families/examples. These are selected because the evidence is strong enough to support detailed structural analysis: prerequisites, opening, progression, reasoning, tutor intervention, transfer, and pedagogical role.
+- [`reference-inventory.json`](./reference-inventory.json): **34 compact reference fingerprints** spanning confirmed-used questions, official samples/demonstrations, official interview-style continuations, and closely relevant first-party preparation material.
+
+The broader inventory exists primarily as an **anti-collision aid**. It is intentionally compact so it does not become a copied question archive.
+
+**Neither layer is exhaustive. Absence from either file is not evidence of originality.** Agent H must perform external mathematical nearest-neighbour retrieval for every proposed production family; local corpus checks alone can never approve originality.
+
+### 2026 “Precision” evidence-date note
+
+Oxford's current 2026 admissions-livestream schedule lists a session titled **Precision** for **17 September 2026**. As of **4 September 2026**, that session is still in the future and its substantive content is not available evidence for this foundation.
+
+This reference may be used only to note that Oxford has scheduled a session under that title. The `precision-checking` recommendation is instead grounded in already-published material: official sample-question commentary requiring systematic completeness, published 2026 Visualisation material that explicitly warns about false assumptions and unproved graphical inferences, and other first-party examples where candidates must check cases/conditions. Revisit the Precision session only after Oxford publishes it.
+
 
 ---
 
@@ -146,7 +164,7 @@ These are problem/evidence dimensions, not personality scores.
 | case analysis | Partitions possibilities systematically and checks coverage. | OX-SAMPLE 2-by-n |
 | strategic simplification | Replaces a hard general problem with a revealing smaller/special case. | OX-SAMPLE; OX-MATHCS-Q1 |
 | **guided adaptation** | After a tutor prompt, incorporates the new idea and advances rather than merely repeating it. | OX-PROSPECTUS; OX-SAMPLE; OX-DEMO-2023 |
-| **precision/checking** | Checks assumptions, omitted cases, signs, edge cases, and whether a diagram/argument actually proves the claim. | OX-SAMPLE; OX-VIS-2026; 2026 “Precision” preparation emphasis |
+| **precision/checking** | Checks assumptions, omitted cases, signs, edge cases, and whether a diagram/argument actually proves the claim. | OX-SAMPLE; published OX-VIS-2026 material (including explicit false-assumption/case-checking guidance) |
 
 The last two are the only additions this research recommends to Agent A’s current reasoning-skill enum.
 
@@ -328,6 +346,19 @@ Best for: modelling and abstraction.
 
 ## 6. Recommended 72-family bank coverage
 
+**Semantics contract:** the numbers below are a **coverage-capacity allocation**, not observed Oxford question frequencies.
+
+They MUST NOT be interpreted as:
+
+- historical percentages of Oxford interview questions;
+- empirical Oxford topic priors;
+- default recommendation sampling weights;
+- evidence that a domain with 7 slots should be selected more often than one with 3 slots.
+
+The allocation answers a product-design question — “how much authored capacity should the bank contain so that it can cover the required mathematical/reasoning space?” — not a historical-frequency question.
+
+A future recommendation engine should choose the next family primarily from **student need/evidence, uncertainty, appropriate difficulty, prerequisites, recent exposure, family/similarity repetition control, and portfolio availability**. These 72 target counts should constrain whether the bank has enough breadth; they should not directly control per-student sampling.
+
 This is an **internal portfolio recommendation**, not a claim about Oxford’s empirical question frequencies. Counts are primary-domain assignments; individual families should carry multiple domain/skill tags.
 
 | Agent A primary domain | Families |
@@ -488,8 +519,10 @@ A candidate who needs one structural nudge and then transfers it powerfully may 
 ### Officially anchored
 
 - Maths-specific current guidance: each interview is about 25 minutes.
-- Current prospectus: typically 20–30 minutes.
-- The 2-by-n sample explicitly describes the opening small cases as taking a relatively comfortable few minutes.
+- Current prospectus: interviews are typically 20–30 minutes.
+- The official 2-by-n sample commentary describes the opening small cases as a relatively comfortable few minutes.
+
+These are **whole-interview / broad conversational anchors**. Oxford does not publish a pacing script for individual stages.
 
 ### Not officially anchored
 
@@ -500,9 +533,10 @@ Oxford does **not** publish:
 - expected prompted completion time;
 - extension time;
 - stage soft cutoffs;
-- a time-to-grade conversion.
+- a time-to-grade conversion;
+- a rule saying every warm-up/core/extension should consume a fixed share of 25 minutes.
 
-Therefore Agent A’s `OxfordTimingEstimate` is an internal product model.
+Therefore Agent A's `OxfordTimingEstimate` is an internal product model.
 
 ### Initial product heuristics
 
@@ -515,24 +549,37 @@ Use only as low-confidence author estimates until pilot data exists:
 | core reasoning | 7–12 min |
 | extension / transfer | 4–8 min |
 
-These ranges may overlap and should **not** hard-stop the candidate.
+These ranges:
+
+- may overlap;
+- may be skipped;
+- may be much shorter or much longer for a particular family;
+- must **not** hard-stop the candidate or automatically trigger a hint/transition;
+- must **not** be enforced as mandatory stage targets.
+
+A realistic ~25-minute interview can spend most of its mathematical time on one core development if that conversation remains productive. Conversely, a candidate may move rapidly through an opening and reach several extensions.
+
+**Stage changes should occur at mathematically natural transition points**: a useful conjecture has been formed, a proof has reached a coherent conclusion, a representation change is warranted, the current route is exhausted, or a transfer question becomes pedagogically useful. A nominal minute window expiring is not itself a mathematical reason to switch stages.
 
 For new authored families:
 
-- mark timing calibration `expert-estimate`;
-- use low confidence unless there is repeated pilot evidence;
+- mark timing calibration `expert-estimate` only after an actual estimate has been made;
+- normally use low confidence before repeated pilot evidence;
 - retain more mathematical ceiling than the nominal interview length;
-- permit the interview to stop at a mathematically natural point before “completion.”
+- permit the interview to stop at a mathematically natural point before “completion”;
+- calibrate each family independently rather than fitting it to the generic table above.
 
-Empirical calibration should later use distributions conditioned on candidate strength and prompt history, not a single average.
+Empirical calibration should later use distributions conditioned on candidate strength, assistance history, and stage reached, not a single average. Timing exists to support realism and operational planning, not to force scripted pacing.
 
 ---
 
-## 10. Mapping to Agent A taxonomy
+## 10. Reconciliation with Agent A PR #126
 
-Research was mapped against Agent A working branch `agent-a/oxford-adaptive-taxonomy`, commit `6fd99b418b92e6b754b9f4f3138af420480ab730`.
+Re-checked against **Agent A PR #126**, latest reviewed head `00824aebdc7392c9c83a2c1cd29bb02c93b73487`.
 
 ### Strong alignment
+
+Agent A's current contract still cleanly supports the core research needs:
 
 | Research need | Agent A contract |
 | --- | --- |
@@ -543,21 +590,57 @@ Research was mapped against Agent A working branch `agent-a/oxford-adaptive-taxo
 | small cases/conjecture/proof | explicit reasoning-skill tags |
 | new definition | `definition-exploration` + `introducesNewDefinition` |
 | between-interview repetition control | `familyId`, `similarityClusterId` |
-| provenance/originality | provenance + review status |
+| provenance/originality | provenance + independent review status |
 | uncertain calibration | estimate confidence + calibration status |
 
-### Only two recommended enum amendments
+### Remaining synchronization requirement: two reasoning skills are still absent
 
-These are substantial enough to justify schema vocabulary; other differences are terminology preferences and should not destabilize Agent A’s work.
+At the latest #126 head, the canonical reasoning enum still has neither:
 
-1. **`guided-adaptation`** (or equivalent): evidence that a candidate can absorb a tutor prompt/new idea and use it.
-2. **`precision-checking`** (or equivalent): verifies assumptions, completeness of cases, edge conditions, and whether a claimed argument is actually sufficient.
+- `guided-adaptation`;
+- `precision-checking`.
 
-Do not add “communication,” “perseverance,” or “enthusiasm” as problem-family reasoning tags. Those are better handled as session-level evidence dimensions.
+Agent B recommends adding both (or semantically equivalent bounded tags) **before Wave 2 authoring freezes metadata**, rather than forcing authors to misuse nearby tags.
+
+#### Why `guided-adaptation` is distinct
+
+The product needs two separate facts:
+
+1. **Assistance/prompt dependency:** did the candidate need a tutor intervention to progress?
+2. **Guided adaptation:** once an intervention supplied a new representation, observation, subproblem, or idea, did the candidate understand it, integrate it, and use it productively?
+
+Those are not opposites and should not collapse into one score.
+
+`guided-adaptation` is distinct from:
+
+- **`error-recovery`** — recovering after the candidate's own unsuccessful/incorrect approach. A candidate can adapt superbly to a tutor's new idea without first making an error, or can correct an error without using any tutor-supplied idea.
+- **hint responsiveness / assistance level** — assistance records *what help was supplied/how much was needed*. Guided adaptation records the *quality of mathematical use after that help*. A student can receive the same prompt as another student and respond very differently.
+- **`transfer`** — applying an established mechanism to a modified problem, representation, or context. Guided adaptation may occur inside the original core problem immediately after a tutor prompt, before any transfer question exists.
+- **independence** — unaided progress. Independence decreases when help is needed; guided adaptation can still be strong after help. Oxford's interview format is specifically useful because tutors can observe both.
+
+Recommended evidence unit: milestone/stage evidence should record assistance through the existing evaluation seam and independently tag `guided-adaptation` when the post-prompt response itself is what the milestone tests.
+
+#### Why `precision-checking` remains useful
+
+This skill covers deliberate verification that:
+
+- all cases have been considered;
+- an assumption has not slipped in unnoticed;
+- signs/endpoints/domain restrictions are correct;
+- a graphical or numerical pattern actually proves the claim;
+- a proposed converse/sufficiency statement is justified.
+
+It overlaps with technique and error recovery but is observable even when no error has yet occurred. Published Oxford material repeatedly asks candidates to move from plausible picture/enumeration to a checked, sufficient argument.
+
+### Coordination boundary
+
+Agent B is not editing Agent A's branch. PR #127 remains docs/data-only and independent. The synchronization needed before Agents C–E bulk-author metadata is unambiguous: Agent A should either add these two bounded concepts or explicitly provide equivalent canonical representations so authoring agents do not improvise free-form tags.
 
 ### Timing warning for Agent A
 
-The current schema requires authored timing with non-unknown confidence. That is acceptable if all initial values are explicitly product estimates. New problem authors should not cite Oxford as the source of stage timing values. `timingCalibration = "expert-estimate"` should remain until enough observed sessions justify `empirically-calibrated`.
+The latest #126 contract requires problem/stage timing metadata. That remains compatible with this research **only if the values are treated as internal estimates rather than pacing obligations**.
+
+New problem authors must not cite Oxford as the source of stage timing values. `timingCalibration = "expert-estimate"` should remain until enough observed sessions justify `empirically-calibrated`, and runtime/recommendation logic should not advance stages solely because a `softCutoffMinutes` value has elapsed.
 
 ---
 
@@ -565,74 +648,160 @@ The current schema requires authored timing with non-unknown confidence. That is
 
 Full procedure: [`originality-audit.md`](./originality-audit.md).
 
-The audit must compare a candidate family against:
+The audit now requires five comparison pools for **every** proposed family:
 
-- the official benchmark corpus;
-- the current Interview App bank;
-- other generated candidate families in the same authoring wave;
-- known classic problems surfaced during expert review.
+1. deep official benchmark corpus;
+2. broader official/reference inventory;
+3. current Interview App bank;
+4. same-wave generated candidate families;
+5. **mandatory external/classic mathematical nearest-neighbour retrieval** based on the mathematical fingerprint.
+
+External retrieval must search mathematical structure, not only generated wording: normalized objects/constraints/target, central mechanism, progression signature, representation change, diagram topology, and extension/generalisation path.
+
+The final originality record must retain the strongest plausible nearest matches and briefly explain mathematically why each is safe or too close.
+
+**The local benchmark corpus is not an exhaustive whitelist of Oxford questions. Passing local similarity checks alone is insufficient for originality approval.**
 
 A family is **not original enough** merely because:
 
 - variables/numbers changed;
 - people/objects/context changed;
-- the diagram was relabelled;
+- the diagram was relabelled/redrawn;
 - prose was rewritten;
 - a famous problem gained an extra extension;
-- the same central invariant/trick is presented in the same progression.
+- the same central invariant/trick is presented in the same reveal path.
 
 Allowed inspiration is at the level of **reasoning shape**, e.g. “small cases → conjecture → proof → generalise,” while the mathematical kernel and progression specifics must be independent.
 
 ---
 
-## 12. Handoff requirements
+## 12. Wave 2 handoff: Agents C–H
 
-### 12.1 Problem-authoring agents
+All downstream agents should use Agent A's canonical schema plus this research layer. No Wave 2 agent should invent a parallel taxonomy.
 
-For each family proposal:
+### 12.1 Agent C — graphs/functions/algebra/calculus/sequences author
 
-1. choose a primary Agent A domain and 2–5 reasoning skills;
-2. state only prerequisites genuinely assumed without teaching;
-3. choose one abstract family pattern (or justify a different shape);
-4. specify entry/core/ceiling separately;
-5. design a productive opening before the decisive insight;
-6. design tutor interventions from weak to strong;
-7. include at least one meaningful transfer/generalisation when natural;
-8. produce a mathematical fingerprint for originality review;
-9. run the independent originality audit before marking ready;
-10. never copy source wording into authoring notes or prompts.
+Primary remit:
 
-Do not begin from an official question and “mutate it until different.” Begin from a desired skill/domain/shape, then invent a new mathematical kernel.
+- graph/curve sketching;
+- functions and transformations;
+- algebra;
+- calculus;
+- sequences/recurrences.
 
-### 12.2 Difficulty/calibration agent
+Requirements:
+
+- prioritise the documented graph-sketching deficit;
+- include families where school technique is only the opening and the core becomes structural;
+- use the 20 deep benchmarks for pedagogical shape, not as mutation templates;
+- check the 34-entry inventory before drafting and run external fingerprint search before originality approval;
+- separate prerequisites from interview subject;
+- author entry/core/ceiling and stage roles through Agent A's schema;
+- keep new material in review until Agent H passes both fidelity and originality.
+
+### 12.2 Agent D — combinatorics/number theory/graph theory/proof/invariants author
+
+Primary remit:
+
+- combinatorics;
+- number theory;
+- graph theory;
+- proof structures/invariants.
+
+Requirements:
+
+- treat this as the highest collision-risk authoring area because the current bank and classic puzzle literature are already concentrated here;
+- do **not** add familiar classics merely to increase count;
+- external nearest-neighbour retrieval is mandatory even when wording is novel;
+- diversify mechanisms beyond coloring, pigeonhole, parity, standard contradiction, and textbook recurrences;
+- build accessible openings that reveal proof decisions rather than single-trick puzzle recognition;
+- use `similarityClusterId` aggressively when distinct approved families still exercise closely related mechanisms.
+
+### 12.3 Agent E — geometry/modelling/probability/unfamiliar-definition/abstraction author
+
+Primary remit:
+
+- Euclidean/coordinate geometry and visualisation;
+- modelling;
+- elementary probability where prerequisites are controlled;
+- unfamiliar-definition / mini-theory families;
+- abstraction and representation change.
+
+Requirements:
+
+- help correct the current visual-geometry and new-definition deficits;
+- design whiteboard-native families where diagrams carry reasoning evidence;
+- for unfamiliar definitions, teach the definition inside the family and test examples/consequences/converses rather than prior vocabulary;
+- distinguish modelling skill from mere word-problem context;
+- ensure diagram topology is included in the originality fingerprint and external search.
+
+### 12.4 Agent F — recommendation/evidence tooling
+
+Primary remit:
+
+- connect Agent A metadata to grounded session evidence;
+- distinguish milestone/process evidence;
+- build between-interview recommendation/tooling rather than in-interview topic hopping.
+
+Requirements from Agent B:
+
+- **never convert the 72-family coverage counts into Oxford-frequency priors or automatic sampling weights**;
+- select based on student need/strength/weakness, uncertainty, difficulty fit, prerequisites, recent exposure, family/similarity repetition control, and available calibrated content;
+- distinguish “needed a prompt” from “used the prompt well” once Agent A resolves `guided-adaptation`;
+- only grounded milestone evidence should update reasoning-skill estimates;
+- keep uncertainty high when a skill/domain has little evidence;
+- keep one live interview coherent within its selected family except for mathematically natural stages/extensions.
+
+### 12.5 Agent G — difficulty/timing calibration
 
 For every family:
 
-- calibrate entry/core/ceiling independently;
+- calibrate `entry`, `core`, and `ceiling` independently;
 - record which difficulty dimensions drive the label;
+- keep prerequisite burden separate from reasoning difficulty;
 - keep prompt dependency separate from guided adaptation;
-- mark initial timing as expert estimate, normally low confidence;
-- use pilot distributions before upgrading calibration;
-- flag families where prerequisite burden, not reasoning, is the main source of difficulty.
+- mark initial timing as an internal expert estimate, normally low confidence;
+- **do not fit stages to the generic timing table**;
+- permit substantial family-specific timing deviation and mathematically natural stopping points;
+- use pilot distributions before upgrading to `empirically-calibrated`;
+- never describe the internal bands/minutes as official Oxford ratings or stage expectations.
 
-### 12.3 Fidelity/originality auditor (Agent H)
+### 12.6 Agent H — Oxford fidelity/originality auditor
 
-Agent H should be independent of the authoring agent and should receive:
+Agent H must be independent of the authoring agent.
 
-- generated family;
-- fingerprint;
-- top semantic/structural nearest matches from official corpus and app bank;
+For every proposed family, H receives:
+
+- generated family + Agent A metadata;
+- mathematical fingerprint;
+- nearest local benchmark/inventory/app-bank/same-wave matches;
+- external-search results;
 - no author self-assessment as authoritative evidence.
 
-Agent H returns one of:
+H must independently complete the five-pool retrieval in [`originality-audit.md`](./originality-audit.md), including external mathematical search. A clean local corpus check alone cannot produce `PASS`.
 
-- `PASS`;
-- `PASS_WITH_NOTES`;
-- `REVISE`;
-- `REJECT_TOO_CLOSE`;
-- `REJECT_NOT_OXFORD_LIKE`.
+H returns separate decisions for:
 
-A mathematically excellent problem can fail originality. An original problem can fail fidelity. These are separate gates.
+- originality;
+- Oxford fidelity.
+
+A mathematically excellent problem can fail originality. An original problem can fail fidelity. Both gates must pass.
+
+### 12.7 Shared Wave 2 authoring gate
+
+Before a family is production-ready:
+
+1. Agent A metadata is canonical and complete enough for review.
+2. Mathematical correctness/solvability is independently checked.
+3. Difficulty has at least a truthful expert estimate.
+4. Timing is explicitly internal/non-scripted unless empirically calibrated.
+5. Provenance is recorded.
+6. All five originality retrieval pools have been searched.
+7. Agent H approves originality.
+8. Agent H approves Oxford fidelity.
+9. The family does not create an unacceptable similarity/repetition cluster in the overall bank.
+
+Agents C–E should not bulk-author ahead of unresolved taxonomy semantics for `guided-adaptation` / `precision-checking`; if Agent A has not synchronized those tags, record the evidence need without inventing replacement free-form strings.
 
 ---
 
@@ -650,6 +819,8 @@ Do not overclaim these points:
 8. **Advanced school material:** interviewers can introduce unfamiliar ideas or work with material the candidate has studied, so authoring should avoid assuming a uniform Further Mathematics background.
 9. **One-family policy:** a product choice for coherence and between-interview adaptation, not a universal Oxford rule.
 10. **Current bank semantics:** the concentration audit is based on catalog metadata and inspected authored entries; it is not a claim that every problem exercises only its primary category.
+11. **2026 Precision session:** scheduled for 17 September 2026 and therefore unpublished as of this research cutoff (4 September 2026); its title is not substantive evidence.
+12. **Reference inventory completeness:** 34 compact entries materially improve collision coverage, but Oxford does not publish an exhaustive historical question archive. External retrieval remains mandatory.
 
 ---
 
@@ -667,5 +838,9 @@ A downstream authoring/calibration system is using this foundation correctly whe
 - [ ] family selection happens primarily between interviews;
 - [ ] in-interview adaptation normally deepens the coherent family;
 - [ ] originality audit checks mathematical structure, not only text similarity;
+- [ ] broader reference inventory is checked but never treated as exhaustive;
+- [ ] external/classic nearest-neighbour retrieval is completed for every proposed family;
 - [ ] classic problems are explicitly labelled as classic;
+- [ ] 72-family domain counts are treated as coverage-only, never empirical Oxford frequencies or recommender priors;
+- [ ] stage timing remains soft/internal and never forces a mathematically unnatural transition;
 - [ ] Agent A vocabulary is used wherever available.
