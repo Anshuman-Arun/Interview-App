@@ -17,8 +17,8 @@ export const oxfordCantorReviewEntries = Object.freeze([
   ...cantorFunctionEntriesB
 ] as const);
 
-if (oxfordCantorFamilies.length !== 20 || oxfordCantorReviewEntries.length !== 20) {
-  throw new Error("Agent C — Cantor Wave 2 portfolio must contain exactly 20 candidate families");
+if (oxfordCantorFamilies.length !== 18 || oxfordCantorReviewEntries.length !== 18) {
+  throw new Error("Agent C — Cantor Wave 2 completion portfolio must contain exactly 18 surviving candidate families");
 }
 
 for (const entry of oxfordCantorReviewEntries) {
