@@ -160,6 +160,29 @@ describe("editorial v10 adversarial UI states", () => {
     );
   });
 
+  it("keeps Sessions recovery reachable when authority is unavailable with multiple cached active rooms", () => {
+    const home = renderToStaticMarkup(
+      <HomePage
+        activeSessionId={null}
+        activeSessionCount={2}
+        sessions={[]}
+        onStartInterview={vi.fn()}
+        onResumeInterview={vi.fn()}
+        onOpenSessions={vi.fn()}
+        onOpenSettings={vi.fn()}
+        canReview={() => false}
+        onReview={vi.fn()}
+        sessionEntryPending={false}
+        sessionAuthorityUnavailable
+      />
+    );
+
+    expect(home).toContain("Choose active session");
+    expect(home).toMatch(/<button[^>]*>\s*<span>Choose active session<\/span>/u);
+    expect(home).not.toMatch(/<button[^>]*disabled=""[^>]*>\s*<span>Choose active session<\/span>/u);
+    expect(home).toMatch(/<button[^>]*>Open Sessions<\/button>/u);
+  });
+
   it("does not offer a false new-session action when multiple active sessions exist", () => {
     const home = renderToStaticMarkup(
       <HomePage
