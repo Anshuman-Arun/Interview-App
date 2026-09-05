@@ -90,30 +90,38 @@ Agent I — Itô completed independent current-version mathematical certificatio
 
 | Author PR | Reviewed head | Surviving families | Approved | Changes required |
 | --- | --- | ---: | ---: | ---: |
-| Agent C — Cantor #132 | `5499bdc6dfc3ce40b127e8c9fa2a0722c8021a7a` | 20 | 20 | 0 |
+| Agent C — Cantor #132 | `0d4941ab3197b2297ab389d7438df39f599b2ad5` | 18 | 18 | 0 |
 | Agent D — Dirichlet #133 | `ecece22058c997d37c4b352fa5ed32bd1daf5243` | 12 | 12 | 0 |
-| Agent E — Euler #134 | `e5f5b431a5dea843d69e6451b1114c7aa0c76532` | 17 | 17 | 0 |
+| Agent E — Euler #134 | `165bb3100fb894158969abb808caad5bc9150807` | 17 | 17 | 0 |
 
-**Surviving total: 49. Correctness approvals: 49. Current C/D/E blockers: 0.**
+**Surviving total: 47. Correctness approvals: 47. Current C/D/E blockers: 0.**
 
 The review standard for every retained family was: solve the candidate-visible problem independently; inspect the authored solution only afterward; verify all intended approaches, protected hints, extensions, prerequisites, parameter domains, and exceptional cases; and use finite computation only as supporting evidence, never as the general proof.
 
 ### Cantor current-version recheck
 
-All 20 Cantor families are correctness-approved at head `5499bdc...`.
+All 18 surviving Cantor families are correctness-approved at head `0d4941ab...`.
 
 The previously repaired `oxford-cantor-reciprocal-implicit-curve` remains correct: the isolated origin is preserved separately from the four closest points on the nonzero branches, and the scaled extension retains that distinction.
 
-After the prior certification, Cantor changed protected hints in four surviving families. Agent I rechecked the current hints for:
+Cantor pruned `oxford-cantor-tangent-intersection-locus` and `oxford-cantor-line-envelope` and later changed protected hints/givens/extensions in surviving families. Agent I rechecked the current candidate-visible/protected material, including:
 
 - `oxford-cantor-moving-v-envelope`;
 - `oxford-cantor-reciprocal-root-parabolas`;
 - `oxford-cantor-cubic-two-thresholds`;
-- `oxford-cantor-integral-sign-landscape`.
+- `oxford-cantor-integral-sign-landscape`;
+- `oxford-cantor-mobius-recurrence`;
+- `oxford-cantor-squared-error-recurrence`;
+- `oxford-cantor-three-cycle-map`;
+- `oxford-cantor-reciprocal-increment-recurrence`;
+- `oxford-cantor-mobius-involution`;
+- `oxford-cantor-radical-asymptote`;
+- `oxford-cantor-shifted-cubic-intersections`;
+- `oxford-cantor-reciprocal-implicit-curve`.
 
-The revised hints remain mathematically valid and route-consistent. No statement, canonical-solution, approach, or extension kernel changed in the other Cantor families.
+The revised material remains mathematically valid and route-consistent. The current Möbius-involution hint explicitly defines the self-inverse composition property, resolving the earlier vocabulary concern. No replacement family was introduced.
 
-Two non-blocking wording warnings remain recorded: the phrase “involution” should ideally be defined in `oxford-cantor-mobius-involution`, and the `three-cycle-map` stretch asks broadly for “simple algebraic relations” rather than one unique target. Neither creates a false mathematical claim or blocks correctness.
+One non-blocking wording warning remains recorded: the `three-cycle-map` stretch asks broadly for “simple algebraic relations” rather than one unique target. This does not create a false mathematical claim or block correctness.
 
 ### Dirichlet current-version recheck
 
@@ -138,7 +146,7 @@ Important discrete checks included small-cardinality exceptions for thirds-closu
 
 ### Euler current-version recheck and repairs
 
-Euler pruned two previously present candidate families, leaving 17 survivors at head `e5f5b431...`. The removed families are not counted as current certifications.
+Euler pruned two previously present candidate families, leaving 17 survivors. Mathematical source was certified at `e5f5b431...`; the latest head `165bb310...` adds only a test-file change, so Agent I re-pinned the unchanged mathematical decisions after inspecting that diff. The removed families are not counted as current certifications.
 
 The earlier queue specification blocker is repaired and independently reverified. The current `oxford-euler-periodic-queue-model` now explicitly states:
 
@@ -156,8 +164,8 @@ The circular random-adjacency domain is also repaired: candidate-visible givens 
 
 Across the retained existing-bank and current author-PR records:
 
-- Families independently solved/reviewed: **63**
-- Correctness approvals: **56**
+- Families independently solved/reviewed: **61**
+- Correctness approvals: **54**
 - Changes required: **7**
 - Reject recommendations: **0**
 - Unresolved mathematical uncertainties: **0**
@@ -221,9 +229,9 @@ Specify `n` as an integer in the candidate-visible statement. Keep the reflectio
 
 Agent I — Itô full-certification state is head-pinned and current:
 
-- Cantor #132: 20/20 surviving families approved at `5499bdc6...`;
+- Cantor #132: 18/18 surviving families approved at `0d4941ab...`;
 - Dirichlet #133: 12/12 surviving families approved at `ecece220...`;
-- Euler #134: 17/17 surviving families approved at `e5f5b431...`.
+- Euler #134: 17/17 surviving families approved at `165bb310...`.
 
 Removed author families are not retained as current certifications. Correctness decisions remain separate from Agent G taxonomy/difficulty/timing and Agent H originality/fidelity decisions.
 
