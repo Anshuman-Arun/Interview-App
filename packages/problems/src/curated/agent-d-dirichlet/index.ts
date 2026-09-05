@@ -2,15 +2,18 @@ export * from "./support.js";
 export * from "./batch-a.js";
 export * from "./batch-b.js";
 export * from "./batch-c.js";
+export * from "./batch-d.js";
 
 import { dirichletBatchAEntries } from "./batch-a.js";
 import { dirichletBatchBEntries } from "./batch-b.js";
 import { dirichletBatchCEntries } from "./batch-c.js";
+import { dirichletBatchDEntries } from "./batch-d.js";
 
 export const dirichletCandidateEntries = Object.freeze([
   ...dirichletBatchAEntries,
   ...dirichletBatchBEntries,
-  ...dirichletBatchCEntries
+  ...dirichletBatchCEntries,
+  ...dirichletBatchDEntries
 ] as const);
 
 export const dirichletCandidateProblems = Object.freeze(
