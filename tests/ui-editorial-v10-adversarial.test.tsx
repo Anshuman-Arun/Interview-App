@@ -701,6 +701,10 @@ describe("editorial v10 adversarial UI states", () => {
     expect(app).toMatch(
       /reviewAutoUpgradeEpochRef\.current \+= 1;\s*reviewAutoUpgradePendingRef\.current = null;\s*navigate\(/u
     );
+    expect(app).toMatch(
+      /useEffect\(\(\) => \{\s*reviewAutoUpgradeEpochRef\.current \+= 1;\s*reviewAutoUpgradePendingRef\.current = null;[\s\S]{0,260}\}, \[session\.baseUrl\]\);/u
+    );
+    expect(app).toContain('key={`${session.baseUrl}:${sessionId}`}');
   });
 
   it("retries a transient bounded review read in place", async () => {
