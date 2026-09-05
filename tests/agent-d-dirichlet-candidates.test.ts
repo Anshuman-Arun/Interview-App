@@ -10,8 +10,8 @@ import {
 } from "../packages/problems/src/oxford-adaptive-taxonomy.js";
 
 describe("Agent D — Dirichlet Oxford candidate bank", () => {
-  it("contains exactly 22 distinct expert-review candidates", () => {
-    expect(dirichletCandidateEntries).toHaveLength(22);
+  it("contains exactly 12 distinct completion-pass candidates", () => {
+    expect(dirichletCandidateEntries).toHaveLength(12);
     const ids = dirichletCandidateEntries.map((entry) => entry.problem.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids.every((id) => id.startsWith("oxford-d-"))).toBe(true);
@@ -22,17 +22,107 @@ describe("Agent D — Dirichlet Oxford candidate bank", () => {
     ).toBe(true);
   });
 
-  it("keeps every candidate outside recommendation-ready status", () => {
+  it("keeps every survivor outside recommendation-ready status while preserving completed reviews", () => {
+    const reviewById = new Map(
+      dirichletCandidateEntries.map((entry) => [
+        entry.problem.id,
+        entry.metadata.oxfordAdaptive?.review
+      ])
+    );
+
     for (const entry of dirichletCandidateEntries) {
       const metadata = entry.metadata.oxfordAdaptive;
       expect(metadata?.status).toBe("authored");
       expect(isOxfordRecommendationReady(metadata)).toBe(false);
-      expect(metadata?.review.taxonomyClassification).toBe("unreviewed");
-      expect(metadata?.review.originality).toBe("unreviewed");
-      expect(metadata?.review.fidelity).toBe("unreviewed");
-      expect(metadata?.review.mathematicalCorrectness).toBe("unreviewed");
-      expect(metadata?.review.difficultyCalibration).toBe("unreviewed");
       expect(metadata?.review.timingCalibration).toBe("unreviewed");
+    }
+
+    expect(reviewById.get("oxford-d-gcd-descent-network")).toMatchObject({
+      taxonomyClassification: "approved",
+      originality: "approved",
+      fidelity: "approved",
+      mathematicalCorrectness: "unreviewed",
+      difficultyCalibration: "expert-estimate",
+      timingCalibration: "unreviewed"
+    });
+    expect(reviewById.get("oxford-d-thirds-closed-integers")).toMatchObject({
+      originality: "approved",
+      fidelity: "approved"
+    });
+    expect(reviewById.get("oxford-d-midpoint-closed-residues")).toMatchObject({
+      mathematicalCorrectness: "approved"
+    });
+    expect(reviewById.get("oxford-d-triple-flip-circle")).toMatchObject({
+      taxonomyClassification: "approved",
+      mathematicalCorrectness: "approved",
+      difficultyCalibration: "expert-estimate",
+      timingCalibration: "unreviewed"
+    });
+  });
+
+  it("uses family-specific low-confidence timing estimates", () => {
+    const wholeTimingSignatures: string[] = [];
+    const familyStageSignatures: string[] = [];
+
+    for (const entry of dirichletCandidateEntries) {
+      const metadata = entry.metadata.oxfordAdaptive;
+      expect(metadata?.timing).toBeDefined();
+      if (metadata?.timing === undefined) {
+        throw new Error(`Missing family timing for ${entry.problem.id}`);
+      }
+
+      expect(metadata.timing.confidence).toBe("low");
+      expect(metadata.timing.firstMeaningfulInsightMinutes.min).toBeLessThanOrEqual(
+        metadata.timing.firstMeaningfulInsightMinutes.max
+      );
+      expect(metadata.timing.promptedCompletionMinutes.max).toBeLessThanOrEqual(
+        metadata.timing.independentCompletionMinutes.max
+      );
+      expect(metadata.timing.softCutoffMinutes).toBeGreaterThanOrEqual(
+        metadata.timing.independentCompletionMinutes.max
+      );
+      wholeTimingSignatures.push(JSON.stringify(metadata.timing));
+
+      const stageSignature: string[] = [];
+      for (const stage of metadata.stages) {
+        expect(stage.timing.confidence).toBe("low");
+        expect(stage.timing.firstMeaningfulInsightMinutes.min).toBeLessThanOrEqual(
+          stage.timing.firstMeaningfulInsightMinutes.max
+        );
+        expect(stage.timing.promptedCompletionMinutes.max).toBeLessThanOrEqual(
+          stage.timing.independentCompletionMinutes.max
+        );
+        expect(stage.timing.softCutoffMinutes).toBeGreaterThanOrEqual(
+          stage.timing.independentCompletionMinutes.max
+        );
+        stageSignature.push(JSON.stringify(stage.timing));
+      }
+      familyStageSignatures.push(stageSignature.join("|"));
+    }
+
+    expect(new Set(wholeTimingSignatures).size).toBe(dirichletCandidateEntries.length);
+    expect(new Set(familyStageSignatures).size).toBe(dirichletCandidateEntries.length);
+  });
+
+  it("does not expose any completion-pass pruned family", () => {
+    const prunedIds = [
+      "oxford-d-switching-cuts",
+      "oxford-d-orientation-parities",
+      "oxford-d-prime-divisor-three-cycles",
+      "oxford-d-laminar-family",
+      "oxford-d-discrete-maximum-principle",
+      "oxford-d-finite-map-cycles",
+      "oxford-d-spanning-tree-exchange",
+      "oxford-d-stable-binary-words",
+      "oxford-d-directed-flow-decomposition",
+      "oxford-d-idempotent-maps"
+    ] as const;
+    const survivingIds = new Set(
+      dirichletCandidateEntries.map((entry) => entry.problem.id)
+    );
+    for (const id of prunedIds) {
+      expect(survivingIds.has(id)).toBe(false);
+      expect(CURATED_DISCLOSURE_LEVELS[id]).toBeUndefined();
     }
   });
 
