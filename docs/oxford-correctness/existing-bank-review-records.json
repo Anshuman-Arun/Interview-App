@@ -423,7 +423,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "5499bdc6dfc3ce40b127e8c9fa2a0722c8021a7a"
+      "reviewedAuthorHead": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -451,7 +451,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "5499bdc6dfc3ce40b127e8c9fa2a0722c8021a7a"
+      "reviewedAuthorHead": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -479,7 +479,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "5499bdc6dfc3ce40b127e8c9fa2a0722c8021a7a"
+      "reviewedAuthorHead": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -507,7 +507,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "5499bdc6dfc3ce40b127e8c9fa2a0722c8021a7a"
+      "reviewedAuthorHead": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -553,7 +553,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "5499bdc6dfc3ce40b127e8c9fa2a0722c8021a7a"
+      "reviewedAuthorHead": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -579,7 +579,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "5499bdc6dfc3ce40b127e8c9fa2a0722c8021a7a"
+      "reviewedAuthorHead": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -668,7 +668,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "e5f5b431a5dea843d69e6451b1114c7aa0c76532"
+      "reviewedAuthorHead": "165bb3100fb894158969abb808caad5bc9150807"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -696,7 +696,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "e5f5b431a5dea843d69e6451b1114c7aa0c76532"
+      "reviewedAuthorHead": "165bb3100fb894158969abb808caad5bc9150807"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -724,7 +724,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "e5f5b431a5dea843d69e6451b1114c7aa0c76532"
+      "reviewedAuthorHead": "165bb3100fb894158969abb808caad5bc9150807"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -752,7 +752,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "e5f5b431a5dea843d69e6451b1114c7aa0c76532"
+      "reviewedAuthorHead": "165bb3100fb894158969abb808caad5bc9150807"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -780,7 +780,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "e5f5b431a5dea843d69e6451b1114c7aa0c76532"
+      "reviewedAuthorHead": "165bb3100fb894158969abb808caad5bc9150807"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -806,7 +806,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "e5f5b431a5dea843d69e6451b1114c7aa0c76532"
+      "reviewedAuthorHead": "165bb3100fb894158969abb808caad5bc9150807"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -843,7 +843,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "5499bdc6dfc3ce40b127e8c9fa2a0722c8021a7a"
+      "reviewedAuthorHead": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -869,33 +869,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "5499bdc6dfc3ce40b127e8c9fa2a0722c8021a7a"
-    },
-    "independentlySolved": true,
-    "statementChecked": true,
-    "approachesChecked": true,
-    "canonicalSolutionChecked": true,
-    "hintsChecked": true,
-    "extensionsChecked": true,
-    "prerequisitesChecked": true,
-    "unresolvedUncertainties": [],
-    "familyId": "oxford-cantor-tangent-intersection-locus",
-    "mathematicalCorrectness": "approved",
-    "recommendation": "approve",
-    "independentSolutionSummary": "The tangent to y=x^2 at u is y=2ux-u^2. Tangents at u and v meet at X=(u+v)/2,Y=uv. With v=u+h this eliminates u to Y=X^2-h^2/4, and every X occurs; scaling to y=cx^2 multiplies the ordinate by c.",
-    "computationalChecks": [],
-    "findings": []
-  },
-  {
-    "schemaVersion": 1,
-    "problemVersion": "1.0.0",
-    "reviewerAgent": "I — Itô",
-    "reviewedAt": "2026-09-05",
-    "source": {
-      "kind": "author-pr",
-      "authorAgent": "C — Cantor",
-      "prNumber": 132,
-      "reviewedAuthorHead": "5499bdc6dfc3ce40b127e8c9fa2a0722c8021a7a"
+      "reviewedAuthorHead": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -921,7 +895,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "5499bdc6dfc3ce40b127e8c9fa2a0722c8021a7a"
+      "reviewedAuthorHead": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -947,7 +921,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "5499bdc6dfc3ce40b127e8c9fa2a0722c8021a7a"
+      "reviewedAuthorHead": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -982,7 +956,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "5499bdc6dfc3ce40b127e8c9fa2a0722c8021a7a"
+      "reviewedAuthorHead": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1008,33 +982,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "5499bdc6dfc3ce40b127e8c9fa2a0722c8021a7a"
-    },
-    "independentlySolved": true,
-    "statementChecked": true,
-    "approachesChecked": true,
-    "canonicalSolutionChecked": true,
-    "hintsChecked": true,
-    "extensionsChecked": true,
-    "prerequisitesChecked": true,
-    "unresolvedUncertainties": [],
-    "familyId": "oxford-cantor-line-envelope",
-    "mathematicalCorrectness": "approved",
-    "recommendation": "approve",
-    "independentSolutionSummary": "For fixed x, L_t(x)=t(x-1)-t^2 is a concave quadratic in t with maximum (x-1)^2/4 at t=(x-1)/2. The difference from the envelope is a square, proving every line lies below and touches once at x=2t+1 with matching slope. The alpha,beta extension gives (x-beta)^2/(4alpha).",
-    "computationalChecks": [],
-    "findings": []
-  },
-  {
-    "schemaVersion": 1,
-    "problemVersion": "1.0.0",
-    "reviewerAgent": "I — Itô",
-    "reviewedAt": "2026-09-05",
-    "source": {
-      "kind": "author-pr",
-      "authorAgent": "C — Cantor",
-      "prNumber": 132,
-      "reviewedAuthorHead": "5499bdc6dfc3ce40b127e8c9fa2a0722c8021a7a"
+      "reviewedAuthorHead": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1060,7 +1008,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "5499bdc6dfc3ce40b127e8c9fa2a0722c8021a7a"
+      "reviewedAuthorHead": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1086,7 +1034,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "5499bdc6dfc3ce40b127e8c9fa2a0722c8021a7a"
+      "reviewedAuthorHead": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1112,7 +1060,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "5499bdc6dfc3ce40b127e8c9fa2a0722c8021a7a"
+      "reviewedAuthorHead": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1138,7 +1086,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "5499bdc6dfc3ce40b127e8c9fa2a0722c8021a7a"
+      "reviewedAuthorHead": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1164,7 +1112,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "5499bdc6dfc3ce40b127e8c9fa2a0722c8021a7a"
+      "reviewedAuthorHead": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1190,7 +1138,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "5499bdc6dfc3ce40b127e8c9fa2a0722c8021a7a"
+      "reviewedAuthorHead": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1484,7 +1432,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "e5f5b431a5dea843d69e6451b1114c7aa0c76532"
+      "reviewedAuthorHead": "165bb3100fb894158969abb808caad5bc9150807"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1510,7 +1458,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "e5f5b431a5dea843d69e6451b1114c7aa0c76532"
+      "reviewedAuthorHead": "165bb3100fb894158969abb808caad5bc9150807"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1536,7 +1484,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "e5f5b431a5dea843d69e6451b1114c7aa0c76532"
+      "reviewedAuthorHead": "165bb3100fb894158969abb808caad5bc9150807"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1562,7 +1510,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "e5f5b431a5dea843d69e6451b1114c7aa0c76532"
+      "reviewedAuthorHead": "165bb3100fb894158969abb808caad5bc9150807"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1588,7 +1536,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "e5f5b431a5dea843d69e6451b1114c7aa0c76532"
+      "reviewedAuthorHead": "165bb3100fb894158969abb808caad5bc9150807"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1623,7 +1571,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "e5f5b431a5dea843d69e6451b1114c7aa0c76532"
+      "reviewedAuthorHead": "165bb3100fb894158969abb808caad5bc9150807"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1649,7 +1597,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "e5f5b431a5dea843d69e6451b1114c7aa0c76532"
+      "reviewedAuthorHead": "165bb3100fb894158969abb808caad5bc9150807"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1686,7 +1634,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "e5f5b431a5dea843d69e6451b1114c7aa0c76532"
+      "reviewedAuthorHead": "165bb3100fb894158969abb808caad5bc9150807"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1712,7 +1660,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "e5f5b431a5dea843d69e6451b1114c7aa0c76532"
+      "reviewedAuthorHead": "165bb3100fb894158969abb808caad5bc9150807"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1747,7 +1695,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "e5f5b431a5dea843d69e6451b1114c7aa0c76532"
+      "reviewedAuthorHead": "165bb3100fb894158969abb808caad5bc9150807"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1773,7 +1721,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "e5f5b431a5dea843d69e6451b1114c7aa0c76532"
+      "reviewedAuthorHead": "165bb3100fb894158969abb808caad5bc9150807"
     },
     "independentlySolved": true,
     "statementChecked": true,
