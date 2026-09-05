@@ -8,7 +8,7 @@ import {
 export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
   {
     id: "oxford-cantor-absolute-quadratic-crossings",
-    title: "How Many Times Does a Folded Quadratic Meet a Line?",
+    title: "An Absolute-Value Quadratic",
     category: "algebra and graph sketching",
     topics: ["absolute value","quadratics","graphs","equations"],
     prompt:
@@ -138,7 +138,7 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
   },
   {
     id: "oxford-cantor-radical-asymptote",
-    title: "A Radical Curve with Unequal Ends",
+    title: "A Parameterized Radical Curve",
     category: "functions and elementary analysis",
     topics: ["functions","radicals","graphs","calculus"],
     prompt:
@@ -403,7 +403,7 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
   },
   {
     id: "oxford-cantor-moving-integral-window",
-    title: "Area in a Window that Moves and Stretches",
+    title: "A Moving Integral Window",
     category: "calculus and functions",
     topics: ["calculus","integrals","graphs","parameters"],
     prompt:
@@ -537,7 +537,7 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
   },
   {
     id: "oxford-cantor-reciprocal-implicit-curve",
-    title: "A Circle Hidden in an Implicit Curve",
+    title: "An Implicit Quartic Curve",
     category: "graph sketching and coordinate geometry",
     topics: ["implicit curves","graphs","coordinate geometry","algebra"],
     prompt:

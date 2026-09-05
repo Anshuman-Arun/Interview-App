@@ -8,7 +8,7 @@ import {
 export const cantorFunctionFamiliesA: readonly CantorFamilyAuthoring[] = [
   {
     id: "oxford-cantor-reciprocal-paired-inputs",
-    title: "A Function that Pairs Reciprocal Inputs",
+    title: "A Rational Function on the Positive Reals",
     category: "functions and graph sketching",
     topics: ["functions","graphs","algebra","inequalities"],
     prompt:
@@ -270,7 +270,7 @@ export const cantorFunctionFamiliesA: readonly CantorFamilyAuthoring[] = [
   },
   {
     id: "oxford-cantor-exponential-rotating-line",
-    title: "When an Exponential Meets a Rotating Line",
+    title: "An Exponential and a Line",
     category: "functions and calculus",
     topics: ["functions","exponentials","graphs","calculus"],
     prompt:
@@ -406,7 +406,7 @@ export const cantorFunctionFamiliesA: readonly CantorFamilyAuthoring[] = [
   },
   {
     id: "oxford-cantor-mobius-recurrence",
-    title: "A Recurrence Hidden Inside a Translation",
+    title: "A Fractional Recurrence",
     category: "sequences and functions",
     topics: ["sequences","recurrences","functions","algebra"],
     prompt:
@@ -536,7 +536,7 @@ export const cantorFunctionFamiliesA: readonly CantorFamilyAuthoring[] = [
   },
   {
     id: "oxford-cantor-squared-error-recurrence",
-    title: "A Recurrence that Squares Its Own Error",
+    title: "A Quadratic Recurrence",
     category: "sequences and recurrences",
     topics: ["sequences","recurrences","convergence","algebra"],
     prompt:

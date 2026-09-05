@@ -8,7 +8,7 @@ import {
 export const cantorFunctionFamiliesB: readonly CantorFamilyAuthoring[] = [
   {
     id: "oxford-cantor-three-cycle-map",
-    title: "A Function Whose Third Iterate Comes Home",
+    title: "Iterating a Fractional Function",
     category: "functions and iteration",
     topics: ["functions","iteration","algebra","domains"],
     prompt:
@@ -140,7 +140,7 @@ export const cantorFunctionFamiliesB: readonly CantorFamilyAuthoring[] = [
   },
   {
     id: "oxford-cantor-quartic-horizontal-levels",
-    title: "Horizontal Slices Through a Double-Well Quartic",
+    title: "Horizontal Levels of a Quartic",
     category: "functions and graph sketching",
     topics: ["quartics","graphs","equations","parameters"],
     prompt:
@@ -272,7 +272,7 @@ export const cantorFunctionFamiliesB: readonly CantorFamilyAuthoring[] = [
   },
   {
     id: "oxford-cantor-reciprocal-increment-recurrence",
-    title: "How Fast Does Reciprocal Growth Accumulate?",
+    title: "A Reciprocal-Increment Recurrence",
     category: "sequences and recurrences",
     topics: ["sequences","recurrences","asymptotics","inequalities"],
     prompt:
@@ -402,7 +402,7 @@ export const cantorFunctionFamiliesB: readonly CantorFamilyAuthoring[] = [
   },
   {
     id: "oxford-cantor-line-envelope",
-    title: "The Parabola Touched by a Family of Lines",
+    title: "A Family of Moving Lines",
     category: "functions and graph sketching",
     topics: ["line families","graphs","parameters","quadratics"],
     prompt:
@@ -535,7 +535,7 @@ export const cantorFunctionFamiliesB: readonly CantorFamilyAuthoring[] = [
   },
   {
     id: "oxford-cantor-mobius-involution",
-    title: "A Family of Self-Undoing Fractional Maps",
+    title: "A Parameterized Fractional Function",
     category: "functions and graph sketching",
     topics: ["functions","fractional functions","graphs","parameters"],
     prompt:

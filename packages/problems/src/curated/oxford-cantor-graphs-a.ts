@@ -8,7 +8,7 @@ import {
 export const cantorGraphFamiliesA: readonly CantorFamilyAuthoring[] = [
   {
     id: "oxford-cantor-moving-v-envelope",
-    title: "The Lower Edge of Moving V-Shapes",
+    title: "A Family of Moving V-Shapes",
     category: "functions and graph sketching",
     topics: ["functions","graphs","absolute value","parameters"],
     prompt:
