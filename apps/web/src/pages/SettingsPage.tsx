@@ -44,6 +44,7 @@ interface SettingsPageProps {
   readonly providerOptionsLoading?: boolean;
   readonly providerOptionsError?: string | null;
   readonly activeSessionCount?: number;
+  readonly sessionAuthorityChecking?: boolean;
   readonly onRefreshProviderOptions?: () => Promise<readonly ProviderLaunchOption[]>;
   readonly onStartInterview?: () => void;
 }
@@ -180,6 +181,7 @@ export function SettingsPage({
   providerOptionsLoading = false,
   providerOptionsError = null,
   activeSessionCount = 0,
+  sessionAuthorityChecking = false,
   onRefreshProviderOptions,
   onStartInterview
 }: SettingsPageProps) {
@@ -393,6 +395,7 @@ export function SettingsPage({
     if (
       setupOperationInFlightRef.current
       || restarting
+      || sessionAuthorityChecking
       || activeSessionCount > 0
     ) return;
     try {
@@ -403,8 +406,10 @@ export function SettingsPage({
     onStartInterview?.();
   };
 
-  const summary = activeSessionCount > 0
-    ? (
+  const summary = sessionAuthorityChecking
+    ? "Checking stored session authority before enabling a new interview."
+    : activeSessionCount > 0
+      ? (
       activeSessionCount === 1
         ? "An active interview already exists. Resume or resolve it before starting another."
         : `${String(activeSessionCount)} active interviews need resolution before another can start.`
@@ -692,7 +697,8 @@ export function SettingsPage({
                 className="expressive-settings__start"
                 onClick={finishSetup}
                 disabled={
-                  activeSessionCount > 0
+                  sessionAuthorityChecking
+                  || activeSessionCount > 0
                   || !reasoningReady
                   || restarting
                   || runtimeChecking
