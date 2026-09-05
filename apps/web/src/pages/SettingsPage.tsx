@@ -282,6 +282,25 @@ export function SettingsPage({
     && runtimeStatus === undefined
     && runtimeStatusError !== undefined;
 
+  useEffect(() => {
+    if (pythonReady || runtimeStatus?.pythonSetup.restartRequired === true) {
+      setPythonInstallError(undefined);
+    }
+    if (voiceReady || runtimeStatus?.voiceSetup.restartRequired === true) {
+      setVoiceInstallError(undefined);
+    }
+    if (visionReady || runtimeStatus?.visionSetup.restartRequired === true) {
+      setVisionInstallError(undefined);
+    }
+  }, [
+    pythonReady,
+    runtimeStatus?.pythonSetup.restartRequired,
+    runtimeStatus?.visionSetup.restartRequired,
+    runtimeStatus?.voiceSetup.restartRequired,
+    visionReady,
+    voiceReady
+  ]);
+
   const installPythonRuntime = useCallback(async (): Promise<void> => {
     if (desktopRuntime === undefined || setupOperationInFlightRef.current) return;
     const operation = desktopRuntime.installPythonRuntime;
