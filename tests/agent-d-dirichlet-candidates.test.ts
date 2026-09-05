@@ -10,8 +10,8 @@ import {
 } from "../packages/problems/src/oxford-adaptive-taxonomy.js";
 
 describe("Agent D — Dirichlet Oxford candidate bank", () => {
-  it("contains exactly 12 distinct completion-pass candidates", () => {
-    expect(dirichletCandidateEntries).toHaveLength(12);
+  it("contains exactly 11 distinct final-synchronization candidates", () => {
+    expect(dirichletCandidateEntries).toHaveLength(11);
     const ids = dirichletCandidateEntries.map((entry) => entry.problem.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids.every((id) => id.startsWith("oxford-d-"))).toBe(true);
@@ -22,7 +22,7 @@ describe("Agent D — Dirichlet Oxford candidate bank", () => {
     ).toBe(true);
   });
 
-  it("keeps every survivor outside recommendation-ready status while preserving completed reviews", () => {
+  it("keeps every survivor outside recommendation-ready status while preserving latest H/I findings", () => {
     const reviewById = new Map(
       dirichletCandidateEntries.map((entry) => [
         entry.problem.id,
@@ -34,29 +34,42 @@ describe("Agent D — Dirichlet Oxford candidate bank", () => {
       const metadata = entry.metadata.oxfordAdaptive;
       expect(metadata?.status).toBe("authored");
       expect(isOxfordRecommendationReady(metadata)).toBe(false);
+      expect(metadata?.review.mathematicalCorrectness).toBe("approved");
       expect(metadata?.review.timingCalibration).toBe("unreviewed");
     }
 
-    expect(reviewById.get("oxford-d-gcd-descent-network")).toMatchObject({
-      taxonomyClassification: "approved",
-      originality: "approved",
-      fidelity: "approved",
-      mathematicalCorrectness: "unreviewed",
-      difficultyCalibration: "expert-estimate",
-      timingCalibration: "unreviewed"
-    });
-    expect(reviewById.get("oxford-d-thirds-closed-integers")).toMatchObject({
-      originality: "approved",
-      fidelity: "approved"
-    });
-    expect(reviewById.get("oxford-d-midpoint-closed-residues")).toMatchObject({
-      mathematicalCorrectness: "approved"
-    });
-    expect(reviewById.get("oxford-d-triple-flip-circle")).toMatchObject({
-      taxonomyClassification: "approved",
-      mathematicalCorrectness: "approved",
-      difficultyCalibration: "expert-estimate",
-      timingCalibration: "unreviewed"
+    for (const id of [
+      "oxford-d-gcd-descent-network",
+      "oxford-d-thirds-closed-integers",
+      "oxford-d-balancing-transfers",
+      "oxford-d-cube-twist-equivalence",
+      "oxford-d-sliding-window-parity",
+      "oxford-d-weighted-cycle-readings",
+      "oxford-d-midpoint-closed-residues",
+      "oxford-d-odd-symmetric-difference",
+      "oxford-d-triple-flip-circle"
+    ] as const) {
+      expect(reviewById.get(id)).toMatchObject({
+        originality: "approved",
+        fidelity: "approved",
+        mathematicalCorrectness: "approved"
+      });
+    }
+
+    for (const id of [
+      "oxford-d-three-reversal-permutations",
+      "oxford-d-divisor-step-geometry"
+    ] as const) {
+      expect(reviewById.get(id)).toMatchObject({
+        originality: "changes-required",
+        fidelity: "approved",
+        mathematicalCorrectness: "approved"
+      });
+    }
+
+    expect(reviewById.get("oxford-d-weighted-cycle-readings")).toMatchObject({
+      taxonomyClassification: "in-review",
+      difficultyCalibration: "expert-estimate"
     });
   });
 
@@ -79,7 +92,10 @@ describe("Agent D — Dirichlet Oxford candidate bank", () => {
         metadata.timing.independentCompletionMinutes.max
       );
       expect(metadata.timing.softCutoffMinutes).toBeGreaterThanOrEqual(
-        metadata.timing.independentCompletionMinutes.max
+        metadata.timing.promptedCompletionMinutes.max
+      );
+      expect(metadata.timing.softCutoffMinutes).toBeGreaterThanOrEqual(
+        metadata.timing.independentCompletionMinutes.min
       );
       wholeTimingSignatures.push(JSON.stringify(metadata.timing));
 
@@ -104,6 +120,102 @@ describe("Agent D — Dirichlet Oxford candidate bank", () => {
     expect(new Set(familyStageSignatures).size).toBe(dirichletCandidateEntries.length);
   });
 
+  it("matches Gauss whole-family timing estimates for all eight revised profiles", () => {
+    const expected = {
+      "oxford-d-thirds-closed-integers": [3, 6, 17, 28, 13, 22, 5, 9, 25],
+      "oxford-d-cube-twist-equivalence": [2, 5, 14, 23, 10, 18, 4, 7, 22],
+      "oxford-d-sliding-window-parity": [1, 4, 12, 20, 9, 16, 4, 7, 20],
+      "oxford-d-weighted-cycle-readings": [2, 5, 15, 24, 11, 20, 4, 8, 23],
+      "oxford-d-midpoint-closed-residues": [3, 6, 17, 28, 13, 22, 5, 9, 25],
+      "oxford-d-three-reversal-permutations": [2, 5, 14, 23, 10, 19, 4, 8, 22],
+      "oxford-d-divisor-step-geometry": [2, 5, 15, 25, 11, 20, 4, 8, 23],
+      "oxford-d-triple-flip-circle": [3, 6, 17, 28, 13, 22, 5, 9, 25]
+    } as const;
+
+    const byId = new Map(
+      dirichletCandidateEntries.map((entry) => [
+        entry.problem.id,
+        entry.metadata.oxfordAdaptive?.timing
+      ])
+    );
+
+    for (const [id, values] of Object.entries(expected)) {
+      const timing = byId.get(id);
+      expect(timing).toBeDefined();
+      if (timing === undefined) {
+        throw new Error(`Missing timing for ${id}`);
+      }
+      expect([
+        timing.firstMeaningfulInsightMinutes.min,
+        timing.firstMeaningfulInsightMinutes.max,
+        timing.independentCompletionMinutes.min,
+        timing.independentCompletionMinutes.max,
+        timing.promptedCompletionMinutes.min,
+        timing.promptedCompletionMinutes.max,
+        timing.optionalExtensionMinutes?.min,
+        timing.optionalExtensionMinutes?.max,
+        timing.softCutoffMinutes
+      ]).toEqual(values);
+    }
+  });
+
+  it("applies the final Gauss taxonomy/difficulty and Hilbert provenance revisions", () => {
+    const byId = new Map(
+      dirichletCandidateEntries.map((entry) => [
+        entry.problem.id,
+        entry.metadata.oxfordAdaptive
+      ])
+    );
+
+    const thirds = byId.get("oxford-d-thirds-closed-integers");
+    expect(thirds?.difficulty).toMatchObject({
+      entry: "introductory-plus",
+      core: "strong",
+      ceiling: "strong"
+    });
+
+    const weighted = byId.get("oxford-d-weighted-cycle-readings");
+    expect(weighted?.domains).toContain("sequences-recurrences");
+    expect(weighted?.contentConcepts).toContain("recurrence-structure");
+    expect(weighted?.difficulty).toMatchObject({
+      entry: "introductory-plus",
+      core: "strong",
+      ceiling: "strong"
+    });
+    const weightedCore = weighted?.stages.find(
+      (stage) => stage.id === "weighted-cycle-core"
+    );
+    expect(weightedCore?.domains).toContain("sequences-recurrences");
+    expect(weightedCore?.contentConcepts).toContain("recurrence-structure");
+    for (const milestoneId of [
+      "derive-one-step-recurrence",
+      "close-after-n-steps"
+    ]) {
+      expect(
+        weightedCore?.milestones.find(
+          (milestone) => milestone.milestoneId === milestoneId
+        )?.contentConcepts
+      ).toContain("recurrence-structure");
+    }
+
+    const midpoint = byId.get("oxford-d-midpoint-closed-residues");
+    expect(midpoint?.difficulty).toMatchObject({
+      entry: "introductory-plus",
+      core: "strong",
+      ceiling: "stretch"
+    });
+
+    for (const id of [
+      "oxford-d-three-reversal-permutations",
+      "oxford-d-divisor-step-geometry"
+    ] as const) {
+      expect(byId.get(id)?.provenance).toEqual({
+        originType: "classic-problem",
+        sourceCategory: "classic-mathematics"
+      });
+    }
+  });
+
   it("does not expose any completion-pass pruned family", () => {
     const prunedIds = [
       "oxford-d-switching-cuts",
@@ -115,7 +227,8 @@ describe("Agent D — Dirichlet Oxford candidate bank", () => {
       "oxford-d-spanning-tree-exchange",
       "oxford-d-stable-binary-words",
       "oxford-d-directed-flow-decomposition",
-      "oxford-d-idempotent-maps"
+      "oxford-d-idempotent-maps",
+      "oxford-d-mirror-orbits"
     ] as const;
     const survivingIds = new Set(
       dirichletCandidateEntries.map((entry) => entry.problem.id)
