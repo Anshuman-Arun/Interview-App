@@ -1577,11 +1577,18 @@ export function useInterviewSession(
         boardSyncSessionRef.current === targetSessionId
           ? boardSyncRef.current
           : null;
-      if (pendingCoordinator !== null) {
+      if (
+        pendingCoordinator !== null
+        && pendingCoordinator.snapshot().status !== "UNSYNCHRONIZED"
+      ) {
         await pendingCoordinator.awaitQuiescence();
       }
       if (sessionTransitionEpochRef.current !== transitionEpoch) return;
 
+      // An unsynchronized coordinator has already rejected/cleared its pending
+      // mutation queue, so there is nothing left to await. Go straight to the
+      // conservative server/local reconciliation instead of permanently
+      // blocking Resume on awaitQuiescence().
       await synchronizeWhiteboardFor(targetSessionId, {
         allowLocalSupersetRepair: true
       });
