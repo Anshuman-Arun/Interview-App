@@ -296,6 +296,40 @@ describe("Oxford independent calibration review", () => {
     );
   });
 
+  it("validates the late C/D/E cross-agent review batch", () => {
+    const reviewPath = new URL(
+      "../docs/oxford-research/gauss-cross-agent-review.json",
+      import.meta.url
+    );
+    const review = JSON.parse(readFileSync(reviewPath, "utf8")) as {
+      readonly agent: string;
+      readonly authorPullRequests: readonly {
+        readonly agent: string;
+        readonly prNumber: number;
+        readonly familiesReviewed: readonly string[];
+      }[];
+      readonly records: readonly OxfordCalibrationReviewRecord[];
+    };
+
+    expect(review.agent).toBe("G — Gauss");
+    expect(review.authorPullRequests.map((item) => item.prNumber)).toEqual([132, 133, 134]);
+    expect(review.records).toHaveLength(6);
+    expect(review.records.map((record) => record.familyId)).toEqual([
+      "oxford-cantor-cubic-divided-difference",
+      "oxford-cantor-reciprocal-increment-recurrence",
+      "oxford-d-gcd-descent-network",
+      "oxford-d-triple-flip-circle",
+      "oxford-euler-circle-sweep",
+      "oxford-euler-self-averaging-sets"
+    ]);
+
+    for (const record of review.records) {
+      expect(() => assertOxfordCalibrationReviewRecord(record)).not.toThrow();
+      expect(record.reviewedMetadataStatus).toBe("author-proposal");
+      expect(record.disposition).toBe("needs-revision");
+    }
+  });
+
   it("validates every retained existing-bank audit record and summarizes dispositions", () => {
     const auditPath = new URL(
       "../docs/oxford-research/gauss-existing-bank-audit.json",
