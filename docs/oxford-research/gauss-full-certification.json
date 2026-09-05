@@ -32,7 +32,7 @@
     {
       "agent": "D — Dirichlet",
       "prNumber": 133,
-      "headSha": "65d570a1f6dad3773edb7eea4568d9399f3164c8",
+      "headSha": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
       "survivingFamilyCount": 11,
       "familiesReviewed": [
         "oxford-d-gcd-descent-network",
@@ -51,7 +51,7 @@
     {
       "agent": "E — Euler",
       "prNumber": 134,
-      "headSha": "1ce96b5b89be971399cab5080d4487a908ea294d",
+      "headSha": "8846c612825d2b8ae53a81f6f8861fd851f452c6",
       "survivingFamilyCount": 13,
       "familiesReviewed": [
         "oxford-euler-quadrilateral-balance",
@@ -80,7 +80,7 @@
       "finalApproved": true
     },
     "dirichlet": {
-      "headSha": "65d570a1f6dad3773edb7eea4568d9399f3164c8",
+      "headSha": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
       "genericTimingTemplateRemoved": true,
       "tripleFlipRecurrenceTaxonomyCorrected": true,
       "knownDifficultyChangesApplied": true,
@@ -88,10 +88,10 @@
       "weightedCycleRecurrenceTaxonomyFixed": true,
       "eightTimingCorrectionsApplied": true,
       "finalApproved": true,
-      "note": "Final 11-family D head removes mirror-orbits and exactly applies the remaining weighted-cycle taxonomy, three difficulty, and eight family timing findings."
+      "note": "Final 11-family D head removes mirror-orbits and exactly applies the remaining weighted-cycle taxonomy, three difficulty, and eight timing findings. The last synchronization increment is documentation-only."
     },
     "euler": {
-      "headSha": "1ce96b5b89be971399cab5080d4487a908ea294d",
+      "headSha": "8846c612825d2b8ae53a81f6f8861fd851f452c6",
       "genericTimingTableRemoved": true,
       "mechanicalCoreAssignmentRemoved": true,
       "circleSweepCoreCorrected": true,
@@ -100,7 +100,7 @@
       "fourHardRejectsRemoved": true,
       "fourTimingCorrectionsApplied": true,
       "finalApproved": true,
-      "note": "Final 13-family E head removes the four H hard rejects, preserves approved G taxonomy/difficulty, and exactly applies all four G timing corrections."
+      "note": "Final 13-family E head removes the four H hard rejects, preserves approved G taxonomy/difficulty, and exactly applies all four G timing corrections. The last increment only removes a stale similarity-cluster mapping for a deleted family."
     }
   },
   "records": [
@@ -4610,7 +4610,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-gcd-descent-network",
-      "authorHeadReviewed": "65d570a1f6dad3773edb7eea4568d9399f3164c8",
+      "authorHeadReviewed": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -4814,7 +4814,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-thirds-closed-integers",
-      "authorHeadReviewed": "65d570a1f6dad3773edb7eea4568d9399f3164c8",
+      "authorHeadReviewed": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -5024,7 +5024,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-balancing-transfers",
-      "authorHeadReviewed": "65d570a1f6dad3773edb7eea4568d9399f3164c8",
+      "authorHeadReviewed": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -5226,7 +5226,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-cube-twist-equivalence",
-      "authorHeadReviewed": "65d570a1f6dad3773edb7eea4568d9399f3164c8",
+      "authorHeadReviewed": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -5443,7 +5443,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-sliding-window-parity",
-      "authorHeadReviewed": "65d570a1f6dad3773edb7eea4568d9399f3164c8",
+      "authorHeadReviewed": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -5651,7 +5651,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-weighted-cycle-readings",
-      "authorHeadReviewed": "65d570a1f6dad3773edb7eea4568d9399f3164c8",
+      "authorHeadReviewed": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -5864,7 +5864,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-midpoint-closed-residues",
-      "authorHeadReviewed": "65d570a1f6dad3773edb7eea4568d9399f3164c8",
+      "authorHeadReviewed": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -6068,7 +6068,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-odd-symmetric-difference",
-      "authorHeadReviewed": "65d570a1f6dad3773edb7eea4568d9399f3164c8",
+      "authorHeadReviewed": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -6276,7 +6276,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-three-reversal-permutations",
-      "authorHeadReviewed": "65d570a1f6dad3773edb7eea4568d9399f3164c8",
+      "authorHeadReviewed": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -6480,7 +6480,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-divisor-step-geometry",
-      "authorHeadReviewed": "65d570a1f6dad3773edb7eea4568d9399f3164c8",
+      "authorHeadReviewed": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -6704,7 +6704,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-triple-flip-circle",
-      "authorHeadReviewed": "65d570a1f6dad3773edb7eea4568d9399f3164c8",
+      "authorHeadReviewed": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -6917,7 +6917,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-quadrilateral-balance",
-      "authorHeadReviewed": "1ce96b5b89be971399cab5080d4487a908ea294d",
+      "authorHeadReviewed": "8846c612825d2b8ae53a81f6f8861fd851f452c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -7167,7 +7167,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-random-chord-midpoint",
-      "authorHeadReviewed": "1ce96b5b89be971399cab5080d4487a908ea294d",
+      "authorHeadReviewed": "8846c612825d2b8ae53a81f6f8861fd851f452c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -7423,7 +7423,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-circle-sweep",
-      "authorHeadReviewed": "1ce96b5b89be971399cab5080d4487a908ea294d",
+      "authorHeadReviewed": "8846c612825d2b8ae53a81f6f8861fd851f452c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -7683,7 +7683,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-triangle-midpoint-cycle",
-      "authorHeadReviewed": "1ce96b5b89be971399cab5080d4487a908ea294d",
+      "authorHeadReviewed": "8846c612825d2b8ae53a81f6f8861fd851f452c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -7941,7 +7941,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-box-diagonal-bisector",
-      "authorHeadReviewed": "1ce96b5b89be971399cab5080d4487a908ea294d",
+      "authorHeadReviewed": "8846c612825d2b8ae53a81f6f8861fd851f452c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -8200,7 +8200,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-diagonal-blend-transform",
-      "authorHeadReviewed": "1ce96b5b89be971399cab5080d4487a908ea294d",
+      "authorHeadReviewed": "8846c612825d2b8ae53a81f6f8861fd851f452c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -8461,7 +8461,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-self-averaging-sets",
-      "authorHeadReviewed": "1ce96b5b89be971399cab5080d4487a908ea294d",
+      "authorHeadReviewed": "8846c612825d2b8ae53a81f6f8861fd851f452c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -8720,7 +8720,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-corner-balanced-tables",
-      "authorHeadReviewed": "1ce96b5b89be971399cab5080d4487a908ea294d",
+      "authorHeadReviewed": "8846c612825d2b8ae53a81f6f8861fd851f452c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -8966,7 +8966,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-tank-gauge-model",
-      "authorHeadReviewed": "1ce96b5b89be971399cab5080d4487a908ea294d",
+      "authorHeadReviewed": "8846c612825d2b8ae53a81f6f8861fd851f452c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -9212,7 +9212,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-periodic-queue-model",
-      "authorHeadReviewed": "1ce96b5b89be971399cab5080d4487a908ea294d",
+      "authorHeadReviewed": "8846c612825d2b8ae53a81f6f8861fd851f452c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -9462,7 +9462,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-kiosk-grid-model",
-      "authorHeadReviewed": "1ce96b5b89be971399cab5080d4487a908ea294d",
+      "authorHeadReviewed": "8846c612825d2b8ae53a81f6f8861fd851f452c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -9712,7 +9712,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-cooling-data-model",
-      "authorHeadReviewed": "1ce96b5b89be971399cab5080d4487a908ea294d",
+      "authorHeadReviewed": "8846c612825d2b8ae53a81f6f8861fd851f452c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -9964,7 +9964,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-random-halving-interval",
-      "authorHeadReviewed": "1ce96b5b89be971399cab5080d4487a908ea294d",
+      "authorHeadReviewed": "8846c612825d2b8ae53a81f6f8861fd851f452c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
