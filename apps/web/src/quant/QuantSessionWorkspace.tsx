@@ -135,7 +135,7 @@ export const QuantSessionWorkspace: React.FC<QuantSessionWorkspaceProps> = ({
 
   const modeLabel = configuration.mode === "QUANT_TRADING" ? "Quant Trading" : "Quant Research";
   const disabled =
-    paused || sessionStatus !== "ACTIVE" || activationRefreshing;
+    !connected || paused || sessionStatus !== "ACTIVE" || activationRefreshing;
 
   return (
     <div
