@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import type {
   InterviewSessionConfiguration,
   QuantResearchCandidateAction,
@@ -57,6 +57,9 @@ export const QuantSessionWorkspace: React.FC<QuantSessionWorkspaceProps> = ({
   const presentationActiveRef = useRef(presentationActive);
   const lifecycleInitializedRef = useRef(false);
   const deferredRefreshRef = useRef(false);
+  const activationRefreshEpochRef = useRef(0);
+  const [activationRefreshing, setActivationRefreshing] =
+    useState(presentationActive);
 
   useEffect(() => {
     const wasPending = actionPendingRef.current;
@@ -65,6 +68,8 @@ export const QuantSessionWorkspace: React.FC<QuantSessionWorkspaceProps> = ({
     presentationActiveRef.current = presentationActive;
 
     if (!presentationActive) {
+      activationRefreshEpochRef.current += 1;
+      setActivationRefreshing(true);
       if (quantActionPending || wasPending) {
         deferredRefreshRef.current = true;
       }
@@ -74,6 +79,7 @@ export const QuantSessionWorkspace: React.FC<QuantSessionWorkspaceProps> = ({
     if (quantActionPending) {
       if (!wasPresentationActive) {
         deferredRefreshRef.current = true;
+        setActivationRefreshing(true);
       }
       lifecycleInitializedRef.current = true;
       return;
@@ -84,10 +90,26 @@ export const QuantSessionWorkspace: React.FC<QuantSessionWorkspaceProps> = ({
       || !wasPresentationActive
       || (wasPending && deferredRefreshRef.current);
     lifecycleInitializedRef.current = true;
-    if (!shouldRefresh) return;
+    if (!shouldRefresh) {
+      setActivationRefreshing(false);
+      return;
+    }
 
     deferredRefreshRef.current = false;
-    void onRefresh().catch(() => undefined);
+    const refreshEpoch = activationRefreshEpochRef.current + 1;
+    activationRefreshEpochRef.current = refreshEpoch;
+    setActivationRefreshing(true);
+    void onRefresh()
+      .catch(() => undefined)
+      .finally(() => {
+        if (
+          activationRefreshEpochRef.current === refreshEpoch
+          && presentationActiveRef.current
+          && !actionPendingRef.current
+        ) {
+          setActivationRefreshing(false);
+        }
+      });
   }, [
     onRefresh,
     presentationActive,
@@ -112,7 +134,8 @@ export const QuantSessionWorkspace: React.FC<QuantSessionWorkspaceProps> = ({
   }, [onRefresh, presentationActive]);
 
   const modeLabel = configuration.mode === "QUANT_TRADING" ? "Quant Trading" : "Quant Research";
-  const disabled = paused || sessionStatus !== "ACTIVE";
+  const disabled =
+    paused || sessionStatus !== "ACTIVE" || activationRefreshing;
 
   return (
     <div
