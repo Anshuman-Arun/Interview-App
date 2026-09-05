@@ -186,7 +186,7 @@ export const oxfordDOddSymmetricDifferenceSpec: CuratedProblemSpec = {
     domains: ["set-theory", "combinatorics"],
     contentConcepts: ["set-relations", "parity", "counting-structure"],
     prerequisiteConcepts: ["set-notation", "counting-principles", "modular-arithmetic"],
-    skillEvidence: [evidence("small-case-exploration", "supporting"), evidence("representation-switching", "primary"), evidence("proof-construction", "primary"), evidence("extremal-configuration", "supporting")],
+    skillEvidence: [evidence("small-case-exploration", "supporting"), evidence("representation-switching", "primary"), evidence("proof-construction", "primary"), evidence("case-analysis", "supporting")],
     difficulty: { entry: "introductory", core: "introductory-plus", ceiling: "standard" },
     novelty: "moderate",
     abstraction: "low",
