@@ -627,6 +627,19 @@ describe("editorial v10 adversarial UI states", () => {
     expect(home).toMatch(/<button[^>]*>Resume<\/button>/u);
   });
 
+  it("contains stale voice-control promise rejections during lifecycle races", () => {
+    const voice = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/components/VoiceControls.tsx"),
+      "utf8"
+    );
+
+    expect(voice).toContain("controls.enableMicrophone()");
+    expect(voice).toContain(").catch(() => undefined);");
+    expect(voice).toContain(
+      "controls.selectInputDevice(deviceId).catch(() => undefined)"
+    );
+  });
+
   it("contains rejected quant refresh reads instead of creating unhandled promises", () => {
     for (const sourcePath of [
       "apps/web/src/quant/QuantTradingWorkspace.tsx",
