@@ -40,16 +40,16 @@ export const cantorGraphFamiliesA: readonly CantorFamilyAuthoring[] = [
         concepts: ["equations-inequalities", "optimization-extrema"]
       },
       {
-        id: "validity-thresholds",
-        description: "Check when the unconstrained minimizers t=1/2 and t=-1/2 lie in their respective regions and otherwise use t=x.",
-        skills: cantorSkills(["precision-checking", "primary"], ["proof-construction", "supporting"]),
-        concepts: ["optimization-extrema", "qualitative-function-behavior"]
+        id: "validity-and-envelope",
+        description: "Check branch feasibility for the unconstrained minimizers, assemble the three-piece lower envelope, and justify that no other t can do better.",
+        skills: cantorSkills(["precision-checking", "primary"], ["proof-construction", "primary"], ["graph-sketching", "supporting"]),
+        concepts: ["optimization-extrema", "qualitative-function-behavior", "function-transformations"]
       },
       {
-        id: "assemble-envelope",
-        description: "Assemble the three pieces, sketch their joins, and justify that no other t can do better.",
-        skills: cantorSkills(["proof-construction", "primary"], ["generalization", "supporting"], ["graph-sketching", "supporting"]),
-        concepts: ["qualitative-function-behavior", "function-transformations", "optimization-extrema"]
+        id: "scaled-penalty-transfer",
+        description: "Transfer the same optimizer-feasibility argument to |x-t|+λt² for λ>0 and analyze how the switch points and joins move.",
+        skills: cantorSkills(["generalization", "primary"], ["transfer", "primary"], ["graph-sketching", "supporting"]),
+        concepts: ["parameter-dependent-curves", "function-transformations", "optimization-extrema"]
       }
     ],
     commonErrors: [
@@ -90,12 +90,12 @@ export const cantorGraphFamiliesA: readonly CantorFamilyAuthoring[] = [
         formulations: ["split the absolute value according to t versus x", "there are two quadratic expressions in t"]
       },
       {
-        text: "The two completed squares prefer t=1/2 and t=-1/2, but each preference is only valid on the correct side of x.",
-        formulations: ["check branch feasibility of ±1/2", "an unconstrained minimum may fall outside its branch"]
+        text: "The two completed squares prefer t=1/2 and t=-1/2, but each preference is only valid on the correct side of x; use the boundary t=x when it is not.",
+        formulations: ["check branch feasibility of ±1/2 and then assemble the envelope", "an unconstrained minimum may fall outside its branch"]
       },
       {
-        text: "The answer is x² in the middle and linear outside; find the switch points by branch feasibility.",
-        formulations: ["the central minimizer is t=x", "piece together one quadratic and two linear pieces"]
+        text: "For λt², the branch minimizers scale to ±1/(2λ); repeat the same feasibility check before joining the pieces.",
+        formulations: ["the switch points move like 1/λ", "reuse the parameter-optimization mechanism rather than starting over"]
       }
     ],
     canonicalSolution:
@@ -124,18 +124,19 @@ export const cantorGraphFamiliesA: readonly CantorFamilyAuthoring[] = [
       ["guided-adaptation", "supporting"]
     ),
     difficulty: { entry: "introductory", core: "standard", ceiling: "strong" },
-    timing: cantorTiming([2, 5], [19, 30], [15, 27], [5, 10], 28),
+    timing: cantorTiming([2, 5], [15, 24], [12, 20], [4, 8], 24),
     stageTiming: [
-      cantorTiming([1, 3], [5, 9], [4, 8], undefined, 9),
-      cantorTiming([2, 5], [10, 17], [8, 15], undefined, 17),
-      cantorTiming([2, 4], [7, 12], [5, 10], [4, 8], 12)
+      cantorTiming([1, 3], [4, 7], [3, 6], undefined, 7),
+      cantorTiming([2, 5], [8, 14], [6, 12], undefined, 14),
+      cantorTiming([1, 3], [4, 8], [3, 7], [3, 6], 8)
     ],
     openingRole: "warm-up",
     finalRole: "transfer",
-    novelty: "high",
+    novelty: "moderate",
     abstraction: "moderate",
     similarityClusterId: "parameter-envelope",
-    originalityRisk: "medium",
+    provenance: { originType: "structural-adaptation", sourceCategory: "classic-mathematics" },
+    originalityRisk: "high",
     correctnessRisk: "low",
     calibrationRisk: "medium"
   },
@@ -171,16 +172,16 @@ export const cantorGraphFamiliesA: readonly CantorFamilyAuthoring[] = [
         concepts: ["inequalities-bounds", "parameter-dependent-algebra"]
       },
       {
-        id: "vertex-formula",
-        description: "Express the vertex in terms of s=a+1/a and eliminate s.",
-        skills: cantorSkills(["representation-switching", "primary"], ["technique", "supporting"]),
-        concepts: ["turning-points-extrema", "polynomial-structure"]
+        id: "vertex-locus",
+        description: "Express the vertex in terms of s=a+1/a, eliminate s, and prove the full half-parabola locus is attained.",
+        skills: cantorSkills(["representation-switching", "primary"], ["proof-construction", "primary"], ["graph-sketching", "supporting"]),
+        concepts: ["turning-points-extrema", "parameter-dependent-curves", "polynomial-structure"]
       },
       {
-        id: "vertex-locus",
-        description: "Show the vertices trace y=1-x² for x≥1 and explain why every point on that half-locus occurs.",
-        skills: cantorSkills(["generalization", "primary"], ["proof-construction", "supporting"], ["graph-sketching", "supporting"]),
-        concepts: ["parameter-dependent-curves", "turning-points-extrema"]
+        id: "fixed-product-transfer",
+        description: "Transfer the reciprocal-root argument to roots a and c/a with c>0, including the new vertex locus and parameter double-cover.",
+        skills: cantorSkills(["generalization", "primary"], ["transfer", "primary"], ["precision-checking", "supporting"]),
+        concepts: ["parameter-dependent-curves", "turning-points-extrema", "parameter-dependent-algebra"]
       }
     ],
     commonErrors: [
@@ -221,12 +222,12 @@ export const cantorGraphFamiliesA: readonly CantorFamilyAuthoring[] = [
         formulations: ["derive the reciprocal-sum inequality from a square", "the effective parameter starts at 2"]
       },
       {
-        text: "If s=a+1/a, the vertex is at (s/2, 1-s²/4).",
-        formulations: ["write the quadratic using s", "use the usual vertex formula after parameter compression"]
+        text: "If s=a+1/a, the vertex is at (s/2, 1-s²/4); eliminate s and remember that every s≥2 is attained.",
+        formulations: ["write the quadratic using s and eliminate it", "prove both inclusion in and coverage of the vertex locus"]
       },
       {
-        text: "Eliminate s between the two vertex coordinates.",
-        formulations: ["replace s/2 by the vertex x-coordinate", "the vertex locus is another parabola"]
+        text: "With roots a and c/a, the effective sum starts at 2sqrt(c), while the product term becomes c.",
+        formulations: ["repeat the same compression with fixed product c", "the new locus follows from the shifted constant term"]
       }
     ],
     canonicalSolution:
@@ -255,11 +256,11 @@ export const cantorGraphFamiliesA: readonly CantorFamilyAuthoring[] = [
       ["guided-adaptation", "supporting"]
     ),
     difficulty: { entry: "introductory", core: "standard", ceiling: "strong" },
-    timing: cantorTiming([2, 5], [18, 28], [14, 25], [4, 9], 27),
+    timing: cantorTiming([2, 5], [15, 23], [12, 20], [4, 7], 23),
     stageTiming: [
-      cantorTiming([1, 3], [5, 8], [4, 7], undefined, 8),
-      cantorTiming([2, 5], [9, 15], [7, 13], undefined, 15),
-      cantorTiming([2, 4], [6, 11], [5, 9], [4, 7], 11)
+      cantorTiming([1, 3], [4, 7], [3, 6], undefined, 7),
+      cantorTiming([2, 4], [8, 14], [6, 12], undefined, 14),
+      cantorTiming([1, 3], [4, 8], [3, 7], [3, 6], 8)
     ],
     openingRole: "warm-up",
     finalRole: "transfer",
@@ -301,16 +302,16 @@ export const cantorGraphFamiliesA: readonly CantorFamilyAuthoring[] = [
         concepts: ["derivative-structure", "turning-points-extrema"]
       },
       {
-        id: "intermediate-regime",
-        description: "Explain the regime sqrt(3)<|a|<2, where the graph has two turning points but still only one real zero.",
-        skills: cantorSkills(["graph-sketching", "primary"], ["representation-switching", "supporting"], ["proof-construction", "supporting"]),
-        concepts: ["qualitative-function-behavior", "roots-intersections", "turning-points-extrema"]
+        id: "full-regime-classification",
+        description: "Explain the intermediate regime sqrt(3)<|a|<2 and produce justified sketches for every threshold regime, including both equality cases.",
+        skills: cantorSkills(["graph-sketching", "primary"], ["case-analysis", "primary"], ["proof-construction", "supporting"], ["precision-checking", "supporting"]),
+        concepts: ["qualitative-function-behavior", "roots-intersections", "turning-points-extrema", "parameter-dependent-curves"]
       },
       {
-        id: "full-regime-sketches",
-        description: "Produce and justify sketches for all threshold regimes, including equality cases.",
-        skills: cantorSkills(["case-analysis", "primary"], ["graph-sketching", "primary"], ["precision-checking", "supporting"]),
-        concepts: ["parameter-dependent-curves", "qualitative-function-behavior"]
+        id: "positive-constant-transfer",
+        description: "Transfer both threshold calculations to x(x²+a x+c) for c>0 and explain how the two scales change.",
+        skills: cantorSkills(["generalization", "primary"], ["transfer", "primary"]),
+        concepts: ["parameter-dependent-algebra", "roots-intersections", "turning-points-extrema"]
       }
     ],
     commonErrors: [
@@ -351,12 +352,12 @@ export const cantorGraphFamiliesA: readonly CantorFamilyAuthoring[] = [
         formulations: ["differentiate and inspect a second discriminant", "critical points have threshold a²=3"]
       },
       {
-        text: "There is therefore a genuine interval of parameters with two critical points but only one real root.",
-        formulations: ["compare sqrt(3) with 2", "sketch the intermediate regime carefully"]
+        text: "Compare sqrt(3) with 2, then treat both equality values separately: one merges critical points and the other merges roots.",
+        formulations: ["classify and sketch every parameter regime", "the intermediate regime has two critical points but only one real zero"]
       },
       {
-        text: "Treat |a|=sqrt(3) and |a|=2 separately; each is a merger event of a different kind.",
-        formulations: ["one equality merges critical points, the other merges roots", "check both boundary regimes"]
+        text: "For x(x²+a x+c), repeat the two discriminant calculations rather than rescaling by guesswork.",
+        formulations: ["the root threshold and critical-point threshold scale differently with c", "derive both thresholds from their own quadratics"]
       }
     ],
     canonicalSolution:
@@ -385,11 +386,11 @@ export const cantorGraphFamiliesA: readonly CantorFamilyAuthoring[] = [
       ["proof-construction", "supporting"]
     ),
     difficulty: { entry: "introductory-plus", core: "standard", ceiling: "strong" },
-    timing: cantorTiming([3, 6], [20, 31], [16, 28], [5, 9], 29),
+    timing: cantorTiming([2, 5], [16, 24], [13, 21], [4, 8], 24),
     stageTiming: [
-      cantorTiming([2, 4], [6, 10], [5, 9], undefined, 10),
-      cantorTiming([2, 5], [10, 17], [8, 15], undefined, 17),
-      cantorTiming([2, 4], [7, 12], [5, 10], [4, 8], 12)
+      cantorTiming([1, 3], [4, 7], [3, 6], undefined, 7),
+      cantorTiming([2, 4], [8, 14], [6, 12], undefined, 14),
+      cantorTiming([1, 3], [4, 9], [3, 7], [3, 6], 9)
     ],
     openingRole: "technique-check",
     finalRole: "stretch",
@@ -514,18 +515,19 @@ export const cantorGraphFamiliesA: readonly CantorFamilyAuthoring[] = [
       ["generalization", "supporting"],
       ["guided-adaptation", "supporting"]
     ),
-    difficulty: { entry: "introductory-plus", core: "strong", ceiling: "stretch" },
-    timing: cantorTiming([3, 7], [22, 34], [17, 30], [5, 10], 30),
+    difficulty: { entry: "introductory-plus", core: "strong", ceiling: "strong" },
+    timing: cantorTiming([2, 5], [14, 24], [10, 20], [4, 8], 24),
     stageTiming: [
-      cantorTiming([2, 4], [6, 10], [5, 9], undefined, 10),
-      cantorTiming([3, 6], [11, 19], [8, 16], undefined, 19),
-      cantorTiming([2, 5], [7, 13], [5, 11], [4, 8], 13)
+      cantorTiming([1, 3], [4, 7], [3, 6], undefined, 7),
+      cantorTiming([2, 5], [8, 14], [6, 12], undefined, 14),
+      cantorTiming([1, 3], [4, 8], [3, 7], [3, 6], 8)
     ],
     openingRole: "technique-check",
     finalRole: "stretch",
-    novelty: "high",
+    novelty: "moderate",
     abstraction: "moderate",
-    originalityRisk: "low",
+    provenance: { originType: "classic-problem", sourceCategory: "secondary-reference" },
+    originalityRisk: "high",
     correctnessRisk: "medium",
     calibrationRisk: "high"
   },
@@ -561,16 +563,16 @@ export const cantorGraphFamiliesA: readonly CantorFamilyAuthoring[] = [
         concepts: ["integral-accumulation", "roots-intersections"]
       },
       {
-        id: "zero-count",
-        description: "Combine monotonicity, signs, and oddness to prove there are exactly five real zeros.",
-        skills: cantorSkills(["proof-construction", "primary"], ["case-analysis", "supporting"]),
-        concepts: ["roots-intersections", "qualitative-function-behavior"]
+        id: "zero-count-and-locations",
+        description: "Combine monotonicity, signs, and oddness to prove there are exactly five real zeros, then evaluate the antiderivative only to locate them exactly.",
+        skills: cantorSkills(["proof-construction", "primary"], ["case-analysis", "supporting"], ["representation-switching", "primary"]),
+        concepts: ["roots-intersections", "qualitative-function-behavior", "polynomial-structure", "integral-accumulation"]
       },
       {
-        id: "exact-zero-locations",
-        description: "Only now evaluate the polynomial antiderivative and reduce the nonzero root equation to a quadratic in x².",
-        skills: cantorSkills(["representation-switching", "primary"], ["technique", "supporting"]),
-        concepts: ["polynomial-structure", "roots-intersections", "integral-accumulation"]
+        id: "two-parameter-transfer",
+        description: "Transfer the sign-landscape method to ∫_0^x(t²-a²)(t²-b²)dt with 0<a<b and identify what controls the positive-side root count.",
+        skills: cantorSkills(["generalization", "primary"], ["transfer", "primary"], ["strategic-simplification", "supporting"]),
+        concepts: ["integral-accumulation", "turning-points-extrema", "roots-intersections"]
       }
     ],
     commonErrors: [
@@ -611,12 +613,12 @@ export const cantorGraphFamiliesA: readonly CantorFamilyAuthoring[] = [
         formulations: ["turning-point heights matter", "evaluate only the strategic points"]
       },
       {
-        text: "On x>0, monotonicity forces one zero between 1 and 3 and one after 3 once the signs are known.",
-        formulations: ["use monotone intervals to prove uniqueness of each crossing", "oddness supplies the negative roots"]
+        text: "Use monotone intervals to prove the zero count first; only then integrate, factor out x, and set u=x² for exact locations.",
+        formulations: ["separate qualitative counting from exact algebra", "oddness supplies the negative roots after the positive crossings are unique"]
       },
       {
-        text: "After integration, factor out x and set u=x² in the remaining quartic.",
-        formulations: ["the exact root equation is quadratic in x²", "delay the algebra until the structure is settled"]
+        text: "For the 0<a<b family, evaluate only the strategically relevant turning-point height at x=b before doing any full expansion.",
+        formulations: ["the sign of the outer positive local minimum controls the crossing pattern", "reuse the derivative-sign landscape with scaled turning points"]
       }
     ],
     canonicalSolution:
@@ -645,11 +647,11 @@ export const cantorGraphFamiliesA: readonly CantorFamilyAuthoring[] = [
       ["representation-switching", "primary"]
     ),
     difficulty: { entry: "introductory-plus", core: "standard", ceiling: "strong" },
-    timing: cantorTiming([2, 6], [20, 31], [16, 28], [5, 9], 29),
+    timing: cantorTiming([2, 5], [16, 24], [13, 21], [4, 8], 24),
     stageTiming: [
-      cantorTiming([1, 4], [6, 10], [5, 9], undefined, 10),
-      cantorTiming([2, 5], [10, 17], [8, 15], undefined, 17),
-      cantorTiming([2, 4], [6, 11], [5, 9], [4, 7], 11)
+      cantorTiming([1, 3], [4, 7], [3, 6], undefined, 7),
+      cantorTiming([2, 4], [8, 14], [6, 12], undefined, 14),
+      cantorTiming([1, 3], [4, 9], [3, 7], [3, 6], 9)
     ],
     openingRole: "technique-check",
     finalRole: "stretch",
