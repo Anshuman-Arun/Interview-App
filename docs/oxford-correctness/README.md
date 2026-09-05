@@ -106,6 +106,40 @@ Agent I — Itô independently reviewed the six correctness-sensitive families e
 
 Agent I initially found two error-level issues in `oxford-cantor-reciprocal-implicit-curve`: the four nonzero-branch minima were described as globally closest despite the isolated origin, and the common-error text falsely said the axis case could not satisfy the equation. Cantor repaired both on head `b9fe1d9cdd3d0216bc3f4a0fa350824a97f36b73` and also clarified the scaled extension. Agent I re-reviewed the actual updated source and marked both findings resolved; the family is now correctness-approved. The `mobius-involution` vocabulary warning remains non-blocking.
 
+## Agent D — Dirichlet PR #133 audit
+
+Agent I — Itô independently reviewed six representative/high-risk discrete families from Agent D — Dirichlet PR #133 at head `017759febfd7d49ea032d6474bcc9177a76b2c2b`.
+
+- Families independently solved/reviewed from PR #133: **6**
+- Correctness approvals: **6**
+- Changes required: **0**
+
+Approved batch: `oxford-d-orientation-parities`, `oxford-d-prime-divisor-three-cycles`, `oxford-d-laminar-family`, `oxford-d-midpoint-closed-residues`, `oxford-d-directed-flow-decomposition`, and `oxford-d-triple-flip-circle`.
+
+The review explicitly checked the root parity dependence, the `p=3` and short-period exceptions, laminar child coverage and equality structure, the finite halving-bijection used to recover doubling, the artificial-edge direction and `r`-path transfer, and the triple-flip period-three kernel. Small-`n` triple-flip enumeration is retained in the regression suite.
+
+## Agent E — Euler PR #134 audit
+
+Agent I — Itô independently reviewed seven of the highest-priority visual/modelling/probability families from Agent E — Euler PR #134. The mathematical source files were unchanged between the initially inspected head and latest reviewed head `a18db48700800c1987e2abd43726254ba25267dd`.
+
+- Families independently solved/reviewed from PR #134: **7**
+- Correctness approvals: **6**
+- Changes required: **1**
+
+Approved: `oxford-euler-box-diagonal-bisector`, `oxford-euler-circle-sweep`, `oxford-euler-random-chord-midpoint`, `oxford-euler-random-subset-blocks`, `oxford-euler-difference-closed-sets`, and `oxford-euler-random-halving-interval`.
+
+`oxford-euler-periodic-queue-model` is held at `changes-required`: the recurrence/drift mathematics is sound, but the candidate-visible statement does not explicitly declare the customer/capacity parameter domain, an initial queue `q_0`, or the starting phase. Those are needed to make the prompt's exact “does the queue ever empty?” question well-posed. Agent I left this repair request directly on PR #134.
+
+## Aggregate reviewed state
+
+Across the retained existing-bank and author-PR records:
+
+- Families independently solved/reviewed: **33**
+- Correctness approvals: **25**
+- Changes required: **8**
+- Reject recommendations: **0**
+- Unresolved mathematical uncertainties: **0**; every non-approval has a concrete repair item.
+
 ## Computational regression checks retained
 
 `tests/oxford-correctness-audit.test.ts` adds targeted checks for claims where a small mistake is easy to miss:
@@ -116,7 +150,12 @@ Agent I initially found two error-level issues in `oxford-cantor-reciprocal-impl
 - all `2^15` two-colourings of `K6`, plus the `C5` lower-bound colouring;
 - every hat assignment in a six-prisoner parity-strategy analogue;
 - the nested-radical rationalized error identity across a grid in `[0,2]`;
-- an explicit composite Euclid number.
+- an explicit composite Euclid number;
+- triple-flip move-map kernel/image counts through `n=10`;
+- representative diagonal-bisector box-section vertex counts on both sides of the transition;
+- a finite-grid check of the circle-sweep sign-product criterion;
+- exhaustive line/circular random-subset block expectations through `n=7`;
+- regular-polygon random-chord midpoint expectations through `n=14`.
 
 These checks are regression evidence only. The retained review records contain independent mathematical arguments for the general claims.
 
@@ -152,6 +191,10 @@ Specify `n` as an integer in the candidate-visible statement. Keep the reflectio
 
 ## Cross-agent handoff
 
-Agent I — Itô should append author-PR records using `source.kind = "author-pr"`, the author agent marker, and PR number. Review actual family files, not PR summaries. Do not modify an author's branch as part of independent review.
+Agent I — Itô reviewed actual family source from all three Wave 2 author PRs available during this task:
 
-At the time this baseline was established, no open Wave 2 Agent C/D/E author PR was available. This is intentionally not a blocker: the framework, existing-bank baseline, and computational gate are independently useful and author PRs can be appended as they appear.
+- Agent C — Cantor PR #132: 6 families reviewed, 6 approved after one caught-and-repaired blocker;
+- Agent D — Dirichlet PR #133: 6 families reviewed, 6 approved;
+- Agent E — Euler PR #134: 7 families reviewed, 6 approved and 1 changes-required.
+
+All author-PR records use `source.kind = "author-pr"` with agent marker and PR number. Agent I did not modify author branches. Correctness results remain separate from Agent G taxonomy/calibration and Agent H originality/fidelity decisions.
