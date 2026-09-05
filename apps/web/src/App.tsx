@@ -105,6 +105,7 @@ export const App: React.FC = () => {
   });
   const { route, navigate } = useProductNavigation();
   const routeRef = useRef(route);
+  const reviewAutoUpgradeEpochRef = useRef(0);
   const firstRunRedirectedRef = useRef(false);
   routeRef.current = route;
 
@@ -128,6 +129,8 @@ export const App: React.FC = () => {
   }, [navigate, route.page, session.isTransportManaged]);
 
   const openDefaultReview = useCallback((targetSessionId: SessionId): void => {
+    const autoUpgradeEpoch = reviewAutoUpgradeEpochRef.current + 1;
+    reviewAutoUpgradeEpochRef.current = autoUpgradeEpoch;
     navigate({
       page: "review",
       sessionId: targetSessionId,
@@ -138,7 +141,8 @@ export const App: React.FC = () => {
       .then((configuration) => {
         const currentRoute = routeRef.current;
         if (
-          configuration.mode !== "OXFORD_MATHEMATICS"
+          reviewAutoUpgradeEpochRef.current !== autoUpgradeEpoch
+          || configuration.mode !== "OXFORD_MATHEMATICS"
           || currentRoute.page !== "review"
           || currentRoute.sessionId !== targetSessionId
           || currentRoute.view !== "replay"
@@ -672,6 +676,7 @@ export const App: React.FC = () => {
             openDefaultReview(sessionId);
             return;
           }
+          reviewAutoUpgradeEpochRef.current += 1;
           navigate(
             {
               page: "review",
