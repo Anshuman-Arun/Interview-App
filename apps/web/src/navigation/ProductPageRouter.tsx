@@ -27,6 +27,7 @@ export function ProductPageRouter({
   activeSessionPaused,
   canReview,
   sessionEntryPending,
+  sessionAuthorityChecking = false,
   onNavigatePage,
   onEnterInterview,
   launchCatalog,
@@ -58,6 +59,7 @@ export function ProductPageRouter({
   readonly activeSessionPaused?: boolean;
   readonly canReview: (session: StoredSessionSummary) => boolean;
   readonly sessionEntryPending: boolean;
+  readonly sessionAuthorityChecking?: boolean;
   readonly onNavigatePage: (page: ProductPageId) => void;
   readonly onEnterInterview: () => void;
   readonly launchCatalog: readonly InterviewCatalogEntry[];
@@ -117,6 +119,7 @@ export function ProductPageRouter({
           onOpenSettings={() => onNavigatePage("settings")}
           canReview={canReview}
           sessionEntryPending={sessionEntryPending}
+          sessionAuthorityChecking={sessionAuthorityChecking}
           onReview={(sessionId) => onReview(sessionId, "evaluation")}
         />
       );
@@ -136,6 +139,7 @@ export function ProductPageRouter({
           activeSessionId={activeSessionId}
           activeSessionCount={activeSessionCount}
           startPending={sessionEntryPending}
+          sessionAuthorityChecking={sessionAuthorityChecking}
           onRefreshCatalog={onRefreshLaunchCatalog}
           onRefreshProviderOptions={onRefreshProviderOptions}
           onStart={onStartConfiguredInterview}
@@ -177,6 +181,7 @@ export function ProductPageRouter({
           providerOptionsLoading={providerOptionsLoading}
           providerOptionsError={providerOptionsError}
           activeSessionCount={activeSessionCount}
+          sessionAuthorityChecking={sessionAuthorityChecking}
           onRefreshProviderOptions={onRefreshProviderOptions}
           onStartInterview={onEnterInterview}
         />
