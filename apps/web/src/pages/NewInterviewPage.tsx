@@ -387,7 +387,7 @@ export function NewInterviewPage({
                     title={durationInvalid ? "Enter a whole number from 5 to 480 minutes" : undefined}
                     data-testid="duration-input"
                   /><small>min</small>
-                </div></label>
+                </div><small className="new-interview__duration-help">Planning reminder only; the interview will not end automatically.</small></label>
               </div>
             )}
           </section>
