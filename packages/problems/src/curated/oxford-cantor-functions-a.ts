@@ -386,7 +386,8 @@ export const cantorFunctionFamiliesA: readonly CantorFamilyAuthoring[] = [
       ["proof-construction", "primary"],
       ["precision-checking", "supporting"],
       ["generalization", "supporting"],
-      ["guided-adaptation", "supporting"]
+      ["guided-adaptation", "supporting"],
+      ["case-analysis", "primary"]
     ),
     difficulty: { entry: "introductory", core: "standard", ceiling: "strong" },
     timing: cantorTiming([2, 5], [15, 24], [12, 20], [4, 8], 23),
@@ -516,7 +517,8 @@ export const cantorFunctionFamiliesA: readonly CantorFamilyAuthoring[] = [
       ["pattern-recognition", "primary"],
       ["strategic-simplification", "primary"],
       ["representation-switching", "primary"],
-      ["generalization", "supporting"]
+      ["generalization", "supporting"],
+      ["transfer", "primary"]
     ),
     difficulty: { entry: "introductory", core: "standard", ceiling: "strong" },
     timing: cantorTiming([2, 4], [13, 21], [10, 18], [3, 7], 21),
