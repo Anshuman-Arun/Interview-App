@@ -638,7 +638,8 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
       "roots-intersections",
       "qualitative-function-behavior",
       "asymptotic-behavior",
-      "inequalities-bounds"
+      "inequalities-bounds",
+      "parameter-dependent-curves"
     ],
     prerequisiteConcepts: ["algebraic-manipulation", "equations-inequalities", "coordinate-geometry-basics", "functions-graphs"],
     skills: cantorSkills(
