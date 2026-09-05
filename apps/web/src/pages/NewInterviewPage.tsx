@@ -23,7 +23,7 @@ const MODE_LABELS: Readonly<Record<InterviewMode, string>> = {
 
 const INTERVENTION_LABELS = {
   MINIMAL: "Minimal",
-  BALANCED: "Standard",
+  BALANCED: "Balanced",
   STRICT: "Strict"
 } as const;
 
