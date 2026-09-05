@@ -168,6 +168,64 @@ describe("editorial v10 adversarial UI states", () => {
     );
   });
 
+  it("fails closed when one stored active session has not resolved to an attached id", async () => {
+    const onStart = vi.fn(async () => undefined);
+
+    await act(async () => {
+      root?.render(
+        <NewInterviewPage
+          catalog={[{
+            mode: "OXFORD_MATHEMATICS",
+            id: "unresolved-active",
+            version: "1",
+            title: "Unresolved active authority",
+            category: "proof",
+            difficulty: "standard"
+          }]}
+          catalogLoading={false}
+          catalogError={null}
+          providerOptions={[{
+            providerId: "test-provider",
+            providerDisplayName: "Test Provider",
+            providerKind: "MOCK",
+            modelId: "test-model",
+            modelDisplayName: "Test Model",
+            availability: "AVAILABLE"
+          }]}
+          providerOptionsLoading={false}
+          providerOptionsError={null}
+          activeSessionId={null}
+          activeSessionCount={1}
+          startPending={false}
+          onRefreshCatalog={async () => []}
+          onRefreshProviderOptions={async () => []}
+          onStart={onStart}
+          onResumeActive={null}
+        />
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(host?.textContent).toContain("An active session is stored but not attached.");
+    const form = document.querySelector(".new-interview__layout");
+    const start = document.querySelector("[data-testid='start-configured-session-btn']");
+    if (!(form instanceof HTMLFormElement) || !(start instanceof HTMLButtonElement)) {
+      throw new Error("Unresolved active-session launch controls did not mount");
+    }
+    expect(start.disabled).toBe(true);
+
+    await act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await Promise.resolve();
+    });
+
+    expect(onStart).not.toHaveBeenCalled();
+    expect(host?.textContent).toContain(
+      "An active interview exists but is not attached yet."
+    );
+  });
+
   it("fails closed before submit when duration is outside the launch contract", async () => {
     await act(async () => {
       root?.render(
