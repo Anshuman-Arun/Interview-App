@@ -58,7 +58,11 @@ import {
 } from "./window-config.js";
 
 const OPTIONAL_LOCAL_RUNTIME_COLD_STARTUP_BUDGET_MS = 15_000;
-const OPTIONAL_LOCAL_RUNTIME_PREPARED_STARTUP_BUDGET_MS = 60_000;
+// Explicitly installed workers are sequential and each has its own bounded
+// startup handshake. The prepared-runtime budget must not be shorter than the
+// combined activation path or a successful install is misclassified as missing
+// after restart.
+const OPTIONAL_LOCAL_RUNTIME_PREPARED_STARTUP_BUDGET_MS = 4 * 60_000;
 const PACKAGED_SMOKE_PROOF_MAX_BYTES = 64 * 1024;
 const MAX_APPEARANCE_SETTINGS_BYTES = 4 * 1024;
 const PACKAGED_SMOKE_INPUT = "Packaged Windows desktop smoke input.";
@@ -556,7 +560,14 @@ async function installLocalModelAssets(
     } else {
       await runtime.installVisionAssets(startupAbort.signal);
     }
-    setSetupState(kind, "INSTALLED", kind !== "PYTHON");
+    // Python dependencies are usable in this process immediately, so they do
+    // not enter the restart-required INSTALLED setup state. Voice/vision need a
+    // desktop restart because the backend captures those runtimes at startup.
+    setSetupState(
+      kind,
+      kind === "PYTHON" ? "IDLE" : "INSTALLED",
+      kind !== "PYTHON"
+    );
     return localRuntimeStatusForRenderer();
   } catch (error) {
     if (startupAbort.signal.aborted) {
