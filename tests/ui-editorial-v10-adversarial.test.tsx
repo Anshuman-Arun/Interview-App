@@ -200,6 +200,114 @@ describe("editorial v10 adversarial UI states", () => {
     );
   });
 
+  it("blocks new-session entry while cold-route stored authority is being checked", async () => {
+    const home = renderToStaticMarkup(
+      <HomePage
+        activeSessionId={null}
+        activeSessionCount={0}
+        sessions={[]}
+        onStartInterview={vi.fn()}
+        onResumeInterview={vi.fn()}
+        onOpenSessions={vi.fn()}
+        onOpenSettings={vi.fn()}
+        canReview={() => false}
+        onReview={vi.fn()}
+        sessionEntryPending={false}
+        sessionAuthorityChecking
+      />
+    );
+    expect(home).toContain("Checking rooms…");
+    expect(home).toMatch(/data-testid="start-session-btn"[^>]*disabled=""/u);
+
+    const onStart = vi.fn(async () => undefined);
+    await act(async () => {
+      root?.render(
+        <NewInterviewPage
+          catalog={[{
+            mode: "OXFORD_MATHEMATICS",
+            id: "cold-route",
+            version: "1",
+            title: "Cold route",
+            category: "proof",
+            difficulty: "standard"
+          }]}
+          catalogLoading={false}
+          catalogError={null}
+          providerOptions={[{
+            providerId: "test-provider",
+            providerDisplayName: "Test Provider",
+            providerKind: "MOCK",
+            modelId: "test-model",
+            modelDisplayName: "Test Model",
+            availability: "AVAILABLE"
+          }]}
+          providerOptionsLoading={false}
+          providerOptionsError={null}
+          activeSessionId={null}
+          activeSessionCount={0}
+          startPending={false}
+          sessionAuthorityChecking
+          onRefreshCatalog={async () => []}
+          onRefreshProviderOptions={async () => []}
+          onStart={onStart}
+          onResumeActive={null}
+        />
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const form = document.querySelector(".new-interview__layout");
+    const start = document.querySelector("[data-testid='start-configured-session-btn']");
+    if (!(form instanceof HTMLFormElement) || !(start instanceof HTMLButtonElement)) {
+      throw new Error("Cold-route launch controls did not mount");
+    }
+    expect(start.disabled).toBe(true);
+    expect(host?.textContent).toContain("Checking stored session authority…");
+
+    await act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await Promise.resolve();
+    });
+    expect(onStart).not.toHaveBeenCalled();
+
+    const settings = renderToStaticMarkup(
+      <AppearanceProvider>
+        <SettingsPage
+          providerOptions={[{
+            providerId: "ready-provider",
+            providerDisplayName: "Ready Provider",
+            providerKind: "REMOTE_API",
+            modelId: "ready-model",
+            modelDisplayName: "Ready Model",
+            availability: "AVAILABLE"
+          }]}
+          providerOptionsLoading={false}
+          providerOptionsError={null}
+          activeSessionCount={0}
+          sessionAuthorityChecking
+          onRefreshProviderOptions={async () => []}
+          onStartInterview={vi.fn()}
+        />
+      </AppearanceProvider>
+    );
+    expect(settings).toContain(
+      "Checking stored session authority before enabling a new interview."
+    );
+    expect(settings).toMatch(
+      /<button[^>]*disabled=""[^>]*>Start interview<\/button>/u
+    );
+
+    const appSource = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+    expect(appSource).toContain(
+      "const [sessionAuthorityChecking, setSessionAuthorityChecking] = useState(true)"
+    );
+    expect(appSource).toContain("sessionAuthorityCheckEpochRef.current === checkEpoch");
+  });
+
   it("fails closed when one stored active session has not resolved to an attached id", async () => {
     const onStart = vi.fn(async () => undefined);
 
