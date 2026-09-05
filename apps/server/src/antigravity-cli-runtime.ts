@@ -16,7 +16,7 @@ import {
 } from "../../../packages/providers/src/index.js";
 
 const ANTIGRAVITY_EXECUTABLE_ID = "antigravity-cli";
-const ANTIGRAVITY_SAFE_CLI_VERSION = Object.freeze([1, 1, 25] as const);
+const ANTIGRAVITY_SAFE_CLI_VERSION = Object.freeze([1, 1, 26] as const);
 // First use also pays cold executable hashing and trusted Windows supervisor
 // compilation. Those stages are each independently bounded at 30s, so this
 // one-time local preflight must leave room for both plus `agy --version`.
