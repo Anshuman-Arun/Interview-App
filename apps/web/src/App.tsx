@@ -79,6 +79,8 @@ export const App: React.FC = () => {
   const [historyRead, setHistoryRead] = useState<SessionHistoryReadResponse | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [sessionAuthorityChecking, setSessionAuthorityChecking] = useState(true);
+  const sessionAuthorityCheckEpochRef = useRef(0);
   const historyAbortRef = useRef<AbortController | null>(null);
   const sessionEntryPendingRef = useRef(false);
   const sessionTerminalPendingRef = useRef(false);
@@ -376,6 +378,8 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     if (session.isSessionStarted && session.sessionStatus === "ACTIVE") {
+      sessionAuthorityCheckEpochRef.current += 1;
+      setSessionAuthorityChecking(false);
       return;
     }
     if (
@@ -383,9 +387,19 @@ export const App: React.FC = () => {
       || route.page === "new"
       || route.page === "settings"
     ) {
-      void session.fetchAvailableSessions();
+      const checkEpoch = sessionAuthorityCheckEpochRef.current + 1;
+      sessionAuthorityCheckEpochRef.current = checkEpoch;
+      setSessionAuthorityChecking(true);
+      void session.fetchAvailableSessions()
+        .finally(() => {
+          if (sessionAuthorityCheckEpochRef.current === checkEpoch) {
+            setSessionAuthorityChecking(false);
+          }
+        });
       return;
     }
+    sessionAuthorityCheckEpochRef.current += 1;
+    setSessionAuthorityChecking(false);
     if (route.page === "sessions") {
       refreshStoredSessions();
     }
@@ -657,6 +671,7 @@ export const App: React.FC = () => {
         }
         onNavigatePage={navigateProductPage}
         sessionEntryPending={sessionEntryPending}
+        sessionAuthorityChecking={sessionAuthorityChecking}
         onEnterInterview={handleOpenNewInterview}
         launchCatalog={session.interviewCatalog}
         launchCatalogLoading={session.interviewCatalogLoading}
