@@ -675,7 +675,6 @@ export function SettingsPage({
                   || !reasoningReady
                   || restarting
                   || runtimeChecking
-                  || providerOptionsLoading
                   || anyInstallActive
                 }
               >
