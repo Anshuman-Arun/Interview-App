@@ -65,14 +65,6 @@ export interface EulerFamilyDefinition {
   readonly verificationNotes: string;
 }
 
-const STAGE_ROLES: readonly OxfordStageRole[] = [
-  "warm-up",
-  "core",
-  "deep-dive",
-  "transfer",
-  "stretch"
-];
-
 const STAGE_TIMING: readonly OxfordTimingEstimate[] = [
   {
     firstMeaningfulInsightMinutes: { min: 0.5, max: 1.5 },
@@ -163,6 +155,24 @@ function milestoneEvidenceFor(
   );
 }
 
+function stageRoleFor(
+  family: EulerFamilyDefinition,
+  index: number
+): OxfordStageRole {
+  if (index === 0) return "warm-up";
+  if (index === family.stages.length - 1) return "transfer";
+  const firstCoreIndex = family.stages.findIndex(
+    (stage, stageIndex) =>
+      stageIndex > 0
+      && stageIndex < family.stages.length - 1
+      && stage.difficulty === family.difficulty.core
+  );
+  if (firstCoreIndex < 0) {
+    throw new Error(`Euler family "${family.id}" has no interior stage at its core difficulty`);
+  }
+  return index === firstCoreIndex ? "core" : "deep-dive";
+}
+
 export function makeEulerCandidateSpec(family: EulerFamilyDefinition): CuratedProblemSpec {
   const approaches = [{
     id: "primary",
@@ -204,7 +214,7 @@ export function makeEulerCandidateSpec(family: EulerFamilyDefinition): CuratedPr
     introducesNewDefinition: family.introducesNewDefinition,
     stages: family.stages.map((stage, index) => ({
       id: stage.id,
-      role: STAGE_ROLES[index]!,
+      role: stageRoleFor(family, index),
       prerequisiteStageIds: index === 0 ? [] : [family.stages[index - 1]!.id],
       domains: family.domains,
       contentConcepts: stage.contentConcepts,
