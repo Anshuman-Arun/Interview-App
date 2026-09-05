@@ -1092,3 +1092,147 @@ summary:focus-visible {
   color: var(--text-muted);
   font: 500 11px/1.4 var(--font-ui);
 }
+
+
+/* -------------------------------------------------------------------------- */
+/* Installed live-room fidelity + recovery pass                               */
+/* -------------------------------------------------------------------------- */
+.interview-app-container:not(.interview-app-container--backgrounded) .app-header {
+  height: 58px;
+  min-height: 58px !important;
+  flex-basis: 58px;
+  padding: 0 15px 0 18px !important;
+  border-bottom-color: var(--border-subtle) !important;
+}
+.interview-app-container:not(.interview-app-container--backgrounded) .app-header__identity {
+  padding: 0;
+  border-radius: 0;
+}
+.interview-app-container:not(.interview-app-container--backgrounded) .app-header__identity:hover:not(:disabled) {
+  background: transparent;
+}
+.interview-app-container:not(.interview-app-container--backgrounded) .app-header__actions,
+.interview-app-container:not(.interview-app-container--backgrounded) .app-header__session-actions {
+  gap: 7px;
+}
+.interview-app-container:not(.interview-app-container--backgrounded) .appearance-dock__trigger {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+}
+.live-main {
+  background: #ebe7dc !important;
+}
+.reasoning-pane {
+  border-right: 0 !important;
+}
+.problem-block {
+  padding: 20px 23px 18px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.live-problem-meta {
+  padding: 0;
+  letter-spacing: .08em;
+}
+.problem-block .problem-card-container {
+  padding: 0 !important;
+  margin-top: 17px;
+}
+.problem-block .problem-header {
+  display: none;
+}
+.problem-block .problem-statement {
+  margin: 0;
+  color: var(--text-primary) !important;
+  font: 500 clamp(20px, 2vw, 29px)/1.15 var(--font-display) !important;
+  letter-spacing: -.025em;
+}
+.problem-block .given-information {
+  margin: 12px 0 0;
+  padding: 0;
+  border: 0;
+}
+.problem-block .given-information h3 {
+  display: none;
+}
+.problem-block .given-information ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.problem-block .given-information li {
+  color: var(--text-muted);
+  font: italic 11px/1.45 var(--font-display);
+}
+.live-transcript-region .transcript-feed__header {
+  min-height: 34px;
+  padding: 12px 23px 10px;
+  border-bottom: 0;
+}
+.live-transcript-region .transcript-feed__messages {
+  padding: 0 23px 18px;
+}
+.input-dock {
+  padding: 12px 14px 13px;
+  border-top: 1px solid var(--border-default);
+  background: color-mix(in srgb, var(--surface-app) 78%, var(--surface-panel));
+}
+.input-dock .voice-strip {
+  min-height: 27px;
+  margin: 0 0 8px;
+}
+.input-dock .voice-strip__mic {
+  min-height: 26px;
+}
+.board-appbar {
+  height: 40px;
+  min-height: 40px;
+  flex-basis: 40px;
+  padding: 0 13px;
+}
+.board-appbar__left {
+  gap: 12px;
+}
+.board-appbar__actions button {
+  min-height: 25px;
+  border-radius: 5px;
+}
+.board-appbar__reconnect-action {
+  border-color: color-mix(in srgb, var(--danger) 36%, #d6d5d1) !important;
+  color: var(--danger) !important;
+}
+.tldraw-wrap {
+  padding: 10px;
+}
+.tldraw-wrap .whiteboard-wrapper,
+.tldraw-wrap .tldraw-frame,
+.tldraw-wrap [data-whiteboard-canvas="true"] {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+}
+.tldraw-frame {
+  border-radius: 7px !important;
+  overflow: hidden;
+}
+.tldraw-frame .tl-container,
+.tldraw-frame .tl-canvas {
+  width: 100%;
+  height: 100%;
+}
+@media (max-width: 960px) {
+  .problem-block {
+    padding: 16px 18px 14px;
+  }
+  .live-transcript-region .transcript-feed__header {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+  .live-transcript-region .transcript-feed__messages {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+}
