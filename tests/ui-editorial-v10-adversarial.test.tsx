@@ -776,8 +776,9 @@ describe("editorial v10 adversarial UI states", () => {
     expect(app).toContain('aria-haspopup="dialog"');
     expect(app).toContain('event.pointerType === "mouse" && event.button !== 0');
     expect(app).toContain("retrySubmission(itemId).catch(() => undefined)");
+    expect(app).toContain("const beginSessionAuthorityCheck = useCallback");
     expect(app).toMatch(
-      /route\.page === "home"[\s\S]{0,120}route\.page === "new"[\s\S]{0,120}route\.page === "settings"[\s\S]{0,180}fetchAvailableSessions/u
+      /route\.page === "sessions"[\s\S]{0,120}return refreshStoredSessions\(\);[\s\S]{0,120}return beginSessionAuthorityCheck\(\);/u
     );
     expect(app).toMatch(
       /route\.page !== "home"[\s\S]{0,140}route\.page !== "sessions"[\s\S]{0,140}route\.page !== "review"[\s\S]{0,220}refreshProviderOptions\(\)\.catch/u
