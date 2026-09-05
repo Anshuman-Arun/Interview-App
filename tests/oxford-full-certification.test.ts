@@ -113,12 +113,12 @@ describe("Agent G full C/D/E certification", () => {
   it("covers every current survivor exactly once at the reviewed author heads", () => {
     expect(artifact.agent).toBe("G — Gauss");
     expect(artifact.summary).toEqual({
-      reviewed: 46,
-      surviving: 46,
-      byAuthor: { cantor: 17, dirichlet: 12, euler: 17 },
-      taxonomy: { approved: 44, changesRequired: 2 },
-      difficulty: { approved: 43, changesRequired: 3 },
-      timing: { approved: 34, changesRequired: 12 }
+      reviewed: 41,
+      surviving: 41,
+      byAuthor: { cantor: 17, dirichlet: 11, euler: 13 },
+      taxonomy: { approved: 41, changesRequired: 0 },
+      difficulty: { approved: 41, changesRequired: 0 },
+      timing: { approved: 41, changesRequired: 0 }
     });
 
     expect(artifact.authorPullRequests).toEqual([
@@ -131,19 +131,19 @@ describe("Agent G full C/D/E certification", () => {
       expect.objectContaining({
         agent: "D — Dirichlet",
         prNumber: 133,
-        headSha: "ecece22058c997d37c4b352fa5ed32bd1daf5243",
-        survivingFamilyCount: 12
+        headSha: "65d570a1f6dad3773edb7eea4568d9399f3164c8",
+        survivingFamilyCount: 11
       }),
       expect.objectContaining({
         agent: "E — Euler",
         prNumber: 134,
-        headSha: "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
-        survivingFamilyCount: 17
+        headSha: "1ce96b5b89be971399cab5080d4487a908ea294d",
+        survivingFamilyCount: 13
       })
     ]);
 
     const ids = artifact.records.map((record) => record.familyId);
-    expect(new Set(ids).size).toBe(46);
+    expect(new Set(ids).size).toBe(41);
     const listedIds = artifact.authorPullRequests.flatMap((entry) => entry.familiesReviewed);
     expect(new Set(listedIds)).toEqual(new Set(ids));
 
@@ -158,12 +158,12 @@ describe("Agent G full C/D/E certification", () => {
   });
 
   it("keeps decision summary counts derived from the records", () => {
-    expect(countDecision("taxonomy", "approved")).toBe(44);
-    expect(countDecision("taxonomy", "changes-required")).toBe(2);
-    expect(countDecision("difficulty", "approved")).toBe(43);
-    expect(countDecision("difficulty", "changes-required")).toBe(3);
-    expect(countDecision("timing", "approved")).toBe(34);
-    expect(countDecision("timing", "changes-required")).toBe(12);
+    expect(countDecision("taxonomy", "approved")).toBe(41);
+    expect(countDecision("taxonomy", "changes-required")).toBe(0);
+    expect(countDecision("difficulty", "approved")).toBe(41);
+    expect(countDecision("difficulty", "changes-required")).toBe(0);
+    expect(countDecision("timing", "approved")).toBe(41);
+    expect(countDecision("timing", "changes-required")).toBe(0);
   });
 
   it("requires coherent family and stage difficulty for every survivor", () => {
@@ -261,16 +261,20 @@ describe("Agent G full C/D/E certification", () => {
       allStageRolesMathematicallyKeyed: true
     });
 
+    expect(artifact.records.some((record) => record.familyId === "oxford-d-mirror-orbits")).toBe(false);
+
     const weighted = artifact.records.find(
       (record) => record.familyId === "oxford-d-weighted-cycle-readings"
     );
-    expect(weighted?.taxonomy.decision).toBe("changes-required");
+    expect(weighted?.taxonomy.decision).toBe("approved");
+    expect(weighted?.taxonomy.recommended.domains).toContain("sequences-recurrences");
     expect(weighted?.taxonomy.recommended.contentConcepts).toContain("recurrence-structure");
 
-    const mirror = artifact.records.find(
-      (record) => record.familyId === "oxford-d-mirror-orbits"
-    );
-    expect(mirror?.taxonomy.decision).toBe("changes-required");
-    expect(mirror?.taxonomy.recommended.contentConcepts).toContain("divisibility");
+    for (const record of artifact.records) {
+      expect(record.taxonomy.decision).toBe("approved");
+      expect(record.difficulty.decision).toBe("approved");
+      expect(record.timing.decision).toBe("approved");
+      expect(record.requestedChanges).toEqual([]);
+    }
   });
 });
