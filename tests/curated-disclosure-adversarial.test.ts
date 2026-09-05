@@ -36,7 +36,7 @@ describe("curated semantic disclosure review", () => {
   });
 
   it("covers every curated problem with five explicit reviewed semantic levels", () => {
-    expect(Object.keys(CURATED_DISCLOSURE_LEVELS)).toHaveLength(39);
+    expect(Object.keys(CURATED_DISCLOSURE_LEVELS)).toHaveLength(38);
     for (const [problemId, levels] of Object.entries(CURATED_DISCLOSURE_LEVELS)) {
       expect(Object.keys(levels)).toEqual(["1", "2", "3", "4", "5"]);
       for (const stage of [1, 2, 3, 4, 5] as const) {
@@ -112,10 +112,10 @@ describe("curated semantic disclosure review", () => {
       ...oxfordCuratedReviewEntries.map((entry) => entry.problem.id),
       ...quantCuratedReviewEntries.map((entry) => entry.problem.id)
     ]);
-    expect(reviewIds.size).toBe(20);
+    expect(reviewIds.size).toBe(19);
     expect(reviewIds.has("oxford-catalan-paths")).toBe(true);
     expect(reviewIds.has("quant-random-walk-drawdown")).toBe(true);
-    expect([...reviewIds].filter((id) => id.startsWith("oxford-cantor-"))).toHaveLength(18);
+    expect([...reviewIds].filter((id) => id.startsWith("oxford-cantor-"))).toHaveLength(17);
     expect(problemCatalog.some((problem) => reviewIds.has(problem.id))).toBe(false);
     expect(PROBLEM_METADATA.some((metadata) => reviewIds.has(metadata.id))).toBe(false);
   });
