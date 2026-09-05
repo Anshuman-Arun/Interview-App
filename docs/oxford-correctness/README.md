@@ -93,7 +93,7 @@ Agent I — Itô completed a final diff-based synchronization against the author
 | Author PR | Final reviewed head | Final survivors | Approved | Changes required |
 | --- | --- | ---: | ---: | ---: |
 | Agent C — Cantor #132 | `8b22dc5df99111fb95e27a2c006d5e74544dd385` | 17 | 17 | 0 |
-| Agent D — Dirichlet #133 | `1d9222ed89895f643b4f25429b0a5dbe1dac0a4c` | 11 | 11 | 0 |
+| Agent D — Dirichlet #133 | `44b13bab28e315d3c76a177904bec47c884ef470` | 11 | 11 | 0 |
 | Agent E — Euler #134 | `8846c612825d2b8ae53a81f6f8861fd851f452c6` | 13 | 13 | 0 |
 
 **Final surviving total: 41. Final correctness approvals: 41. Current C/D/E correctness blockers: 0.**
@@ -215,7 +215,7 @@ Specify `n` as an integer in the candidate-visible statement. Keep the reflectio
 Agent I — Itô final Wave 2 correctness snapshot is head-pinned and complete:
 
 - Cantor #132: **17/17** final survivors approved at `8b22dc5df99111fb95e27a2c006d5e74544dd385`;
-- Dirichlet #133: **11/11** final survivors approved at `1d9222ed89895f643b4f25429b0a5dbe1dac0a4c`;
+- Dirichlet #133: **11/11** final survivors approved at `44b13bab28e315d3c76a177904bec47c884ef470`;
 - Euler #134: **13/13** final survivors approved at `8846c612825d2b8ae53a81f6f8861fd851f452c6`.
 
 Final total: **41/41 mathematicalCorrectness approved**.
