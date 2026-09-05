@@ -62,6 +62,22 @@ describe("editorial v10 adversarial UI states", () => {
     vi.restoreAllMocks();
   });
 
+  it("serializes same-item transcript retries before a second network commit", () => {
+    const hook = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/hooks/useInterviewSession.ts"),
+      "utf8"
+    );
+
+    expect(hook).toContain(
+      "const retrySubmissionsInFlightRef = useRef<Set<string>>(new Set())"
+    );
+    expect(hook).toContain(
+      "if (retrySubmissionsInFlightRef.current.has(itemId)) return"
+    );
+    expect(hook).toContain("retrySubmissionsInFlightRef.current.add(itemId)");
+    expect(hook).toContain("retrySubmissionsInFlightRef.current.delete(itemId)");
+  });
+
   it("contains rejecting transcript retry callbacks at the component boundary", async () => {
     const onRetry = vi.fn(async () => {
       throw new Error("retry transport failed");
