@@ -525,7 +525,7 @@ const geminiFactory: ProviderAdapterFactoryDefinition = {
 };
 
 function antigravityModelDisplayName(modelId: string): string {
-  const match = /^gemini-(3\.[78])-flash-(high|medium|low)$/u.exec(modelId);
+  const match = modelId.match(/^gemini-(3\.[78])-flash-(high|medium|low)$/u);
   if (match === null) return modelId;
   const version = match[1];
   const effort = match[2];
