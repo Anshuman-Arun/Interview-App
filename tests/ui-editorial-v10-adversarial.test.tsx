@@ -879,6 +879,22 @@ describe("editorial v10 adversarial UI states", () => {
       path.resolve(process.cwd(), "apps/web/src/styles/app.css"),
       "utf8"
     );
+    const voiceControls = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/components/VoiceControls.tsx"),
+      "utf8"
+    );
+    const voiceCss = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/components/VoiceControls.css"),
+      "utf8"
+    );
+    const sessionHook = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/hooks/useInterviewSession.ts"),
+      "utf8"
+    );
+    const desktopMain = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/desktop/src/main.ts"),
+      "utf8"
+    );
 
     expect(app).toContain("scrollContextKey={session.sessionId}");
     expect(app).toContain('className="board-appbar__layout-action"');
@@ -957,6 +973,33 @@ describe("editorial v10 adversarial UI states", () => {
     );
     expect(editorialCss).toMatch(
       /\.live-main\[data-focus="transcript"\],[\s\S]{0,100}\.live-main\[data-focus="whiteboard"\]\s*\{[\s\S]{0,120}grid-template-columns:\s*minmax\(0,\s*1fr\)\s*!important;/u
+    );
+    expect(app).toContain(
+      '{paneFocus === "whiteboard" ? "Restore split" : "Focus whiteboard"}'
+    );
+    expect(app).not.toMatch(
+      /readOnly=\{[\s\S]{0,360}whiteboardSync\.status === "UNSYNCHRONIZED"/u
+    );
+    expect(sessionHook).toMatch(
+      /const synchronizeWhiteboard = useCallback[\s\S]{0,1300}sessionMutationAdmissionRef\.current = true/u
+    );
+    expect(sessionHook).not.toMatch(
+      /const synchronizeWhiteboard = useCallback[\s\S]{0,420}!sessionMutationAdmissionRef\.current/u
+    );
+    expect(voiceControls).toContain('className="voice-strip__chevron"');
+    expect(voiceControls).not.toContain("⌄");
+    expect(voiceCss).toContain(".voice-strip__chevron");
+    expect(editorialCss).toMatch(
+      /\.reasoning-pane \.input-dock \.student-input-area\s*\{[^}]*width:\s*100%;[^}]*margin:\s*0;/u
+    );
+    expect(editorialCss).toMatch(
+      /\.appearance-dock__trigger-mark::after\s*\{[^}]*width:\s*14px;[^}]*height:\s*14px;[^}]*border-radius:\s*50%;/u
+    );
+    expect(desktopMain).toContain(
+      "OPTIONAL_LOCAL_RUNTIME_PREPARED_STARTUP_BUDGET_MS = 60_000"
+    );
+    expect(desktopMain).toContain(
+      'setSetupState(kind, "INSTALLED", kind !== "PYTHON")'
     );
   });
 
