@@ -3394,6 +3394,120 @@ summary:focus-visible,
 }
 
 
+@media (max-width: 240px) {
+  .app-header {
+    gap: 4px;
+    padding-right: 5px !important;
+    padding-left: 5px !important;
+  }
+
+  .app-header__actions,
+  .app-header__session-actions {
+    gap: 3px;
+  }
+
+  .app-header__quiet,
+  .app-header__end {
+    min-height: 22px;
+    padding-right: 5px;
+    padding-left: 5px;
+  }
+
+  .app-header__end-long {
+    display: none;
+  }
+
+  .board-appbar {
+    gap: 4px;
+    padding-right: 5px;
+    padding-left: 5px;
+  }
+
+  .board-sync {
+    gap: 0;
+    font-size: 0;
+  }
+
+  .board-appbar__actions button {
+    padding-right: 4px;
+    padding-left: 4px;
+  }
+
+  .expressive-settings__swatches {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-height: 200px) {
+  .app-header {
+    min-height: 30px;
+    flex-basis: 30px;
+  }
+
+  .compact-workspace-tabs {
+    min-height: 20px;
+    padding: 1px 4px;
+  }
+
+  .compact-workspace-tabs button {
+    min-height: 18px;
+  }
+
+  .problem-block {
+    max-height: 18px;
+  }
+
+  .problem-block .problem-header {
+    display: none;
+  }
+
+  .problem-block .problem-card-container {
+    padding: 2px 4px !important;
+  }
+
+  .problem-block .problem-card-container .problem-statement {
+    font-size: 7px !important;
+    line-height: 1.1 !important;
+  }
+
+  .live-transcript-region .transcript-feed__header {
+    display: none;
+  }
+
+  .input-dock {
+    padding: 2px;
+  }
+
+  .input-dock .voice-strip {
+    display: none;
+  }
+
+  .input-dock .reasoning-composer__textarea {
+    min-height: 24px;
+    max-height: 28px;
+    padding: 2px 4px;
+  }
+
+  .input-dock .reasoning-composer__foot {
+    min-height: 18px;
+    padding: 1px 2px;
+  }
+
+  .input-dock .reasoning-composer__submit {
+    min-height: 16px;
+    padding-right: 5px;
+    padding-left: 5px;
+  }
+
+  .board-appbar {
+    min-height: 24px;
+  }
+
+  .tldraw-wrap {
+    padding: 4px;
+  }
+}
+
 .app-header__board-state[data-sync="PENDING"] > span,
 .board-sync i[data-sync="PENDING"] {
   background: var(--warning);
