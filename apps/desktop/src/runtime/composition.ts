@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
-import { access, lstat, readFile, realpath, rm } from "node:fs/promises";
+import { access, lstat, readFile, readdir, realpath, rm } from "node:fs/promises";
 import path from "node:path";
 import {
   KokoroSpeechSynthesizer,
@@ -182,6 +182,21 @@ export class DesktopLocalRuntimeComposition {
       ?? (process.platform === "win32" ? "python" : "python3");
     this.requireManagedPythonRuntime = options.isPackaged;
     this.enforcePackagedWorkerIntegrity = options.isPackaged;
+  }
+
+  public async hasPreparedRuntimeViews(): Promise<boolean> {
+    try {
+      const entries = await readdir(this.runtimeViewsRoot, { withFileTypes: true });
+      return entries.some((entry) =>
+        entry.isDirectory()
+        && !entry.isSymbolicLink()
+        && /^view-[0-9a-f]{64}$/u.test(entry.name)
+      );
+    } catch {
+      // This is only a startup-budget hint. Runtime startup still performs the
+      // full safe-directory and digest verification before using any asset.
+      return false;
+    }
   }
 
   public start(options: { readonly signal?: AbortSignal } = {}): Promise<void> {
