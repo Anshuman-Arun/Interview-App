@@ -90,7 +90,7 @@ Agent I — Itô completed independent current-version mathematical certificatio
 
 | Author PR | Reviewed head | Surviving families | Approved | Changes required |
 | --- | --- | ---: | ---: | ---: |
-| Agent C — Cantor #132 | `29ae86d5bccfa10eb91987bfaccc94adfbd57fcf` | 18 | 18 | 0 |
+| Agent C — Cantor #132 | `794fe2282c2c8ef265869ccf84bb955695fbaa7f` | 18 | 18 | 0 |
 | Agent D — Dirichlet #133 | `ecece22058c997d37c4b352fa5ed32bd1daf5243` | 12 | 12 | 0 |
 | Agent E — Euler #134 | `b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6` | 17 | 17 | 0 |
 
@@ -100,7 +100,7 @@ The review standard for every retained family was: solve the candidate-visible p
 
 ### Cantor current-version recheck
 
-All 18 surviving Cantor families are correctness-approved at head `29ae86d5...`.
+All 18 surviving Cantor families are correctness-approved at head `794fe228...`.
 
 The previously repaired `oxford-cantor-reciprocal-implicit-curve` remains correct: the isolated origin is preserved separately from the four closest points on the nonzero branches, and the scaled extension retains that distinction.
 
@@ -229,7 +229,7 @@ Specify `n` as an integer in the candidate-visible statement. Keep the reflectio
 
 Agent I — Itô full-certification state is head-pinned and current:
 
-- Cantor #132: 18/18 surviving families approved at `29ae86d5...`;
+- Cantor #132: 18/18 surviving families approved at `794fe228...`;
 - Dirichlet #133: 12/12 surviving families approved at `ecece220...`;
 - Euler #134: 17/17 surviving families approved at `b0ac8821...`.
 
