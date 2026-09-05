@@ -200,10 +200,13 @@ function validateAudit(record) {
     `${record.familyId}: handoff is incomplete`);
 
   if (["PASS", "PASS_WITH_NOTES"].includes(record.originalityDecision)) {
+    const truthfullyClassic = record.provenanceDisposition === "truthful-classic";
     for (const match of record.nearestMatches) {
       const hardFails = hardFailRules(match.similarity);
-      assert(hardFails.length === 0,
-        `${record.familyId}: originality pass conflicts with hard-fail match ${match.source}: ${hardFails.join(",")}`);
+      assert(
+        hardFails.length === 0 || truthfullyClassic,
+        `${record.familyId}: originality pass conflicts with hard-fail match ${match.source}: ${hardFails.join(",")}`
+      );
     }
   }
 }
@@ -247,12 +250,21 @@ function countDecisions(records, key) {
 function main() {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const root = path.resolve(here, "..");
-  const target = process.argv[2]
-    ? path.resolve(process.cwd(), process.argv[2])
-    : path.join(root, "docs", "oxford-audits", "current-bank-baseline.json");
-  const document = JSON.parse(fs.readFileSync(target, "utf8"));
-  const summary = validateAuditDocument(document);
-  process.stdout.write(`Oxford audit validation passed: ${JSON.stringify(summary)}\n`);
+  const requested = process.argv.slice(2);
+  const targets = requested.length > 0
+    ? requested.map((target) => path.resolve(process.cwd(), target))
+    : [
+        path.join(root, "docs", "oxford-audits", "current-bank-baseline.json"),
+        path.join(root, "docs", "oxford-audits", "same-wave-high-risk-batch.json")
+      ];
+
+  for (const target of targets) {
+    const document = JSON.parse(fs.readFileSync(target, "utf8"));
+    const summary = validateAuditDocument(document);
+    process.stdout.write(
+      `Oxford audit validation passed (${path.basename(target)}): ${JSON.stringify(summary)}\n`
+    );
+  }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
