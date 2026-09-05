@@ -696,4 +696,44 @@ describe("editorial v10 adversarial UI states", () => {
     expect(quantShell).toContain("data-connected={String(connected)}");
     expect(quantShell).toContain('connected ? "Deterministic state" : "Disconnected"');
   });
+  it("freezes launch configuration while session entry is pending", () => {
+    const markup = renderToStaticMarkup(
+      <NewInterviewPage
+        catalog={[{
+          mode: "OXFORD_MATHEMATICS",
+          id: "pending-launch",
+          version: "1",
+          title: "Pending launch",
+          category: "proof",
+          difficulty: "standard"
+        }]}
+        catalogLoading={false}
+        catalogError={null}
+        providerOptions={[{
+          providerId: "test-provider",
+          providerDisplayName: "Test Provider",
+          providerKind: "MOCK",
+          modelId: "test-model",
+          modelDisplayName: "Test Model",
+          availability: "AVAILABLE"
+        }]}
+        providerOptionsLoading={false}
+        providerOptionsError={null}
+        activeSessionId={null}
+        activeSessionCount={0}
+        startPending
+        onRefreshCatalog={async () => []}
+        onRefreshProviderOptions={async () => []}
+        onStart={async () => undefined}
+        onResumeActive={null}
+      />
+    );
+
+    expect(markup).toMatch(/data-testid="interview-target-select"[^>]*disabled=""/u);
+    expect(markup).toMatch(/data-testid="duration-input"[^>]*disabled=""/u);
+    expect(markup).toMatch(/data-testid="provider-select"[^>]*disabled=""/u);
+    expect(markup).toMatch(/data-testid="intervention-balanced"[^>]*disabled=""/u);
+    expect(markup).toMatch(/data-testid="start-configured-session-btn"[^>]*disabled/u);
+  });
+
 });
