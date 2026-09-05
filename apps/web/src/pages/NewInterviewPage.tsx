@@ -471,7 +471,7 @@ export function NewInterviewPage({
                           : "Quant research scenario"
                     }))}
                     placeholder="No target available"
-                    disabled={startPending || catalogLoading || targets.length === 0}
+                    disabled={startPending || targets.length === 0}
                     testId="interview-target-select"
                     onChange={setSelectedTargetKey}
                   />
