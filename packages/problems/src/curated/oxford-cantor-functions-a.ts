@@ -123,148 +123,17 @@ export const cantorFunctionFamiliesA: readonly CantorFamilyAuthoring[] = [
       ["transfer", "primary"]
     ),
     difficulty: { entry: "introductory", core: "standard", ceiling: "strong" },
-    timing: cantorTiming([2, 5], [18, 28], [14, 24], [4, 8], 26),
+    timing: cantorTiming([2, 4], [14, 22], [11, 19], [4, 7], 22),
     stageTiming: [
-      cantorTiming([1, 3], [5, 8], [4, 7], undefined, 8),
-      cantorTiming([2, 4], [9, 15], [7, 12], undefined, 15),
-      cantorTiming([2, 4], [6, 10], [5, 8], [3, 6], 10)
+      cantorTiming([1, 2], [4, 6], [3, 5], undefined, 6),
+      cantorTiming([1, 4], [7, 13], [5, 11], undefined, 13),
+      cantorTiming([1, 3], [4, 8], [3, 7], [3, 6], 8)
     ],
     openingRole: "warm-up",
     finalRole: "transfer",
     novelty: "moderate",
     abstraction: "moderate",
     originalityRisk: "medium",
-    correctnessRisk: "low",
-    calibrationRisk: "medium"
-  },
-  {
-    id: "oxford-cantor-tangent-intersection-locus",
-    title: "Where Two Parabola Tangents Meet",
-    category: "calculus and coordinate geometry",
-    topics: ["calculus","parabolas","coordinate geometry","graphs"],
-    prompt:
-      "On the parabola y=x², take the tangent at x=u and the tangent at x=u+1. As u varies, their intersection moves. Determine and sketch the locus of that intersection. Then replace the separation 1 by a fixed positive separation h.",
-    givenInformation: [],
-    approaches: [
-      { id: "line-equations", label: "Write both tangent equations and eliminate u" },
-      { id: "midpoint-structure", label: "First discover where the x-coordinate of two tangent intersections lies relative to their contact points" }
-    ],
-    milestones: [
-      {
-        id: "tangent-at-u",
-        description: "Write the tangent line to y=x² at a general point u.",
-        skills: cantorSkills(["technique", "primary"], ["precision-checking", "supporting"]),
-        concepts: ["derivative-structure", "analytic-curve-geometry"]
-      },
-      {
-        id: "intersect-two-tangents",
-        description: "Solve for the intersection of tangents at u and v and notice its x-coordinate is (u+v)/2.",
-        skills: cantorSkills(["strategic-simplification", "supporting"], ["representation-switching", "primary"]),
-        concepts: ["loci-coordinate-constraints", "equations-inequalities"]
-      },
-      {
-        id: "fixed-gap-coordinates",
-        description: "Set v=u+1 and express the moving intersection coordinates in terms of u.",
-        skills: cantorSkills(["technique", "supporting"], ["pattern-recognition", "supporting"]),
-        concepts: ["parameter-dependent-curves", "loci-coordinate-constraints"]
-      },
-      {
-        id: "eliminate-parameter",
-        description: "Eliminate u and prove the locus is y=x²-1/4.",
-        skills: cantorSkills(["proof-construction", "primary"], ["graph-sketching", "primary"]),
-        concepts: ["analytic-curve-geometry", "parameter-dependent-curves"]
-      },
-      {
-        id: "general-gap",
-        description: "For gap h, derive y=x²-h²/4 and explain the geometric effect of increasing h.",
-        skills: cantorSkills(["generalization", "primary"], ["transfer", "primary"], ["visualization", "supporting"]),
-        concepts: ["parameter-dependent-curves", "function-transformations"]
-      }
-    ],
-    commonErrors: [
-      {
-        id: "wrong-tangent-constant",
-        description: "Writes y=2ux+u² instead of y=2ux-u²."
-      },
-      {
-        id: "locus-only-inclusion",
-        description: "Shows every generated intersection lies on the proposed parabola but does not check every point of that parabola is reached by some u."
-      }
-    ],
-    followUps: [
-      "Why is the intersection x-coordinate always the midpoint of the contact x-coordinates?",
-      "How is the locus related to the original parabola as h varies?"
-    ],
-    extensions: [
-      {
-        id: "arbitrary-gap",
-        prompt: "For tangency points u and u+h with fixed h>0, derive the entire intersection locus and prove it is fully attained."
-      },
-      {
-        id: "scaled-parabola",
-        prompt: "Repeat the calculation for y=cx² with c>0 and describe how the locus changes."
-      }
-    ],
-    hints: [
-      {
-        text: "The tangent at x=u is y=2ux-u².",
-        formulations: ["differentiate and use point-slope form", "the tangent line has slope 2u"]
-      },
-      {
-        text: "For tangents at u and v, subtract the two line equations before solving fully.",
-        formulations: ["the intersection x-coordinate simplifies first", "factor u-v after equating the lines"]
-      },
-      {
-        text: "The intersection of tangents at u and v is ((u+v)/2, uv).",
-        formulations: ["the coordinates have midpoint-product form", "use v=u+1 after obtaining the symmetric formula"]
-      },
-      {
-        text: "With v=u+1, set X=u+1/2 and rewrite u(u+1) in terms of X.",
-        formulations: ["complete the square in the parameter", "eliminate u through the midpoint coordinate"]
-      },
-      {
-        text: "For separation h, use X=u+h/2 and u(u+h)=X²-h²/4.",
-        formulations: ["the gap creates a vertical shift of h²/4", "generalize the completed-square identity"]
-      }
-    ],
-    canonicalSolution:
-      "The tangent at u is y=2ux-u². For tangents at u and v, equality gives 2(u-v)x=(u-v)(u+v), so for u≠v their intersection has X=(u+v)/2. Substituting back gives Y=uv. With v=u+1, X=u+1/2 and Y=u(u+1)=(u+1/2)²-1/4=X²-1/4. Since u ranges over all reals, X does too, so the full locus is y=x²-1/4. For a fixed gap h>0, X=u+h/2 and Y=u(u+h)=X²-h²/4, so increasing h shifts the locus downward by h²/4. For y=cx², the same derivation gives Y=cX²-c h²/4.",
-    verificationNotes:
-      "The u=v cancellation is not used in the fixed positive gap case, but mention it if deriving the symmetric formula. Prove surjectivity onto the locus via X=u+h/2 ranging over all real numbers.",
-    domains: ["calculus", "coordinate-geometry", "graph-sketching", "functions", "algebra"],
-    contentConcepts: [
-      "derivative-structure",
-      "loci-coordinate-constraints",
-      "analytic-curve-geometry",
-      "parameter-dependent-curves",
-      "function-transformations",
-      "equations-inequalities"
-    ],
-    prerequisiteConcepts: ["differentiation", "coordinate-geometry-basics", "algebraic-manipulation", "functions-graphs"],
-    skills: cantorSkills(
-      ["technique", "primary"],
-      ["precision-checking", "supporting"],
-      ["strategic-simplification", "supporting"],
-      ["representation-switching", "primary"],
-      ["pattern-recognition", "supporting"],
-      ["proof-construction", "primary"],
-      ["graph-sketching", "primary"],
-      ["generalization", "primary"],
-      ["transfer", "primary"],
-      ["visualization", "supporting"]
-    ),
-    difficulty: { entry: "introductory", core: "standard", ceiling: "strong" },
-    timing: cantorTiming([2, 5], [17, 27], [14, 24], [4, 8], 26),
-    stageTiming: [
-      cantorTiming([1, 3], [5, 8], [4, 7], undefined, 8),
-      cantorTiming([2, 4], [8, 14], [7, 12], undefined, 14),
-      cantorTiming([2, 4], [6, 10], [5, 8], [3, 6], 10)
-    ],
-    openingRole: "technique-check",
-    finalRole: "transfer",
-    novelty: "moderate",
-    abstraction: "moderate",
-    originalityRisk: "high",
     correctnessRisk: "low",
     calibrationRisk: "medium"
   },
@@ -389,11 +258,11 @@ export const cantorFunctionFamiliesA: readonly CantorFamilyAuthoring[] = [
       ["transfer", "primary"]
     ),
     difficulty: { entry: "introductory", core: "standard", ceiling: "strong" },
-    timing: cantorTiming([2, 5], [17, 27], [13, 24], [4, 8], 25),
+    timing: cantorTiming([2, 4], [13, 21], [10, 18], [3, 6], 21),
     stageTiming: [
-      cantorTiming([1, 3], [5, 8], [4, 7], undefined, 8),
-      cantorTiming([2, 4], [8, 14], [6, 12], undefined, 14),
-      cantorTiming([2, 4], [6, 10], [5, 8], [3, 6], 10)
+      cantorTiming([1, 2], [4, 6], [3, 5], undefined, 6),
+      cantorTiming([1, 3], [7, 12], [5, 10], undefined, 12),
+      cantorTiming([1, 3], [4, 7], [3, 6], [2, 5], 7)
     ],
     openingRole: "warm-up",
     finalRole: "transfer",
@@ -436,16 +305,16 @@ export const cantorFunctionFamiliesA: readonly CantorFamilyAuthoring[] = [
         concepts: ["recurrence-structure", "composition-iteration"]
       },
       {
-        id: "explicit-form",
-        description: "Solve the translated recurrence and obtain an exact formula for x_n.",
-        skills: cantorSkills(["proof-construction", "primary"], ["precision-checking", "supporting"]),
-        concepts: ["recurrence-structure", "sequence-convergence"]
+        id: "explicit-form-and-limit",
+        description: "Solve the translated recurrence, obtain an exact formula for x_n, and use it to prove monotonicity, boundedness, and convergence to 1 for x_0<1.",
+        skills: cantorSkills(["proof-construction", "primary"], ["precision-checking", "supporting"], ["representation-switching", "supporting"]),
+        concepts: ["recurrence-structure", "monotonicity-boundedness", "sequence-convergence"]
       },
       {
-        id: "monotone-limit",
-        description: "Use the explicit form to prove monotonicity, boundedness, and convergence to 1 for x_0<1.",
-        skills: cantorSkills(["proof-construction", "primary"], ["generalization", "supporting"]),
-        concepts: ["monotonicity-boundedness", "sequence-convergence"]
+        id: "starting-above-one-transfer",
+        description: "Classify starting values x_0>1 by tracking when the transformed arithmetic progression reaches the pole, and distinguish failure from eventual convergence.",
+        skills: cantorSkills(["case-analysis", "primary"], ["generalization", "primary"], ["precision-checking", "primary"]),
+        concepts: ["recurrence-structure", "qualitative-function-behavior", "sequence-convergence"]
       }
     ],
     commonErrors: [
@@ -486,12 +355,12 @@ export const cantorFunctionFamiliesA: readonly CantorFamilyAuthoring[] = [
         formulations: ["set y_n=1/(1-x_n)", "reciprocal error linearizes the update"]
       },
       {
-        text: "You should obtain y_n=y_0+n, hence x_n=1-1/(y_0+n).",
-        formulations: ["solve the arithmetic progression", "translate the explicit y_n formula back"]
+        text: "You should obtain y_n=y_0+n, hence x_n=1-1/(y_0+n); for x_0<1 the positivity of y_0 then proves the monotone limit.",
+        formulations: ["solve the arithmetic progression and translate back", "the explicit formula settles domain, monotonicity, and convergence together"]
       },
       {
-        text: "For x_0<1, y_0>0, so the denominator y_0+n grows steadily and never vanishes.",
-        formulations: ["positivity makes the domain and monotonicity transparent", "the explicit formula proves the limit"]
+        text: "For x_0>1, y_0<0; the recurrence fails precisely if some transformed term reaches -1 before the next update.",
+        formulations: ["audit the pole in the y_n=y_0+n arithmetic progression", "negative-integer transformed starts are the exceptional cases"]
       }
     ],
     canonicalSolution:
@@ -520,17 +389,18 @@ export const cantorFunctionFamiliesA: readonly CantorFamilyAuthoring[] = [
       ["guided-adaptation", "supporting"]
     ),
     difficulty: { entry: "introductory", core: "standard", ceiling: "strong" },
-    timing: cantorTiming([3, 6], [19, 30], [15, 26], [5, 9], 28),
+    timing: cantorTiming([2, 5], [15, 24], [12, 20], [4, 8], 23),
     stageTiming: [
-      cantorTiming([2, 4], [6, 9], [5, 8], undefined, 9),
-      cantorTiming([2, 5], [9, 16], [7, 14], undefined, 16),
-      cantorTiming([2, 4], [7, 12], [5, 10], [4, 7], 12)
+      cantorTiming([1, 3], [4, 7], [3, 6], undefined, 7),
+      cantorTiming([2, 4], [8, 14], [6, 12], undefined, 14),
+      cantorTiming([1, 3], [4, 9], [3, 7], [3, 6], 9)
     ],
     openingRole: "warm-up",
     finalRole: "stretch",
-    novelty: "high",
+    novelty: "moderate",
     abstraction: "moderate",
-    originalityRisk: "medium",
+    provenance: { originType: "classic-problem", sourceCategory: "secondary-reference" },
+    originalityRisk: "high",
     correctnessRisk: "medium",
     calibrationRisk: "medium"
   },
@@ -566,16 +436,16 @@ export const cantorFunctionFamiliesA: readonly CantorFamilyAuthoring[] = [
         concepts: ["continuity-fixed-points", "sequence-convergence"]
       },
       {
-        id: "square-the-error",
-        description: "Discover and prove 1-x_{n+1}=(1-x_n)².",
-        skills: cantorSkills(["pattern-recognition", "primary"], ["strategic-simplification", "primary"]),
-        concepts: ["recurrence-structure", "composition-iteration"]
+        id: "error-square-and-exact-rate",
+        description: "Discover 1-x_{n+1}=(1-x_n)², iterate it to obtain the exact formula, and interpret the resulting convergence rate.",
+        skills: cantorSkills(["pattern-recognition", "primary"], ["strategic-simplification", "primary"], ["representation-switching", "primary"]),
+        concepts: ["recurrence-structure", "composition-iteration", "sequence-convergence"]
       },
       {
-        id: "exact-rate",
-        description: "Iterate the error identity to obtain x_n=1-(1-x_0)^{2^n} and interpret the double-exponential exponent.",
-        skills: cantorSkills(["representation-switching", "primary"], ["generalization", "supporting"]),
-        concepts: ["sequence-convergence", "recurrence-structure"]
+        id: "basin-and-tolerance-transfer",
+        description: "Transfer the error formula to starting values in [0,2] and to quantitative tolerance bounds.",
+        skills: cantorSkills(["generalization", "primary"], ["transfer", "primary"], ["precision-checking", "supporting"]),
+        concepts: ["sequence-convergence", "inequalities-bounds", "recurrence-structure"]
       }
     ],
     commonErrors: [
@@ -616,12 +486,12 @@ export const cantorFunctionFamiliesA: readonly CantorFamilyAuthoring[] = [
         formulations: ["use the fixed-point equation only after convergence is justified", "the initial interval selects the correct fixed point"]
       },
       {
-        text: "Expand 1-x_n(2-x_n).",
-        formulations: ["the error is a perfect square", "1-x_{n+1}=(1-x_n)²"]
+        text: "Expand 1-x_n(2-x_n), then iterate the perfect-square error identity; repeated squaring produces exponents 1,2,4,8,...",
+        formulations: ["derive both the identity and exact rate in one representation", "the error after n steps is the initial error to power 2^n"]
       },
       {
-        text: "Repeated squaring produces exponents 1,2,4,8,...",
-        formulations: ["the error after n steps is the initial error to power 2^n", "translate back from the error sequence"]
+        text: "For 1<x_0<2 the first squared error becomes positive and less than 1; the same exact formula then controls the basin and tolerance questions.",
+        formulations: ["extend the error representation rather than restarting the recurrence proof", "check the endpoints 0 and 2 separately"]
       }
     ],
     canonicalSolution:
@@ -649,15 +519,15 @@ export const cantorFunctionFamiliesA: readonly CantorFamilyAuthoring[] = [
       ["generalization", "supporting"]
     ),
     difficulty: { entry: "introductory", core: "standard", ceiling: "strong" },
-    timing: cantorTiming([2, 5], [17, 27], [13, 23], [4, 8], 25),
+    timing: cantorTiming([2, 4], [13, 21], [10, 18], [3, 7], 21),
     stageTiming: [
-      cantorTiming([1, 3], [5, 8], [4, 7], undefined, 8),
-      cantorTiming([2, 4], [8, 14], [6, 12], undefined, 14),
-      cantorTiming([2, 4], [6, 10], [5, 8], [3, 6], 10)
+      cantorTiming([1, 2], [4, 6], [3, 5], undefined, 6),
+      cantorTiming([1, 3], [7, 12], [5, 10], undefined, 12),
+      cantorTiming([1, 3], [4, 8], [3, 7], [2, 5], 8)
     ],
     openingRole: "warm-up",
     finalRole: "transfer",
-    novelty: "moderate",
+    novelty: "low",
     abstraction: "moderate",
     provenance: { originType: "classic-problem", sourceCategory: "secondary-reference" },
     originalityRisk: "medium",
