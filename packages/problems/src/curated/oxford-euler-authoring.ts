@@ -65,53 +65,229 @@ export interface EulerFamilyDefinition {
   readonly verificationNotes: string;
 }
 
-const STAGE_TIMING: readonly OxfordTimingEstimate[] = [
-  {
-    firstMeaningfulInsightMinutes: { min: 0.5, max: 1.5 },
-    independentCompletionMinutes: { min: 2, max: 4 },
-    promptedCompletionMinutes: { min: 1.5, max: 3 },
-    softCutoffMinutes: 4,
-    confidence: "low"
-  },
-  {
-    firstMeaningfulInsightMinutes: { min: 1, max: 2.5 },
-    independentCompletionMinutes: { min: 4, max: 7 },
-    promptedCompletionMinutes: { min: 3, max: 6 },
-    softCutoffMinutes: 7,
-    confidence: "low"
-  },
-  {
-    firstMeaningfulInsightMinutes: { min: 1, max: 3 },
-    independentCompletionMinutes: { min: 5, max: 9 },
-    promptedCompletionMinutes: { min: 4, max: 8 },
-    softCutoffMinutes: 9,
-    confidence: "low"
-  },
-  {
-    firstMeaningfulInsightMinutes: { min: 0.5, max: 2 },
-    independentCompletionMinutes: { min: 3, max: 6 },
-    promptedCompletionMinutes: { min: 2, max: 5 },
-    softCutoffMinutes: 6,
-    confidence: "low"
-  },
-  {
-    firstMeaningfulInsightMinutes: { min: 1, max: 3 },
-    independentCompletionMinutes: { min: 5, max: 10 },
-    promptedCompletionMinutes: { min: 4, max: 8 },
-    optionalExtensionMinutes: { min: 3, max: 7 },
-    softCutoffMinutes: 9,
-    confidence: "low"
-  }
-];
+interface EulerStageAuthoringProfile {
+  readonly role: OxfordStageRole;
+  readonly timing: OxfordTimingEstimate;
+}
 
-const FAMILY_TIMING: OxfordTimingEstimate = {
-  firstMeaningfulInsightMinutes: { min: 1, max: 4 },
-  independentCompletionMinutes: { min: 18, max: 30 },
-  promptedCompletionMinutes: { min: 14, max: 25 },
-  optionalExtensionMinutes: { min: 5, max: 12 },
-  softCutoffMinutes: 25,
-  confidence: "low"
-};
+interface EulerFamilyAuthoringProfile {
+  readonly familyTiming: OxfordTimingEstimate;
+  readonly stages: Readonly<Record<string, EulerStageAuthoringProfile>>;
+}
+
+function timing(
+  firstMeaningfulInsightMinutes: readonly [number, number],
+  independentCompletionMinutes: readonly [number, number],
+  promptedCompletionMinutes: readonly [number, number],
+  softCutoffMinutes: number,
+  optionalExtensionMinutes?: readonly [number, number]
+): OxfordTimingEstimate {
+  return Object.freeze({
+    firstMeaningfulInsightMinutes: {
+      min: firstMeaningfulInsightMinutes[0],
+      max: firstMeaningfulInsightMinutes[1]
+    },
+    independentCompletionMinutes: {
+      min: independentCompletionMinutes[0],
+      max: independentCompletionMinutes[1]
+    },
+    promptedCompletionMinutes: {
+      min: promptedCompletionMinutes[0],
+      max: promptedCompletionMinutes[1]
+    },
+    ...(optionalExtensionMinutes === undefined
+      ? {}
+      : {
+          optionalExtensionMinutes: {
+            min: optionalExtensionMinutes[0],
+            max: optionalExtensionMinutes[1]
+          }
+        }),
+    softCutoffMinutes,
+    confidence: "low"
+  });
+}
+
+/**
+ * Explicit author-side calibration hypotheses for Agent E.
+ *
+ * These are family-specific low-confidence estimates, not G approvals. Both
+ * stage role and timing are keyed by the mathematical stage id so neither can
+ * move merely because a difficulty band happens to match another stage.
+ */
+const EULER_AUTHORING_PROFILES: Readonly<Record<string, EulerFamilyAuthoringProfile>> =
+  Object.freeze({
+  "oxford-euler-quadrilateral-balance": Object.freeze({
+    familyTiming: timing([1, 3], [16, 26], [12, 22], 23, [4, 8]),
+    stages: Object.freeze({
+      "opening": Object.freeze({ role: "warm-up", timing: timing([0.5, 1.5], [2, 4], [1, 3], 4) }),
+      "structure": Object.freeze({ role: "technique-check", timing: timing([0.5, 1.5], [3, 5], [2, 4], 5) }),
+      "classification": Object.freeze({ role: "core", timing: timing([1.5, 3], [5, 8], [4, 7], 8) }),
+      "boundary": Object.freeze({ role: "deep-dive", timing: timing([1, 2.5], [4, 7], [3, 6], 7) }),
+      "transfer": Object.freeze({ role: "transfer", timing: timing([1, 2], [3, 6], [2, 5], 6, [3, 5]) }),
+    })
+  }),
+  "oxford-euler-random-chord-midpoint": Object.freeze({
+    familyTiming: timing([0.5, 2], [13, 22], [10, 18], 20, [4, 7]),
+    stages: Object.freeze({
+      "opening": Object.freeze({ role: "warm-up", timing: timing([0.5, 1.5], [2, 3], [1, 2.5], 3.5) }),
+      "local-formula": Object.freeze({ role: "technique-check", timing: timing([0.5, 1.5], [2, 4], [1.5, 3], 4) }),
+      "symmetry-sum": Object.freeze({ role: "core", timing: timing([1, 2.5], [4, 7], [3, 6], 7) }),
+      "expectation": Object.freeze({ role: "deep-dive", timing: timing([0.5, 1.5], [3, 5], [2, 4], 5) }),
+      "transfer": Object.freeze({ role: "transfer", timing: timing([1, 2], [3, 6], [2, 5], 6, [3, 5]) }),
+    })
+  }),
+  "oxford-euler-circle-sweep": Object.freeze({
+    familyTiming: timing([1, 3], [18, 30], [14, 25], 27, [5, 9]),
+    stages: Object.freeze({
+      "opening": Object.freeze({ role: "warm-up", timing: timing([0.5, 1.5], [2, 4], [1.5, 3], 4) }),
+      "circle-equation": Object.freeze({ role: "technique-check", timing: timing([0.5, 1.5], [3, 5], [2, 4], 5) }),
+      "parameter-test": Object.freeze({ role: "core", timing: timing([1.5, 3.5], [6, 9], [4.5, 8], 9) }),
+      "topology": Object.freeze({ role: "deep-dive", timing: timing([1.5, 3], [5, 9], [4, 7], 9) }),
+      "transfer": Object.freeze({ role: "transfer", timing: timing([1, 3], [4, 8], [3, 6], 8, [4, 7]) }),
+    })
+  }),
+  "oxford-euler-triangle-midpoint-cycle": Object.freeze({
+    familyTiming: timing([1, 2.5], [16, 26], [12, 22], 24, [5, 8]),
+    stages: Object.freeze({
+      "opening": Object.freeze({ role: "warm-up", timing: timing([0.5, 1.5], [2, 4], [1, 3], 4) }),
+      "structure": Object.freeze({ role: "technique-check", timing: timing([1, 2], [4, 6], [3, 5], 6) }),
+      "fixed-point": Object.freeze({ role: "core", timing: timing([1, 2.5], [4, 7], [3, 6], 7) }),
+      "convergence": Object.freeze({ role: "deep-dive", timing: timing([1, 2.5], [4, 7], [3, 6], 7) }),
+      "transfer": Object.freeze({ role: "transfer", timing: timing([1, 2], [4, 7], [3, 6], 7, [4, 6]) }),
+    })
+  }),
+  "oxford-euler-box-diagonal-bisector": Object.freeze({
+    familyTiming: timing([1, 3], [20, 32], [16, 27], 29, [6, 10]),
+    stages: Object.freeze({
+      "opening": Object.freeze({ role: "warm-up", timing: timing([0.5, 1.5], [2, 4], [1.5, 3], 4) }),
+      "plane": Object.freeze({ role: "technique-check", timing: timing([1, 2], [4, 6], [3, 5], 6) }),
+      "edge-test": Object.freeze({ role: "core", timing: timing([1.5, 3.5], [6, 10], [5, 8], 10) }),
+      "classification": Object.freeze({ role: "deep-dive", timing: timing([1.5, 3], [6, 9], [4.5, 8], 9) }),
+      "transfer": Object.freeze({ role: "transfer", timing: timing([1, 2.5], [4, 8], [3, 6], 8, [5, 8]) }),
+    })
+  }),
+  "oxford-euler-locally-balanced-labels": Object.freeze({
+    familyTiming: timing([0.5, 2], [14, 24], [10, 19], 21, [5, 8]),
+    stages: Object.freeze({
+      "opening": Object.freeze({ role: "warm-up", timing: timing([0.5, 1], [2, 3], [1, 2], 3) }),
+      "structure": Object.freeze({ role: "technique-check", timing: timing([0.5, 1.5], [3, 5], [2, 4], 5) }),
+      "path-proof": Object.freeze({ role: "core", timing: timing([1, 2.5], [4, 7], [3, 6], 7) }),
+      "cycle-proof": Object.freeze({ role: "deep-dive", timing: timing([1, 2.5], [4, 7], [3, 6], 7) }),
+      "transfer": Object.freeze({ role: "transfer", timing: timing([1, 2], [4, 7], [3, 6], 7, [4, 6]) }),
+    })
+  }),
+  "oxford-euler-diagonal-blend-transform": Object.freeze({
+    familyTiming: timing([0.5, 2], [15, 24], [11, 20], 22, [5, 8]),
+    stages: Object.freeze({
+      "opening": Object.freeze({ role: "warm-up", timing: timing([0.5, 1], [2, 3], [1, 2], 3) }),
+      "structure": Object.freeze({ role: "technique-check", timing: timing([0.5, 1.5], [3, 5], [2, 4], 5) }),
+      "metric": Object.freeze({ role: "core", timing: timing([1, 2], [4, 6], [3, 5], 6) }),
+      "invariant-lines": Object.freeze({ role: "deep-dive", timing: timing([1, 2.5], [5, 8], [4, 7], 8) }),
+      "transfer": Object.freeze({ role: "transfer", timing: timing([1, 2], [4, 7], [3, 6], 7, [4, 6]) }),
+    })
+  }),
+  "oxford-euler-self-averaging-sets": Object.freeze({
+    familyTiming: timing([0.5, 2], [17, 28], [13, 23], 25, [4, 7]),
+    stages: Object.freeze({
+      "opening": Object.freeze({ role: "warm-up", timing: timing([0.5, 1], [2, 4], [1.5, 3], 4) }),
+      "structure": Object.freeze({ role: "technique-check", timing: timing([0.5, 1.5], [3, 5], [2, 4], 5) }),
+      "finite-orbit": Object.freeze({ role: "core", timing: timing([1.5, 3], [6, 9], [5, 8], 9) }),
+      "classification": Object.freeze({ role: "deep-dive", timing: timing([1, 2.5], [4, 7], [3, 6], 7) }),
+      "transfer": Object.freeze({ role: "transfer", timing: timing([1, 2], [4, 7], [3, 6], 7, [3, 5]) }),
+    })
+  }),
+  "oxford-euler-corner-balanced-tables": Object.freeze({
+    familyTiming: timing([0.5, 2], [15, 25], [11, 20], 22, [4, 8]),
+    stages: Object.freeze({
+      "opening": Object.freeze({ role: "warm-up", timing: timing([0.5, 1], [2, 4], [1, 3], 4) }),
+      "structure": Object.freeze({ role: "technique-check", timing: timing([0.5, 1.5], [3, 5], [2, 4], 5) }),
+      "classification": Object.freeze({ role: "core", timing: timing([1, 2.5], [5, 8], [4, 7], 8) }),
+      "converse": Object.freeze({ role: "deep-dive", timing: timing([1, 2], [4, 7], [3, 6], 7) }),
+      "transfer": Object.freeze({ role: "transfer", timing: timing([1, 2], [4, 7], [3, 6], 7, [4, 6]) }),
+    })
+  }),
+  "oxford-euler-tank-gauge-model": Object.freeze({
+    familyTiming: timing([1, 3], [17, 27], [13, 22], 24, [6, 10]),
+    stages: Object.freeze({
+      "opening": Object.freeze({ role: "warm-up", timing: timing([0.5, 1.5], [3, 5], [2, 4], 5) }),
+      "structure": Object.freeze({ role: "core", timing: timing([1, 2.5], [5, 8], [4, 7], 8) }),
+      "identifiability": Object.freeze({ role: "deep-dive", timing: timing([1, 2], [4, 7], [3, 6], 7) }),
+      "model-check": Object.freeze({ role: "deep-dive", timing: timing([1, 2.5], [4, 7], [3, 6], 7) }),
+      "transfer": Object.freeze({ role: "transfer", timing: timing([1, 2], [4, 7], [3, 6], 7, [5, 8]) }),
+    })
+  }),
+  "oxford-euler-periodic-queue-model": Object.freeze({
+    familyTiming: timing([1, 3], [18, 30], [14, 25], 27, [6, 10]),
+    stages: Object.freeze({
+      "opening": Object.freeze({ role: "warm-up", timing: timing([0.5, 1.5], [3, 5], [2, 4], 5) }),
+      "structure": Object.freeze({ role: "technique-check", timing: timing([1, 2], [4, 6], [3, 5], 6) }),
+      "classification": Object.freeze({ role: "core", timing: timing([1, 2.5], [5, 8], [4, 7], 8) }),
+      "emptying": Object.freeze({ role: "deep-dive", timing: timing([1.5, 3], [6, 9], [5, 8], 9) }),
+      "transfer": Object.freeze({ role: "transfer", timing: timing([1, 2.5], [4, 8], [3, 7], 8, [5, 8]) }),
+    })
+  }),
+  "oxford-euler-kiosk-grid-model": Object.freeze({
+    familyTiming: timing([1, 3], [18, 29], [14, 24], 26, [6, 10]),
+    stages: Object.freeze({
+      "quantities": Object.freeze({ role: "warm-up", timing: timing([0.5, 1.5], [3, 5], [2, 4], 5) }),
+      "walking": Object.freeze({ role: "technique-check", timing: timing([1, 2.5], [4, 7], [3, 6], 7) }),
+      "objective": Object.freeze({ role: "core", timing: timing([1, 2], [4, 7], [3, 6], 7) }),
+      "optimize": Object.freeze({ role: "deep-dive", timing: timing([1, 2], [4, 7], [3, 6], 7) }),
+      "transfer": Object.freeze({ role: "transfer", timing: timing([1, 2.5], [4, 8], [3, 7], 8, [5, 8]) }),
+    })
+  }),
+  "oxford-euler-cooling-data-model": Object.freeze({
+    familyTiming: timing([0.5, 1.5], [12, 20], [9, 16], 18, [4, 7]),
+    stages: Object.freeze({
+      "opening": Object.freeze({ role: "warm-up", timing: timing([0.25, 0.75], [1.5, 3], [1, 2.5], 3) }),
+      "structure": Object.freeze({ role: "core", timing: timing([0.5, 1.5], [3, 5], [2, 4], 5) }),
+      "prediction": Object.freeze({ role: "deep-dive", timing: timing([0.5, 1.5], [3, 5], [2, 4], 5) }),
+      "sanity": Object.freeze({ role: "deep-dive", timing: timing([0.5, 1.5], [3, 5], [2, 4], 5) }),
+      "transfer": Object.freeze({ role: "transfer", timing: timing([0.5, 1.5], [3, 6], [2, 5], 6, [3, 5]) }),
+    })
+  }),
+  "oxford-euler-random-adjacent-consecutives": Object.freeze({
+    familyTiming: timing([0.5, 2], [13, 22], [10, 18], 20, [4, 7]),
+    stages: Object.freeze({
+      "opening": Object.freeze({ role: "warm-up", timing: timing([0.5, 1], [2, 3], [1, 2], 3) }),
+      "structure": Object.freeze({ role: "technique-check", timing: timing([0.5, 1.5], [3, 5], [2, 4], 5) }),
+      "expectation": Object.freeze({ role: "core", timing: timing([0.75, 2], [4, 6], [3, 5], 6) }),
+      "circle": Object.freeze({ role: "deep-dive", timing: timing([1, 2], [4, 7], [3, 6], 7) }),
+      "transfer": Object.freeze({ role: "transfer", timing: timing([0.75, 1.5], [3, 6], [2, 5], 6, [3, 5]) }),
+    })
+  }),
+  "oxford-euler-stop-on-change": Object.freeze({
+    familyTiming: timing([0.5, 2], [14, 23], [10, 19], 21, [4, 7]),
+    stages: Object.freeze({
+      "opening": Object.freeze({ role: "warm-up", timing: timing([0.5, 1], [2, 3], [1, 2], 3) }),
+      "distribution": Object.freeze({ role: "technique-check", timing: timing([0.75, 1.5], [3, 5], [2, 4], 5) }),
+      "expectation": Object.freeze({ role: "core", timing: timing([1, 2], [4, 7], [3, 6], 7) }),
+      "bias": Object.freeze({ role: "deep-dive", timing: timing([1, 2.5], [5, 8], [4, 7], 8) }),
+      "transfer": Object.freeze({ role: "transfer", timing: timing([0.75, 1.5], [3, 6], [2, 5], 6, [3, 5]) }),
+    })
+  }),
+  "oxford-euler-random-subset-blocks": Object.freeze({
+    familyTiming: timing([0.5, 2], [14, 24], [11, 20], 21, [4, 7]),
+    stages: Object.freeze({
+      "opening": Object.freeze({ role: "warm-up", timing: timing([0.5, 1], [2, 3], [1, 2], 3) }),
+      "line-indicators": Object.freeze({ role: "technique-check", timing: timing([0.75, 1.5], [3, 5], [2, 4], 5) }),
+      "line-mean": Object.freeze({ role: "core", timing: timing([0.75, 2], [4, 6], [3, 5], 6) }),
+      "circle": Object.freeze({ role: "deep-dive", timing: timing([1, 2.5], [5, 8], [4, 7], 8) }),
+      "transfer": Object.freeze({ role: "transfer", timing: timing([0.75, 1.5], [3, 6], [2, 5], 6, [3, 5]) }),
+    })
+  }),
+  "oxford-euler-random-halving-interval": Object.freeze({
+    familyTiming: timing([0.5, 2], [15, 25], [11, 20], 22, [5, 8]),
+    stages: Object.freeze({
+      "opening": Object.freeze({ role: "warm-up", timing: timing([0.5, 1], [2, 4], [1, 3], 4) }),
+      "encoding": Object.freeze({ role: "technique-check", timing: timing([0.75, 1.5], [3, 5], [2, 4], 5) }),
+      "distribution": Object.freeze({ role: "core", timing: timing([1, 2], [4, 7], [3, 6], 7) }),
+      "moments": Object.freeze({ role: "deep-dive", timing: timing([1, 2.5], [5, 8], [4, 7], 8) }),
+      "transfer": Object.freeze({ role: "transfer", timing: timing([1, 2], [4, 7], [3, 6], 7, [4, 6]) }),
+    })
+  }),
+  });
 
 const EULER_REVIEW: OxfordAdaptiveMetadata["review"] = {
   taxonomyClassification: "in-review",
@@ -136,6 +312,15 @@ const EULER_SIMILARITY_CLUSTERS: Readonly<Record<string, string>> = Object.freez
   "oxford-euler-cooling-data-model": "euler-discrete-dynamics-model",
   "oxford-euler-random-adjacent-consecutives": "euler-local-indicator-expectation",
   "oxford-euler-random-subset-blocks": "euler-local-indicator-expectation"
+});
+
+const EULER_PROVENANCE_OVERRIDES: Readonly<
+  Record<string, OxfordAdaptiveMetadata["provenance"]>
+> = Object.freeze({
+  "oxford-euler-quadrilateral-balance": Object.freeze({
+    originType: "structural-adaptation",
+    sourceCategory: "classic-mathematics"
+  })
 });
 
 function evidenceFor(
@@ -166,33 +351,34 @@ function stageIdAt(
   return stage.id;
 }
 
-function stageTimingAt(index: number): OxfordTimingEstimate {
-  const timing = STAGE_TIMING[index];
-  if (timing === undefined) {
-    throw new Error(`Euler stage timing is missing at index ${String(index)}`);
+function profileFor(family: EulerFamilyDefinition): EulerFamilyAuthoringProfile {
+  const profile = EULER_AUTHORING_PROFILES[family.id];
+  if (profile === undefined) {
+    throw new Error(`Euler family "${family.id}" is missing an explicit authoring profile`);
   }
-  return timing;
-}
-
-function stageRoleFor(
-  family: EulerFamilyDefinition,
-  index: number
-): OxfordStageRole {
-  if (index === 0) return "warm-up";
-  if (index === family.stages.length - 1) return "transfer";
-  const firstCoreIndex = family.stages.findIndex(
-    (stage, stageIndex) =>
-      stageIndex > 0
-      && stageIndex < family.stages.length - 1
-      && stage.difficulty === family.difficulty.core
+  const stageIds = family.stages.map((stage) => stage.id).sort();
+  const profileStageIds = Object.keys(profile.stages).sort();
+  if (JSON.stringify(stageIds) !== JSON.stringify(profileStageIds)) {
+    throw new Error(
+      `Euler family "${family.id}" authoring profile must name exactly its five stages`
+    );
+  }
+  const coreStages = family.stages.filter(
+    (stage) => profile.stages[stage.id]?.role === "core"
   );
-  if (firstCoreIndex < 0) {
-    throw new Error(`Euler family "${family.id}" has no interior stage at its core difficulty`);
+  if (coreStages.length !== 1) {
+    throw new Error(`Euler family "${family.id}" must explicitly assign exactly one core stage`);
   }
-  return index === firstCoreIndex ? "core" : "deep-dive";
+  if (coreStages[0]?.difficulty !== family.difficulty.core) {
+    throw new Error(
+      `Euler family "${family.id}" explicit core stage difficulty must match family core`
+    );
+  }
+  return profile;
 }
 
 export function makeEulerCandidateSpec(family: EulerFamilyDefinition): CuratedProblemSpec {
+  const profile = profileFor(family);
   const approaches = [{
     id: "primary",
     label: "Develop and justify the family structure"
@@ -227,32 +413,40 @@ export function makeEulerCandidateSpec(family: EulerFamilyDefinition): CuratedPr
       ...family.difficulty,
       confidence: "low"
     },
-    timing: FAMILY_TIMING,
+    timing: profile.familyTiming,
     novelty: family.novelty,
     abstraction: family.abstraction,
     introducesNewDefinition: family.introducesNewDefinition,
-    stages: family.stages.map((stage, index) => ({
-      id: stage.id,
-      role: stageRoleFor(family, index),
-      prerequisiteStageIds: index === 0 ? [] : [stageIdAt(family, index - 1)],
-      domains: family.domains,
-      contentConcepts: stage.contentConcepts,
-      skillEvidence: evidenceFor(stage.skills),
-      milestones: [{
-        milestoneId: stage.id,
-        skillEvidence: milestoneEvidenceFor(stage.skills),
-        contentConcepts: stage.contentConcepts
-      }],
-      extensionIds: index === family.stages.length - 1
-        ? family.extensions.map((extension) => extension.id)
-        : [],
-      difficulty: stage.difficulty,
-      timing: stageTimingAt(index),
-      novelty: stage.novelty,
-      abstraction: stage.abstraction,
-      introducesNewDefinition: family.introducesNewDefinition && index === 0
-    })),
-    provenance: {
+    stages: family.stages.map((stage, index) => {
+      const stageProfile = profile.stages[stage.id];
+      if (stageProfile === undefined) {
+        throw new Error(
+          `Euler family "${family.id}" has no role/timing profile for stage "${stage.id}"`
+        );
+      }
+      return {
+        id: stage.id,
+        role: stageProfile.role,
+        prerequisiteStageIds: index === 0 ? [] : [stageIdAt(family, index - 1)],
+        domains: family.domains,
+        contentConcepts: stage.contentConcepts,
+        skillEvidence: evidenceFor(stage.skills),
+        milestones: [{
+          milestoneId: stage.id,
+          skillEvidence: milestoneEvidenceFor(stage.skills),
+          contentConcepts: stage.contentConcepts
+        }],
+        extensionIds: index === family.stages.length - 1
+          ? family.extensions.map((extension) => extension.id)
+          : [],
+        difficulty: stage.difficulty,
+        timing: stageProfile.timing,
+        novelty: stage.novelty,
+        abstraction: stage.abstraction,
+        introducesNewDefinition: family.introducesNewDefinition && index === 0
+      };
+    }),
+    provenance: EULER_PROVENANCE_OVERRIDES[family.id] ?? {
       originType: "original",
       sourceCategory: "independent-original"
     },
@@ -286,4 +480,3 @@ export function makeEulerCandidateSpec(family: EulerFamilyDefinition): CuratedPr
     oxfordAdaptive
   };
 }
-
