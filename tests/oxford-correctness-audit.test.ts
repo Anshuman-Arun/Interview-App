@@ -96,7 +96,7 @@ describe("Oxford fragile-claim computational checks", () => {
     let fiveCycleMask = 0;
     const cyclePairs = new Set(["0-1", "1-2", "2-3", "3-4", "0-4"]);
     fiveEdges.forEach(([a, b], index) => {
-      if (cyclePairs.has(`${a}-${b}`)) fiveCycleMask |= 1 << index;
+      if (cyclePairs.has(edgeKey(a, b))) fiveCycleMask |= 1 << index;
     });
     expect(hasMonochromaticTriangle(fiveCycleMask, fiveEdges, fiveTriangles)).toBe(false);
   });
@@ -264,19 +264,23 @@ function graphTriangles(n: number): readonly [number, number, number][] {
   return triangles;
 }
 
+function edgeKey(a: number, b: number): string {
+  return `${String(a)}-${String(b)}`;
+}
+
 function hasMonochromaticTriangle(
   mask: number,
   edges: readonly Edge[],
   triangles: readonly (readonly [number, number, number])[]
 ): boolean {
   const edgeIndex = new Map<string, number>();
-  edges.forEach(([a, b], index) => edgeIndex.set(`${a}-${b}`, index));
+  edges.forEach(([a, b], index) => edgeIndex.set(edgeKey(a, b), index));
 
   for (const [a, b, c] of triangles) {
     const indices = [
-      edgeIndex.get(`${a}-${b}`),
-      edgeIndex.get(`${a}-${c}`),
-      edgeIndex.get(`${b}-${c}`)
+      edgeIndex.get(edgeKey(a, b)),
+      edgeIndex.get(edgeKey(a, c)),
+      edgeIndex.get(edgeKey(b, c))
     ];
     if (indices.some((index) => index === undefined)) continue;
     const first = indices[0];
