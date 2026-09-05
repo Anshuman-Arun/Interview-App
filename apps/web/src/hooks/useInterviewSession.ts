@@ -127,6 +127,7 @@ export interface UseInterviewSessionResult {
   readonly isTransportManaged: boolean;
   readonly setBaseUrl: (url: string) => void;
   readonly fetchAvailableSessions: () => Promise<readonly StoredSessionSummary[]>;
+  readonly verifyAvailableSessions: () => Promise<readonly StoredSessionSummary[]>;
   readonly fetchAvailableSessionsStrict: () => Promise<readonly StoredSessionSummary[]>;
   readonly refreshInterviewCatalog: () => Promise<readonly InterviewCatalogEntry[]>;
   readonly refreshProviderOptions: () => Promise<readonly ProviderLaunchOption[]>;
@@ -952,6 +953,10 @@ export function useInterviewSession(
     } catch {
       return [];
     }
+  }, [listAvailableSessions]);
+
+  const verifyAvailableSessions = useCallback(async (): Promise<readonly StoredSessionSummary[]> => {
+    return listAvailableSessions();
   }, [listAvailableSessions]);
 
   const fetchAvailableSessionsStrict = useCallback(async (): Promise<readonly StoredSessionSummary[]> => {
@@ -2063,6 +2068,7 @@ export function useInterviewSession(
     isTransportManaged: desktopBootstrap !== undefined,
     setBaseUrl,
     fetchAvailableSessions,
+    verifyAvailableSessions,
     fetchAvailableSessionsStrict,
     refreshInterviewCatalog,
     refreshProviderOptions,
