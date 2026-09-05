@@ -17,7 +17,8 @@ export function HomePage({
   canReview,
   onReview,
   sessionEntryPending,
-  sessionAuthorityChecking = false
+  sessionAuthorityChecking = false,
+  sessionAuthorityUnavailable = false
 }: {
   readonly activeSessionId: SessionId | null;
   readonly activeSessionCount?: number;
@@ -32,13 +33,18 @@ export function HomePage({
   readonly onReview: (sessionId: SessionId) => void;
   readonly sessionEntryPending: boolean;
   readonly sessionAuthorityChecking?: boolean;
+  readonly sessionAuthorityUnavailable?: boolean;
 }) {
   const heroRef = useRef<HTMLElement | null>(null);
   const heroCopyRef = useRef<HTMLDivElement | null>(null);
   const folioRef = useRef<HTMLDivElement | null>(null);
   const routeLocked = activeSessionPaused === true && activeSessionId !== null;
   const entryBlocked =
-    sessionEntryPending || (activeSessionId === null && sessionAuthorityChecking);
+    sessionEntryPending
+    || (
+      activeSessionId === null
+      && (sessionAuthorityChecking || sessionAuthorityUnavailable)
+    );
   const recent = [...sessions]
     .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
     .slice(0, 5);
@@ -116,7 +122,18 @@ export function HomePage({
           </p>
 
           <div className="expressive-home__hero-actions">
-            {activeSessionCount > 1 ? (
+            {sessionAuthorityUnavailable && activeSessionId === null && activeSessionCount === 0 && (
+        <section className="expressive-home__active" data-conflict="true" role="alert">
+          <span className="expressive-home__active-index">CHECK</span>
+          <div>
+            <strong>Stored session authority is unavailable</strong>
+            <p>Starting a new room is disabled until the session list can be verified. Open Sessions to retry the read.</p>
+          </div>
+          <button type="button" onClick={onOpenSessions}>Open Sessions</button>
+        </section>
+      )}
+
+      {activeSessionCount > 1 ? (
               <button
                 type="button"
                 className="expressive-home__primary"
@@ -138,7 +155,7 @@ export function HomePage({
                 disabled={entryBlocked}
                 data-testid="start-session-btn"
               >
-                <span>{sessionAuthorityChecking ? "Checking rooms…" : sessionEntryPending ? "Opening room…" : "New interview"}</span>
+                <span>{sessionAuthorityChecking ? "Checking rooms…" : sessionAuthorityUnavailable ? "Session list unavailable" : sessionEntryPending ? "Opening room…" : "New interview"}</span>
                 <i aria-hidden="true">→</i>
               </button>
             ) : (
