@@ -338,7 +338,7 @@ export const App: React.FC = () => {
       })
       .catch(() => {
         if (controller.signal.aborted) return;
-        setHistoryError("Bounded session history could not be loaded.");
+        setHistoryError("Session history could not be loaded.");
         setHistoryLoading(false);
       });
   }, [session.fetchAvailableSessions, session.readSessionHistory]);
