@@ -224,6 +224,8 @@ export function ProductPageRouter({
         && providerOptions.some((option) => option.availability === "AVAILABLE")
       }
       reasoningChecking={providerOptionsLoading}
+      authorityChecking={sessionAuthorityChecking}
+      authorityUnavailable={sessionAuthorityUnavailable}
       navigationLocked={(activeSessionPaused ?? false) && activeSessionId !== null}
       transitionLocked={sessionEntryPending}
       notice={notice}
