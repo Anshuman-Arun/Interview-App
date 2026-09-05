@@ -709,6 +709,45 @@ describe("editorial v10 adversarial UI states", () => {
     expect(readEvaluation).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps the supported 5x zoom usable at the desktop minimum window", () => {
+    const windowConfig = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/desktop/src/window-config.ts"),
+      "utf8"
+    );
+    const desktopBootstrap = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/desktop/src/bootstrap.ts"),
+      "utf8"
+    );
+    const app = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+    const editorialCss = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/styles/editorial-v10.css"),
+      "utf8"
+    );
+    const appearanceCss = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/components/AppearanceDock.css"),
+      "utf8"
+    );
+
+    expect(windowConfig).toContain("DESKTOP_MIN_WIDTH = 960");
+    expect(windowConfig).toContain("DESKTOP_MIN_HEIGHT = 640");
+    expect(desktopBootstrap).toContain("DESKTOP_MAX_ZOOM_FACTOR = 5");
+    expect(app).toContain('className="app-header__end-long"');
+    expect(editorialCss).toContain("@media (max-width: 240px)");
+    expect(editorialCss).toContain("@media (max-height: 200px)");
+    expect(editorialCss).toMatch(
+      /@media \(max-width: 240px\)[\s\S]*?\.app-header__end-long\s*\{\s*display:\s*none;[\s\S]*?\.expressive-settings__zoom-stepper\s*\{[\s\S]*?grid-template-columns:\s*28px minmax\(0, 1fr\) 28px;/u
+    );
+    expect(editorialCss).toMatch(
+      /@media \(max-height: 200px\)[\s\S]*?\.problem-block\s*\{\s*max-height:\s*18px;[\s\S]*?\.input-dock \.voice-strip\s*\{\s*display:\s*none;[\s\S]*?\.input-dock \.reasoning-composer__textarea\s*\{[\s\S]*?min-height:\s*24px;/u
+    );
+    expect(appearanceCss).toMatch(
+      /@media \(max-width: 240px\)[\s\S]*?\.appearance-swatches\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\);/u
+    );
+  });
+
   it("keeps compact and sync-state contracts explicit in source and CSS", () => {
     const app = fs.readFileSync(
       path.resolve(process.cwd(), "apps/web/src/App.tsx"),
