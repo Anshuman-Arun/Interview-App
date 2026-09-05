@@ -38,16 +38,16 @@ export const cantorFunctionFamiliesB: readonly CantorFamilyAuthoring[] = [
         concepts: ["composition-iteration", "function-transformations"]
       },
       {
-        id: "third-iterate",
-        description: "Prove f³(x)=x for every x in S.",
+        id: "exact-period-three",
+        description: "Prove f³(x)=x on S, rule out real fixed points, and conclude that every admissible real orbit has exact period three.",
         skills: cantorSkills(["proof-construction", "primary"], ["precision-checking", "supporting"]),
         concepts: ["composition-iteration", "fixed-point-constraints"]
       },
       {
-        id: "exact-period-three",
-        description: "Show f has no real fixed point, hence every orbit in S has exact period three, and transfer the structure under a horizontal shift.",
-        skills: cantorSkills(["proof-construction", "primary"], ["generalization", "primary"], ["transfer", "supporting"]),
-        concepts: ["fixed-point-constraints", "composition-iteration", "function-transformations"]
+        id: "shifted-cycle-transfer",
+        description: "Transfer the three-cycle structure to a horizontally shifted fractional map and derive simple relations within one orbit.",
+        skills: cantorSkills(["generalization", "primary"], ["transfer", "primary"]),
+        concepts: ["composition-iteration", "function-transformations", "composition-constraints"]
       }
     ],
     commonErrors: [
@@ -88,12 +88,12 @@ export const cantorFunctionFamiliesB: readonly CantorFamilyAuthoring[] = [
         formulations: ["the second iterate is another simple fractional-linear map", "f²(x)=1/(1-x)"]
       },
       {
-        text: "Apply f once more to 1/(1-x).",
-        formulations: ["the third composition collapses completely", "show f³ is the identity on the safe domain"]
+        text: "Apply f once more to 1/(1-x), then solve f(x)=x; f³=id and the absence of real fixed points together force exact period three.",
+        formulations: ["prove return and exclude shorter real orbits in the same core argument", "period divides three, then rule out period one"]
       },
       {
-        text: "Solve f(x)=x over the reals; the quadratic has negative discriminant.",
-        formulations: ["rule out period one after proving period divides three", "there are no real fixed points"]
+        text: "For g_c(x)=c+1-1/(x-c), translate y=x-c so the shifted problem becomes the same three-cycle map.",
+        formulations: ["conjugate by a horizontal translation", "the exceptional points move from {0,1} to {c,c+1}"]
       }
     ],
     canonicalSolution:
@@ -122,15 +122,15 @@ export const cantorFunctionFamiliesB: readonly CantorFamilyAuthoring[] = [
       ["guided-adaptation", "supporting"]
     ),
     difficulty: { entry: "introductory", core: "standard", ceiling: "strong" },
-    timing: cantorTiming([2, 5], [17, 27], [13, 23], [4, 8], 25),
+    timing: cantorTiming([2, 4], [13, 21], [10, 18], [3, 7], 21),
     stageTiming: [
-      cantorTiming([1, 3], [5, 8], [4, 7], undefined, 8),
-      cantorTiming([2, 4], [8, 14], [6, 12], undefined, 14),
-      cantorTiming([2, 4], [6, 10], [5, 8], [3, 6], 10)
+      cantorTiming([1, 2], [4, 6], [3, 5], undefined, 6),
+      cantorTiming([1, 3], [7, 12], [5, 10], undefined, 12),
+      cantorTiming([1, 3], [4, 8], [3, 7], [2, 5], 8)
     ],
     openingRole: "warm-up",
     finalRole: "transfer",
-    novelty: "high",
+    novelty: "low",
     abstraction: "moderate",
     similarityClusterId: "mobius-iteration",
     provenance: { originType: "classic-problem", sourceCategory: "secondary-reference" },
@@ -256,11 +256,11 @@ export const cantorFunctionFamiliesB: readonly CantorFamilyAuthoring[] = [
       ["generalization", "primary"]
     ),
     difficulty: { entry: "introductory", core: "standard", ceiling: "strong" },
-    timing: cantorTiming([2, 5], [17, 27], [13, 24], [4, 8], 25),
+    timing: cantorTiming([2, 4], [14, 22], [11, 19], [4, 7], 22),
     stageTiming: [
-      cantorTiming([1, 3], [5, 8], [4, 7], undefined, 8),
-      cantorTiming([2, 4], [8, 14], [6, 12], undefined, 14),
-      cantorTiming([2, 4], [6, 10], [5, 8], [3, 6], 10)
+      cantorTiming([1, 2], [4, 6], [3, 5], undefined, 6),
+      cantorTiming([1, 4], [7, 13], [5, 11], undefined, 13),
+      cantorTiming([1, 3], [4, 8], [3, 7], [3, 6], 8)
     ],
     openingRole: "technique-check",
     finalRole: "transfer",
@@ -277,7 +277,9 @@ export const cantorFunctionFamiliesB: readonly CantorFamilyAuthoring[] = [
     topics: ["sequences","recurrences","asymptotics","inequalities"],
     prompt:
       "Let a_0>0 and define a_{n+1}=a_n+1/a_n. Prove that the sequence grows without bound, then determine its asymptotic size as precisely as you can. A useful target is to decide whether a_n/sqrt(2n) has a limit.",
-    givenInformation: [],
+    givenInformation: [
+      "If you need it for a reciprocal-sum bound: for a positive decreasing function h, sum_{k=1}^{n-1} h(k) ≤ h(1)+∫_1^n h(t)dt. You may prove this comparison from the graph rather than treat it as prior knowledge."
+    ],
     approaches: [
       { id: "square-the-update", label: "Square the recurrence to expose a nearly telescoping relation" },
       { id: "growth-bounds", label: "Build lower and upper bounds strong enough to squeeze the normalized sequence" }
@@ -302,16 +304,16 @@ export const cantorFunctionFamiliesB: readonly CantorFamilyAuthoring[] = [
         concepts: ["inequalities-bounds", "recurrence-structure"]
       },
       {
-        id: "error-sum-bound",
-        description: "Write a_n²=a_0²+2n+sum_{k<n}1/a_k² and bound the extra sum by a logarithmic-order quantity using the lower bound.",
-        skills: cantorSkills(["representation-switching", "primary"], ["proof-construction", "primary"]),
-        concepts: ["telescoping-structure", "inequalities-bounds", "limiting-arguments"]
+        id: "error-sum-and-limit",
+        description: "Sum the square identity, bound the reciprocal-square error by a self-contained integral comparison, and conclude a_n/sqrt(2n)→1.",
+        skills: cantorSkills(["representation-switching", "primary"], ["proof-construction", "primary"], ["precision-checking", "supporting"]),
+        concepts: ["telescoping-structure", "inequalities-bounds", "limiting-arguments", "sequence-convergence"]
       },
       {
-        id: "normalized-limit",
-        description: "Conclude a_n²/(2n)→1 and therefore a_n/sqrt(2n)→1; transfer to a_{n+1}=a_n+c/a_n.",
-        skills: cantorSkills(["proof-construction", "primary"], ["generalization", "primary"], ["transfer", "supporting"]),
-        concepts: ["limiting-arguments", "sequence-convergence", "recurrence-structure"]
+        id: "scaled-step-transfer",
+        description: "Transfer the argument to a_{n+1}=a_n+c/a_n and use the exact sum to discuss the smaller logarithmic correction beyond the leading term.",
+        skills: cantorSkills(["generalization", "primary"], ["transfer", "primary"], ["strategic-simplification", "supporting"]),
+        concepts: ["recurrence-structure", "limiting-arguments", "telescoping-structure"]
       }
     ],
     commonErrors: [
@@ -352,12 +354,12 @@ export const cantorFunctionFamiliesB: readonly CantorFamilyAuthoring[] = [
         formulations: ["discard only the positive error term for a lower bound", "this also proves divergence"]
       },
       {
-        text: "Now sum the exact identity and use 1/a_k²≤1/(a_0²+2k).",
-        formulations: ["the leftover error is bounded by a reciprocal-linear sum", "compare the sum with a harmonic or logarithmic bound"]
+        text: "Sum the exact identity, use 1/a_k²≤1/(a_0²+2k), and apply the supplied decreasing-sum/integral comparison; that error is logarithmic and therefore negligible after division by n.",
+        formulations: ["the reciprocal-linear sum grows much more slowly than n", "normalize the squared sequence before taking positive square roots"]
       },
       {
-        text: "A bound of the form C+log n divided by n tends to 0.",
-        formulations: ["normalize the squared sequence first", "take positive square roots after the ratio tends to 1"]
+        text: "For increment c/a_n, squaring changes the main increment to 2c and the residual to c²/a_n²; the same comparison controls the error.",
+        formulations: ["the leading scale becomes sqrt(2cn)", "the exact summed identity also explains why a logarithmic second-order correction is plausible"]
       }
     ],
     canonicalSolution:
@@ -386,152 +388,20 @@ export const cantorFunctionFamiliesB: readonly CantorFamilyAuthoring[] = [
       ["guided-adaptation", "supporting"]
     ),
     difficulty: { entry: "introductory-plus", core: "strong", ceiling: "stretch" },
-    timing: cantorTiming([3, 7], [23, 36], [18, 32], [6, 11], 32),
+    timing: cantorTiming([2, 5], [17, 28], [13, 23], [5, 10], 25),
     stageTiming: [
-      cantorTiming([2, 4], [6, 10], [5, 9], undefined, 10),
-      cantorTiming([3, 6], [12, 21], [9, 18], undefined, 21),
-      cantorTiming([3, 5], [8, 14], [6, 12], [4, 8], 14)
+      cantorTiming([1, 3], [4, 7], [3, 6], undefined, 7),
+      cantorTiming([2, 5], [10, 18], [8, 15], undefined, 18),
+      cantorTiming([2, 4], [6, 11], [5, 9], [4, 8], 11)
     ],
     openingRole: "warm-up",
     finalRole: "stretch",
-    novelty: "high",
+    novelty: "moderate",
     abstraction: "high",
-    originalityRisk: "low",
+    provenance: { originType: "classic-problem", sourceCategory: "secondary-reference" },
+    originalityRisk: "high",
     correctnessRisk: "medium",
     calibrationRisk: "high"
-  },
-  {
-    id: "oxford-cantor-line-envelope",
-    title: "A Family of Moving Lines",
-    category: "functions and graph sketching",
-    topics: ["line families","graphs","parameters","quadratics"],
-    prompt:
-      "For each real t, draw the line L_t:y=t x-t²-t. As t varies, the collection seems to trace the edge of a curve. Determine that envelope exactly, prove every line lies on the same side of it, and identify where each line touches it.",
-    givenInformation: [],
-    approaches: [
-      { id: "maximize-over-lines", label: "For fixed x maximize the line height over t" },
-      { id: "neighboring-lines", label: "Use intersections of nearby parameter lines to guess the tangency locus" }
-    ],
-    milestones: [
-      {
-        id: "sample-lines",
-        description: "Draw several L_t and conjecture that their upper boundary is parabolic.",
-        skills: cantorSkills(["graph-sketching", "primary"], ["conjecture-formation", "supporting"]),
-        concepts: ["parameter-dependent-curves", "qualitative-function-behavior"]
-      },
-      {
-        id: "fix-x-optimize-t",
-        description: "For fixed x, regard t x-t²-t as a quadratic in t.",
-        skills: cantorSkills(["representation-switching", "primary"], ["strategic-simplification", "primary"]),
-        concepts: ["optimization-extrema", "parameter-dependent-algebra"]
-      },
-      {
-        id: "complete-square-envelope",
-        description: "Complete the square and derive the envelope E(x)=(x-1)²/4.",
-        skills: cantorSkills(["technique", "primary"], ["proof-construction", "supporting"]),
-        concepts: ["optimization-extrema", "function-transformations"]
-      },
-      {
-        id: "global-side-proof",
-        description: "Show E(x)-L_t(x)=(x-(2t+1))²/4≥0 for every x,t.",
-        skills: cantorSkills(["proof-construction", "primary"], ["precision-checking", "primary"]),
-        concepts: ["inequalities-bounds", "roots-intersections"]
-      },
-      {
-        id: "tangency-and-general-family",
-        description: "Identify the unique contact point x=2t+1, verify matching slope, and generalize to t x-alpha t²-beta t with alpha>0.",
-        skills: cantorSkills(["generalization", "primary"], ["transfer", "primary"], ["graph-sketching", "supporting"]),
-        concepts: ["parameter-dependent-curves", "turning-points-extrema", "function-transformations"]
-      }
-    ],
-    commonErrors: [
-      {
-        id: "minimize-instead-of-maximize",
-        description: "Looks for a lower envelope even though the quadratic in t opens downward and has a finite maximum, not minimum."
-      },
-      {
-        id: "pointwise-max-not-tangency",
-        description: "Finds the pointwise maximum curve but never proves an individual line is actually tangent at the maximizing parameter."
-      }
-    ],
-    followUps: [
-      "Can you see why the parameter t becomes the tangent slope?",
-      "How does changing the coefficient of t² alter the width of the envelope?"
-    ],
-    extensions: [
-      {
-        id: "general-quadratic-penalty",
-        prompt: "For alpha>0 and beta real, find the envelope of y=t x-alpha t²-beta t and its contact point for each t."
-      },
-      {
-        id: "dual-description",
-        prompt: "Starting from the parabola y=(x-1)²/4, derive its tangent line at a general point and recover the original parameter family."
-      }
-    ],
-    hints: [
-      {
-        text: "For a fixed x, the line height is a quadratic function of t.",
-        formulations: ["switch the variable you are optimizing", "the envelope is a pointwise maximum over t"]
-      },
-      {
-        text: "Write t(x-1)-t² as a completed square in t.",
-        formulations: ["the maximizing t is (x-1)/2", "complete the square before differentiating"]
-      },
-      {
-        text: "The maximum value is (x-1)²/4.",
-        formulations: ["the envelope candidate is a parabola", "substitute the maximizing parameter back"]
-      },
-      {
-        text: "Subtract a fixed L_t from the candidate envelope and factor the result as a square.",
-        formulations: ["prove all lines lie below the curve globally", "equality should happen at one x-value"]
-      },
-      {
-        text: "Equality occurs at x=2t+1; compare the parabola's derivative there with the line slope t.",
-        formulations: ["the contact point certifies tangency", "generalize the same completed-square calculation to alpha and beta"]
-      }
-    ],
-    canonicalSolution:
-      "For fixed x, L_t(x)=t(x-1)-t²=-(t-(x-1)/2)²+(x-1)²/4. Therefore the pointwise maximum over t is E(x)=(x-1)²/4, attained when t=(x-1)/2. Equivalently E(x)-L_t(x)=(x-(2t+1))²/4≥0, so every line lies below the parabola and meets it only at x=2t+1. Since E'(x)=(x-1)/2, the slope at that point is t, so the line is tangent. More generally, y=t x-alpha t²-beta t with alpha>0 has envelope E(x)=(x-beta)²/(4alpha), maximizing parameter t=(x-beta)/(2alpha), and each line is tangent at x=2alpha t+beta.",
-    verificationNotes:
-      "The envelope is an upper envelope. Verify the difference identity exactly. In the general family alpha must be positive for a finite pointwise maximum over all real t.",
-    domains: ["functions", "graph-sketching", "calculus", "algebra", "elementary-analysis"],
-    contentConcepts: [
-      "parameter-dependent-curves",
-      "qualitative-function-behavior",
-      "optimization-extrema",
-      "parameter-dependent-algebra",
-      "function-transformations",
-      "inequalities-bounds",
-      "roots-intersections",
-      "turning-points-extrema"
-    ],
-    prerequisiteConcepts: ["algebraic-manipulation", "functions-graphs", "equations-inequalities"],
-    skills: cantorSkills(
-      ["graph-sketching", "primary"],
-      ["conjecture-formation", "supporting"],
-      ["representation-switching", "primary"],
-      ["strategic-simplification", "primary"],
-      ["technique", "primary"],
-      ["proof-construction", "primary"],
-      ["precision-checking", "primary"],
-      ["generalization", "primary"],
-      ["transfer", "primary"]
-    ),
-    difficulty: { entry: "introductory", core: "standard", ceiling: "strong" },
-    timing: cantorTiming([2, 5], [18, 28], [14, 24], [4, 8], 26),
-    stageTiming: [
-      cantorTiming([1, 3], [5, 8], [4, 7], undefined, 8),
-      cantorTiming([2, 4], [9, 15], [7, 12], undefined, 15),
-      cantorTiming([2, 4], [6, 10], [5, 8], [3, 6], 10)
-    ],
-    openingRole: "warm-up",
-    finalRole: "transfer",
-    novelty: "moderate",
-    abstraction: "moderate",
-    similarityClusterId: "parameter-envelope",
-    originalityRisk: "high",
-    correctnessRisk: "low",
-    calibrationRisk: "medium"
   },
   {
     id: "oxford-cantor-mobius-involution",
@@ -565,16 +435,16 @@ export const cantorFunctionFamiliesB: readonly CantorFamilyAuthoring[] = [
         concepts: ["composition-iteration", "composition-constraints"]
       },
       {
-        id: "fixed-point-count",
-        description: "Solve the fixed-point equation and classify two, zero, or exceptional fixed points according to a>-1, a<-1, or a=-1.",
-        skills: cantorSkills(["case-analysis", "primary"], ["technique", "supporting"]),
-        concepts: ["fixed-point-constraints", "roots-intersections", "parameter-dependent-algebra"]
+        id: "fixed-points-and-exception",
+        description: "Classify fixed points from (x+1)²=a+1 and separately prove that a=-1 collapses the map to the constant -1 on its domain, so the self-inverse property fails there.",
+        skills: cantorSkills(["case-analysis", "primary"], ["technique", "supporting"], ["precision-checking", "primary"]),
+        concepts: ["fixed-point-constraints", "roots-intersections", "parameter-dependent-algebra", "qualitative-function-behavior"]
       },
       {
-        id: "exceptional-degeneration",
-        description: "Show T_{-1}(x)=-1 for x≠-1, so the hyperbola and involution collapse; explain why blindly canceling a+1 hides this case.",
-        skills: cantorSkills(["precision-checking", "primary"], ["case-analysis", "supporting"]),
-        concepts: ["parameter-dependent-curves", "qualitative-function-behavior", "fixed-point-constraints"]
+        id: "self-inverse-transfer",
+        description: "Use graph reflection to explain the self-inverse relation and construct a shifted fractional-linear example S satisfying S(S(x))=x on its valid domain.",
+        skills: cantorSkills(["generalization", "primary"], ["transfer", "primary"], ["graph-sketching", "supporting"]),
+        concepts: ["composition-iteration", "function-transformations", "analytic-curve-geometry"]
       }
     ],
     commonErrors: [
@@ -598,7 +468,7 @@ export const cantorFunctionFamiliesB: readonly CantorFamilyAuthoring[] = [
       },
       {
         id: "shifted-scaled-involution",
-        prompt: "Construct another nontrivial fractional-linear involution by shifting the center and describe its fixed-point regimes."
+        prompt: "Construct another nontrivial fractional-linear function S by shifting the center so that S(S(x))=x wherever both sides are defined, and describe its fixed-point regimes."
       }
     ],
     hints: [
@@ -615,12 +485,12 @@ export const cantorFunctionFamiliesB: readonly CantorFamilyAuthoring[] = [
         formulations: ["the exceptional parameter should remain visible", "simplify numerator and denominator in parallel"]
       },
       {
-        text: "The fixed-point equation becomes (x+1)²=a+1.",
-        formulations: ["intersect with y=x in the implicit hyperbola", "fixed points depend on the sign of a+1"]
+        text: "The fixed-point equation is (x+1)²=a+1, but at a=-1 simplify the original formula directly before using any generic cancellation.",
+        formulations: ["classify the fixed points and exceptional degeneration together", "T_{-1} is constant on its domain, so applying it twice is not a valid identity"]
       },
       {
-        text: "At a=-1, simplify the original formula before using any generic result.",
-        formulations: ["T_{-1} is constant on its domain", "the exceptional case is not an involution"]
+        text: "Here 'self-inverse' means exactly S(S(x))=x wherever both applications are defined; shift the symmetric hyperbola picture to construct another example.",
+        formulations: ["do not make terminology a prerequisite", "graph reflection across y=x suggests the composition identity directly"]
       }
     ],
     canonicalSolution:
@@ -653,15 +523,15 @@ export const cantorFunctionFamiliesB: readonly CantorFamilyAuthoring[] = [
       ["technique", "supporting"],
       ["error-recovery", "supporting"]
     ),
-    difficulty: { entry: "introductory-plus", core: "strong", ceiling: "stretch" },
-    timing: cantorTiming([3, 7], [22, 34], [17, 30], [5, 10], 30),
+    difficulty: { entry: "introductory-plus", core: "strong", ceiling: "strong" },
+    timing: cantorTiming([3, 6], [17, 26], [13, 22], [4, 8], 24),
     stageTiming: [
-      cantorTiming([2, 4], [6, 10], [5, 9], undefined, 10),
-      cantorTiming([3, 6], [11, 19], [8, 16], undefined, 19),
-      cantorTiming([2, 5], [7, 13], [5, 11], [4, 8], 13)
+      cantorTiming([1, 3], [4, 7], [3, 6], undefined, 7),
+      cantorTiming([2, 5], [9, 15], [7, 13], undefined, 15),
+      cantorTiming([1, 3], [4, 9], [3, 7], [3, 6], 9)
     ],
     openingRole: "technique-check",
-    finalRole: "stretch",
+    finalRole: "transfer",
     novelty: "high",
     abstraction: "high",
     similarityClusterId: "mobius-iteration",
