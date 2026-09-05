@@ -369,6 +369,21 @@ describe("editorial v10 adversarial UI states", () => {
     );
   });
 
+  it("claims the setup operation lock before restarting the desktop app", () => {
+    const settings = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/pages/SettingsPage.tsx"),
+      "utf8"
+    );
+    const restartStart = settings.indexOf("const restartApp = desktopRuntime?.restartApp");
+    const restartEnd = settings.indexOf("disabled={restarting || anyInstallActive}", restartStart);
+    const restartBlock = settings.slice(restartStart, restartEnd);
+
+    expect(restartStart).toBeGreaterThan(-1);
+    expect(restartBlock).toContain("setupOperationInFlightRef.current = true");
+    expect(restartBlock).toContain("setRestarting(true)");
+    expect(restartBlock).toContain("setupOperationInFlightRef.current = false");
+  });
+
   it("shows provider rechecks as checking rather than ready", () => {
     const markup = renderToStaticMarkup(
       <AppearanceProvider>
