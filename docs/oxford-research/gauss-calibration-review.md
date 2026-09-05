@@ -161,7 +161,18 @@ This is a representative batch rather than an attempt to rubber-stamp all 61 new
 
 **Euler (#134).** All 19 candidates share one `FAMILY_TIMING` and one five-position `STAGE_TIMING` table, so those values likewise remain author planning estimates rather than calibratable family timing. The helper also derives the `core` role mechanically as the first interior stage whose difficulty equals the author family core. That can put the core on setup rather than the substantive mathematical development. For `circle-sweep`, the coordinate circle equation is a technique check; the parameter-existence test is the strong core. For `self-averaging-sets`, encoding the affine map is setup; the finite permutation plus strict-contraction argument is the strong core. The latter is also better classified with the frozen `set-theory` / `set-maps` concepts than with `combinatorics` / `counting-structure`; no taxonomy expansion is needed.
 
-All six reviewed author families are marked `needs-revision` in the Gauss cross-agent record before calibration approval. This does **not** mean the mathematical families should be rejected. It means their authored taxonomy/difficulty/timing fields do not yet match the independent Gauss review.
+All six reviewed author families are marked `needs-revision` in the Gauss cross-agent record before calibration approval. This does **not** mean the mathematical families should be rejected. It means at least one authored taxonomy/difficulty/timing field does not yet match the independent Gauss review.
+
+| Family | Taxonomy classification | Difficulty | Timing |
+| --- | --- | --- | --- |
+| `oxford-cantor-cubic-divided-difference` | approved as proposed | changes required: ceiling stretch → strong | changes required |
+| `oxford-cantor-reciprocal-increment-recurrence` | approved as proposed | approved as proposed | changes required |
+| `oxford-d-gcd-descent-network` | approved as proposed | changes required: entry/ceiling each lower one band | changes required |
+| `oxford-d-triple-flip-circle` | changes required: add existing recurrence domain/content | changes required: core standard → strong | changes required |
+| `oxford-euler-circle-sweep` | approved as proposed | changes required: move substantive core to `parameter-test`, core strong | changes required |
+| `oxford-euler-self-averaging-sets` | changes required: use `set-theory` / `set-maps` | changes required: finite-orbit core strong | changes required |
+
+These are Gauss-owned decisions only. Originality/fidelity and mathematical correctness remain pending H/I regardless of a Gauss “approved as proposed” cell.
 
 A concurrent correctness review, **Agent I — Itô PR #128**, had previously handed prerequisite/solvability findings to Gauss in **issue #129**. Gauss incorporated only the calibration-relevant consequences from that handoff and did not inherit Itô's correctness statuses.
 
