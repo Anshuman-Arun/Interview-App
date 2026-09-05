@@ -399,6 +399,7 @@ export const cantorFunctionFamiliesA: readonly CantorFamilyAuthoring[] = [
     finalRole: "transfer",
     novelty: "low",
     abstraction: "moderate",
+    provenance: { originType: "classic-problem", sourceCategory: "secondary-reference" },
     originalityRisk: "high",
     correctnessRisk: "low",
     calibrationRisk: "medium"
@@ -658,6 +659,7 @@ export const cantorFunctionFamiliesA: readonly CantorFamilyAuthoring[] = [
     finalRole: "transfer",
     novelty: "moderate",
     abstraction: "moderate",
+    provenance: { originType: "classic-problem", sourceCategory: "secondary-reference" },
     originalityRisk: "medium",
     correctnessRisk: "low",
     calibrationRisk: "medium"
