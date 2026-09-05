@@ -1,0 +1,214 @@
+import { authorCuratedProblem, type CuratedProblemSpec } from "../../curated-authoring.js";
+import { DIRICHLET_CANDIDATE_REVIEW_NOTES, evidence, makeDirichletAdaptive } from "./support.js";
+
+export const oxfordDSlidingWindowParitySpec: CuratedProblemSpec = {
+  id: "oxford-d-sliding-window-parity",
+  title: "Equal-Parity Windows Around a Circle",
+  mode: "OXFORD_MATHEMATICS",
+  category: "combinatorics",
+  topics: ["parity", "cyclic sequences", "gcd"],
+  difficulty: "uncalibrated-oxford-candidate",
+  prompt: "Arrange n lamps in a circle, each either off or on. Fix 1<=k<=n. Suppose every block of k consecutive lamps contains the same parity of on lamps. Characterize all such configurations and count them.",
+  givenInformation: ["Blocks wrap around cyclically.", "Only the parity of the number of on lamps in a block is assumed equal, not the exact number."],
+  approaches: [{ id: "adjacent-window-cancellation", label: "Compare neighboring windows, then study step-k orbits on the cyclic positions" }],
+  milestones: [
+    { id: "compare-neighboring-windows", description: "Subtract the parity conditions for two consecutive k-windows and isolate the entering and leaving lamps.", approachIds: ["adjacent-window-cancellation"], hintLevels: [1] },
+    { id: "derive-step-k-equality", description: "Prove every valid configuration satisfies x_i=x_{i+k} modulo cyclic indexing.", approachIds: ["adjacent-window-cancellation"], prerequisiteIds: ["compare-neighboring-windows"], hintLevels: [2] },
+    { id: "analyze-step-k-orbits", description: "Show step-k motion partitions the n positions into gcd(n,k) residue orbits.", approachIds: ["adjacent-window-cancellation"], prerequisiteIds: ["derive-step-k-equality"], hintLevels: [3] },
+    { id: "count-and-prove-converse", description: "Choose one lamp state independently per orbit, count 2^{gcd(n,k)} configurations, and prove every such choice has equal window parity.", approachIds: ["adjacent-window-cancellation"], prerequisiteIds: ["analyze-step-k-orbits"], hintLevels: [4] },
+    { id: "classify-odd-common-parity", description: "Determine when configurations with every k-window odd exist and how many there are.", approachIds: ["adjacent-window-cancellation"], prerequisiteIds: ["count-and-prove-converse"], hintLevels: [5] }
+  ],
+  edges: [
+    { from: "compare-neighboring-windows", to: "derive-step-k-equality" },
+    { from: "derive-step-k-equality", to: "analyze-step-k-orbits" },
+    { from: "analyze-step-k-orbits", to: "count-and-prove-converse" },
+    { from: "count-and-prove-converse", to: "classify-odd-common-parity" }
+  ],
+  commonErrors: [
+    { id: "confuses-equal-with-parity", description: "Assumes all k-window sums are numerically equal, a stronger condition than the problem gives." },
+    { id: "uses-k-residue-classes", description: "Claims there are k independent position classes; on a circle the number is gcd(n,k)." },
+    { id: "necessity-no-converse", description: "Derives x_i=x_{i+k} but does not show this periodicity is sufficient for all window parities to match." }
+  ],
+  followUps: ["How does the answer simplify when gcd(n,k)=1?", "Among these configurations, when can the common parity be odd?"],
+  extensions: [
+    { id: "odd-window-count", prompt: "Let d=gcd(n,k). Determine when every k-window can have odd parity and count those configurations." },
+    { id: "exact-window-sums", prompt: "Replace equal parity by equal exact numbers of on lamps. Which part of the same orbit argument survives?" }
+  ],
+  hints: [
+    { level: 1, text: "Write the parity of the window starting at i and the one starting at i+1. All shared lamps cancel modulo 2.", formulations: ["compare adjacent windows", "cancel the overlap"] },
+    { level: 2, text: "The only lamps that do not cancel are x_i and x_{i+k}, so equal window parity gives x_i=x_{i+k}.", formulations: ["leaving lamp equals entering lamp", "step k preserves the lamp state"] },
+    { level: 3, text: "Repeatedly add k to an index modulo n. The number of resulting cycles is d=gcd(n,k).", formulations: ["study step-k orbits", "positions split into gcd classes"] },
+    { level: 4, text: "A valid configuration is constant on each of those d orbits, giving 2^d choices. Conversely x_i=x_{i+k} makes every neighboring pair of window parities equal.", formulations: ["one bit per orbit", "prove the periodic condition is sufficient"] },
+    { level: 5, text: "Each k-window contains k/d positions from each of the d orbit classes. Its parity is (k/d) times the xor-sum of the orbit bits.", formulations: ["reduce odd-window existence to k divided by d", "if k/d is even every window parity is even"] }
+  ],
+  canonicalSolution: "Let x_i in {0,1} be the state of lamp i, with indices modulo n, and let W_i be the sum modulo 2 of x_i,...,x_{i+k-1}. Since all W_i are equal, 0=W_{i+1}-W_i=x_{i+k}-x_i modulo 2, so x_{i+k}=x_i for every i. Thus lamp states are constant on the orbits generated by adding k modulo n. There are d=gcd(n,k) such orbits, so there are at most 2^d configurations. Conversely, any assignment of one bit to each step-k orbit satisfies x_{i+k}=x_i; therefore W_{i+1}=W_i for all i and all k-window parities are equal. Hence there are exactly 2^d configurations. For the odd-parity extension, every k-window contains exactly k/d representatives counted with multiplicity from each of the d orbit classes, so its parity is (k/d) times the xor of the d orbit bits. If k/d is even, every valid configuration has even windows and there are no odd-window configurations. If k/d is odd, exactly half of the 2^d orbit assignments have xor 1, giving 2^{d-1} odd-window configurations.",
+  verificationNotes: "The statement includes k=n: then d=n and the condition is vacuous because every cyclic n-window is the whole circle, yielding 2^n configurations as the formula predicts. The orbit count is gcd(n,k), not k. The odd-parity extension correctly distinguishes the parity of k/d.",
+  reviewStatus: "expert-review",
+  reviewNotes: DIRICHLET_CANDIDATE_REVIEW_NOTES,
+  oxfordAdaptive: makeDirichletAdaptive({
+    familyId: "oxford-d-sliding-window-parity",
+    domains: ["combinatorics", "number-theory"],
+    contentConcepts: ["parity", "modular-reasoning", "counting-structure"],
+    prerequisiteConcepts: ["arithmetic", "modular-arithmetic", "counting-principles"],
+    skillEvidence: [evidence("representation-switching", "primary"), evidence("pattern-recognition", "primary"), evidence("proof-construction", "primary"), evidence("generalization", "supporting"), evidence("precision-checking", "supporting")],
+    difficulty: { entry: "introductory", core: "standard", ceiling: "strong" },
+    novelty: "high",
+    abstraction: "moderate",
+    introducesNewDefinition: false,
+    stages: [
+      { id: "window-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["combinatorics", "number-theory"], contentConcepts: ["parity", "modular-reasoning"], skillEvidence: [evidence("representation-switching", "primary")], milestones: [{ milestoneId: "compare-neighboring-windows", skillEvidence: [evidence("representation-switching", "primary")], contentConcepts: ["parity"] }], extensionIds: [], difficulty: "introductory" },
+      { id: "window-core", role: "core", prerequisiteStageIds: ["window-opening"], domains: ["combinatorics", "number-theory"], contentConcepts: ["parity", "modular-reasoning", "counting-structure"], skillEvidence: [evidence("pattern-recognition", "primary"), evidence("proof-construction", "primary")], milestones: [
+        { milestoneId: "derive-step-k-equality", skillEvidence: [evidence("proof-construction", "supporting")], contentConcepts: ["parity"] },
+        { milestoneId: "analyze-step-k-orbits", skillEvidence: [evidence("pattern-recognition", "primary")], contentConcepts: ["modular-reasoning"] },
+        { milestoneId: "count-and-prove-converse", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["counting-structure"] }
+      ], extensionIds: [], difficulty: "standard" },
+      { id: "window-transfer", role: "transfer", prerequisiteStageIds: ["window-core"], domains: ["combinatorics", "number-theory"], contentConcepts: ["parity", "modular-reasoning", "counting-structure"], skillEvidence: [evidence("generalization", "primary"), evidence("precision-checking", "supporting")], milestones: [{ milestoneId: "classify-odd-common-parity", skillEvidence: [evidence("generalization", "primary")], contentConcepts: ["parity", "counting-structure"] }], extensionIds: ["odd-window-count", "exact-window-sums"], difficulty: "strong"
+      }
+    ]
+  })
+};
+export const oxfordDSlidingWindowParityEntry = authorCuratedProblem(oxfordDSlidingWindowParitySpec);
+
+export const oxfordDWeightedCycleReadingsSpec: CuratedProblemSpec = {
+  id: "oxford-d-weighted-cycle-readings",
+  title: "Recovering Vertex Labels from Weighted Cycle Readings",
+  mode: "OXFORD_MATHEMATICS",
+  category: "graph theory",
+  topics: ["cyclic equations", "parameter analysis", "case analysis"],
+  difficulty: "uncalibrated-oxford-candidate",
+  prompt: "Vertices of an n-cycle carry unknown real numbers x_1,...,x_n, and the edges are read clockwise. For a fixed nonzero real parameter t, edge i displays s_i=x_i+t x_{i+1}, with x_{n+1}=x_1. For which choices of n and t do the edge readings determine the vertex labels uniquely for every possible list of readings? Analyze what happens in the exceptional cases.",
+  givenInformation: ["n>=3.", "t is a fixed nonzero real number.", "The cycle has a chosen clockwise direction only to define which endpoint receives coefficient t."],
+  approaches: [{ id: "cycle-recurrence-closure", label: "Propagate one unknown around the cycle and inspect the closing coefficient" }],
+  milestones: [
+    { id: "solve-small-cycles", description: "Work through n=3 and n=4 for simple t values and notice parity-sensitive exceptional behavior.", approachIds: ["cycle-recurrence-closure"], hintLevels: [1] },
+    { id: "derive-one-step-recurrence", description: "Rewrite each edge equation as x_{i+1}=(s_i-x_i)/t and track how the coefficient of x_1 changes.", approachIds: ["cycle-recurrence-closure"], prerequisiteIds: ["solve-small-cycles"], hintLevels: [2] },
+    { id: "close-after-n-steps", description: "Show the closing equation has coefficient 1-(-1/t)^n on x_1.", approachIds: ["cycle-recurrence-closure"], prerequisiteIds: ["derive-one-step-recurrence"], hintLevels: [3] },
+    { id: "classify-singular-parameters", description: "Over the reals, solve (-1/t)^n=1 and separate odd and even n.", approachIds: ["cycle-recurrence-closure"], prerequisiteIds: ["close-after-n-steps"], hintLevels: [4] },
+    { id: "analyze-exception-consistency", description: "Describe consistency and one-parameter nonuniqueness for t=-1, and for t=1 when n is even.", approachIds: ["cycle-recurrence-closure"], prerequisiteIds: ["classify-singular-parameters"], hintLevels: [5] }
+  ],
+  edges: [
+    { from: "solve-small-cycles", to: "derive-one-step-recurrence" },
+    { from: "derive-one-step-recurrence", to: "close-after-n-steps" },
+    { from: "close-after-n-steps", to: "classify-singular-parameters" },
+    { from: "classify-singular-parameters", to: "analyze-exception-consistency" }
+  ],
+  commonErrors: [
+    { id: "ordinary-sums-only", description: "Analyzes only t=1 and misses the parameter classification." },
+    { id: "forgets-existence", description: "Calls a singular case merely nonunique without noting that inconsistent edge readings may have no solution." },
+    { id: "complex-roots-over-real", description: "Introduces non-real roots of unity even though t is explicitly real." }
+  ],
+  followUps: ["Recover the familiar odd/even phenomenon for ordinary edge sums t=1.", "What does t=-1 mean geometrically in terms of edge differences?"],
+  extensions: [
+    { id: "ordinary-sum-specialization", prompt: "Set t=1. Derive the exact alternating-sum consistency condition for even n and explain why odd n is always uniquely solvable." },
+    { id: "difference-specialization", prompt: "Set t=-1. Derive the consistency condition on the readings and explain the one-parameter translation freedom." }
+  ],
+  hints: [
+    { level: 1, text: "Choose x_1 freely and use the first edge to compute x_2, then x_3, and so on. The only issue is whether the final value agrees with x_1.", formulations: ["propagate around the cycle", "reduce to one starting variable"] },
+    { level: 2, text: "The recurrence is x_{i+1}=s_i/t-(1/t)x_i, so the coefficient multiplying x_1 is multiplied by -1/t at each step.", formulations: ["track just the x1 coefficient", "each step multiplies the free coefficient by minus one over t"] },
+    { level: 3, text: "After n steps, x_{n+1}=(-1/t)^n x_1 plus a known expression in the s_i. Enforce x_{n+1}=x_1.", formulations: ["the closing coefficient is one minus a power", "cycle closure gives one scalar equation"] },
+    { level: 4, text: "Uniqueness fails exactly when (-1/t)^n=1. For real t, an odd power equals 1 only at 1; an even power equals 1 at ±1.", formulations: ["solve the singular parameter equation over the reals", "odd and even n behave differently"] },
+    { level: 5, text: "For t=-1 the readings are differences and must sum to 0. For t=1 with even n, the alternating sum s_1-s_2+...-s_n must be 0.", formulations: ["write the exceptional consistency conditions", "singular cases have a free additive parameter"] }
+  ],
+  canonicalSolution: "From s_i=x_i+t x_{i+1}, we have x_{i+1}=s_i/t-x_i/t. Starting from x_1 and iterating, x_{n+1}=(-1/t)^n x_1+C(s_1,...,s_n), where C is determined by the readings. The closure condition x_{n+1}=x_1 is [1-(-1/t)^n]x_1=C. If the coefficient is nonzero, this uniquely determines x_1 for every reading list, and then all other labels are uniquely recovered. Uniqueness for every reading list therefore fails exactly when (-1/t)^n=1. Over real nonzero t: if n is odd, this happens only for t=-1; if n is even, it happens for t=1 or t=-1. In a singular case the closing equation loses x_1, so either the readings violate one consistency relation and there is no solution, or the relation holds and x_1 is free, giving a one-parameter family. For t=-1, s_i=x_i-x_{i+1} and consistency is sum_i s_i=0. For t=1 with even n, consistency is s_1-s_2+s_3-...-s_n=0. Thus odd cycles are uniquely reconstructible for all real t except -1; even cycles are uniquely reconstructible for all real t except ±1.",
+  verificationNotes: "The recurrence coefficient is (-1/t)^n; t=0 is excluded in the prompt. The classification is over real t, so there are no additional roots of unity. In singular cases existence depends on one linear relation and, when it holds, exactly one scalar degree of freedom remains.",
+  reviewStatus: "expert-review",
+  reviewNotes: DIRICHLET_CANDIDATE_REVIEW_NOTES,
+  oxfordAdaptive: makeDirichletAdaptive({
+    familyId: "oxford-d-weighted-cycle-readings",
+    domains: ["graph-theory", "algebra", "sequences-recurrences"],
+    contentConcepts: ["paths-cycles-connectivity", "parameter-dependent-algebra", "recurrence-structure"],
+    prerequisiteConcepts: ["algebraic-manipulation", "equations-inequalities", "graph-basics"],
+    skillEvidence: [evidence("small-case-exploration", "supporting"), evidence("representation-switching", "primary"), evidence("case-analysis", "primary"), evidence("proof-construction", "primary"), evidence("precision-checking", "supporting")],
+    difficulty: { entry: "introductory-plus", core: "strong", ceiling: "strong" },
+    novelty: "high",
+    abstraction: "moderate",
+    introducesNewDefinition: false,
+    stages: [
+      { id: "weighted-cycle-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["graph-theory", "algebra"], contentConcepts: ["paths-cycles-connectivity", "parameter-dependent-algebra"], skillEvidence: [evidence("small-case-exploration", "primary")], milestones: [{ milestoneId: "solve-small-cycles", skillEvidence: [evidence("small-case-exploration", "primary")], contentConcepts: ["paths-cycles-connectivity"] }], extensionIds: [], difficulty: "introductory-plus" },
+      { id: "weighted-cycle-core", role: "core", prerequisiteStageIds: ["weighted-cycle-opening"], domains: ["graph-theory", "algebra", "sequences-recurrences"], contentConcepts: ["paths-cycles-connectivity", "parameter-dependent-algebra", "recurrence-structure"], skillEvidence: [evidence("representation-switching", "primary"), evidence("case-analysis", "primary"), evidence("proof-construction", "primary")], milestones: [
+        { milestoneId: "derive-one-step-recurrence", skillEvidence: [evidence("representation-switching", "primary")], contentConcepts: ["parameter-dependent-algebra", "recurrence-structure"] },
+        { milestoneId: "close-after-n-steps", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["paths-cycles-connectivity", "parameter-dependent-algebra", "recurrence-structure"] },
+        { milestoneId: "classify-singular-parameters", skillEvidence: [evidence("case-analysis", "primary")], contentConcepts: ["parameter-dependent-algebra"] }
+      ], extensionIds: [], difficulty: "strong" },
+      { id: "weighted-cycle-transfer", role: "transfer", prerequisiteStageIds: ["weighted-cycle-core"], domains: ["graph-theory", "algebra"], contentConcepts: ["paths-cycles-connectivity", "parameter-dependent-algebra"], skillEvidence: [evidence("precision-checking", "primary"), evidence("case-analysis", "supporting")], milestones: [{ milestoneId: "analyze-exception-consistency", skillEvidence: [evidence("precision-checking", "primary"), evidence("case-analysis", "supporting")], contentConcepts: ["parameter-dependent-algebra"] }], extensionIds: ["ordinary-sum-specialization", "difference-specialization"], difficulty: "strong"
+      }
+    ]
+  })
+};
+export const oxfordDWeightedCycleReadingsEntry = authorCuratedProblem(oxfordDWeightedCycleReadingsSpec);
+
+export const oxfordDMidpointClosedResiduesSpec: CuratedProblemSpec = {
+  id: "oxford-d-midpoint-closed-residues",
+  title: "Midpoint-Closed Sets Modulo a Prime",
+  mode: "OXFORD_MATHEMATICS",
+  category: "number theory",
+  topics: ["modular arithmetic", "closure", "classification"],
+  difficulty: "uncalibrated-oxford-candidate",
+  prompt: "Let p be an odd prime, and let S be a nonempty set of residue classes modulo p. Suppose that whenever x,y are in S, their modular midpoint (x+y)/2 is also in S. Classify all possible S. Then decide what the correct statement becomes for an odd composite modulus.",
+  givenInformation: ["Because p is odd, 2 has a multiplicative inverse modulo p.", "All additions and divisions by 2 are taken modulo p."],
+  approaches: [{ id: "translate-and-double", label: "Translate one point to zero, recover doubling from midpoint closure, then obtain additive closure" }],
+  milestones: [
+    { id: "test-small-residue-sets", description: "Explore examples for small odd primes and conjecture that only singletons and the whole residue system occur.", approachIds: ["translate-and-double"], hintLevels: [1] },
+    { id: "translate-to-zero", description: "Choose a in S and translate to T=S-a, preserving midpoint closure and ensuring 0 in T.", approachIds: ["translate-and-double"], prerequisiteIds: ["test-small-residue-sets"], hintLevels: [2] },
+    { id: "recover-doubling", description: "Use closure under halving and finiteness to prove T is also closed under doubling.", approachIds: ["translate-and-double"], prerequisiteIds: ["translate-to-zero"], hintLevels: [3] },
+    { id: "prove-additive-subgroup", description: "Combine averaging and doubling to prove T is closed under addition, then use finiteness to obtain additive inverses.", approachIds: ["translate-and-double"], prerequisiteIds: ["recover-doubling"], hintLevels: [4] },
+    { id: "classify-prime-and-composite", description: "Use primality to show a nonzero element generates all residues; then generalize to cosets of additive subgroups for odd composite moduli.", approachIds: ["translate-and-double"], prerequisiteIds: ["prove-additive-subgroup"], hintLevels: [5] }
+  ],
+  edges: [
+    { from: "test-small-residue-sets", to: "translate-to-zero" },
+    { from: "translate-to-zero", to: "recover-doubling" },
+    { from: "recover-doubling", to: "prove-additive-subgroup" },
+    { from: "prove-additive-subgroup", to: "classify-prime-and-composite" }
+  ],
+  commonErrors: [
+    { id: "assumes-doubling", description: "Infers 2x is in the set directly from midpoint closure; this requires a finite-bijection argument after translating to include zero." },
+    { id: "forgets-translation", description: "Tries to prove S itself is an additive subgroup even when 0 is not in S; the natural object is the translate S-a." },
+    { id: "prime-step-in-composite", description: "Claims every nonzero residue generates the whole additive group for composite moduli." }
+  ],
+  followUps: ["Why is finiteness needed to turn closure under halving into closure under doubling?", "Give a nontrivial example modulo 9."],
+  extensions: [
+    { id: "odd-composite-cosets", prompt: "For odd m, prove every nonempty midpoint-closed S modulo m is a coset of an additive subgroup, and conversely." },
+    { id: "mod-nine-examples", prompt: "List all midpoint-closed sets modulo 9 up to translation." }
+  ],
+  hints: [
+    { level: 1, text: "Translate S so that one chosen element becomes 0. Midpoint closure is preserved by translation.", formulations: ["move one element to zero", "work with T equals S minus a"] },
+    { level: 2, text: "With 0 in T, midpoint closure gives x/2 in T whenever x is in T.", formulations: ["T is closed under halving", "average x with zero"] },
+    { level: 3, text: "The map x->x/2 is injective on the finite set T, hence bijective. Its inverse x->2x therefore also maps T to T.", formulations: ["finiteness recovers doubling", "halving is a permutation of T"] },
+    { level: 4, text: "For x,y in T, first average to get (x+y)/2 in T and then double to get x+y in T. A finite nonempty subset of a finite group closed under addition is a subgroup.", formulations: ["averaging plus doubling gives addition", "T becomes an additive subgroup"] },
+    { level: 5, text: "Modulo a prime, any nonzero residue additively generates every residue. For odd composite m, stop one step earlier: translated solutions are precisely additive subgroups.", formulations: ["prime modulus leaves only trivial subgroups", "composite solutions are subgroup cosets"] }
+  ],
+  canonicalSolution: "Choose a in S and set T=S-a. Then 0 is in T and T is still midpoint-closed. Averaging x in T with 0 shows x/2 is in T. The map h:T->T given by h(x)=x/2 is injective because 2 is invertible modulo p; since T is finite, h is bijective. Hence its inverse, doubling, also maps T into T. For x,y in T, midpoint closure gives (x+y)/2 in T and doubling gives x+y in T. Thus T is closed under addition. Because T is finite and contains 0, repeated addition of any x eventually returns to 0, so -x is also in T; therefore T is an additive subgroup of Z/pZ. If T={0}, then S is a singleton. Otherwise T contains nonzero x, and because p is prime the multiples 0,x,2x,...,(p-1)x are all residues, so T=Z/pZ and S is the whole residue system. For any odd composite modulus m the same translation, halving, doubling, and addition argument works because 2 remains invertible; the conclusion is that S is a coset of an additive subgroup of Z/mZ. Conversely every such coset is midpoint-closed.",
+  verificationNotes: "Oddness of the modulus is essential because division by 2 must be well-defined. The finite-bijection step is necessary before asserting doubling closure. For prime p the additive subgroups are {0} and the full group. For odd composite m the subgroup-coset classification is exact.",
+  reviewStatus: "expert-review",
+  reviewNotes: DIRICHLET_CANDIDATE_REVIEW_NOTES,
+  oxfordAdaptive: makeDirichletAdaptive({
+    familyId: "oxford-d-midpoint-closed-residues",
+    similarityClusterId: "closure-classification-residue-affine",
+    domains: ["number-theory", "set-theory"],
+    contentConcepts: ["modular-reasoning", "relations-operations"],
+    prerequisiteConcepts: ["modular-arithmetic", "set-notation"],
+    skillEvidence: [evidence("small-case-exploration", "supporting"), evidence("abstraction", "primary"), evidence("proof-construction", "primary"), evidence("generalization", "primary"), evidence("precision-checking", "supporting")],
+    difficulty: { entry: "introductory-plus", core: "strong", ceiling: "stretch" },
+    novelty: "moderate",
+    abstraction: "high",
+    introducesNewDefinition: true,
+    provenance: { originType: "classic-problem", sourceCategory: "classic-mathematics" },
+    stages: [
+      { id: "midpoint-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["number-theory", "set-theory"], contentConcepts: ["modular-reasoning", "relations-operations"], skillEvidence: [evidence("small-case-exploration", "primary")], milestones: [{ milestoneId: "test-small-residue-sets", skillEvidence: [evidence("small-case-exploration", "primary")], contentConcepts: ["modular-reasoning"] }], extensionIds: [], difficulty: "introductory-plus", introducesNewDefinition: true },
+      { id: "midpoint-core", role: "core", prerequisiteStageIds: ["midpoint-opening"], domains: ["number-theory", "set-theory"], contentConcepts: ["modular-reasoning", "relations-operations"], skillEvidence: [evidence("abstraction", "primary"), evidence("proof-construction", "primary")], milestones: [
+        { milestoneId: "translate-to-zero", skillEvidence: [evidence("abstraction", "primary")], contentConcepts: ["relations-operations"] },
+        { milestoneId: "recover-doubling", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["modular-reasoning"] },
+        { milestoneId: "prove-additive-subgroup", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["relations-operations"] }
+      ], extensionIds: [], difficulty: "strong" },
+      { id: "midpoint-transfer", role: "transfer", prerequisiteStageIds: ["midpoint-core"], domains: ["number-theory", "set-theory"], contentConcepts: ["modular-reasoning", "relations-operations"], skillEvidence: [evidence("generalization", "primary"), evidence("precision-checking", "supporting")], milestones: [{ milestoneId: "classify-prime-and-composite", skillEvidence: [evidence("generalization", "primary")], contentConcepts: ["modular-reasoning", "relations-operations"] }], extensionIds: ["odd-composite-cosets", "mod-nine-examples"], difficulty: "stretch"
+      }
+    ]
+  })
+};
+export const oxfordDMidpointClosedResiduesEntry = authorCuratedProblem(oxfordDMidpointClosedResiduesSpec);
+
+export const dirichletBatchBEntries = Object.freeze([
+  oxfordDSlidingWindowParityEntry,
+  oxfordDWeightedCycleReadingsEntry,
+  oxfordDMidpointClosedResiduesEntry,
+] as const);

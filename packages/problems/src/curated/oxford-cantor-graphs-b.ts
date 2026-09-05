@@ -1,0 +1,542 @@
+import {
+  buildCantorEntry,
+  cantorSkills,
+  cantorTiming,
+  type CantorFamilyAuthoring
+} from "./oxford-cantor-authoring.js";
+
+export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
+  {
+    id: "oxford-cantor-absolute-quadratic-crossings",
+    title: "An Absolute-Value Quadratic",
+    category: "algebra and graph sketching",
+    topics: ["absolute value","quadratics","graphs","equations"],
+    prompt:
+      "Sketch y=|(x-1)(x+2)| carefully. For a real number c, classify the number of real solutions of |(x-1)(x+2)|=c. Explain every transition value rather than relying only on the picture.",
+    givenInformation: [],
+    approaches: [
+      { id: "fold-quadratic", label: "Sketch the quadratic first, then reflect its negative part" },
+      { id: "two-signed-equations", label: "Solve q(x)=c and q(x)=-c and track discriminants" }
+    ],
+    milestones: [
+      {
+        id: "base-quadratic",
+        description: "Sketch q(x)=(x-1)(x+2), locating its roots and vertex.",
+        skills: cantorSkills(["graph-sketching", "primary"], ["technique", "supporting"]),
+        concepts: ["roots-intersections", "turning-points-extrema"]
+      },
+      {
+        id: "fold-negative-arc",
+        description: "Construct |q(x)| by reflecting only the portion of q below the x-axis.",
+        skills: cantorSkills(["visualization", "primary"], ["representation-switching", "supporting"]),
+        concepts: ["function-transformations", "qualitative-function-behavior"]
+      },
+      {
+        id: "inner-cap-height",
+        description: "Find the height 9/4 of the reflected inner arch and identify it as the key transition.",
+        skills: cantorSkills(["strategic-simplification", "supporting"], ["precision-checking", "supporting"]),
+        concepts: ["turning-points-extrema", "roots-intersections"]
+      },
+      {
+        id: "horizontal-level-count",
+        description: "Classify the number of intersections for c<0, c=0, 0<c<9/4, c=9/4, and c>9/4.",
+        skills: cantorSkills(["case-analysis", "primary"], ["proof-construction", "primary"]),
+        concepts: ["roots-intersections", "qualitative-function-behavior"]
+      },
+      {
+        id: "general-root-gap",
+        description: "Generalize to |(x-a)(x-b)| with a<b and express the critical level in terms of b-a.",
+        skills: cantorSkills(["generalization", "primary"], ["transfer", "primary"]),
+        concepts: ["parameter-dependent-algebra", "turning-points-extrema", "function-transformations"]
+      }
+    ],
+    commonErrors: [
+      {
+        id: "reflect-entire-quadratic",
+        description: "Reflects the whole quadratic rather than only the portion where it is negative."
+      },
+      {
+        id: "count-tangency-twice",
+        description: "Counts the single tangent point on the inner arch as two distinct solutions at c=9/4."
+      }
+    ],
+    followUps: [
+      "Could you reproduce the count algebraically without drawing?",
+      "How does only the distance between the two original roots control the critical level?"
+    ],
+    extensions: [
+      {
+        id: "arbitrary-root-gap",
+        prompt: "For a<b, classify the solution count of |(x-a)(x-b)|=c and derive the transition level."
+      },
+      {
+        id: "signed-level-comparison",
+        prompt: "Explain the same classification by comparing the discriminants of (x-a)(x-b)=c and (x-a)(x-b)=-c."
+      }
+    ],
+    hints: [
+      {
+        text: "Start with the unfurled quadratic: its roots are -2 and 1, and its vertex is midway between them.",
+        formulations: ["sketch the quadratic before applying absolute value", "find roots and midpoint first"]
+      },
+      {
+        text: "Absolute value reflects exactly the part of the quadratic below the x-axis.",
+        formulations: ["fold the negative arc upward", "the outer branches are unchanged"]
+      },
+      {
+        text: "The original vertex is at x=-1/2 with value -9/4, so the reflected arch peaks at 9/4.",
+        formulations: ["the inner arch has one maximum", "compute the folded vertex height"]
+      },
+      {
+        text: "Now slide a horizontal line y=c through the picture, treating equality cases separately.",
+        formulations: ["count crossings by height regime", "the two transition heights are 0 and 9/4"]
+      },
+      {
+        text: "For roots a<b, the quadratic minimum is -(b-a)²/4.",
+        formulations: ["center the roots around their midpoint", "the critical folded height depends on the squared root gap"]
+      }
+    ],
+    canonicalSolution:
+      "Let q(x)=(x-1)(x+2)=x²+x-2. Its roots are -2 and 1, and its vertex is at x=-1/2 with value -9/4. Thus |q| keeps the two outer upward branches and reflects the negative arc on (-2,1) upward, producing an inner arch with maximum 9/4. Hence c<0 gives 0 solutions; c=0 gives the two roots; 0<c<9/4 gives two outer intersections and two inner intersections, so 4; c=9/4 gives two outer intersections plus the single top of the arch, so 3; c>9/4 gives only the two outer intersections. For q(x)=(x-a)(x-b), a<b, its vertex is at (a+b)/2 and its minimum is -(b-a)²/4, so the identical classification holds with critical positive level (b-a)²/4.",
+    verificationNotes:
+      "At c=0 the two roots remain distinct. At the critical positive level the inner equation has a double root at the midpoint but that is one distinct solution. For general a<b, complete the square to verify the minimum exactly.",
+    domains: ["algebra", "functions", "graph-sketching"],
+    contentConcepts: [
+      "roots-intersections",
+      "turning-points-extrema",
+      "function-transformations",
+      "qualitative-function-behavior",
+      "parameter-dependent-algebra"
+    ],
+    prerequisiteConcepts: ["algebraic-manipulation", "polynomial-factorization", "functions-graphs"],
+    skills: cantorSkills(
+      ["graph-sketching", "primary"],
+      ["technique", "supporting"],
+      ["visualization", "primary"],
+      ["representation-switching", "supporting"],
+      ["strategic-simplification", "supporting"],
+      ["precision-checking", "supporting"],
+      ["case-analysis", "primary"],
+      ["proof-construction", "primary"],
+      ["generalization", "primary"],
+      ["transfer", "primary"]
+    ),
+    difficulty: { entry: "warm-up", core: "introductory-plus", ceiling: "standard" },
+    timing: cantorTiming([1, 3], [12, 20], [10, 17], [3, 6], 20),
+    stageTiming: [
+      cantorTiming([1, 2], [3, 6], [3, 5], undefined, 6),
+      cantorTiming([1, 3], [6, 11], [5, 9], undefined, 11),
+      cantorTiming([1, 3], [4, 7], [3, 6], [2, 5], 7)
+    ],
+    openingRole: "warm-up",
+    finalRole: "transfer",
+    novelty: "moderate",
+    abstraction: "low",
+    originalityRisk: "medium",
+    correctnessRisk: "low",
+    calibrationRisk: "medium"
+  },
+  {
+    id: "oxford-cantor-radical-asymptote",
+    title: "A Parameterized Radical Curve",
+    category: "functions and elementary analysis",
+    topics: ["functions","radicals","graphs","calculus"],
+    prompt:
+      "Let -2<a<2 and define R_a(x)=sqrt(x²+a x+1)-x. Sketch R_a as accurately as you can without graphing software: determine its domain, monotonicity, end behavior, and range. Then investigate what changes when a reaches or passes ±2.",
+    givenInformation: [],
+    approaches: [
+      { id: "rationalize-at-infinity", label: "Use conjugates to expose the finite asymptote" },
+      { id: "derivative-sign-square", label: "Differentiate and reduce the sign question to a parameter inequality" }
+    ],
+    milestones: [
+      {
+        id: "positive-radicand",
+        description: "Show x²+a x+1 is positive for every real x when |a|<2.",
+        skills: cantorSkills(["technique", "supporting"], ["precision-checking", "primary"]),
+        concepts: ["equations-inequalities", "parameter-dependent-algebra"]
+      },
+      {
+        id: "right-end-limit",
+        description: "Rationalize R_a(x) to prove the horizontal asymptote a/2 as x→∞.",
+        skills: cantorSkills(["strategic-simplification", "primary"], ["representation-switching", "supporting"]),
+        concepts: ["asymptotic-behavior", "limiting-arguments"]
+      },
+      {
+        id: "left-end-growth",
+        description: "Analyze x→-∞ and show R_a(x) grows without bound, with leading behavior -2x-a/2.",
+        skills: cantorSkills(["precision-checking", "supporting"], ["proof-construction", "supporting"]),
+        concepts: ["asymptotic-behavior", "qualitative-function-behavior"]
+      },
+      {
+        id: "strict-decrease-and-range",
+        description: "Prove R_a is strictly decreasing for |a|<2, combine this with the end behavior, and deduce the exact range (a/2,∞).",
+        skills: cantorSkills(["technique", "primary"], ["proof-construction", "primary"], ["precision-checking", "supporting"]),
+        concepts: ["derivative-structure", "qualitative-function-behavior", "asymptotic-behavior"]
+      },
+      {
+        id: "boundary-domain-transfer",
+        description: "Transfer the analysis to a=±2 and |a|>2, where the radicand develops zeros and the domain topology changes.",
+        skills: cantorSkills(["case-analysis", "primary"], ["generalization", "primary"], ["graph-sketching", "supporting"]),
+        concepts: ["parameter-dependent-curves", "roots-intersections", "qualitative-function-behavior"]
+      }
+    ],
+    commonErrors: [
+      {
+        id: "wrong-left-asymptote",
+        description: "Treats sqrt(x²+a x+1) as asymptotic to x rather than |x| when x→-∞."
+      },
+      {
+        id: "square-without-sign-check",
+        description: "Squares an inequality in the derivative argument without first handling the case 2x+a≤0."
+      }
+    ],
+    followUps: [
+      "Why does the right-hand asymptote never get attained when |a|<2?",
+      "What do the perfect-square cases a=2 and a=-2 look like exactly?"
+    ],
+    extensions: [
+      {
+        id: "boundary-perfect-squares",
+        prompt: "Analyze a=±2 exactly and sketch the resulting piecewise-linear radical expressions."
+      },
+      {
+        id: "disconnected-domain",
+        prompt: "For |a|>2, find the domain components and describe the behavior near their finite endpoints."
+      }
+    ],
+    hints: [
+      {
+        text: "The quadratic under the root has discriminant a²-4.",
+        formulations: ["start with the radicand before sketching", "the core range |a|<2 gives no real radicand zeros"]
+      },
+      {
+        text: "For x→∞, multiply by the conjugate; the numerator becomes a x+1.",
+        formulations: ["rationalization reveals the finite limit", "divide the conjugate expression by x"]
+      },
+      {
+        text: "For x→-∞, remember sqrt(x²) behaves like |x|=-x.",
+        formulations: ["the two ends are not symmetric", "factor -x rather than x on the left"]
+      },
+      {
+        text: "Control the derivative sign by splitting on 2x+a; once strict decrease is proved, combine it with the two end behaviors to read off the range.",
+        formulations: ["the key squared comparison reduces to a²<4", "monotonicity plus the unattained right limit gives the exact range"]
+      },
+      {
+        text: "At |a|=2 the radicand becomes a perfect square; beyond that it has two real zeros and the domain separates.",
+        formulations: ["the parameter boundary is a domain-topology change", "treat equality before the disconnected case"]
+      }
+    ],
+    canonicalSolution:
+      "For |a|<2 the radicand q=x²+a x+1 has negative discriminant and positive leading coefficient, so q>0 on R. Rationalizing gives R_a(x)=(a x+1)/(sqrt(q)+x); after dividing numerator and denominator by x for x→∞, the limit is a/2. For x→-∞, sqrt(q)=-x-a/2+o(1), so R_a(x)=-2x-a/2+o(1)→∞. Differentiating gives R_a'=(2x+a)/(2sqrt(q))-1. If 2x+a≤0, this is plainly negative. If 2x+a>0, then (2x+a)²<4q is equivalent to a²<4, so again the first fraction is <1 and R_a'<0. Thus R_a is strictly decreasing from ∞ toward the unattained limit a/2, so its range is (a/2,∞). At a=2, q=(x+1)² and R_2=|x+1|-x; at a=-2, q=(x-1)² and R_{-2}=|x-1|-x. For |a|>2, let r_±=(-a±sqrt(a²-4))/2. Then the domain is (-∞,r_-] union [r_+,∞), the endpoint values are R_a(r_±)=-r_±, and q'(r_- )=-sqrt(a²-4), q'(r_+)=sqrt(a²-4). Consequently R_a' tends to -∞ approaching r_- from the left and +∞ approaching r_+ from the right; the square-root branches meet their finite endpoints with vertical-tangent behavior.",
+    verificationNotes:
+      "At a=2: R_2=1 for x≥-1 and -2x-1 for x<-1. At a=-2: R_{-2}=1-2x for x<1 and R_{-2}=-1 for x≥1. Keep this exact in review. For |a|>2, domain is x≤r_- or x≥r_+ where r_±=(-a±sqrt(a²-4))/2.",
+    domains: ["functions", "graph-sketching", "elementary-analysis", "calculus", "algebra"],
+    contentConcepts: [
+      "asymptotic-behavior",
+      "limiting-arguments",
+      "qualitative-function-behavior",
+      "derivative-structure",
+      "parameter-dependent-curves",
+      "roots-intersections",
+      "equations-inequalities",
+      "parameter-dependent-algebra"
+    ],
+    prerequisiteConcepts: ["algebraic-manipulation", "equations-inequalities", "functions-graphs", "differentiation", "limits-continuity"],
+    skills: cantorSkills(
+      ["technique", "primary"],
+      ["precision-checking", "primary"],
+      ["strategic-simplification", "primary"],
+      ["representation-switching", "supporting"],
+      ["proof-construction", "primary"],
+      ["case-analysis", "primary"],
+      ["generalization", "primary"],
+      ["graph-sketching", "supporting"],
+      ["guided-adaptation", "supporting"]
+    ),
+    difficulty: { entry: "introductory-plus", core: "strong", ceiling: "stretch" },
+    timing: cantorTiming([3, 6], [18, 27], [14, 23], [5, 9], 25),
+    stageTiming: [
+      cantorTiming([1, 3], [4, 7], [3, 6], undefined, 7),
+      cantorTiming([2, 5], [9, 16], [7, 13], undefined, 16),
+      cantorTiming([2, 4], [5, 10], [4, 8], [3, 7], 10)
+    ],
+    openingRole: "technique-check",
+    finalRole: "stretch",
+    novelty: "high",
+    abstraction: "moderate",
+    originalityRisk: "low",
+    correctnessRisk: "medium",
+    calibrationRisk: "high"
+  },
+  {
+    id: "oxford-cantor-shifted-cubic-intersections",
+    title: "Intersecting a Cubic with Its Own Translate",
+    category: "functions and algebra",
+    topics: ["functions","cubics","graphs","parameters"],
+    prompt:
+      "Let f(x)=x³-x. For h>0, compare the graphs y=f(x) and y=f(x-h). Determine exactly how many intersection points they have as h varies, identify the transition value, and explain what the small-h intersections approach.",
+    givenInformation: [],
+    approaches: [
+      { id: "difference-factorization", label: "Factor the difference f(x)-f(x-h)" },
+      { id: "translation-geometry", label: "Think of sliding the cubic horizontally and then connect the threshold to tangency" }
+    ],
+    milestones: [
+      {
+        id: "translated-picture",
+        description: "Sketch a cubic and its horizontal translate for a few small and large h values.",
+        skills: cantorSkills(["graph-sketching", "primary"], ["conjecture-formation", "supporting"]),
+        concepts: ["function-transformations", "roots-intersections"]
+      },
+      {
+        id: "factor-difference",
+        description: "Compute f(x)-f(x-h)=h(3x²-3h x+h²-1).",
+        skills: cantorSkills(["technique", "primary"], ["strategic-simplification", "supporting"]),
+        concepts: ["polynomial-structure", "parameter-dependent-algebra"]
+      },
+      {
+        id: "spacing-threshold",
+        description: "Use the discriminant to prove two intersections for 0<h<2, one for h=2, and none for h>2.",
+        skills: cantorSkills(["case-analysis", "primary"], ["proof-construction", "primary"]),
+        concepts: ["roots-intersections", "parameter-dependent-curves"]
+      },
+      {
+        id: "transition-and-small-shift",
+        description: "Interpret h=2 as tangency and show that, as h→0+, the two intersection x-coordinates approach the stationary points ±1/sqrt(3).",
+        skills: cantorSkills(["representation-switching", "primary"], ["visualization", "supporting"], ["precision-checking", "supporting"]),
+        concepts: ["turning-points-extrema", "roots-intersections", "limiting-arguments", "derivative-structure"]
+      },
+      {
+        id: "scaled-cubic-transfer",
+        description: "Transfer the intersection analysis to f_c(x)=x³-cx and connect the small-shift equation to a difference quotient.",
+        skills: cantorSkills(["generalization", "primary"], ["transfer", "primary"]),
+        concepts: ["parameter-dependent-algebra", "limiting-arguments", "derivative-structure"]
+      }
+    ],
+    commonErrors: [
+      {
+        id: "forget-positive-h-factor",
+        description: "Cancels h without noting the problem assumes h>0."
+      },
+      {
+        id: "wrong-small-h-centers",
+        description: "Assumes intersections approach the zeros of f rather than the stationary points of f."
+      }
+    ],
+    followUps: [
+      "Why should stationary points emerge from comparing a function to a very small translate?",
+      "What is the analogous threshold for f(x)=x³-cx?"
+    ],
+    extensions: [
+      {
+        id: "scaled-cubic-translate",
+        prompt: "For c>0 and f_c(x)=x³-cx, classify intersections with f_c(x-h) and find the critical h."
+      },
+      {
+        id: "difference-quotient-link",
+        prompt: "Divide the intersection equation by h and explain how the h→0 limit becomes a derivative condition."
+      }
+    ],
+    hints: [
+      {
+        text: "The second graph is the first shifted h units to the right.",
+        formulations: ["sketch a few translations first", "look for a critical horizontal separation"]
+      },
+      {
+        text: "Expand only the difference f(x)-f(x-h); the cubic terms cancel.",
+        formulations: ["two cubics reduce to a quadratic intersection equation", "factor out h after cancellation"]
+      },
+      {
+        text: "The remaining quadratic has discriminant 3(4-h²).",
+        formulations: ["intersection count is controlled by one discriminant", "the transition occurs at h=2"]
+      },
+      {
+        text: "At h=2 the double root gives tangency; for h→0+, either use the exact roots or divide the difference by h to see the stationary-point limit.",
+        formulations: ["connect the merger and small-shift regimes to derivative geometry", "a finite difference becomes a derivative as the translate shrinks"]
+      },
+      {
+        text: "For f_c(x)=x³-cx the same cancellation leaves 3x²-3hx+h²-c; reuse the discriminant and difference-quotient ideas.",
+        formulations: ["the threshold rescales with sqrt(c)", "transfer the same kernel instead of recomputing from scratch"]
+      }
+    ],
+    canonicalSolution:
+      "Intersections satisfy f(x)=f(x-h). Expanding gives f(x)-f(x-h)=h(3x²-3h x+h²-1). Since h>0, the intersection equation is 3x²-3h x+h²-1=0, whose discriminant is 9h²-12(h²-1)=3(4-h²). Therefore 0<h<2 gives two distinct intersections, h=2 gives one double intersection, and h>2 gives none. At h=2 the root is x=1, and f'(1)=2=f'(-1)=f'(1-2), so the two translated curves are tangent there. The roots are x=(3h±sqrt(12-3h²))/6, which approach ±1/sqrt(3) as h→0+, exactly the stationary points of f because f'(x)=3x²-1. For f_c=x³-cx, the same calculation gives h(3x²-3h x+h²-c), so the threshold is h=2sqrt(c).",
+    verificationNotes:
+      "At h=2 the common point uses arguments x=1 and x-h=-1; both derivatives are 2. Small-h root limits from the exact formula are ±sqrt(12)/6=±1/sqrt(3).",
+    domains: ["functions", "graph-sketching", "algebra", "calculus", "elementary-analysis"],
+    contentConcepts: [
+      "function-transformations",
+      "roots-intersections",
+      "polynomial-structure",
+      "parameter-dependent-algebra",
+      "parameter-dependent-curves",
+      "turning-points-extrema",
+      "derivative-structure",
+      "limiting-arguments"
+    ],
+    prerequisiteConcepts: ["algebraic-manipulation", "polynomial-factorization", "functions-graphs", "differentiation"],
+    skills: cantorSkills(
+      ["graph-sketching", "primary"],
+      ["conjecture-formation", "supporting"],
+      ["technique", "primary"],
+      ["strategic-simplification", "supporting"],
+      ["case-analysis", "primary"],
+      ["proof-construction", "primary"],
+      ["representation-switching", "primary"],
+      ["visualization", "supporting"],
+      ["generalization", "primary"],
+      ["precision-checking", "supporting"],
+      ["transfer", "primary"]
+    ),
+    difficulty: { entry: "introductory-plus", core: "strong", ceiling: "strong" },
+    timing: cantorTiming([2, 5], [15, 24], [12, 20], [4, 8], 23),
+    stageTiming: [
+      cantorTiming([1, 3], [4, 7], [3, 6], undefined, 7),
+      cantorTiming([2, 4], [8, 14], [6, 12], undefined, 14),
+      cantorTiming([1, 3], [4, 9], [3, 7], [3, 6], 9)
+    ],
+    openingRole: "warm-up",
+    finalRole: "transfer",
+    novelty: "high",
+    abstraction: "moderate",
+    similarityClusterId: "cantor-cubic-graph-structure",
+    originalityRisk: "medium",
+    correctnessRisk: "low",
+    calibrationRisk: "high"
+  },
+  {
+    id: "oxford-cantor-moving-integral-window",
+    title: "A Moving Integral Window",
+    category: "calculus and functions",
+    topics: ["calculus","integrals","graphs","parameters"],
+    prompt:
+      "Define W(x)=∫_x^{2x} 1/(1+t²) dt for real x. Sketch W without evaluating an antiderivative: determine its symmetry, sign, turning points, and end behavior. Then replace 2 by a parameter k>1.",
+    givenInformation: [
+      "You may use the Fundamental Theorem of Calculus for differentiating variable-limit integrals."
+    ],
+    approaches: [
+      { id: "moving-window-geometry", label: "Interpret W as signed area over a moving interval" },
+      { id: "leibniz-derivative", label: "Differentiate the endpoints directly and analyze the rational derivative" }
+    ],
+    milestones: [
+      {
+        id: "odd-symmetry",
+        description: "Use the even integrand and orientation of the integral to prove W is odd.",
+        skills: cantorSkills(["pattern-recognition", "supporting"], ["proof-construction", "supporting"]),
+        concepts: ["symmetry-periodicity", "integral-accumulation"]
+      },
+      {
+        id: "sign-from-window",
+        description: "Show W(x)>0 for x>0, W(0)=0, and W(x)<0 for x<0.",
+        skills: cantorSkills(["visualization", "supporting"], ["precision-checking", "supporting"]),
+        concepts: ["integral-accumulation", "qualitative-function-behavior"]
+      },
+      {
+        id: "differentiate-window",
+        description: "Derive W'(x)=2/(1+4x²)-1/(1+x²) and reduce its sign to 1-2x².",
+        skills: cantorSkills(["technique", "primary"], ["strategic-simplification", "supporting"]),
+        concepts: ["derivative-structure", "turning-points-extrema"]
+      },
+      {
+        id: "end-limit-without-arctan",
+        description: "Prove W(x)→0 as x→∞ using comparison rather than an antiderivative.",
+        skills: cantorSkills(["proof-construction", "primary"], ["precision-checking", "supporting"]),
+        concepts: ["limiting-arguments", "integral-accumulation"]
+      },
+      {
+        id: "parameter-k",
+        description: "For W_k(x)=∫_x^{kx}1/(1+t²)dt, find the positive maximum at x=1/sqrt(k) and explain its movement with k.",
+        skills: cantorSkills(["generalization", "primary"], ["transfer", "primary"], ["graph-sketching", "supporting"]),
+        concepts: ["parameter-dependent-curves", "optimization-extrema", "derivative-structure"]
+      }
+    ],
+    commonErrors: [
+      {
+        id: "even-function-guess",
+        description: "Sees an even integrand and incorrectly concludes W is even, ignoring the reversed interval for negative x."
+      },
+      {
+        id: "chain-factor-missing",
+        description: "Differentiates the upper endpoint contribution as 1/(1+4x²) rather than 2/(1+4x²)."
+      }
+    ],
+    followUps: [
+      "Can you prove the limit at infinity by a one-line comparison?",
+      "How does the maximizing x depend on k, and is that direction intuitive from the moving interval?"
+    ],
+    extensions: [
+      {
+        id: "general-window-factor",
+        prompt: "For k>1, fully classify the turning points of W_k and derive the positive maximizer."
+      },
+      {
+        id: "maximum-value-behavior",
+        prompt: "Without needing a closed form, investigate qualitatively how the maximum value changes as k→1+ and as k→∞."
+      }
+    ],
+    hints: [
+      {
+        text: "Compare W(-x) with W(x) by substituting t=-u and using that the integrand is even.",
+        formulations: ["the integration orientation matters", "the moving-window function is odd, not even"]
+      },
+      {
+        text: "For x>0 the interval [x,2x] has positive orientation and the integrand is positive.",
+        formulations: ["the sign is visible geometrically", "interpret it as area"]
+      },
+      {
+        text: "Differentiate both moving endpoints: W'(x)=2f(2x)-f(x).",
+        formulations: ["remember the chain factor from 2x", "apply FTC to both endpoints"]
+      },
+      {
+        text: "For large x>0, 0<W(x)≤∫_x^{2x}1/t² dt=1/(2x).",
+        formulations: ["compare with 1/t²", "avoid evaluating arctangent"]
+      },
+      {
+        text: "For W_k, the derivative numerator factors as (k-1)(1-kx²).",
+        formulations: ["put the derivative over a common denominator", "the positive critical point is 1/sqrt(k)"]
+      }
+    ],
+    canonicalSolution:
+      "Let f(t)=1/(1+t²), which is even and positive. A change of variables shows W(-x)=-W(x), so W is odd; in particular it is positive for x>0. By FTC, W'(x)=2/(1+4x²)-1/(1+x²)=(1-2x²)/((1+4x²)(1+x²)). Hence on x>0 it increases until x=1/sqrt(2) and then decreases. Also 0<W(x)≤∫_x^{2x}t^{-2}dt=1/(2x) for x>0, so W(x)→0 as x→∞; oddness gives the left end. For k>1, W_k'(x)=k/(1+k²x²)-1/(1+x²)=((k-1)(1-kx²))/((1+k²x²)(1+x²)), so the unique positive maximizer is x=1/sqrt(k), with a symmetric negative minimum.",
+    verificationNotes:
+      "The comparison 1/(1+t²)≤1/t² is valid for t>0, which is all that is needed for x→∞. For W_k, check the numerator expansion: k+kx²-1-k²x²=(k-1)(1-kx²).",
+    domains: ["calculus", "functions", "graph-sketching", "elementary-analysis"],
+    contentConcepts: [
+      "integral-accumulation",
+      "symmetry-periodicity",
+      "qualitative-function-behavior",
+      "derivative-structure",
+      "turning-points-extrema",
+      "limiting-arguments",
+      "parameter-dependent-curves",
+      "optimization-extrema"
+    ],
+    prerequisiteConcepts: ["integration", "differentiation", "functions-graphs", "limits-continuity"],
+    skills: cantorSkills(
+      ["pattern-recognition", "supporting"],
+      ["proof-construction", "primary"],
+      ["visualization", "supporting"],
+      ["precision-checking", "supporting"],
+      ["technique", "primary"],
+      ["strategic-simplification", "supporting"],
+      ["generalization", "primary"],
+      ["transfer", "primary"],
+      ["graph-sketching", "supporting"]
+    ),
+    difficulty: { entry: "introductory-plus", core: "standard", ceiling: "strong" },
+    timing: cantorTiming([2, 5], [15, 23], [12, 20], [4, 8], 23),
+    stageTiming: [
+      cantorTiming([1, 3], [4, 7], [3, 6], undefined, 7),
+      cantorTiming([2, 4], [8, 14], [6, 12], undefined, 14),
+      cantorTiming([1, 3], [4, 9], [3, 7], [3, 6], 9)
+    ],
+    openingRole: "warm-up",
+    finalRole: "transfer",
+    novelty: "high",
+    abstraction: "moderate",
+    originalityRisk: "low",
+    correctnessRisk: "low",
+    calibrationRisk: "medium"
+  }
+];
+
+export const cantorGraphEntriesB = Object.freeze(cantorGraphFamiliesB.map(buildCantorEntry));
