@@ -9,9 +9,17 @@ import { CURATED_DISCLOSURE_LEVELS } from "../packages/problems/src/curated-disc
 import { oxfordCuratedReviewEntries } from "../packages/problems/src/oxford-curated.js";
 import { quantCuratedReviewEntries } from "../packages/problems/src/quant-curated.js";
 
+const curatedDisclosureFixtures = [
+  ...ALL_PROBLEMS,
+  ...oxfordCuratedReviewEntries.map((entry) => entry.problem),
+  ...quantCuratedReviewEntries.map((entry) => entry.problem)
+];
+const curatedDisclosureFixtureIds = [
+  ...new Set(curatedDisclosureFixtures.map((problem) => problem.id))
+];
+
 function disclosure(problemId: string, stage: number) {
-  const problem = [...ALL_PROBLEMS, ...oxfordCuratedReviewEntries.map((entry) => entry.problem), ...quantCuratedReviewEntries.map((entry) => entry.problem)]
-    .find((candidate) => candidate.id === problemId);
+  const problem = curatedDisclosureFixtures.find((candidate) => candidate.id === problemId);
   if (problem === undefined) throw new Error(`Missing fixture ${problemId}`);
   const suffix = `_hint_${String(stage)}`;
   const item = problem.interviewer.protectedDisclosures.find((candidate) => candidate.id.endsWith(suffix));
@@ -35,9 +43,13 @@ describe("curated semantic disclosure review", () => {
     expect(disclosure("quant-monty-hall", 2).minimumDisclosureLevel).toBe(before);
   });
 
-  it("covers every curated problem with five explicit reviewed semantic levels", () => {
-    expect(Object.keys(CURATED_DISCLOSURE_LEVELS)).toHaveLength(21);
-    for (const [problemId, levels] of Object.entries(CURATED_DISCLOSURE_LEVELS)) {
+  it("covers every catalog/review curated fixture with five explicit reviewed semantic levels", () => {
+    for (const problemId of curatedDisclosureFixtureIds) {
+      const levels = CURATED_DISCLOSURE_LEVELS[problemId];
+      expect(levels).toBeDefined();
+      if (levels === undefined) {
+        throw new Error(`Missing semantic disclosure review for ${problemId}`);
+      }
       expect(Object.keys(levels)).toEqual(["1", "2", "3", "4", "5"]);
       for (const stage of [1, 2, 3, 4, 5] as const) {
         expect(levels[stage]).toBeGreaterThanOrEqual(0);
@@ -87,7 +99,7 @@ describe("curated semantic disclosure review", () => {
   });
 
   it("keeps every equivalent formulation at its fact's effective semantic level", () => {
-    for (const problemId of Object.keys(CURATED_DISCLOSURE_LEVELS)) {
+    for (const problemId of curatedDisclosureFixtureIds) {
       for (const stage of [1, 2, 3, 4, 5] as const) {
         const item = disclosure(problemId, stage);
         expect(item.equivalentFormulations.length).toBeGreaterThan(0);
@@ -102,7 +114,7 @@ describe("curated semantic disclosure review", () => {
   });
 
   it("classifies every final curated formulation as level 5", () => {
-    for (const problemId of Object.keys(CURATED_DISCLOSURE_LEVELS)) {
+    for (const problemId of curatedDisclosureFixtureIds) {
       expect(disclosure(problemId, 5).minimumDisclosureLevel).toBe(5);
     }
   });
