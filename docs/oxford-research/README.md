@@ -624,7 +624,7 @@ Those are not opposites and should not collapse into one score.
 - **`transfer`** — applying an established mechanism to a modified problem, representation, or context. Guided adaptation may occur inside the original core problem immediately after a tutor prompt, before any transfer question exists.
 - **independence** — unaided progress. Independence decreases when help is needed; guided adaptation can still be strong after help. Oxford's interview format is specifically useful because tutors can observe both.
 
-Recommended evidence unit: milestone/stage evidence should record assistance through the existing evaluation seam and independently tag `guided-adaptation` when the post-prompt response itself is what the milestone tests.
+Recommended evidence unit: stage-level metadata may declare that a family is designed to elicit `guided-adaptation`, but candidate competency evidence must come from an authoritative tutor-intervention → subsequent-grounded-progress relationship. Milestone completion alone must not prove `guided-adaptation`; assistance/prompt dependency remains recorded separately through the existing evaluation seam.
 
 #### `precision-checking` interpretation
 
