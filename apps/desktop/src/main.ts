@@ -5,6 +5,7 @@ import path from "node:path";
 import process from "node:process";
 import { createAndStartServer } from "../../server/src/server.js";
 import { SessionIdSchema, newSessionId, type SessionId } from "../../../packages/domain/src/index.js";
+import { ModelAssetError } from "../../../packages/model-assets/src/index.js";
 import {
   app,
   BrowserWindow,
@@ -549,16 +550,46 @@ async function installLocalModelAssets(
     }
     setSetupState(kind, "INSTALLED", true);
     return localRuntimeStatusForRenderer();
-  } catch {
+  } catch (error) {
     if (startupAbort.signal.aborted) {
       setSetupState(kind, "IDLE", false);
-      throw new Error("Local model setup was cancelled");
+      throw new Error("LOCAL_SETUP_CANCELLED");
     }
     setSetupState(kind, "FAILED", false);
-    throw new Error(
-      "Local model setup failed. Check Python, network access, available disk space, and retry."
-    );
+    throw new Error(localSetupFailureCode(error));
   }
+}
+
+function localSetupFailureCode(error: unknown): string {
+  if (error instanceof ModelAssetError) {
+    switch (error.code) {
+      case "DOWNLOAD_TIMEOUT":
+        return "LOCAL_SETUP_DOWNLOAD_TIMEOUT";
+      case "NETWORK_ERROR":
+      case "HTTP_STATUS":
+      case "REDIRECT_LIMIT":
+      case "UNSAFE_REDIRECT":
+        return "LOCAL_SETUP_NETWORK";
+      case "INSUFFICIENT_DISK_SPACE":
+      case "CACHE_LIMIT_EXCEEDED":
+        return "LOCAL_SETUP_DISK";
+      case "SIZE_MISMATCH":
+      case "DIGEST_MISMATCH":
+      case "CORRUPT_INSTALLATION":
+        return "LOCAL_SETUP_INTEGRITY";
+      case "CANCELLED":
+        return "LOCAL_SETUP_CANCELLED";
+      default:
+        return "LOCAL_SETUP_MODEL_ASSET";
+    }
+  }
+  if (error instanceof Error) {
+    if (/disk space/iu.test(error.message)) return "LOCAL_SETUP_DISK";
+    if (/python|cpython|runtime dependenc/iu.test(error.message)) {
+      return "LOCAL_SETUP_PYTHON";
+    }
+  }
+  return "LOCAL_SETUP_FAILED";
 }
 
 function localRuntimeStatusForRenderer(): DesktopRendererLocalRuntimeStatus {
