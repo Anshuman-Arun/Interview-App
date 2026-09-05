@@ -176,7 +176,20 @@ export const TranscriptFeed: React.FC<TranscriptFeedProps> = ({
                     {item.errorMessage !== undefined && (
                       <div className="transcript-entry__error" role="status">
                         <span>Error: {item.errorMessage}</span>
-                        {onRetry !== undefined && <button type="button" disabled={retryDisabled} onClick={() => { if (!retryDisabled) void onRetry(item.id); }}>Retry</button>}
+                        {onRetry !== undefined && (
+                        <button
+                          type="button"
+                          disabled={retryDisabled}
+                          onClick={() => {
+                            if (retryDisabled) return;
+                            void Promise.resolve()
+                              .then(() => onRetry(item.id))
+                              .catch(() => undefined);
+                          }}
+                        >
+                          Retry
+                        </button>
+                      )}
                       </div>
                     )}
                   </div>
