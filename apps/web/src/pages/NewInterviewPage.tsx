@@ -110,6 +110,23 @@ export function NewInterviewPage({
   const [interventionPolicy, setInterventionPolicy] =
     useState<"MINIMAL" | "BALANCED" | "STRICT">("BALANCED");
   const [formError, setFormError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setFormError(null);
+  }, [
+    activeSessionCount,
+    activeSessionId,
+    catalogError,
+    catalogLoading,
+    durationText,
+    interventionPolicy,
+    mode,
+    providerOptionsError,
+    providerOptionsLoading,
+    selectedProviderKey,
+    selectedTargetKey
+  ]);
+
   const desktopRuntime = useMemo(() => getDesktopRuntimeBridge(), []);
   const [localRuntimeStatus, setLocalRuntimeStatus] =
     useState<DesktopRuntimeStatus | undefined>();
