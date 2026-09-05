@@ -11,12 +11,16 @@ import {
   ANTIGRAVITY_CLI_TURN_ARGUMENTS,
   ANTIGRAVITY_CLI_ZERO_TURN_PREFLIGHT_INPUT,
   assertAntigravityCliZeroTurnPreflightResult,
+  isSupportedAntigravityCliModelId,
   type SupervisedCliExecutionRequest,
   type SupervisedCliExecutor
 } from "../../../packages/providers/src/index.js";
 
 const ANTIGRAVITY_EXECUTABLE_ID = "antigravity-cli";
-const ANTIGRAVITY_SAFE_CLI_VERSION = Object.freeze([1, 1, 26] as const);
+const ANTIGRAVITY_SAFE_CLI_VERSIONS = Object.freeze([
+  Object.freeze([1, 1, 26] as const),
+  Object.freeze([1, 1, 27] as const)
+]);
 // First use also pays cold executable hashing and trusted Windows supervisor
 // compilation. Those stages are each independently bounded at 30s, so this
 // one-time local preflight must leave room for both plus `agy --version`.
@@ -224,7 +228,7 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
     ): Promise<void> {
       if (
         selection.providerId !== ANTIGRAVITY_CLI_PROVIDER_ID
-        || selection.modelId !== ANTIGRAVITY_CLI_MODEL_ID
+        || !isSupportedAntigravityCliModelId(selection.modelId)
       ) {
         return;
       }
@@ -234,7 +238,7 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
     resolveRuntime(selection: ProviderSelectionReference): unknown {
       if (
         selection.providerId === ANTIGRAVITY_CLI_PROVIDER_ID
-        && selection.modelId === ANTIGRAVITY_CLI_MODEL_ID
+        && isSupportedAntigravityCliModelId(selection.modelId)
       ) {
         // Acquire only for the selected provider. Construction failures are
         // allowed to be retried later and must not affect unrelated providers.
@@ -325,12 +329,15 @@ export function isSupportedAntigravityCliVersionOutput(
     return false;
   }
 
-  const [safeMajor, safeMinor, safePatch] = ANTIGRAVITY_SAFE_CLI_VERSION;
-  // Headless, keyring restoration, profile, auth, stdio, and protocol behavior
-  // can change even in a patch release. This runtime depends on the later 1.1.x
-  // fixes for keyring/account restoration, stream integrity, and piped stdio
-  // shutdown, so admit exactly the release audited for this adapter.
-  return major === safeMajor && minor === safeMinor && patch === safePatch;
+  // Patch releases can change the headless/keyring/stdio contract, so keep an
+  // explicit audited allowlist instead of accepting an open-ended 1.1.x range.
+  // 1.1.27 is the current Windows CLI release; retain 1.1.26 during the
+  // transition so an otherwise healthy installed runtime is not needlessly
+  // rejected before the user's updater has run.
+  return ANTIGRAVITY_SAFE_CLI_VERSIONS.some(
+    ([safeMajor, safeMinor, safePatch]) =>
+      major === safeMajor && minor === safeMinor && patch === safePatch
+  );
 }
 
 function assertRestrictedAntigravityProfile(environment: {
