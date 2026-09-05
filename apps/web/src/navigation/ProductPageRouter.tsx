@@ -28,6 +28,7 @@ export function ProductPageRouter({
   canReview,
   sessionEntryPending,
   sessionAuthorityChecking = false,
+  sessionAuthorityUnavailable = false,
   onNavigatePage,
   onEnterInterview,
   launchCatalog,
@@ -60,6 +61,7 @@ export function ProductPageRouter({
   readonly canReview: (session: StoredSessionSummary) => boolean;
   readonly sessionEntryPending: boolean;
   readonly sessionAuthorityChecking?: boolean;
+  readonly sessionAuthorityUnavailable?: boolean;
   readonly onNavigatePage: (page: ProductPageId) => void;
   readonly onEnterInterview: () => void;
   readonly launchCatalog: readonly InterviewCatalogEntry[];
