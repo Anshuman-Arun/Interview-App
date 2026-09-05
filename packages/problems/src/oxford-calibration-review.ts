@@ -97,6 +97,7 @@ export interface OxfordCalibrationTaxonomyReview {
   readonly milestoneSkillClaims: readonly {
     readonly milestoneId: string;
     readonly skills: readonly OxfordReasoningSkill[];
+    readonly contentConcepts: readonly OxfordContentConcept[];
   }[];
   readonly rationale: {
     readonly domains: string;
@@ -458,6 +459,18 @@ function assertTaxonomyReview(review: OxfordCalibrationTaxonomyReview): void {
       SKILL_SET,
       `Oxford review milestone "${claim.milestoneId}" reasoning skill`
     );
+    assertCanonicalMembers(
+      claim.contentConcepts,
+      CONTENT_SET,
+      `Oxford review milestone "${claim.milestoneId}" content concept`
+    );
+    for (const concept of claim.contentConcepts) {
+      if (!review.contentConcepts.includes(concept)) {
+        throw new Error(
+          `Oxford review milestone "${claim.milestoneId}" content concept "${concept}" is not declared at family review level`
+        );
+      }
+    }
     for (const skill of claim.skills) {
       if (OXFORD_SKILL_EVIDENCE_BASIS[skill] === "process-grounded") {
         throw new Error(
