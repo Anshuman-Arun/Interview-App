@@ -131,7 +131,8 @@ describe("Windows desktop packaging contract", () => {
     expect(main).toContain('beginLocalModelInstall("PYTHON")');
     expect(main).toContain('beginLocalModelInstall("VOICE")');
     expect(main).toContain('beginLocalModelInstall("VISION")');
-    expect(main).toContain("app.relaunch()");
+    expect(main).toContain("app.relaunch({");
+    expect(main).toContain("relaunchArgsForLocalModelActivation");
     expect(preload).not.toMatch(/require\(["'](?:node:)?(?:fs|child_process)["']\)/u);
     expect(preload).not.toContain("process.env");
     expect(preload).not.toContain("shell.");
