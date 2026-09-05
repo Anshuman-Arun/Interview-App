@@ -68,7 +68,7 @@ const OPTIONAL_LOCAL_RUNTIME_COLD_STARTUP_BUDGET_MS = 15_000;
 // startup handshake. The prepared-runtime budget must not be shorter than the
 // combined activation path or a successful install is misclassified as missing
 // after restart.
-const OPTIONAL_LOCAL_RUNTIME_PREPARED_STARTUP_BUDGET_MS = 4 * 60_000;
+const OPTIONAL_LOCAL_RUNTIME_PREPARED_STARTUP_BUDGET_MS = 7 * 60_000;
 const PACKAGED_SMOKE_PROOF_MAX_BYTES = 64 * 1024;
 const MAX_APPEARANCE_SETTINGS_BYTES = 4 * 1024;
 const PACKAGED_SMOKE_INPUT = "Packaged Windows desktop smoke input.";
@@ -174,6 +174,14 @@ if (!app.requestSingleInstanceLock()) {
 
 async function startDesktop(): Promise<void> {
   app.setName("Interview App");
+  // The desktop product deliberately exposes the signed-in Antigravity account
+  // route when the user selects it. The supervised CLI profile separately pins
+  // useG1Credits=false and strips API-key/custom-endpoint configuration, so this
+  // opt-in does not enable AI-credit fallback or inherited Gemini API billing.
+  // An explicit host value still wins for development/security testing.
+  if (process.env["INTERVIEW_ALLOW_METERED_REMOTE_REASONING"] === undefined) {
+    process.env["INTERVIEW_ALLOW_METERED_REMOTE_REASONING"] = "1";
+  }
   await configurePackagedSmokeUserData();
   if (process.platform === "win32") {
     app.setAppUserModelId("com.anshuman.interviewapp");
