@@ -34,10 +34,10 @@ describe("Oxford mathematical correctness audit gate", () => {
     for (const record of authorRecords) {
       const expectedHead =
         record.source.authorAgent === "C — Cantor"
-          ? "0d4941ab3197b2297ab389d7438df39f599b2ad5"
+          ? "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf"
           : record.source.authorAgent === "D — Dirichlet"
             ? "ecece22058c997d37c4b352fa5ed32bd1daf5243"
-            : "165bb3100fb894158969abb808caad5bc9150807";
+            : "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6";
       expect(record.source.reviewedAuthorHead).toBe(expectedHead);
     }
   });
