@@ -45,6 +45,7 @@ interface SettingsPageProps {
   readonly providerOptionsError?: string | null;
   readonly activeSessionCount?: number;
   readonly sessionAuthorityChecking?: boolean;
+  readonly sessionAuthorityUnavailable?: boolean;
   readonly onRefreshProviderOptions?: () => Promise<readonly ProviderLaunchOption[]>;
   readonly onStartInterview?: () => void;
 }
@@ -182,6 +183,7 @@ export function SettingsPage({
   providerOptionsError = null,
   activeSessionCount = 0,
   sessionAuthorityChecking = false,
+  sessionAuthorityUnavailable = false,
   onRefreshProviderOptions,
   onStartInterview
 }: SettingsPageProps) {
@@ -396,6 +398,7 @@ export function SettingsPage({
       setupOperationInFlightRef.current
       || restarting
       || sessionAuthorityChecking
+      || sessionAuthorityUnavailable
       || activeSessionCount > 0
     ) return;
     try {
@@ -408,7 +411,9 @@ export function SettingsPage({
 
   const summary = sessionAuthorityChecking
     ? "Checking stored session authority before enabling a new interview."
-    : activeSessionCount > 0
+    : sessionAuthorityUnavailable
+      ? "Stored session authority could not be verified. Open Sessions and retry before starting another interview."
+      : activeSessionCount > 0
       ? (
       activeSessionCount === 1
         ? "An active interview already exists. Resume or resolve it before starting another."
@@ -698,6 +703,7 @@ export function SettingsPage({
                 onClick={finishSetup}
                 disabled={
                   sessionAuthorityChecking
+                  || sessionAuthorityUnavailable
                   || activeSessionCount > 0
                   || !reasoningReady
                   || restarting
