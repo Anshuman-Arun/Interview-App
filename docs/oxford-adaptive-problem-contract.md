@@ -129,7 +129,7 @@ Skill evidence exists at three levels:
 - stage: competency signal of a coherent interview phase;
 - milestone: the grounded evidence attribution point.
 
-Every authored reasoning milestone must be assigned to exactly one stage. Milestone skills must be declared at stage level, and stage skills must be declared at problem level.
+Every authored reasoning milestone must be assigned to exactly one stage. Every reasoning-graph extension must also be assigned to exactly one stage through `extensionIds`. Milestone skills must be declared at stage level, and stage skills must be declared at problem level.
 
 This is the intended Wave 2 evaluation seam:
 
@@ -232,9 +232,9 @@ The metadata integrity layer rejects:
 - invalid evidence weights;
 - unknown stage prerequisites;
 - self-dependencies and cyclic stage graphs;
-- unknown reasoning milestones;
-- milestones assigned to multiple stages;
-- authored milestones left unassigned;
+- unknown reasoning milestones or extensions;
+- milestones/extensions assigned to multiple stages;
+- authored milestones/extensions left unassigned;
 - stage graphs that fail to preserve cross-stage reasoning dependencies;
 - stage domains/skills not declared at family level;
 - impossible timing ranges;
@@ -275,8 +275,8 @@ New Oxford authoring should set `oxfordAdaptive.status = "authored"` and provide
 - problem novelty, abstraction, and definition flag;
 - provenance and all review/calibration fields;
 - one or more stages, including a `core` stage;
-- for every stage: role, prerequisite stages, domains, skill evidence, difficulty, timing, novelty, abstraction, definition flag;
-- every reasoning milestone assigned exactly once to a stage;
+- for every stage: role, prerequisite stages, domains, skill evidence, difficulty, timing, novelty, abstraction, definition flag, and `extensionIds`;
+- every reasoning milestone and reasoning-graph extension assigned exactly once to a stage;
 - milestone-level skill evidence.
 
 Keep the existing curated fields too: problem ID/version, prompt/givens, approaches, reasoning milestones/edges, errors, extensions, five-stage disclosure-aware hints, solution, verification notes, catalog title/category/follow-ups, and existing review status.
@@ -311,7 +311,7 @@ For a migrated existing fixture with no reviewed metadata, leave the entire reco
 2. Choose a stable `familyId`; choose `similarityClusterId` only if justified.
 3. Select canonical domains/prerequisites/skills from the exported taxonomy.
 4. Build the reasoning graph and protected hint/disclosure structure as today.
-5. Partition the reasoning milestones into coherent interview stages.
+5. Partition the reasoning milestones and extensions into coherent interview stages.
 6. Add stage dependencies that preserve any cross-stage milestone dependencies.
 7. Add problem/stage/milestone skill evidence using only `secondary/supporting/primary`.
 8. Add internal entry/core/ceiling difficulty plus stage difficulty; start confidence conservatively.
