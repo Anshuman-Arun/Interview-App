@@ -423,7 +423,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "794fe2282c2c8ef265869ccf84bb955695fbaa7f"
+      "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -451,7 +451,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "794fe2282c2c8ef265869ccf84bb955695fbaa7f"
+      "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -479,7 +479,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "794fe2282c2c8ef265869ccf84bb955695fbaa7f"
+      "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -507,53 +507,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "794fe2282c2c8ef265869ccf84bb955695fbaa7f"
-    },
-    "independentlySolved": true,
-    "statementChecked": true,
-    "approachesChecked": true,
-    "canonicalSolutionChecked": true,
-    "hintsChecked": true,
-    "extensionsChecked": true,
-    "prerequisitesChecked": true,
-    "unresolvedUncertainties": [],
-    "familyId": "oxford-cantor-reciprocal-implicit-curve",
-    "mathematicalCorrectness": "approved",
-    "recommendation": "approve",
-    "independentSolutionSummary": "The original equation has the isolated solution (0,0). Every other solution has x,y nonzero and satisfies 1/x²+1/y²=1, so |x|,|y|>1 with asymptotes x=±1,y=±1. On the nonzero branches, x²+y²>=4 with equality at the four points (±sqrt(2),±sqrt(2)); globally, however, the origin itself is the unique closest point to the origin.",
-    "computationalChecks": [
-      "Direct substitution confirms (0,0) satisfies the original equation, while the four (±sqrt(2),±sqrt(2)) points lie on the nonzero branches at squared distance 4.",
-      "Re-reviewed Cantor head b9fe1d9cdd3d0216bc3f4a0fa350824a97f36b73 after the inline fixes; the scaled extension now also asks specifically for closest points on the nonzero branches."
-    ],
-    "findings": [
-      {
-        "id": "global-closest-point-conflict",
-        "area": "approach",
-        "severity": "error",
-        "status": "resolved",
-        "summary": "A reasoning milestone calls the four nonzero branch minima the closest points on the curve, contradicting the isolated origin retained elsewhere in the family.",
-        "evidence": "Fixed on Cantor head b9fe1d9cdd3d0216bc3f4a0fa350824a97f36b73: the milestone now explicitly minimizes on the nonzero branches and calls the four sqrt(2) points the closest points of those branches."
-      },
-      {
-        "id": "axis-common-error-false",
-        "area": "common-error",
-        "severity": "error",
-        "status": "resolved",
-        "summary": "The common-error description falsely states that x=0 or y=0 cannot satisfy the original equation.",
-        "evidence": "Fixed on Cantor head b9fe1d9cdd3d0216bc3f4a0fa350824a97f36b73: the common-error text now says division before checking the axes deletes the isolated solution (0,0)."
-      }
-    ]
-  },
-  {
-    "schemaVersion": 1,
-    "problemVersion": "1.0.0",
-    "reviewerAgent": "I — Itô",
-    "reviewedAt": "2026-09-05",
-    "source": {
-      "kind": "author-pr",
-      "authorAgent": "C — Cantor",
-      "prNumber": 132,
-      "reviewedAuthorHead": "794fe2282c2c8ef265869ccf84bb955695fbaa7f"
+      "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -568,7 +522,16 @@
     "recommendation": "approve",
     "independentSolutionSummary": "Squaring gives a_{n+1}²=a_n²+2+1/a_n², hence a_n²>=a_0²+2n and divergence. Summation yields a_n²=a_0²+2n+sum 1/a_k²; the lower bound makes the error sum at most logarithmic, so a_n²/(2n)->1 and positivity gives a_n/sqrt(2n)->1. The same argument with c>0 gives the stated sqrt(2cn) scaling.",
     "computationalChecks": [],
-    "findings": []
+    "findings": [
+      {
+        "id": "supplied-sum-integral-guidance",
+        "area": "prerequisite",
+        "severity": "note",
+        "status": "resolved",
+        "summary": "Final candidate-visible guidance supplies the decreasing-sum/integral comparison needed for the logarithmic reciprocal-square bound.",
+        "evidence": "For positive decreasing h, sum_{k=1}^{n-1} h(k) <= h(1)+integral_1^n h(t)dt follows by bounding h(k) with the area on [k-1,k] for k>=2. Applied to h(t)=1/(a_0^2+2t), it yields the required O(log n) error without assuming hidden harmonic-sum knowledge."
+      }
+    ]
   },
   {
     "schemaVersion": 1,
@@ -579,7 +542,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "794fe2282c2c8ef265869ccf84bb955695fbaa7f"
+      "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -614,7 +577,7 @@
       "kind": "author-pr",
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
-      "reviewedAuthorHead": "ecece22058c997d37c4b352fa5ed32bd1daf5243"
+      "reviewedAuthorHead": "59c3f1b7ef7893eb93739936535668878a8fb8c5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -640,7 +603,7 @@
       "kind": "author-pr",
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
-      "reviewedAuthorHead": "ecece22058c997d37c4b352fa5ed32bd1daf5243"
+      "reviewedAuthorHead": "59c3f1b7ef7893eb93739936535668878a8fb8c5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -668,7 +631,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
+      "reviewedAuthorHead": "760467d4bfa54949bd7303cea944e338533289d9"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -696,7 +659,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
+      "reviewedAuthorHead": "760467d4bfa54949bd7303cea944e338533289d9"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -724,7 +687,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
+      "reviewedAuthorHead": "760467d4bfa54949bd7303cea944e338533289d9"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -752,35 +715,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
-    },
-    "independentlySolved": true,
-    "statementChecked": true,
-    "approachesChecked": true,
-    "canonicalSolutionChecked": true,
-    "hintsChecked": true,
-    "extensionsChecked": true,
-    "prerequisitesChecked": true,
-    "unresolvedUncertainties": [],
-    "familyId": "oxford-euler-random-subset-blocks",
-    "mathematicalCorrectness": "approved",
-    "recommendation": "approve",
-    "independentSolutionSummary": "On a line, block starts are position 1 when selected plus each later 0→1 transition, so E[X]=1/2+(n-1)/4=(n+1)/4. On a circle ordinary blocks equal cyclic 0→1 transitions except the all-selected configuration, adding the correction 2^-n; thus E[X]=n/4+2^-n. Replacing 1/2 by p gives p+(n-1)p(1-p) and np(1-p)+p^n.",
-    "computationalChecks": [
-      "Exhaustive enumeration of all subsets for n=2,...,7 matched both the line and circular expectation formulas."
-    ],
-    "findings": []
-  },
-  {
-    "schemaVersion": 1,
-    "problemVersion": "1.0.0",
-    "reviewerAgent": "I — Itô",
-    "reviewedAt": "2026-09-05",
-    "source": {
-      "kind": "author-pr",
-      "authorAgent": "E — Euler",
-      "prNumber": 134,
-      "reviewedAuthorHead": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
+      "reviewedAuthorHead": "760467d4bfa54949bd7303cea944e338533289d9"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -806,7 +741,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
+      "reviewedAuthorHead": "760467d4bfa54949bd7303cea944e338533289d9"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -843,7 +778,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "794fe2282c2c8ef265869ccf84bb955695fbaa7f"
+      "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -869,7 +804,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "794fe2282c2c8ef265869ccf84bb955695fbaa7f"
+      "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -895,7 +830,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "794fe2282c2c8ef265869ccf84bb955695fbaa7f"
+      "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -921,7 +856,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "794fe2282c2c8ef265869ccf84bb955695fbaa7f"
+      "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -956,7 +891,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "794fe2282c2c8ef265869ccf84bb955695fbaa7f"
+      "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -982,7 +917,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "794fe2282c2c8ef265869ccf84bb955695fbaa7f"
+      "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1008,7 +943,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "794fe2282c2c8ef265869ccf84bb955695fbaa7f"
+      "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1034,7 +969,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "794fe2282c2c8ef265869ccf84bb955695fbaa7f"
+      "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1060,7 +995,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "794fe2282c2c8ef265869ccf84bb955695fbaa7f"
+      "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1086,7 +1021,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "794fe2282c2c8ef265869ccf84bb955695fbaa7f"
+      "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1112,7 +1047,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "794fe2282c2c8ef265869ccf84bb955695fbaa7f"
+      "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1138,7 +1073,7 @@
       "kind": "author-pr",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "reviewedAuthorHead": "794fe2282c2c8ef265869ccf84bb955695fbaa7f"
+      "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1164,7 +1099,7 @@
       "kind": "author-pr",
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
-      "reviewedAuthorHead": "ecece22058c997d37c4b352fa5ed32bd1daf5243"
+      "reviewedAuthorHead": "59c3f1b7ef7893eb93739936535668878a8fb8c5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1192,7 +1127,7 @@
       "kind": "author-pr",
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
-      "reviewedAuthorHead": "ecece22058c997d37c4b352fa5ed32bd1daf5243"
+      "reviewedAuthorHead": "59c3f1b7ef7893eb93739936535668878a8fb8c5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1220,7 +1155,7 @@
       "kind": "author-pr",
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
-      "reviewedAuthorHead": "ecece22058c997d37c4b352fa5ed32bd1daf5243"
+      "reviewedAuthorHead": "59c3f1b7ef7893eb93739936535668878a8fb8c5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1246,7 +1181,7 @@
       "kind": "author-pr",
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
-      "reviewedAuthorHead": "ecece22058c997d37c4b352fa5ed32bd1daf5243"
+      "reviewedAuthorHead": "59c3f1b7ef7893eb93739936535668878a8fb8c5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1272,7 +1207,7 @@
       "kind": "author-pr",
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
-      "reviewedAuthorHead": "ecece22058c997d37c4b352fa5ed32bd1daf5243"
+      "reviewedAuthorHead": "59c3f1b7ef7893eb93739936535668878a8fb8c5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1300,7 +1235,7 @@
       "kind": "author-pr",
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
-      "reviewedAuthorHead": "ecece22058c997d37c4b352fa5ed32bd1daf5243"
+      "reviewedAuthorHead": "59c3f1b7ef7893eb93739936535668878a8fb8c5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1326,33 +1261,7 @@
       "kind": "author-pr",
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
-      "reviewedAuthorHead": "ecece22058c997d37c4b352fa5ed32bd1daf5243"
-    },
-    "independentlySolved": true,
-    "statementChecked": true,
-    "approachesChecked": true,
-    "canonicalSolutionChecked": true,
-    "hintsChecked": true,
-    "extensionsChecked": true,
-    "prerequisitesChecked": true,
-    "unresolvedUncertainties": [],
-    "familyId": "oxford-d-mirror-orbits",
-    "mathematicalCorrectness": "approved",
-    "recommendation": "approve",
-    "independentSolutionSummary": "Composing the two reflections yields translations x->x+/-c. From 0 the reachable set is exactly the subgroup H of multiples of d=gcd(c,m), so all residues are reachable iff d=1. From a general start the orbit is (a+H) union (-a+H), with the two cosets equal exactly when 2a is in H.",
-    "computationalChecks": [],
-    "findings": []
-  },
-  {
-    "schemaVersion": 1,
-    "problemVersion": "1.0.0",
-    "reviewerAgent": "I — Itô",
-    "reviewedAt": "2026-09-05",
-    "source": {
-      "kind": "author-pr",
-      "authorAgent": "D — Dirichlet",
-      "prNumber": 133,
-      "reviewedAuthorHead": "ecece22058c997d37c4b352fa5ed32bd1daf5243"
+      "reviewedAuthorHead": "59c3f1b7ef7893eb93739936535668878a8fb8c5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1378,7 +1287,7 @@
       "kind": "author-pr",
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
-      "reviewedAuthorHead": "ecece22058c997d37c4b352fa5ed32bd1daf5243"
+      "reviewedAuthorHead": "59c3f1b7ef7893eb93739936535668878a8fb8c5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1406,7 +1315,7 @@
       "kind": "author-pr",
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
-      "reviewedAuthorHead": "ecece22058c997d37c4b352fa5ed32bd1daf5243"
+      "reviewedAuthorHead": "59c3f1b7ef7893eb93739936535668878a8fb8c5"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1432,7 +1341,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
+      "reviewedAuthorHead": "760467d4bfa54949bd7303cea944e338533289d9"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1458,7 +1367,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
+      "reviewedAuthorHead": "760467d4bfa54949bd7303cea944e338533289d9"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1484,7 +1393,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
+      "reviewedAuthorHead": "760467d4bfa54949bd7303cea944e338533289d9"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1510,7 +1419,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
+      "reviewedAuthorHead": "760467d4bfa54949bd7303cea944e338533289d9"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1536,42 +1445,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
-    },
-    "independentlySolved": true,
-    "statementChecked": true,
-    "approachesChecked": true,
-    "canonicalSolutionChecked": true,
-    "hintsChecked": true,
-    "extensionsChecked": true,
-    "prerequisitesChecked": true,
-    "unresolvedUncertainties": [],
-    "familyId": "oxford-euler-locally-balanced-labels",
-    "mathematicalCorrectness": "approved",
-    "recommendation": "approve",
-    "independentSolutionSummary": "On a path, 2x_i=x_{i-1}+x_{i+1} makes first differences constant, so all solutions are arithmetic progressions and endpoints determine the path. On a cycle, a maximum propagates to both neighbors and hence around the cycle, forcing constancy. The same difference/maximum-principle arguments support the stated boundary and fixed-weight transfers.",
-    "computationalChecks": [],
-    "findings": [
-      {
-        "id": "weighted-average-convention",
-        "area": "extension",
-        "severity": "warning",
-        "status": "open",
-        "summary": "The weighted-average transfer could state its weight convention more explicitly.",
-        "evidence": "The intended mathematics is sound once a fixed weight in the usual convex-average sense is introduced; the current wording leaves orientation/parameter notation to the interviewer or candidate. This is non-blocking for correctness."
-      }
-    ]
-  },
-  {
-    "schemaVersion": 1,
-    "problemVersion": "1.0.0",
-    "reviewerAgent": "I — Itô",
-    "reviewedAt": "2026-09-05",
-    "source": {
-      "kind": "author-pr",
-      "authorAgent": "E — Euler",
-      "prNumber": 134,
-      "reviewedAuthorHead": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
+      "reviewedAuthorHead": "760467d4bfa54949bd7303cea944e338533289d9"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1597,44 +1471,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
-    },
-    "independentlySolved": true,
-    "statementChecked": true,
-    "approachesChecked": true,
-    "canonicalSolutionChecked": true,
-    "hintsChecked": true,
-    "extensionsChecked": true,
-    "prerequisitesChecked": true,
-    "unresolvedUncertainties": [],
-    "familyId": "oxford-euler-random-adjacent-consecutives",
-    "mathematicalCorrectness": "approved",
-    "recommendation": "approve",
-    "independentSolutionSummary": "For a linear random permutation, each pair {k,k+1} is adjacent with probability 2/n, so E[X]=2(n-1)/n. On a genuine n-cycle with n>=3, each second value has two adjacent positions among n-1, giving expectation 2. The d-gap and weighted extensions follow by the same indicator argument.",
-    "computationalChecks": [
-      "Exact enumeration of all permutations for n=2,...,7 matched the linear formula, and for n=3,...,7 matched circular expectation 2."
-    ],
-    "findings": [
-      {
-        "id": "circular-n-domain",
-        "area": "statement",
-        "severity": "error",
-        "status": "resolved",
-        "summary": "Current Euler givens explicitly state n>=3 for the circular version.",
-        "evidence": "At head e5f5b431..., givenInformation states n>=2 for the line version and n>=3 for the circular version, matching the 2/(n-1) adjacency argument."
-      }
-    ]
-  },
-  {
-    "schemaVersion": 1,
-    "problemVersion": "1.0.0",
-    "reviewerAgent": "I — Itô",
-    "reviewedAt": "2026-09-05",
-    "source": {
-      "kind": "author-pr",
-      "authorAgent": "E — Euler",
-      "prNumber": 134,
-      "reviewedAuthorHead": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
+      "reviewedAuthorHead": "760467d4bfa54949bd7303cea944e338533289d9"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1660,42 +1497,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
-    },
-    "independentlySolved": true,
-    "statementChecked": true,
-    "approachesChecked": true,
-    "canonicalSolutionChecked": true,
-    "hintsChecked": true,
-    "extensionsChecked": true,
-    "prerequisitesChecked": true,
-    "unresolvedUncertainties": [],
-    "familyId": "oxford-euler-stop-on-change",
-    "mathematicalCorrectness": "approved",
-    "recommendation": "approve",
-    "independentSolutionSummary": "For a fair coin, P(N=k)=2^{-(k-1)} for k>=2 and E[N]=3. For 0<p<1, conditioning on the first face gives E[N]=1+p/(1-p)+(1-p)/p, minimized at p=1/2. At p=0 or p=1 the process never changes and N is infinite almost surely.",
-    "computationalChecks": [],
-    "findings": [
-      {
-        "id": "biased-endpoint-domain",
-        "area": "hint",
-        "severity": "error",
-        "status": "resolved",
-        "summary": "The biased extension explicitly restricts 0<p<1.",
-        "evidence": "Current candidate-visible givenInformation states 0<p<1, so conditioning on either first face and the reciprocal waiting-time expressions are valid."
-      }
-    ]
-  },
-  {
-    "schemaVersion": 1,
-    "problemVersion": "1.0.0",
-    "reviewerAgent": "I — Itô",
-    "reviewedAt": "2026-09-05",
-    "source": {
-      "kind": "author-pr",
-      "authorAgent": "E — Euler",
-      "prNumber": 134,
-      "reviewedAuthorHead": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
+      "reviewedAuthorHead": "760467d4bfa54949bd7303cea944e338533289d9"
     },
     "independentlySolved": true,
     "statementChecked": true,
@@ -1721,7 +1523,7 @@
       "kind": "author-pr",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "reviewedAuthorHead": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
+      "reviewedAuthorHead": "760467d4bfa54949bd7303cea944e338533289d9"
     },
     "independentlySolved": true,
     "statementChecked": true,
