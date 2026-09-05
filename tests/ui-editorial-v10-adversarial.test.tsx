@@ -948,6 +948,16 @@ describe("editorial v10 adversarial UI states", () => {
     expect(appCss).toContain(
       ".app-header__board-state[data-sync=UNSYNCHRONIZED]>span{background:var(--danger)}"
     );
+    expect(editorialCss).toMatch(
+      /\.expressive-home__folio\s*\{[^}]*transform:\s*translateX\(-16px\);/u
+    );
+    expect(frameCss).toContain("scrollbar-width: none;");
+    expect(frameCss).toMatch(
+      /\.product-frame__content::\-webkit-scrollbar,[\s\S]{0,120}display:\s*none;/u
+    );
+    expect(editorialCss).toMatch(
+      /\.live-main\[data-focus="transcript"\],[\s\S]{0,100}\.live-main\[data-focus="whiteboard"\]\s*\{[\s\S]{0,120}grid-template-columns:\s*minmax\(0,\s*1fr\)\s*!important;/u
+    );
   });
 
 
