@@ -134,12 +134,12 @@ export function promoteCertifiedWave2OxfordEntry(
     throw new Error(`Wave 2 certified family "${id}" failed recommendation readiness`);
   }
 
-  const {
-    reviewNotes: _discardedReviewNotes,
-    ...metadataWithoutReviewNotes
-  } = entry.metadata;
   const promotedMetadata: CuratedProblemMetadata = {
-    ...metadataWithoutReviewNotes,
+    id: entry.metadata.id,
+    title: entry.metadata.title,
+    mode: entry.metadata.mode,
+    category: entry.metadata.category,
+    followUps: entry.metadata.followUps,
     reviewStatus: "ready",
     oxfordAdaptive: promotedAdaptive
   };
