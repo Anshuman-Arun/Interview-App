@@ -53,7 +53,7 @@
     {
       "agent": "E — Euler",
       "prNumber": 134,
-      "headSha": "165bb3100fb894158969abb808caad5bc9150807",
+      "headSha": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
       "survivingFamilyCount": 17,
       "familiesReviewed": [
         "oxford-euler-quadrilateral-balance",
@@ -92,13 +92,13 @@
       "note": "All 12 survivors now use family-specific author timings. GCD descent and Triple Flip first-round difficulty/taxonomy changes are present."
     },
     "euler": {
-      "headSha": "165bb3100fb894158969abb808caad5bc9150807",
+      "headSha": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
       "genericTimingTableRemoved": true,
       "mechanicalCoreAssignmentRemoved": true,
       "circleSweepCoreCorrected": true,
       "selfAveragingSetTaxonomyCorrected": true,
       "allStageRolesMathematicallyKeyed": true,
-      "note": "Roles and timings are explicitly keyed by family/stage. Circle Sweep parameter-test is core; Self-Averaging uses set-theory/set-maps with finite-orbit core. The final head increment after G review changed tests only, not family payloads."
+      "note": "Roles and timings are explicitly keyed by family/stage. Circle Sweep parameter-test is core; Self-Averaging uses set-theory/set-maps with finite-orbit core. Latest post-review code increment only added an H-owned provenance reference and did not change G-owned family taxonomy/difficulty/timing."
     }
   },
   "records": [
@@ -7415,7 +7415,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-quadrilateral-balance",
-      "authorHeadReviewed": "165bb3100fb894158969abb808caad5bc9150807",
+      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -7665,7 +7665,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-random-chord-midpoint",
-      "authorHeadReviewed": "165bb3100fb894158969abb808caad5bc9150807",
+      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -7921,7 +7921,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-circle-sweep",
-      "authorHeadReviewed": "165bb3100fb894158969abb808caad5bc9150807",
+      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -8183,7 +8183,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-triangle-midpoint-cycle",
-      "authorHeadReviewed": "165bb3100fb894158969abb808caad5bc9150807",
+      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -8441,7 +8441,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-box-diagonal-bisector",
-      "authorHeadReviewed": "165bb3100fb894158969abb808caad5bc9150807",
+      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -8702,7 +8702,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-locally-balanced-labels",
-      "authorHeadReviewed": "165bb3100fb894158969abb808caad5bc9150807",
+      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -8958,7 +8958,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-diagonal-blend-transform",
-      "authorHeadReviewed": "165bb3100fb894158969abb808caad5bc9150807",
+      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -9219,7 +9219,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-self-averaging-sets",
-      "authorHeadReviewed": "165bb3100fb894158969abb808caad5bc9150807",
+      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -9478,7 +9478,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-corner-balanced-tables",
-      "authorHeadReviewed": "165bb3100fb894158969abb808caad5bc9150807",
+      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -9724,7 +9724,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-tank-gauge-model",
-      "authorHeadReviewed": "165bb3100fb894158969abb808caad5bc9150807",
+      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -9970,7 +9970,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-periodic-queue-model",
-      "authorHeadReviewed": "165bb3100fb894158969abb808caad5bc9150807",
+      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -10222,7 +10222,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-kiosk-grid-model",
-      "authorHeadReviewed": "165bb3100fb894158969abb808caad5bc9150807",
+      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -10474,7 +10474,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-cooling-data-model",
-      "authorHeadReviewed": "165bb3100fb894158969abb808caad5bc9150807",
+      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -10726,7 +10726,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-random-adjacent-consecutives",
-      "authorHeadReviewed": "165bb3100fb894158969abb808caad5bc9150807",
+      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -10971,7 +10971,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-stop-on-change",
-      "authorHeadReviewed": "165bb3100fb894158969abb808caad5bc9150807",
+      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -11218,7 +11218,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-random-subset-blocks",
-      "authorHeadReviewed": "165bb3100fb894158969abb808caad5bc9150807",
+      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -11470,7 +11470,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-random-halving-interval",
-      "authorHeadReviewed": "165bb3100fb894158969abb808caad5bc9150807",
+      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
       "taxonomy": {
         "decision": "approved",
         "author": {
