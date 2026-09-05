@@ -406,16 +406,27 @@ summary:focus-visible,
 }
 
 .appearance-dock__trigger-mark {
+  display: grid;
   width: 20px;
   height: 20px;
+  flex: 0 0 20px;
+  place-items: center;
+  margin: 0;
   background: transparent;
   color: var(--muted);
   font-size: 0;
+  line-height: 1;
 }
 
 .appearance-dock__trigger-mark::after {
-  content: "◐";
-  font: 500 14px/1 var(--font-ui);
+  display: block;
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  background: linear-gradient(to right, currentColor 0 50%, transparent 50% 100%);
+  content: "";
 }
 
 .appearance-dock__panel {
@@ -4066,4 +4077,15 @@ summary:focus-visible,
   font: 500 6.5px/1 var(--font-mono);
   transform: translateY(-50%);
   pointer-events: none;
+}
+
+
+/* Installed feedback: align live composer and controls exactly. */
+.reasoning-pane .input-dock .student-input-area {
+  width: 100%;
+  margin: 0;
+}
+.interview-app-container .appearance-dock__trigger {
+  align-items: center;
+  justify-content: center;
 }
