@@ -542,6 +542,12 @@ describe("editorial v10 adversarial UI states", () => {
     expect(editorialCss).not.toMatch(
       /@media \(max-width: 900px\)[\s\S]{0,300}\.quant-side\s*\{\s*display:\s*none/u
     );
+    expect(editorialCss).toContain(
+      ".new-interview__select-wrap select:focus-visible"
+    );
+    expect(editorialCss).toMatch(
+      /\.new-interview__duration input:focus-visible[\s\S]{0,160}outline:\s*2px solid var\(--accent\)/u
+    );
     expect(transcriptCss).toContain(
       "@media(max-width:960px){.transcript-feed__focus{display:none}}"
     );
