@@ -14,7 +14,17 @@ import {
 const REFLECT_APPLY_INTRINSIC = Reflect.apply;
 
 export const ANTIGRAVITY_CLI_PROVIDER_ID = "antigravity-cli";
-export const ANTIGRAVITY_CLI_MODEL_ID = "gemini-3.7-flash-medium";
+export const ANTIGRAVITY_CLI_MODEL_IDS = Object.freeze([
+  "gemini-3.8-flash-high",
+  "gemini-3.8-flash-medium",
+  "gemini-3.8-flash-low",
+  "gemini-3.7-flash-high",
+  "gemini-3.7-flash-medium",
+  "gemini-3.7-flash-low"
+] as const);
+export type AntigravityCliModelId = typeof ANTIGRAVITY_CLI_MODEL_IDS[number];
+export const ANTIGRAVITY_CLI_MODEL_ID: AntigravityCliModelId =
+  "gemini-3.8-flash-medium";
 export const ANTIGRAVITY_CLI_AGENT_ID = "interview-realizer";
 export const ANTIGRAVITY_CLI_ADAPTER_VERSION = "1.0.0";
 
@@ -296,20 +306,63 @@ const INTERVIEWER_PROPOSAL_JSON_SCHEMA = Object.freeze({
 export const ANTIGRAVITY_CLI_PROPOSAL_SCHEMA_ARGUMENT = JSON.stringify(
   INTERVIEWER_PROPOSAL_JSON_SCHEMA
 );
-export const ANTIGRAVITY_CLI_TURN_ARGUMENTS = Object.freeze([
-  "--input-format",
-  "stream-json",
-  "--output-format",
-  "stream-json",
-  "--json-schema",
-  ANTIGRAVITY_CLI_PROPOSAL_SCHEMA_ARGUMENT,
-  "--model",
-  ANTIGRAVITY_CLI_MODEL_ID,
-  "--agent",
-  ANTIGRAVITY_CLI_AGENT_ID,
-  "--print-timeout",
-  "2m"
-] as const);
+interface AntigravityCliModelExecutionProfile {
+  readonly logicalModelId: AntigravityCliModelId;
+  readonly cliModelId: string;
+  readonly effort: "low" | "medium" | "high";
+}
+
+export function isSupportedAntigravityCliModelId(
+  value: string
+): value is AntigravityCliModelId {
+  return (ANTIGRAVITY_CLI_MODEL_IDS as readonly string[]).includes(value);
+}
+
+function antigravityCliModelExecutionProfile(
+  modelId: string
+): AntigravityCliModelExecutionProfile {
+  if (!isSupportedAntigravityCliModelId(modelId)) {
+    throw new AntigravityCliAdapterError("INVALID_RUNTIME");
+  }
+  const effort = modelId.endsWith("-high")
+    ? "high"
+    : modelId.endsWith("-low")
+      ? "low"
+      : "medium";
+  // Antigravity currently publishes explicit high/medium model slugs while
+  // also exposing --effort low|medium|high. Keep the logical low tier stable
+  // in Interview App by pinning the corresponding medium model slug and
+  // explicitly lowering effort, rather than inventing an undocumented CLI slug.
+  const cliModelId = effort === "low"
+    ? modelId.replace(/-low$/u, "-medium")
+    : modelId;
+  return Object.freeze({ logicalModelId: modelId, cliModelId, effort });
+}
+
+export function antigravityCliTurnArguments(
+  modelId: string = ANTIGRAVITY_CLI_MODEL_ID
+): readonly string[] {
+  const profile = antigravityCliModelExecutionProfile(modelId);
+  return Object.freeze([
+    "--input-format",
+    "stream-json",
+    "--output-format",
+    "stream-json",
+    "--json-schema",
+    ANTIGRAVITY_CLI_PROPOSAL_SCHEMA_ARGUMENT,
+    "--model",
+    profile.cliModelId,
+    "--effort",
+    profile.effort,
+    "--agent",
+    ANTIGRAVITY_CLI_AGENT_ID,
+    "--print-timeout",
+    "2m"
+  ]);
+}
+
+export const ANTIGRAVITY_CLI_TURN_ARGUMENTS =
+  antigravityCliTurnArguments(ANTIGRAVITY_CLI_MODEL_ID);
 export const ANTIGRAVITY_CLI_ZERO_TURN_PREFLIGHT_INPUT =
   '{"event":"control_request"}\n';
 const INTERVIEWER_PROPOSAL_SCHEMA_CANONICAL = serializeBoundedPlainJson(
@@ -398,9 +451,8 @@ export function createAntigravityCliReasoningProvider(
   billingVerificationFactory?: AntigravityBillingVerificationFactory
 ): SupervisedCliReasoningProvider {
   const execute = captureExecutor(executor);
-  if (modelId !== ANTIGRAVITY_CLI_MODEL_ID) {
-    throw new AntigravityCliAdapterError("INVALID_RUNTIME");
-  }
+  const modelProfile = antigravityCliModelExecutionProfile(modelId);
+  const turnArguments = antigravityCliTurnArguments(modelId);
 
   return new SupervisedCliReasoningProvider({
     providerId: ANTIGRAVITY_CLI_PROVIDER_ID,
@@ -442,7 +494,7 @@ export function createAntigravityCliReasoningProvider(
       let rawResult: unknown;
       try {
         rawResult = await execute({
-          args: ANTIGRAVITY_CLI_TURN_ARGUMENTS,
+          args: turnArguments,
           stdin,
           timeoutMs: EXECUTION_TIMEOUT_MS,
           maxStdoutBytes: MAX_STDOUT_BYTES,
@@ -459,7 +511,7 @@ export function createAntigravityCliReasoningProvider(
       }
       return parseAntigravityStream(
         result.stdout,
-        modelId,
+        modelProfile.cliModelId,
         ANTIGRAVITY_CLI_AGENT_ID
       );
     }
