@@ -1,0 +1,1698 @@
+{
+  "schemaVersion": 1,
+  "agent": "G — Gauss",
+  "reviewedAt": "2026-09-05",
+  "purpose": "Traceable late Wave 2 cross-agent taxonomy/difficulty/timing review of an available representative batch. These are independent Gauss records; they do not mutate author branches or claim H/I approvals.",
+  "authorPullRequests": [
+    {
+      "agent": "C — Cantor",
+      "prNumber": 132,
+      "headSha": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "familiesReviewed": [
+        "oxford-cantor-cubic-divided-difference",
+        "oxford-cantor-reciprocal-increment-recurrence"
+      ]
+    },
+    {
+      "agent": "D — Dirichlet",
+      "prNumber": 133,
+      "headSha": "017759febfd7d49ea032d6474bcc9177a76b2c2b",
+      "familiesReviewed": [
+        "oxford-d-gcd-descent-network",
+        "oxford-d-triple-flip-circle"
+      ]
+    },
+    {
+      "agent": "E — Euler",
+      "prNumber": 134,
+      "headSha": "a18db48700800c1987e2abd43726254ba25267dd",
+      "familiesReviewed": [
+        "oxford-euler-circle-sweep",
+        "oxford-euler-self-averaging-sets"
+      ]
+    }
+  ],
+  "portfolioLevelFindings": [
+    {
+      "agent": "D — Dirichlet",
+      "prNumber": 133,
+      "finding": "All 22 candidates reuse one WHOLE_TIMING object and one opening/core/transfer STAGE_TIMING table. Those values are author planning defaults, not family calibration, and cannot be approved as timingCalibration."
+    },
+    {
+      "agent": "E — Euler",
+      "prNumber": 134,
+      "finding": "All 19 candidates reuse one FAMILY_TIMING and one five-position STAGE_TIMING table. The helper also derives core role mechanically from the first interior stage at the author core band. Both choices need family-specific independent review before calibration."
+    },
+    {
+      "agent": "C — Cantor",
+      "prNumber": 132,
+      "finding": "Cantor uses per-family low-confidence timing rather than a shared template. The reviewed high-calibration-risk families still run past the public whole-interview anchor and need shorter soft cutoffs, but the authoring shape is suitable for independent calibration."
+    }
+  ],
+  "summary": {
+    "familiesReviewed": 6,
+    "needsRevision": [
+      "oxford-cantor-cubic-divided-difference",
+      "oxford-cantor-reciprocal-increment-recurrence",
+      "oxford-d-gcd-descent-network",
+      "oxford-d-triple-flip-circle",
+      "oxford-euler-circle-sweep",
+      "oxford-euler-self-averaging-sets"
+    ],
+    "safeForLaterCalibration": [],
+    "taxonomyCorrections": [
+      "oxford-d-triple-flip-circle: add sequences-recurrences / recurrence-structure",
+      "oxford-euler-self-averaging-sets: replace combinatorics/counting-structure with set-theory/set-maps"
+    ],
+    "majorDifficultyDisagreements": [
+      "oxford-cantor-cubic-divided-difference: ceiling stretch -> strong",
+      "oxford-d-gcd-descent-network: entry introductory-plus -> introductory; ceiling strong -> standard",
+      "oxford-d-triple-flip-circle: core standard -> strong",
+      "oxford-euler-circle-sweep: substantive core standard -> strong and move core role to parameter-test",
+      "oxford-euler-self-averaging-sets: core standard -> strong and move core role to finite-orbit"
+    ]
+  },
+  "records": [
+    {
+      "schemaVersion": 1,
+      "familyId": "oxford-cantor-cubic-divided-difference",
+      "source": "agent-c",
+      "reviewedMetadataStatus": "author-proposal",
+      "taxonomy": {
+        "domains": [
+          "algebra",
+          "functions",
+          "calculus",
+          "graph-sketching"
+        ],
+        "contentConcepts": [
+          "polynomial-structure",
+          "parameter-dependent-algebra",
+          "roots-intersections",
+          "derivative-structure",
+          "turning-points-extrema",
+          "qualitative-function-behavior"
+        ],
+        "prerequisiteConcepts": [
+          "algebraic-manipulation",
+          "polynomial-factorization",
+          "functions-graphs",
+          "differentiation"
+        ],
+        "reasoningSkills": [
+          "technique",
+          "strategic-simplification",
+          "representation-switching",
+          "precision-checking",
+          "case-analysis",
+          "proof-construction",
+          "graph-sketching",
+          "generalization",
+          "guided-adaptation"
+        ],
+        "milestoneSkillClaims": [
+          {
+            "milestoneId": "factor-cubic-difference",
+            "skills": [
+              "technique",
+              "strategic-simplification"
+            ],
+            "contentConcepts": [
+              "polynomial-structure",
+              "parameter-dependent-algebra"
+            ]
+          },
+          {
+            "milestoneId": "fill-removable-hole",
+            "skills": [
+              "representation-switching",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "derivative-structure",
+              "qualitative-function-behavior"
+            ]
+          },
+          {
+            "milestoneId": "quotient-discriminant",
+            "skills": [
+              "case-analysis",
+              "technique"
+            ],
+            "contentConcepts": [
+              "roots-intersections",
+              "parameter-dependent-algebra"
+            ]
+          },
+          {
+            "milestoneId": "stationary-duplication",
+            "skills": [
+              "precision-checking",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "turning-points-extrema",
+              "roots-intersections"
+            ]
+          },
+          {
+            "milestoneId": "translate-to-cubic-geometry",
+            "skills": [
+              "graph-sketching",
+              "representation-switching",
+              "generalization"
+            ],
+            "contentConcepts": [
+              "qualitative-function-behavior",
+              "roots-intersections",
+              "turning-points-extrema"
+            ]
+          }
+        ],
+        "rationale": {
+          "domains": "The family genuinely moves among algebraic factorization, function preimages, derivative/turning-point structure, and graphical horizontal-line geometry.",
+          "contentConcepts": "Each listed concept is directly exercised by a milestone; the two distinct parameter thresholds make roots/intersections and extrema separately material.",
+          "prerequisiteConcepts": "Basic factorization, graph language, and differentiation are assumed without teaching; the parameter classification itself is assessed.",
+          "reasoningSkills": "The family measures factorization, representation changes, case analysis and precision. guided-adaptation may be elicited by the staged hint path but remains process-grounded and is intentionally absent from milestone claims."
+        }
+      },
+      "difficulty": {
+        "recommendedStatus": "expert-estimate",
+        "entry": "introductory-plus",
+        "core": "strong",
+        "ceiling": "strong",
+        "confidence": "low",
+        "factors": {
+          "prerequisite-burden": 2,
+          "initial-insight-barrier": 2,
+          "conceptual-jumps": 3,
+          "abstraction": 2,
+          "proof-rigor-burden": 3,
+          "representation-changes": 3,
+          "productive-prompt-dependency": 2,
+          "extension-ceiling": 2
+        },
+        "stageAssessments": [
+          {
+            "stageId": "opening",
+            "role": "technique-check",
+            "difficulty": "introductory-plus",
+            "rationale": "Factoring the divided difference and filling the removable hole are accessible to a prepared candidate but require clean algebra and a derivative connection."
+          },
+          {
+            "stageId": "core",
+            "role": "core",
+            "difficulty": "strong",
+            "rationale": "The core must distinguish discriminant regimes and the separate stationary-point threshold without confusing multiplicity with distinct inputs."
+          },
+          {
+            "stageId": "extension",
+            "role": "stretch",
+            "difficulty": "strong",
+            "rationale": "The scaled-cubic and secant-sign extensions deepen the same mechanism but do not add enough conceptual burden to justify a stretch difficulty band."
+          }
+        ],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Agent G — Gauss independent review of Agent C PR #132 family at head c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9."
+        },
+        "rationale": "Cantor's entry/core bands are reasonable, but the authored stretch ceiling is high for the actual extensions. The hard part is precision across two special thresholds, not a qualitatively new stretch mechanism."
+      },
+      "timing": {
+        "recommendedStatus": "expert-estimate",
+        "estimate": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 5
+          },
+          "independentCompletionMinutes": {
+            "min": 14,
+            "max": 24
+          },
+          "promptedCompletionMinutes": {
+            "min": 10,
+            "max": 20
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 8
+          },
+          "softCutoffMinutes": 24,
+          "confidence": "low"
+        },
+        "stageAssessments": [
+          {
+            "stageId": "opening",
+            "timing": {
+              "firstMeaningfulInsightMinutes": {
+                "min": 1,
+                "max": 3
+              },
+              "independentCompletionMinutes": {
+                "min": 4,
+                "max": 7
+              },
+              "promptedCompletionMinutes": {
+                "min": 3,
+                "max": 6
+              },
+              "softCutoffMinutes": 7,
+              "confidence": "low"
+            },
+            "rationale": "The algebraic opening should resolve quickly once factorization is seen."
+          },
+          {
+            "stageId": "core",
+            "timing": {
+              "firstMeaningfulInsightMinutes": {
+                "min": 2,
+                "max": 5
+              },
+              "independentCompletionMinutes": {
+                "min": 8,
+                "max": 14
+              },
+              "promptedCompletionMinutes": {
+                "min": 6,
+                "max": 12
+              },
+              "softCutoffMinutes": 14,
+              "confidence": "low"
+            },
+            "rationale": "Most interview time belongs on regime classification and distinct-input precision."
+          },
+          {
+            "stageId": "extension",
+            "timing": {
+              "firstMeaningfulInsightMinutes": {
+                "min": 1,
+                "max": 3
+              },
+              "independentCompletionMinutes": {
+                "min": 4,
+                "max": 8
+              },
+              "promptedCompletionMinutes": {
+                "min": 3,
+                "max": 7
+              },
+              "optionalExtensionMinutes": {
+                "min": 3,
+                "max": 6
+              },
+              "softCutoffMinutes": 8,
+              "confidence": "low"
+            },
+            "rationale": "Extensions are optional transfer/deepening rather than a second full core."
+          }
+        ],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Agent G — Gauss independent timing estimate; no usage distributions exist."
+        },
+        "rationale": "The author 22–34 minute independent range and 30-minute soft cutoff are too completion-oriented for a typical ~25-minute Oxford interview. A natural transition near 24 minutes better preserves one coherent core while allowing unfinished strong work to remain informative."
+      },
+      "disposition": "needs-revision",
+      "migration": {
+        "worthMigrating": true,
+        "recommendation": "revise-before-migration",
+        "rationale": "Keep the family, but lower the authored ceiling to strong and replace the timing profile with a more interview-scale expert estimate before Gauss calibration approval."
+      },
+      "blockers": [
+        "Agent C PR #132 authored ceiling/timing do not match the independent Gauss calibration proposal."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      },
+      "reviewNotes": [
+        "No process-grounded skill is accepted as milestone evidence.",
+        "Gauss does not assess originality/fidelity or mathematical correctness here."
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "familyId": "oxford-cantor-reciprocal-increment-recurrence",
+      "source": "agent-c",
+      "reviewedMetadataStatus": "author-proposal",
+      "taxonomy": {
+        "domains": [
+          "sequences-recurrences",
+          "elementary-analysis",
+          "algebra"
+        ],
+        "contentConcepts": [
+          "recurrence-structure",
+          "monotonicity-boundedness",
+          "telescoping-structure",
+          "inequalities-bounds",
+          "limiting-arguments",
+          "sequence-convergence"
+        ],
+        "prerequisiteConcepts": [
+          "algebraic-manipulation",
+          "sequences-series",
+          "limits-continuity"
+        ],
+        "reasoningSkills": [
+          "proof-construction",
+          "precision-checking",
+          "strategic-simplification",
+          "technique",
+          "invariants",
+          "representation-switching",
+          "generalization",
+          "transfer",
+          "guided-adaptation"
+        ],
+        "milestoneSkillClaims": [
+          {
+            "milestoneId": "monotone-growth",
+            "skills": [
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "monotonicity-boundedness",
+              "recurrence-structure"
+            ]
+          },
+          {
+            "milestoneId": "square-identity",
+            "skills": [
+              "strategic-simplification",
+              "technique"
+            ],
+            "contentConcepts": [
+              "recurrence-structure",
+              "telescoping-structure"
+            ]
+          },
+          {
+            "milestoneId": "linear-lower-bound",
+            "skills": [
+              "proof-construction",
+              "invariants"
+            ],
+            "contentConcepts": [
+              "inequalities-bounds",
+              "recurrence-structure"
+            ]
+          },
+          {
+            "milestoneId": "error-sum-bound",
+            "skills": [
+              "representation-switching",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "telescoping-structure",
+              "inequalities-bounds",
+              "limiting-arguments"
+            ]
+          },
+          {
+            "milestoneId": "normalized-limit",
+            "skills": [
+              "proof-construction",
+              "generalization",
+              "transfer"
+            ],
+            "contentConcepts": [
+              "limiting-arguments",
+              "sequence-convergence",
+              "recurrence-structure"
+            ]
+          }
+        ],
+        "rationale": {
+          "domains": "The recurrence is the primary object; the asymptotic squeeze is elementary analysis, with algebra used to expose the squared update.",
+          "contentConcepts": "The family measures monotone growth, an almost-telescoping squared recurrence, quantitative bounds and a normalized limiting argument.",
+          "prerequisiteConcepts": "Basic sequence and limit reasoning is assumed. A logarithmic/harmonic comparison should be supplied or developed if the candidate has not seen it; it should not silently become an extra prerequisite.",
+          "reasoningSkills": "The key reasoning switch is from a_n to a_n^2, followed by a nontrivial cumulative-error bound. guided-adaptation is process-only and not milestone-grounded."
+        }
+      },
+      "difficulty": {
+        "recommendedStatus": "expert-estimate",
+        "entry": "introductory-plus",
+        "core": "strong",
+        "ceiling": "stretch",
+        "confidence": "low",
+        "factors": {
+          "prerequisite-burden": 2,
+          "initial-insight-barrier": 2,
+          "conceptual-jumps": 3,
+          "abstraction": 3,
+          "proof-rigor-burden": 3,
+          "representation-changes": 2,
+          "productive-prompt-dependency": 2,
+          "extension-ceiling": 3
+        },
+        "stageAssessments": [
+          {
+            "stageId": "opening",
+            "role": "warm-up",
+            "difficulty": "introductory-plus",
+            "rationale": "Positivity, monotonicity and the squared update are accessible once the right representation is suggested."
+          },
+          {
+            "stageId": "core",
+            "role": "core",
+            "difficulty": "strong",
+            "rationale": "The core difficulty is proving the accumulated reciprocal-square error is sublinear rather than merely positive or O(n)."
+          },
+          {
+            "stageId": "extension",
+            "role": "stretch",
+            "difficulty": "stretch",
+            "rationale": "General c and the plausible logarithmic correction provide genuine transfer beyond the leading-order proof."
+          }
+        ],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Agent G — Gauss independent review of Agent C PR #132 family at head c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9."
+        },
+        "rationale": "Cantor's ordinal profile is well judged. The difficulty is concentrated in turning the lower bound into a sufficiently sharp cumulative-error estimate, not in the initial recurrence manipulation."
+      },
+      "timing": {
+        "recommendedStatus": "expert-estimate",
+        "estimate": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 5
+          },
+          "independentCompletionMinutes": {
+            "min": 17,
+            "max": 28
+          },
+          "promptedCompletionMinutes": {
+            "min": 13,
+            "max": 23
+          },
+          "optionalExtensionMinutes": {
+            "min": 5,
+            "max": 10
+          },
+          "softCutoffMinutes": 25,
+          "confidence": "low"
+        },
+        "stageAssessments": [
+          {
+            "stageId": "opening",
+            "timing": {
+              "firstMeaningfulInsightMinutes": {
+                "min": 1,
+                "max": 3
+              },
+              "independentCompletionMinutes": {
+                "min": 4,
+                "max": 7
+              },
+              "promptedCompletionMinutes": {
+                "min": 3,
+                "max": 6
+              },
+              "softCutoffMinutes": 7,
+              "confidence": "low"
+            },
+            "rationale": "The first two milestones are a short opening if the squaring idea appears."
+          },
+          {
+            "stageId": "core",
+            "timing": {
+              "firstMeaningfulInsightMinutes": {
+                "min": 2,
+                "max": 5
+              },
+              "independentCompletionMinutes": {
+                "min": 10,
+                "max": 18
+              },
+              "promptedCompletionMinutes": {
+                "min": 8,
+                "max": 15
+              },
+              "softCutoffMinutes": 18,
+              "confidence": "low"
+            },
+            "rationale": "The cumulative-error bound can legitimately consume most of the interview."
+          },
+          {
+            "stageId": "extension",
+            "timing": {
+              "firstMeaningfulInsightMinutes": {
+                "min": 2,
+                "max": 4
+              },
+              "independentCompletionMinutes": {
+                "min": 6,
+                "max": 11
+              },
+              "promptedCompletionMinutes": {
+                "min": 5,
+                "max": 9
+              },
+              "optionalExtensionMinutes": {
+                "min": 4,
+                "max": 8
+              },
+              "softCutoffMinutes": 11,
+              "confidence": "low"
+            },
+            "rationale": "Use the scaled recurrence or second-order discussion only if the core develops quickly."
+          }
+        ],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Agent G — Gauss independent timing estimate; no usage distributions exist."
+        },
+        "rationale": "The author timing is directionally sensible but a 32-minute soft cutoff is too late for the public whole-interview anchor. A 25-minute transition point allows the strong core to remain unfinished without misclassifying the candidate."
+      },
+      "disposition": "needs-revision",
+      "migration": {
+        "worthMigrating": true,
+        "recommendation": "revise-before-migration",
+        "rationale": "Taxonomy and difficulty are suitable, but the authored timing must be brought back to interview scale before calibration approval."
+      },
+      "blockers": [
+        "Agent C PR #132 timing soft cutoff/range should be revised before timingCalibration can become expert-estimate."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      },
+      "reviewNotes": [
+        "If logarithmic comparison is not standard for the candidate, elicit or provide it rather than treating missing prior exposure as weakness."
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "familyId": "oxford-d-gcd-descent-network",
+      "source": "agent-d",
+      "reviewedMetadataStatus": "author-proposal",
+      "taxonomy": {
+        "domains": [
+          "number-theory",
+          "graph-theory"
+        ],
+        "contentConcepts": [
+          "divisibility",
+          "paths-cycles-connectivity"
+        ],
+        "prerequisiteConcepts": [
+          "arithmetic",
+          "divisibility",
+          "graph-basics"
+        ],
+        "reasoningSkills": [
+          "small-case-exploration",
+          "invariants",
+          "proof-construction",
+          "precision-checking",
+          "generalization"
+        ],
+        "milestoneSkillClaims": [
+          {
+            "milestoneId": "test-small-networks",
+            "skills": [
+              "small-case-exploration"
+            ],
+            "contentConcepts": [
+              "divisibility"
+            ]
+          },
+          {
+            "milestoneId": "find-decreasing-sum",
+            "skills": [
+              "invariants"
+            ],
+            "contentConcepts": []
+          },
+          {
+            "milestoneId": "prove-gcd-invariant",
+            "skills": [
+              "invariants",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "divisibility"
+            ]
+          },
+          {
+            "milestoneId": "classify-terminal-state",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "paths-cycles-connectivity"
+            ]
+          },
+          {
+            "milestoneId": "identify-terminal-gcd",
+            "skills": [
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "divisibility"
+            ]
+          }
+        ],
+        "rationale": {
+          "domains": "The process combines Euclidean divisibility with connected-graph propagation.",
+          "contentConcepts": "Divisibility is measured through gcd preservation; connectivity is used essentially to force a constant terminal state.",
+          "prerequisiteConcepts": "Elementary arithmetic/divisibility and graph vocabulary are assumed. The global invariant/monovariant construction is assessed.",
+          "reasoningSkills": "The family primarily measures finding a descent monovariant and a preserved gcd, then joining them in a proof."
+        }
+      },
+      "difficulty": {
+        "recommendedStatus": "expert-estimate",
+        "entry": "introductory",
+        "core": "standard",
+        "ceiling": "standard",
+        "confidence": "low",
+        "factors": {
+          "prerequisite-burden": 1,
+          "initial-insight-barrier": 1,
+          "conceptual-jumps": 2,
+          "abstraction": 1,
+          "proof-rigor-burden": 2,
+          "representation-changes": 1,
+          "productive-prompt-dependency": 1,
+          "extension-ceiling": 1
+        },
+        "stageAssessments": [
+          {
+            "stageId": "network-opening",
+            "role": "warm-up",
+            "difficulty": "introductory",
+            "rationale": "Small paths reduce immediately to repeated subtraction and should function as an accessible opening."
+          },
+          {
+            "stageId": "network-core",
+            "role": "core",
+            "difficulty": "standard",
+            "rationale": "The central work is identifying both the strictly decreasing sum and global gcd invariant, then using connectivity."
+          },
+          {
+            "stageId": "network-transfer",
+            "role": "transfer",
+            "difficulty": "standard",
+            "rationale": "Disconnected components and differing move-sequence lengths deepen precision but remain within the same standard mechanism."
+          }
+        ],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Agent G — Gauss independent review of Agent D PR #133 family at head 017759febfd7d49ea032d6474bcc9177a76b2c2b."
+        },
+        "rationale": "The author entry and ceiling are each one band high. The core is a clean standard invariant proof; the extensions do not create a strong ceiling."
+      },
+      "timing": {
+        "recommendedStatus": "expert-estimate",
+        "estimate": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 1,
+            "max": 4
+          },
+          "independentCompletionMinutes": {
+            "min": 9,
+            "max": 16
+          },
+          "promptedCompletionMinutes": {
+            "min": 7,
+            "max": 13
+          },
+          "optionalExtensionMinutes": {
+            "min": 3,
+            "max": 6
+          },
+          "softCutoffMinutes": 17,
+          "confidence": "low"
+        },
+        "stageAssessments": [
+          {
+            "stageId": "network-opening",
+            "timing": {
+              "firstMeaningfulInsightMinutes": {
+                "min": 1,
+                "max": 2
+              },
+              "independentCompletionMinutes": {
+                "min": 2,
+                "max": 4
+              },
+              "promptedCompletionMinutes": {
+                "min": 2,
+                "max": 3
+              },
+              "softCutoffMinutes": 4,
+              "confidence": "low"
+            },
+            "rationale": "Small examples should be quick."
+          },
+          {
+            "stageId": "network-core",
+            "timing": {
+              "firstMeaningfulInsightMinutes": {
+                "min": 1,
+                "max": 4
+              },
+              "independentCompletionMinutes": {
+                "min": 6,
+                "max": 11
+              },
+              "promptedCompletionMinutes": {
+                "min": 5,
+                "max": 9
+              },
+              "softCutoffMinutes": 11,
+              "confidence": "low"
+            },
+            "rationale": "Most time belongs on discovering and combining the two global quantities."
+          },
+          {
+            "stageId": "network-transfer",
+            "timing": {
+              "firstMeaningfulInsightMinutes": {
+                "min": 1,
+                "max": 3
+              },
+              "independentCompletionMinutes": {
+                "min": 3,
+                "max": 6
+              },
+              "promptedCompletionMinutes": {
+                "min": 2,
+                "max": 5
+              },
+              "optionalExtensionMinutes": {
+                "min": 2,
+                "max": 4
+              },
+              "softCutoffMinutes": 6,
+              "confidence": "low"
+            },
+            "rationale": "Extensions are compact once the core proof is secure."
+          }
+        ],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Agent G — Gauss independent timing estimate; no usage distributions exist."
+        },
+        "rationale": "Dirichlet's shared 14–24 / 27-minute template is materially too long for this comparatively compact family and cannot serve as a family-specific calibration."
+      },
+      "disposition": "needs-revision",
+      "migration": {
+        "worthMigrating": true,
+        "recommendation": "revise-before-migration",
+        "rationale": "Keep the family, but lower entry/ceiling and replace shared-template timing with family-specific estimates before calibration approval."
+      },
+      "blockers": [
+        "Agent D PR #133 uses one generic WHOLE_TIMING/STAGE_TIMING template for all 22 candidates; this family cannot receive timing calibration approval from that template.",
+        "Author difficulty entry/ceiling disagree with Gauss by one band."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      },
+      "reviewNotes": [
+        "The empty contentConcepts list on the pure monovariant milestone is appropriate: it is a reasoning checkpoint, not forced mathematical-content evidence."
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "familyId": "oxford-d-triple-flip-circle",
+      "source": "agent-d",
+      "reviewedMetadataStatus": "author-proposal",
+      "taxonomy": {
+        "domains": [
+          "combinatorics",
+          "number-theory",
+          "sequences-recurrences"
+        ],
+        "contentConcepts": [
+          "parity",
+          "modular-reasoning",
+          "counting-structure",
+          "recurrence-structure"
+        ],
+        "prerequisiteConcepts": [
+          "modular-arithmetic",
+          "counting-principles"
+        ],
+        "reasoningSkills": [
+          "small-case-exploration",
+          "representation-switching",
+          "invariants",
+          "proof-construction",
+          "precision-checking",
+          "generalization"
+        ],
+        "milestoneSkillClaims": [
+          {
+            "milestoneId": "explore-small-circles",
+            "skills": [
+              "small-case-exploration"
+            ],
+            "contentConcepts": [
+              "parity"
+            ]
+          },
+          {
+            "milestoneId": "encode-move-equations",
+            "skills": [
+              "representation-switching"
+            ],
+            "contentConcepts": [
+              "parity",
+              "modular-reasoning"
+            ]
+          },
+          {
+            "milestoneId": "analyze-zero-effect-moves",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "modular-reasoning",
+              "recurrence-structure"
+            ]
+          },
+          {
+            "milestoneId": "classify-reachability",
+            "skills": [
+              "invariants",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "parity",
+              "recurrence-structure"
+            ]
+          },
+          {
+            "milestoneId": "prove-sufficiency-by-counting",
+            "skills": [
+              "precision-checking",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "counting-structure",
+              "parity"
+            ]
+          }
+        ],
+        "rationale": {
+          "domains": "The reachability question is combinatorial/parity based, while the homogeneous period-three recurrence is substantive mathematical content rather than a mere proof convenience.",
+          "contentConcepts": "The author correctly captures parity/modular/counting content but omits recurrence-structure, which is directly derived, solved and used to classify the kernel.",
+          "prerequisiteConcepts": "Basic mod-2 arithmetic and counting are assumed. Recurrence structure is developed inside the interview, so it should be content, not a prerequisite.",
+          "reasoningSkills": "The family measures encoding, invariant discovery and a counting sufficiency argument."
+        }
+      },
+      "difficulty": {
+        "recommendedStatus": "expert-estimate",
+        "entry": "introductory",
+        "core": "strong",
+        "ceiling": "strong",
+        "confidence": "low",
+        "factors": {
+          "prerequisite-burden": 1,
+          "initial-insight-barrier": 2,
+          "conceptual-jumps": 3,
+          "abstraction": 2,
+          "proof-rigor-burden": 3,
+          "representation-changes": 3,
+          "productive-prompt-dependency": 2,
+          "extension-ceiling": 2
+        },
+        "stageAssessments": [
+          {
+            "stageId": "triple-flip-opening",
+            "role": "warm-up",
+            "difficulty": "introductory",
+            "rationale": "Small n exploration is accessible."
+          },
+          {
+            "stageId": "triple-flip-core",
+            "role": "core",
+            "difficulty": "strong",
+            "rationale": "Encoding the linear recurrence, imposing cyclic closure and finding the complete obstruction require several linked conceptual jumps."
+          },
+          {
+            "stageId": "triple-flip-transfer",
+            "role": "transfer",
+            "difficulty": "strong",
+            "rationale": "Kernel/image counting and the two-lamp variant deepen the same algebraic-combinatorial structure."
+          }
+        ],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Agent G — Gauss independent review of Agent D PR #133 family at head 017759febfd7d49ea032d6474bcc9177a76b2c2b."
+        },
+        "rationale": "The author standard core understates the number of conceptual jumps: mod-2 encoding, recurrence kernel, cyclic closure, visible invariant and cardinality sufficiency. The ceiling need not exceed strong."
+      },
+      "timing": {
+        "recommendedStatus": "expert-estimate",
+        "estimate": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 6
+          },
+          "independentCompletionMinutes": {
+            "min": 15,
+            "max": 26
+          },
+          "promptedCompletionMinutes": {
+            "min": 11,
+            "max": 21
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 8
+          },
+          "softCutoffMinutes": 25,
+          "confidence": "low"
+        },
+        "stageAssessments": [
+          {
+            "stageId": "triple-flip-opening",
+            "timing": {
+              "firstMeaningfulInsightMinutes": {
+                "min": 1,
+                "max": 3
+              },
+              "independentCompletionMinutes": {
+                "min": 3,
+                "max": 6
+              },
+              "promptedCompletionMinutes": {
+                "min": 2,
+                "max": 5
+              },
+              "softCutoffMinutes": 6,
+              "confidence": "low"
+            },
+            "rationale": "Use only enough small cases to motivate the split at 3|n."
+          },
+          {
+            "stageId": "triple-flip-core",
+            "timing": {
+              "firstMeaningfulInsightMinutes": {
+                "min": 2,
+                "max": 5
+              },
+              "independentCompletionMinutes": {
+                "min": 10,
+                "max": 18
+              },
+              "promptedCompletionMinutes": {
+                "min": 8,
+                "max": 15
+              },
+              "softCutoffMinutes": 18,
+              "confidence": "low"
+            },
+            "rationale": "The recurrence/kernel and invariant classification can occupy most of one interview."
+          },
+          {
+            "stageId": "triple-flip-transfer",
+            "timing": {
+              "firstMeaningfulInsightMinutes": {
+                "min": 2,
+                "max": 4
+              },
+              "independentCompletionMinutes": {
+                "min": 6,
+                "max": 10
+              },
+              "promptedCompletionMinutes": {
+                "min": 5,
+                "max": 8
+              },
+              "optionalExtensionMinutes": {
+                "min": 3,
+                "max": 6
+              },
+              "softCutoffMinutes": 10,
+              "confidence": "low"
+            },
+            "rationale": "Counting sufficiency/extension is optional if the core runs long."
+          }
+        ],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Agent G — Gauss independent timing estimate; no usage distributions exist."
+        },
+        "rationale": "This family genuinely needs more time than GCD Descent, illustrating why Dirichlet's shared timing table is not calibration."
+      },
+      "disposition": "needs-revision",
+      "migration": {
+        "worthMigrating": true,
+        "recommendation": "revise-before-migration",
+        "rationale": "Add the omitted recurrence taxonomy/content, raise core to strong, and replace shared timing before calibration approval."
+      },
+      "blockers": [
+        "Agent D PR #133 omits sequences-recurrences/recurrence-structure despite making the period-three recurrence central.",
+        "Agent D PR #133 standard core is lower than the independent Gauss strong calibration.",
+        "Agent D PR #133 uses generic timing across all 22 families."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      },
+      "reviewNotes": [
+        "No frozen-taxonomy expansion is needed; recurrence-structure already exists in Agent A's contract."
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "familyId": "oxford-euler-circle-sweep",
+      "source": "agent-e",
+      "reviewedMetadataStatus": "author-proposal",
+      "taxonomy": {
+        "domains": [
+          "coordinate-geometry",
+          "euclidean-geometry",
+          "algebra"
+        ],
+        "contentConcepts": [
+          "loci-coordinate-constraints",
+          "analytic-curve-geometry",
+          "spatial-configuration",
+          "algebraic-identities"
+        ],
+        "prerequisiteConcepts": [
+          "coordinate-geometry-basics",
+          "euclidean-geometry-basics",
+          "algebraic-manipulation"
+        ],
+        "reasoningSkills": [
+          "visualization",
+          "small-case-exploration",
+          "conjecture-formation",
+          "representation-switching",
+          "strategic-simplification",
+          "proof-construction",
+          "case-analysis",
+          "precision-checking",
+          "generalization",
+          "transfer"
+        ],
+        "milestoneSkillClaims": [
+          {
+            "milestoneId": "opening",
+            "skills": [
+              "visualization",
+              "small-case-exploration",
+              "conjecture-formation"
+            ],
+            "contentConcepts": [
+              "spatial-configuration"
+            ]
+          },
+          {
+            "milestoneId": "circle-equation",
+            "skills": [
+              "representation-switching",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "analytic-curve-geometry",
+              "algebraic-identities"
+            ]
+          },
+          {
+            "milestoneId": "parameter-test",
+            "skills": [
+              "strategic-simplification",
+              "proof-construction",
+              "case-analysis"
+            ],
+            "contentConcepts": [
+              "loci-coordinate-constraints",
+              "algebraic-identities"
+            ]
+          },
+          {
+            "milestoneId": "topology",
+            "skills": [
+              "visualization",
+              "precision-checking",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "loci-coordinate-constraints",
+              "spatial-configuration"
+            ]
+          },
+          {
+            "milestoneId": "transfer",
+            "skills": [
+              "generalization",
+              "transfer",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "loci-coordinate-constraints",
+              "analytic-curve-geometry"
+            ]
+          }
+        ],
+        "rationale": {
+          "domains": "The family is a coordinate/Euclidean locus problem with essential algebraic elimination.",
+          "contentConcepts": "The swept-locus condition, circle equation and geometric interpretation all directly exercise the proposed content.",
+          "prerequisiteConcepts": "Basic coordinates, diameter-circle geometry and algebra are assumed; parameter elimination/topology are assessed.",
+          "reasoningSkills": "The core reasoning is a sketch-to-equation representation switch followed by an existence interval test and geometric re-interpretation."
+        }
+      },
+      "difficulty": {
+        "recommendedStatus": "expert-estimate",
+        "entry": "introductory",
+        "core": "strong",
+        "ceiling": "stretch",
+        "confidence": "low",
+        "factors": {
+          "prerequisite-burden": 1,
+          "initial-insight-barrier": 2,
+          "conceptual-jumps": 3,
+          "abstraction": 2,
+          "proof-rigor-burden": 3,
+          "representation-changes": 3,
+          "productive-prompt-dependency": 2,
+          "extension-ceiling": 3
+        },
+        "stageAssessments": [
+          {
+            "stageId": "opening",
+            "role": "warm-up",
+            "difficulty": "introductory",
+            "rationale": "Sketching several admissible circles is deliberately accessible."
+          },
+          {
+            "stageId": "circle-equation",
+            "role": "technique-check",
+            "difficulty": "introductory-plus",
+            "rationale": "Deriving x^2+y^2=ax+by is a coordinate technique check, not the substantive core."
+          },
+          {
+            "stageId": "parameter-test",
+            "role": "core",
+            "difficulty": "strong",
+            "rationale": "Turning existence of a circle through a point into an interval/sign condition is the central insight."
+          },
+          {
+            "stageId": "topology",
+            "role": "deep-dive",
+            "difficulty": "strong",
+            "rationale": "Interpreting the sign product correctly as the closure of the symmetric difference requires care."
+          },
+          {
+            "stageId": "transfer",
+            "role": "transfer",
+            "difficulty": "stretch",
+            "rationale": "General lambda,L and strict-endpoint behavior provide a genuine parameter/topology transfer."
+          }
+        ],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Agent G — Gauss independent review of Agent E PR #134 family at head a18db48700800c1987e2abd43726254ba25267dd."
+        },
+        "rationale": "Euler's family core is placed too early because the helper automatically labels the first interior stage at the authored core band. The real core is the parameter-existence test, which is strong."
+      },
+      "timing": {
+        "recommendedStatus": "expert-estimate",
+        "estimate": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 5
+          },
+          "independentCompletionMinutes": {
+            "min": 16,
+            "max": 28
+          },
+          "promptedCompletionMinutes": {
+            "min": 12,
+            "max": 22
+          },
+          "optionalExtensionMinutes": {
+            "min": 5,
+            "max": 10
+          },
+          "softCutoffMinutes": 25,
+          "confidence": "low"
+        },
+        "stageAssessments": [
+          {
+            "stageId": "opening",
+            "timing": {
+              "firstMeaningfulInsightMinutes": {
+                "min": 1,
+                "max": 3
+              },
+              "independentCompletionMinutes": {
+                "min": 3,
+                "max": 6
+              },
+              "promptedCompletionMinutes": {
+                "min": 2,
+                "max": 5
+              },
+              "softCutoffMinutes": 6,
+              "confidence": "low"
+            },
+            "rationale": "Sketch enough cases to form a locus conjecture."
+          },
+          {
+            "stageId": "circle-equation",
+            "timing": {
+              "firstMeaningfulInsightMinutes": {
+                "min": 1,
+                "max": 3
+              },
+              "independentCompletionMinutes": {
+                "min": 3,
+                "max": 6
+              },
+              "promptedCompletionMinutes": {
+                "min": 2,
+                "max": 5
+              },
+              "softCutoffMinutes": 6,
+              "confidence": "low"
+            },
+            "rationale": "Coordinate derivation should remain compact."
+          },
+          {
+            "stageId": "parameter-test",
+            "timing": {
+              "firstMeaningfulInsightMinutes": {
+                "min": 2,
+                "max": 5
+              },
+              "independentCompletionMinutes": {
+                "min": 7,
+                "max": 12
+              },
+              "promptedCompletionMinutes": {
+                "min": 5,
+                "max": 10
+              },
+              "softCutoffMinutes": 12,
+              "confidence": "low"
+            },
+            "rationale": "Most conceptual time belongs here."
+          },
+          {
+            "stageId": "topology",
+            "timing": {
+              "firstMeaningfulInsightMinutes": {
+                "min": 2,
+                "max": 4
+              },
+              "independentCompletionMinutes": {
+                "min": 5,
+                "max": 10
+              },
+              "promptedCompletionMinutes": {
+                "min": 4,
+                "max": 8
+              },
+              "softCutoffMinutes": 10,
+              "confidence": "low"
+            },
+            "rationale": "Allow time to distinguish swept circumferences from filled disks/lens intuition."
+          },
+          {
+            "stageId": "transfer",
+            "timing": {
+              "firstMeaningfulInsightMinutes": {
+                "min": 2,
+                "max": 4
+              },
+              "independentCompletionMinutes": {
+                "min": 5,
+                "max": 9
+              },
+              "promptedCompletionMinutes": {
+                "min": 4,
+                "max": 8
+              },
+              "optionalExtensionMinutes": {
+                "min": 3,
+                "max": 7
+              },
+              "softCutoffMinutes": 9,
+              "confidence": "low"
+            },
+            "rationale": "Use only if the main locus is secure."
+          }
+        ],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Agent G — Gauss independent timing estimate; no usage distributions exist."
+        },
+        "rationale": "Euler's shared 18–30 / 25-minute family timing accidentally lands near a plausible total here, but identical timing across 19 very different families is not independent calibration. Stage timings must be family-specific."
+      },
+      "disposition": "needs-revision",
+      "migration": {
+        "worthMigrating": true,
+        "recommendation": "revise-before-migration",
+        "rationale": "Retain the family, but move the core role/difficulty to the parameter-test stage and replace the generic Euler timing table."
+      },
+      "blockers": [
+        "Agent E PR #134 stageRoleFor mechanically assigns circle-equation as core; Gauss identifies parameter-test as the substantive core.",
+        "Agent E PR #134 reuses one FAMILY_TIMING/STAGE_TIMING table across all 19 families."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      },
+      "reviewNotes": [
+        "No taxonomy expansion required."
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "familyId": "oxford-euler-self-averaging-sets",
+      "source": "agent-e",
+      "reviewedMetadataStatus": "author-proposal",
+      "taxonomy": {
+        "domains": [
+          "algebra",
+          "functions",
+          "set-theory"
+        ],
+        "contentConcepts": [
+          "equations-inequalities",
+          "function-transformations",
+          "set-maps"
+        ],
+        "prerequisiteConcepts": [
+          "arithmetic",
+          "algebraic-manipulation",
+          "functions-graphs",
+          "set-notation"
+        ],
+        "reasoningSkills": [
+          "definition-exploration",
+          "small-case-exploration",
+          "pattern-recognition",
+          "representation-switching",
+          "proof-construction",
+          "case-analysis",
+          "precision-checking",
+          "abstraction",
+          "generalization",
+          "transfer"
+        ],
+        "milestoneSkillClaims": [
+          {
+            "milestoneId": "opening",
+            "skills": [
+              "definition-exploration",
+              "small-case-exploration"
+            ],
+            "contentConcepts": [
+              "set-maps"
+            ]
+          },
+          {
+            "milestoneId": "structure",
+            "skills": [
+              "representation-switching",
+              "pattern-recognition"
+            ],
+            "contentConcepts": [
+              "equations-inequalities",
+              "function-transformations",
+              "set-maps"
+            ]
+          },
+          {
+            "milestoneId": "finite-orbit",
+            "skills": [
+              "proof-construction",
+              "abstraction"
+            ],
+            "contentConcepts": [
+              "function-transformations",
+              "set-maps"
+            ]
+          },
+          {
+            "milestoneId": "classification",
+            "skills": [
+              "case-analysis",
+              "precision-checking",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "equations-inequalities",
+              "set-maps"
+            ]
+          },
+          {
+            "milestoneId": "transfer",
+            "skills": [
+              "generalization",
+              "transfer",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "equations-inequalities",
+              "set-maps"
+            ]
+          }
+        ],
+        "rationale": {
+          "domains": "The decisive object is an injective affine self-map of a finite set. Set-theory/set-maps is a better canonical fit than combinatorics/counting.",
+          "contentConcepts": "The proof does not count configurations; it turns the definition into a finite self-map and uses contraction of centered iterates. set-maps therefore replaces counting-structure.",
+          "prerequisiteConcepts": "Set notation is the relevant assumed language; counting-principles are not materially required. Basic function/algebra language is assumed.",
+          "reasoningSkills": "The family is definition-led, then requires an affine representation switch and a finite-orbit/contraction abstraction."
+        }
+      },
+      "difficulty": {
+        "recommendedStatus": "expert-estimate",
+        "entry": "warm-up",
+        "core": "strong",
+        "ceiling": "strong",
+        "confidence": "low",
+        "factors": {
+          "prerequisite-burden": 1,
+          "initial-insight-barrier": 2,
+          "conceptual-jumps": 3,
+          "abstraction": 3,
+          "proof-rigor-burden": 3,
+          "representation-changes": 3,
+          "productive-prompt-dependency": 2,
+          "extension-ceiling": 2
+        },
+        "stageAssessments": [
+          {
+            "stageId": "opening",
+            "role": "warm-up",
+            "difficulty": "warm-up",
+            "rationale": "Two-element examples make the new definition approachable."
+          },
+          {
+            "stageId": "structure",
+            "role": "technique-check",
+            "difficulty": "standard",
+            "rationale": "Encoding the rule as T(x)=(sigma-x)/(n-1) is the setup, not yet the central proof."
+          },
+          {
+            "stageId": "finite-orbit",
+            "role": "core",
+            "difficulty": "strong",
+            "rationale": "Recognizing injective finite self-map => permutation and combining that with strict contraction is the main conceptual barrier."
+          },
+          {
+            "stageId": "classification",
+            "role": "deep-dive",
+            "difficulty": "strong",
+            "rationale": "Separating n=2 from n>2 and closing the distinctness contradiction requires precision."
+          },
+          {
+            "stageId": "transfer",
+            "role": "transfer",
+            "difficulty": "strong",
+            "rationale": "The include-self and multiset variants deepen the definition but stay within the same abstraction level."
+          }
+        ],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Agent G — Gauss independent review of Agent E PR #134 family at head a18db48700800c1987e2abd43726254ba25267dd."
+        },
+        "rationale": "The author standard core understates the finite-orbit/contraction insight. This is exactly the kind of low-prerequisite but high-abstraction definition problem the Wave 2 guidance warns about."
+      },
+      "timing": {
+        "recommendedStatus": "expert-estimate",
+        "estimate": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 1,
+            "max": 4
+          },
+          "independentCompletionMinutes": {
+            "min": 12,
+            "max": 22
+          },
+          "promptedCompletionMinutes": {
+            "min": 9,
+            "max": 17
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 8
+          },
+          "softCutoffMinutes": 20,
+          "confidence": "low"
+        },
+        "stageAssessments": [
+          {
+            "stageId": "opening",
+            "timing": {
+              "firstMeaningfulInsightMinutes": {
+                "min": 1,
+                "max": 2
+              },
+              "independentCompletionMinutes": {
+                "min": 2,
+                "max": 4
+              },
+              "promptedCompletionMinutes": {
+                "min": 2,
+                "max": 3
+              },
+              "softCutoffMinutes": 4,
+              "confidence": "low"
+            },
+            "rationale": "Examples should be short."
+          },
+          {
+            "stageId": "structure",
+            "timing": {
+              "firstMeaningfulInsightMinutes": {
+                "min": 1,
+                "max": 3
+              },
+              "independentCompletionMinutes": {
+                "min": 3,
+                "max": 6
+              },
+              "promptedCompletionMinutes": {
+                "min": 2,
+                "max": 5
+              },
+              "softCutoffMinutes": 6,
+              "confidence": "low"
+            },
+            "rationale": "Form the affine map and center it at the mean."
+          },
+          {
+            "stageId": "finite-orbit",
+            "timing": {
+              "firstMeaningfulInsightMinutes": {
+                "min": 2,
+                "max": 4
+              },
+              "independentCompletionMinutes": {
+                "min": 6,
+                "max": 11
+              },
+              "promptedCompletionMinutes": {
+                "min": 5,
+                "max": 9
+              },
+              "softCutoffMinutes": 11,
+              "confidence": "low"
+            },
+            "rationale": "Allow time for the permutation-plus-contraction insight."
+          },
+          {
+            "stageId": "classification",
+            "timing": {
+              "firstMeaningfulInsightMinutes": {
+                "min": 1,
+                "max": 3
+              },
+              "independentCompletionMinutes": {
+                "min": 4,
+                "max": 8
+              },
+              "promptedCompletionMinutes": {
+                "min": 3,
+                "max": 6
+              },
+              "softCutoffMinutes": 8,
+              "confidence": "low"
+            },
+            "rationale": "Boundary n=2 and distinctness close the proof."
+          },
+          {
+            "stageId": "transfer",
+            "timing": {
+              "firstMeaningfulInsightMinutes": {
+                "min": 1,
+                "max": 3
+              },
+              "independentCompletionMinutes": {
+                "min": 4,
+                "max": 7
+              },
+              "promptedCompletionMinutes": {
+                "min": 3,
+                "max": 6
+              },
+              "optionalExtensionMinutes": {
+                "min": 3,
+                "max": 6
+              },
+              "softCutoffMinutes": 7,
+              "confidence": "low"
+            },
+            "rationale": "Extensions are optional."
+          }
+        ],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Agent G — Gauss independent timing estimate; no usage distributions exist."
+        },
+        "rationale": "This family should not inherit the same 18–30 minute completion range as Circle Sweep or modelling families. A 12–22 minute independent range better reflects its compact statement but nontrivial abstraction."
+      },
+      "disposition": "needs-revision",
+      "migration": {
+        "worthMigrating": true,
+        "recommendation": "revise-before-migration",
+        "rationale": "Reclassify from combinatorics/counting to set-theory/set-maps, raise the substantive core to strong, fix stage roles, and replace generic timing."
+      },
+      "blockers": [
+        "Agent E PR #134 taxonomy uses combinatorics/counting-structure where the measured structure is a finite self-map; Gauss recommends set-theory/set-maps.",
+        "Agent E PR #134 core role/difficulty is assigned to setup rather than the finite-orbit insight.",
+        "Agent E PR #134 uses one generic timing table across all 19 families."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      },
+      "reviewNotes": [
+        "No new tag is needed; set-maps already exists in the frozen taxonomy."
+      ]
+    }
+  ]
+}
