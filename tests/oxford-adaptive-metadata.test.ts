@@ -285,6 +285,27 @@ describe("Oxford adaptive metadata contract", () => {
     expect(() => assertOxfordAdaptiveMetadataIntegrity(processTarget)).toThrow(
       /cannot treat process-grounded skill "guided-adaptation" as milestone-completion evidence/
     );
+
+    const precision = cloneMetadata();
+    (precision.skillEvidence as unknown as Array<{ skill: string; weight: string }>).push({
+      skill: "precision-checking",
+      weight: "supporting"
+    });
+    (
+      requireStage(precision, 1).skillEvidence
+      as unknown as Array<{ skill: string; weight: string }>
+    ).push({
+      skill: "precision-checking",
+      weight: "supporting"
+    });
+    (
+      requireMilestone(requireStage(precision, 1), 0).skillEvidence
+      as unknown as Array<{ skill: string; weight: string }>
+    ).push({
+      skill: "precision-checking",
+      weight: "supporting"
+    });
+    expect(() => assertOxfordAdaptiveMetadataIntegrity(precision)).not.toThrow();
   });
 
   it("validates fine-content hierarchy separately from prerequisites", () => {
@@ -341,6 +362,17 @@ describe("Oxford adaptive metadata contract", () => {
 
     expect(
       isOxfordRecommendationReady(createProvisionalLegacyOxfordMetadata("legacy-fixture"))
+    ).toBe(false);
+
+    const catalogReadyButAdaptiveProvisional = PROBLEM_METADATA.find(
+      (metadata) =>
+        metadata.mode === "OXFORD_MATHEMATICS"
+        && metadata.reviewStatus === "ready"
+        && metadata.oxfordAdaptive?.status === "provisional-legacy"
+    );
+    expect(catalogReadyButAdaptiveProvisional).toBeDefined();
+    expect(
+      isOxfordRecommendationReady(catalogReadyButAdaptiveProvisional?.oxfordAdaptive)
     ).toBe(false);
   });
 
