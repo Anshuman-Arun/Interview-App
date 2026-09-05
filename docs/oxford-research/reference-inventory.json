@@ -1,0 +1,567 @@
+{
+  "schema_version": 1,
+  "owner": "Agent B",
+  "purpose": "Compact nearest-neighbour inventory for originality review. It complements, but does not replace, the deep benchmark corpus.",
+  "completeness_contract": {
+    "exhaustive": false,
+    "statement": "This inventory is intentionally broader than the deep corpus but is still not guaranteed exhaustive. Absence from this inventory is not evidence that a proposed family is original.",
+    "approval_rule": "Passing local deep-corpus and inventory similarity checks is necessary but insufficient. Agent H must also perform external mathematical nearest-neighbour retrieval for every proposed family."
+  },
+  "copyright_policy": "Store bounded source-independent fingerprints and provenance metadata only. Do not store full question wording, full solution text, transcript text, or source diagrams.",
+  "inventory_semantics": {
+    "confirmed-used": "Source explicitly says the family was used in Oxford interview/admissions interviewing.",
+    "official-sample": "University of Oxford publishes it as a sample interview question.",
+    "official-demonstration": "Problem appears in an official demonstration interview.",
+    "official-preparation-interview-style": "First-party Oxford material explicitly frames it as an interview continuation/starter.",
+    "official-preparation": "First-party Oxford admissions/preparation material; useful for collision search but not evidence of interview use."
+  },
+  "entries": [
+    {
+      "reference_id": "REF-OX-SAMPLE-LADDER-TRACE",
+      "deep_benchmark_id": "OX-SAMPLE-LADDER-TRACE",
+      "source_url": "https://www.ox.ac.uk/admissions/undergraduate/applying/guide-for-applicants/interviews/sample_questions",
+      "evidence_classification": "official-sample",
+      "provenance_strength": "official",
+      "usage_status": "official-sample",
+      "broad_area": [
+        "coordinate-geometry",
+        "euclidean-geometry"
+      ],
+      "fingerprint": "physical motion -> geometric constraint -> algebraic locus -> parameterized family",
+      "central_mechanism": "geometric constraint characterises a moving-point locus",
+      "progression_signature": "accessible-opening -> experiment -> representation-switch -> core-proof -> transfer",
+      "source_scope": "Mathematics"
+    },
+    {
+      "reference_id": "REF-OX-SAMPLE-TILING-RECURRENCE",
+      "deep_benchmark_id": "OX-SAMPLE-TILING-RECURRENCE",
+      "source_url": "https://www.ox.ac.uk/admissions/undergraduate/applying/guide-for-applicants/interviews/sample_questions",
+      "evidence_classification": "official-sample",
+      "provenance_strength": "official",
+      "usage_status": "official-sample",
+      "broad_area": [
+        "combinatorics",
+        "sequences-recurrences"
+      ],
+      "fingerprint": "finite examples -> recurrence -> structural decomposition -> altered combinatorial system",
+      "central_mechanism": "first-piece decomposition yields a recurrence",
+      "progression_signature": "accessible-opening -> precision-check -> pattern -> core-proof -> transfer",
+      "source_scope": "Mathematics"
+    },
+    {
+      "reference_id": "REF-OX-2026-ITERATED-FUNCTION-SKETCH",
+      "deep_benchmark_id": "OX-2026-ITERATED-FUNCTION-SKETCH",
+      "source_url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/visualisation",
+      "supporting_url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/visualisation-solutions",
+      "evidence_classification": "actual-used",
+      "provenance_strength": "official",
+      "usage_status": "confirmed-used",
+      "broad_area": [
+        "graph-sketching",
+        "functions",
+        "sequences-recurrences",
+        "elementary-analysis"
+      ],
+      "fingerprint": "graph features -> function composition -> dynamical iteration -> local quantitative estimate",
+      "central_mechanism": "qualitative graph iteration plus local contraction/convergence reasoning",
+      "progression_signature": "technique-check -> deep-dive -> conjecture -> stretch",
+      "source_scope": "Mathematics",
+      "caveat": "Oxford states this is adapted from a question James Munro used for Maths interviews."
+    },
+    {
+      "reference_id": "REF-OX-DEMO-ASPECT-RATIO-TILING",
+      "deep_benchmark_id": "OX-DEMO-ASPECT-RATIO-TILING",
+      "source_url": "https://www.youtube.com/watch?v=nietXNrjKD8",
+      "evidence_classification": "official-demonstration",
+      "provenance_strength": "official",
+      "usage_status": "official-demonstration",
+      "broad_area": [
+        "euclidean-geometry",
+        "combinatorics"
+      ],
+      "fingerprint": "small constructions -> local obstruction -> generative construction -> classification",
+      "central_mechanism": "local obstruction plus constructions classify feasible tilings",
+      "progression_signature": "exploration -> obstruction -> construction -> classification",
+      "source_scope": "Mathematics"
+    },
+    {
+      "reference_id": "REF-OX-MATHCS-SQUARE-CUBE-CONSTRAINT",
+      "deep_benchmark_id": "OX-MATHCS-SQUARE-CUBE-CONSTRAINT",
+      "source_url": "https://www.cs.ox.ac.uk/people/varun.kanade/website/post/2022/09/15/interview-question1-discussion.html",
+      "evidence_classification": "subject-adjacent-actual-used",
+      "provenance_strength": "official-oxford-academic",
+      "usage_status": "confirmed-used",
+      "broad_area": [
+        "combinatorics",
+        "number-theory"
+      ],
+      "fingerprint": "examples -> complementary pairing -> hidden interaction -> altered exponent/class",
+      "central_mechanism": "complementary pairing exposes interaction between selection constraints",
+      "progression_signature": "exploration -> structure -> connection -> transfer -> extension",
+      "source_scope": "Maths/CS",
+      "caveat": "Use for structural evidence, not pure Mathematics topic-frequency estimates."
+    },
+    {
+      "reference_id": "REF-OX-MATHCS-DIGIT-PROCESS",
+      "deep_benchmark_id": "OX-MATHCS-DIGIT-PROCESS",
+      "source_url": "https://www.cs.ox.ac.uk/people/varun.kanade/website/post/2022/12/04/interview-question2-discussion.html",
+      "evidence_classification": "subject-adjacent-actual-used",
+      "provenance_strength": "official-oxford-academic",
+      "usage_status": "confirmed-used",
+      "broad_area": [
+        "number-theory",
+        "algebra"
+      ],
+      "fingerprint": "concrete process -> state machine -> finiteness argument -> algebraic encoding -> parameterized family",
+      "central_mechanism": "finite-state digit process is formalised and generalised",
+      "progression_signature": "accessible-opening -> algorithmic-structure -> proof -> representation-switch -> generalization",
+      "source_scope": "Maths/CS",
+      "caveat": "Use for structural evidence, not pure Mathematics topic-frequency estimates."
+    },
+    {
+      "reference_id": "REF-OX-2026-GEOMETRY-CENTRE-BISECTION",
+      "deep_benchmark_id": "OX-2026-GEOMETRY-CENTRE-BISECTION",
+      "source_url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/geometry-solutions",
+      "evidence_classification": "interview-style-extension",
+      "provenance_strength": "official",
+      "usage_status": "official-preparation-interview-style",
+      "broad_area": [
+        "euclidean-geometry",
+        "logic-proof"
+      ],
+      "fingerprint": "familiar symmetry -> generalized claim -> define centre -> test sufficiency/converse",
+      "central_mechanism": "symmetry/area bisection forces definition and converse checking",
+      "progression_signature": "opening -> generalization -> definition -> logic-check -> transfer",
+      "source_scope": "Mathematics preparation",
+      "caveat": "The author explicitly describes how the underlying item could begin an interview."
+    },
+    {
+      "reference_id": "REF-OX-2026-GEOMETRY-AMGM-TRANSFER",
+      "deep_benchmark_id": "OX-2026-GEOMETRY-AMGM-TRANSFER",
+      "source_url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/geometry-solutions",
+      "evidence_classification": "interview-style-extension",
+      "provenance_strength": "official",
+      "usage_status": "official-preparation-interview-style",
+      "broad_area": [
+        "euclidean-geometry",
+        "algebra"
+      ],
+      "fingerprint": "geometric identity -> inequality -> algebraic applications -> optimization",
+      "central_mechanism": "geometric relation is reinterpreted as an inequality and transferred",
+      "progression_signature": "geometry -> representation-switch -> proof -> transfer",
+      "source_scope": "Mathematics preparation"
+    },
+    {
+      "reference_id": "REF-OX-2026-RADIAL-GRAPH-EXTENSION",
+      "deep_benchmark_id": "OX-2026-RADIAL-GRAPH-EXTENSION",
+      "source_url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/graphs-solutions",
+      "evidence_classification": "interview-style-extension",
+      "provenance_strength": "official",
+      "usage_status": "official-preparation-interview-style",
+      "broad_area": [
+        "graph-sketching",
+        "coordinate-geometry",
+        "trigonometry"
+      ],
+      "fingerprint": "two-variable equation -> radius parameter -> family of level sets -> changed outer function",
+      "central_mechanism": "two-variable equation becomes radial level-set geometry",
+      "progression_signature": "representation-switch -> visualization -> qualitative-analysis -> transfer",
+      "source_scope": "Mathematics preparation"
+    },
+    {
+      "reference_id": "REF-OX-2025-ADDITION-COST-INVARIANT",
+      "deep_benchmark_id": "OX-2025-ADDITION-COST-INVARIANT",
+      "source_url": "https://www.youtube.com/watch?v=PaD9Yr7_zKo",
+      "supporting_url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/maths-admissions-test/mat-livestream",
+      "evidence_classification": "official-interviewer-used",
+      "provenance_strength": "official",
+      "usage_status": "confirmed-used",
+      "broad_area": [
+        "algebra",
+        "combinatorics"
+      ],
+      "fingerprint": "operation-order search -> invariant conjecture -> telescoping algebra -> conceptual explanation -> changed local rule",
+      "central_mechanism": "local cost identity telescopes so global cost is operation-order invariant",
+      "progression_signature": "accessible-opening -> pattern -> core-proof -> explanation -> transfer",
+      "source_scope": "Mathematics",
+      "caveat": "In Oxford Mathematics Plus's 2025 Interview Questions livestream, James Munro says he used this family repeatedly in the preceding admissions cycle. A third-party transcript may be used only to navigate the official recording."
+    },
+    {
+      "reference_id": "REF-OX-2026-PARABOLA-TRIANGLE-AREA",
+      "deep_benchmark_id": "OX-2026-PARABOLA-TRIANGLE-AREA",
+      "source_url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/geometry-solutions",
+      "evidence_classification": "official-interviewer-used",
+      "provenance_strength": "official",
+      "usage_status": "confirmed-used",
+      "broad_area": [
+        "coordinate-geometry",
+        "calculus",
+        "euclidean-geometry"
+      ],
+      "fingerprint": "moving point geometry -> fixed-base height -> analytic representation -> parameterised optimum",
+      "central_mechanism": "fixed-base area converts moving-triangle optimisation to distance from a line",
+      "progression_signature": "accessible-opening -> strategic-simplification -> representation-switch -> core-proof -> transfer",
+      "source_scope": "Mathematics",
+      "caveat": "James Munro states in the published 2026 Geometry solutions that he has used this investigation as the start of an interview question."
+    },
+    {
+      "reference_id": "REF-OX-CRAWFORD-CYLINDER-OPTIMISATION",
+      "deep_benchmark_id": "OX-CRAWFORD-CYLINDER-OPTIMISATION",
+      "source_url": "https://tomrocksmaths.com/2022/03/01/oxford-university-admissions-interview-question-what-is-the-optimal-size-for-a-tin-of-cat-food/",
+      "evidence_classification": "official-oxford-academic-used",
+      "provenance_strength": "official-oxford-academic",
+      "usage_status": "confirmed-used",
+      "broad_area": [
+        "calculus",
+        "modelling",
+        "algebra"
+      ],
+      "fingerprint": "physical design -> constrained objective -> one-variable reduction -> calculus optimum -> model perturbation",
+      "central_mechanism": "fixed-volume constraint reduces surface-area optimisation to one variable",
+      "progression_signature": "model -> reduce-dimension -> technique -> check -> transfer",
+      "source_scope": "Mathematics",
+      "caveat": "Oxford mathematician/interviewer Tom Crawford states that he used the optimisation problem in the 2018 Oxford admissions interviews."
+    },
+    {
+      "reference_id": "REF-OX-CRAWFORD-RECTANGLE-ASSEMBLY",
+      "deep_benchmark_id": "OX-CRAWFORD-RECTANGLE-ASSEMBLY",
+      "source_url": "https://www.maths.ox.ac.uk/outreach/oxford-online-maths-club/season-2-episode-9",
+      "supporting_url": "https://tomrocksmaths.com/2021/07/31/numberphile-a-problem-with-rectangles/",
+      "evidence_classification": "official-oxford-academic-used",
+      "provenance_strength": "official-plus-oxford-academic",
+      "usage_status": "confirmed-used",
+      "broad_area": [
+        "euclidean-geometry",
+        "combinatorics"
+      ],
+      "fingerprint": "small assemblies -> reusable construction -> exceptional obstructions -> global classification -> aspect-ratio variant",
+      "central_mechanism": "small tiling constructions and obstructions generate a count classification",
+      "progression_signature": "exploration -> construction -> obstruction -> classification -> extension",
+      "source_scope": "Mathematics",
+      "caveat": "Oxford's Online Maths Club says Tom Crawford presented an interview question he used the previous year; Crawford separately states the rectangle-assembly family was used in the 2020 and 2021 Oxford interview cycles."
+    },
+    {
+      "reference_id": "REF-OX-CRAWFORD-GABRIEL-HORN",
+      "deep_benchmark_id": "OX-CRAWFORD-GABRIEL-HORN",
+      "source_url": "https://www.youtube.com/watch?v=htB_NGmPKVI",
+      "supporting_url": "https://www.sjc.ox.ac.uk/discover/news/maths-study-day-2021/",
+      "evidence_classification": "official-oxford-academic-used",
+      "provenance_strength": "official-oxford-academic-college-endorsed",
+      "usage_status": "confirmed-used",
+      "broad_area": [
+        "calculus",
+        "elementary-analysis"
+      ],
+      "fingerprint": "standard integral -> parallel geometric quantity -> convergence contrast -> parameter classification",
+      "central_mechanism": "improper-integral convergence differs for volume and surface area",
+      "progression_signature": "technique -> contrast -> conceptual -> stretch",
+      "source_scope": "Mathematics",
+      "caveat": "Tom Crawford's University of Oxford-produced video says the exact question was used in his 2018 Oxford Maths interviews; St John's College links these videos as remote-interview-style resources."
+    },
+    {
+      "reference_id": "REF-OX-CRAWFORD-PRIME-RECIPROCAL",
+      "deep_benchmark_id": "OX-CRAWFORD-PRIME-RECIPROCAL",
+      "source_url": "https://tomrocksmaths.com/2021/02/24/prime-reciprocal-series-with-blackpenredpen-oxford-maths-interview-question/",
+      "supporting_url": "https://www.sjc.ox.ac.uk/discover/news/maths-study-day-2021/",
+      "evidence_classification": "official-oxford-academic-used",
+      "provenance_strength": "official-oxford-academic-college-endorsed",
+      "usage_status": "confirmed-used",
+      "broad_area": [
+        "number-theory",
+        "elementary-analysis"
+      ],
+      "fingerprint": "prime factorisation -> finite analytic encoding -> comparison/divergence argument -> weighted-series extension",
+      "central_mechanism": "unique factorisation is encoded analytically and compared with divergent series",
+      "progression_signature": "setup -> representation -> core-proof -> stretch",
+      "source_scope": "Mathematics",
+      "caveat": "Tom Crawford describes it as a real Oxford admissions interview question; St John's College lists the video among its interview resources."
+    },
+    {
+      "reference_id": "REF-OX-OOMC-CUBIC-ENDPOINTS",
+      "deep_benchmark_id": "OX-OOMC-CUBIC-ENDPOINTS",
+      "source_url": "https://www.maths.ox.ac.uk/outreach/oxford-online-maths-club/episode-0",
+      "evidence_classification": "official-interviewer-used",
+      "provenance_strength": "official",
+      "usage_status": "confirmed-used",
+      "broad_area": [
+        "algebra",
+        "calculus",
+        "functions"
+      ],
+      "fingerprint": "conditions -> coefficient system -> constructed function -> smooth piecewise joining -> spline concept",
+      "central_mechanism": "endpoint derivative/value constraints become a coefficient system and spline extension",
+      "progression_signature": "setup -> core -> generalization -> stretch",
+      "source_scope": "Mathematics",
+      "caveat": "Oxford Online Maths Club explicitly describes the livestream problem as an Oxford maths interview question and discusses its higher-dimensional spline continuation."
+    },
+    {
+      "reference_id": "REF-OX-2026-ALGEBRA-BOOLEAN-POLYNOMIAL",
+      "deep_benchmark_id": "OX-2026-ALGEBRA-BOOLEAN-POLYNOMIAL",
+      "source_url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/algebra-solutions",
+      "evidence_classification": "official-preparation-example",
+      "provenance_strength": "official",
+      "usage_status": "official-preparation-interview-style",
+      "broad_area": [
+        "algebra",
+        "logic-proof"
+      ],
+      "fingerprint": "sign intervals -> logical condition -> polynomial encoding -> arbitrary-pair failure analysis",
+      "central_mechanism": "polynomial signs encode logical combinations of inequalities",
+      "progression_signature": "technique -> construction -> variation -> generalization",
+      "source_scope": "Mathematics preparation"
+    },
+    {
+      "reference_id": "REF-OX-2026-SEQUENCE-RANDOM-PROPERTY",
+      "deep_benchmark_id": "OX-2026-SEQUENCE-RANDOM-PROPERTY",
+      "source_url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/sequences-solutions",
+      "evidence_classification": "official-preparation-example",
+      "provenance_strength": "official",
+      "usage_status": "official-preparation-interview-style",
+      "broad_area": [
+        "sequences-recurrences",
+        "probability",
+        "number-theory"
+      ],
+      "fingerprint": "universal claim -> constructed counterexample -> divisibility condition -> finite random model",
+      "central_mechanism": "deterministic divisibility condition becomes a finite probability model",
+      "progression_signature": "counterexample -> structure -> probabilistic-transfer -> core-extension",
+      "source_scope": "Mathematics preparation"
+    },
+    {
+      "reference_id": "REF-OX-2026-ALGEBRA-ROOT-SYMMETRY",
+      "deep_benchmark_id": "OX-2026-ALGEBRA-ROOT-SYMMETRY",
+      "source_url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/algebra-solutions",
+      "evidence_classification": "official-preparation-example",
+      "provenance_strength": "official",
+      "usage_status": "official-preparation-interview-style",
+      "broad_area": [
+        "algebra",
+        "functions"
+      ],
+      "fingerprint": "root data -> symmetric expressions -> transformed-root polynomial -> structural product -> introduced theorem",
+      "central_mechanism": "symmetric root information builds transformed-root polynomials without solving roots",
+      "progression_signature": "technique -> construction -> structural-connection -> new-idea",
+      "source_scope": "Mathematics preparation"
+    },
+    {
+      "reference_id": "REF-OX-2026-TRIG-OSCILLATORY-ROOTS",
+      "deep_benchmark_id": "OX-2026-TRIG-OSCILLATORY-ROOTS",
+      "source_url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/trigonometry-solutions",
+      "evidence_classification": "official-preparation-example",
+      "provenance_strength": "official",
+      "usage_status": "official-preparation-interview-style",
+      "broad_area": [
+        "trigonometry",
+        "graph-sketching",
+        "elementary-analysis"
+      ],
+      "fingerprint": "graph intersections -> interval checks -> changed comparison function -> infinite sequence of roots -> approximation",
+      "central_mechanism": "graph-intersection counting transfers to infinitely many roots and approximation",
+      "progression_signature": "visual -> precision -> transfer -> stretch",
+      "source_scope": "Mathematics preparation"
+    },
+    {
+      "reference_id": "REF-OX-CRAWFORD-DIGIT-COUNT",
+      "source_url": "https://tomrocksmaths.com/2022/02/02/oxford-university-admissions-question-can-you-solve-it/",
+      "supporting_url": "https://tomrocksmaths.com/2022/12/09/time-flies-when-youre-having-fun/",
+      "evidence_classification": "official-oxford-academic-used",
+      "provenance_strength": "Oxford mathematician/interviewer self-report",
+      "usage_status": "confirmed-used",
+      "broad_area": [
+        "combinatorics",
+        "number-theory"
+      ],
+      "fingerprint": "count occurrences of a chosen digit across a complete block of fixed-length decimal representations, then expose positional symmetry and scale the block",
+      "central_mechanism": "partition by digit position / complete place-value blocks",
+      "progression_signature": "small block -> positional count -> whole-range count -> base/range generalisation",
+      "caveat": "The source identifies this as a past/2021 admissions interview question; compact inventory entry only."
+    },
+    {
+      "reference_id": "REF-OX-2025-FACTORIAL-COMPOSITE-RUNS",
+      "source_url": "https://www.youtube.com/watch?v=PaD9Yr7_zKo",
+      "supporting_url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/maths-admissions-test/mat-livestream",
+      "evidence_classification": "official-preparation-borrowed",
+      "provenance_strength": "first-party Oxford preparation; presenter explicitly credits Cambridge origin",
+      "usage_status": "official-preparation",
+      "broad_area": [
+        "number-theory"
+      ],
+      "fingerprint": "factorial-based construction creates a long consecutive block with prescribed composite behavior, then asks for nearby blocks with controlled numbers of primes",
+      "central_mechanism": "divisibility of factorial offsets",
+      "progression_signature": "recognise divisibility -> construct composite run -> impose prime-count condition -> harder existence variants",
+      "caveat": "Useful for anti-lifting and structure only; not Oxford-origin evidence."
+    },
+    {
+      "reference_id": "REF-OX-OOMC-MISSING-CORNERS",
+      "source_url": "https://www.maths.ox.ac.uk/outreach/oxford-online-maths-club/season-2-episode-9",
+      "evidence_classification": "official-preparation-classic",
+      "provenance_strength": "first-party Oxford Maths outreach",
+      "usage_status": "official-preparation",
+      "broad_area": [
+        "combinatorics"
+      ],
+      "fingerprint": "remove selected cells from a bipartite-colored grid and test whether fixed-size adjacent tiles can cover the remainder",
+      "central_mechanism": "checkerboard color invariant",
+      "progression_signature": "try tiling -> color invariant -> impossibility -> alter removed cells / region",
+      "caveat": "Classic problem; presence here is specifically to prevent cosmetic recreation."
+    },
+    {
+      "reference_id": "REF-OX-2026-MOUNTAIN-CROSSING-CONTINUITY",
+      "source_url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/visualisation",
+      "supporting_url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/visualisation-solutions",
+      "evidence_classification": "official-preparation-material",
+      "provenance_strength": "first-party current Oxford Maths admissions preparation",
+      "usage_status": "official-preparation",
+      "broad_area": [
+        "functions",
+        "elementary-analysis"
+      ],
+      "fingerprint": "two continuous journeys with swapped endpoint ordering must coincide at some common time, while tempting monotonic assumptions are explicitly unsafe",
+      "central_mechanism": "intermediate-value/continuity crossing argument",
+      "progression_signature": "draw time-position graphs -> identify endpoint order reversal -> continuity crossing -> inspect false assumptions",
+      "caveat": "Published preparation example, not claimed used in an interview."
+    },
+    {
+      "reference_id": "REF-OX-2026-ABS-DIAMOND-OCTAHEDRON",
+      "source_url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/visualisation-solutions",
+      "evidence_classification": "official-preparation-material",
+      "provenance_strength": "first-party current Oxford Maths admissions preparation",
+      "usage_status": "official-preparation",
+      "broad_area": [
+        "coordinate-geometry",
+        "euclidean-geometry"
+      ],
+      "fingerprint": "absolute-value linear constraints produce polygonal level sets; parameter changes alter intercepts and a higher-dimensional analogue becomes a polyhedron",
+      "central_mechanism": "piecewise-linear absolute-value geometry",
+      "progression_signature": "sketch 2D level set -> parameterise intercepts/area -> lift to 3D -> volume/shape extension"
+    },
+    {
+      "reference_id": "REF-OX-2026-QUADRATIC-COSINE-CROSSINGS",
+      "source_url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/visualisation-solutions",
+      "evidence_classification": "official-preparation-material",
+      "provenance_strength": "first-party current Oxford Maths admissions preparation",
+      "usage_status": "official-preparation",
+      "broad_area": [
+        "graph-sketching",
+        "trigonometry"
+      ],
+      "fingerprint": "compare a bounded oscillatory curve with a monotone/polynomial curve, count intersections visually, then prove no hidden extra crossings",
+      "central_mechanism": "graph comparison plus rigorous bounding",
+      "progression_signature": "sketch -> count likely crossings -> challenge sketch sufficiency -> prove crossing count"
+    },
+    {
+      "reference_id": "REF-OX-2026-INTEGRAL-ORDERING",
+      "source_url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/visualisation-solutions",
+      "evidence_classification": "official-preparation-material",
+      "provenance_strength": "first-party current Oxford Maths admissions preparation",
+      "usage_status": "official-preparation",
+      "broad_area": [
+        "calculus",
+        "functions"
+      ],
+      "fingerprint": "order definite integrals by comparing graphs pointwise rather than evaluating antiderivatives, then transfer the comparison to another function family",
+      "central_mechanism": "pointwise function ordering implies integral ordering",
+      "progression_signature": "graph comparison -> integral order -> justify without calculation -> altered-function transfer"
+    },
+    {
+      "reference_id": "REF-OX-2026-COMMON-TANGENTS-REPEATED-ROOTS",
+      "source_url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/visualisation-solutions",
+      "evidence_classification": "official-preparation-material",
+      "provenance_strength": "first-party current Oxford Maths admissions preparation",
+      "usage_status": "official-preparation",
+      "broad_area": [
+        "coordinate-geometry",
+        "algebra"
+      ],
+      "fingerprint": "repeated-root conditions for two circle-line intersection equations are reinterpreted geometrically as common tangents",
+      "central_mechanism": "repeated root <-> tangency representation switch",
+      "progression_signature": "algebraic repeated roots -> geometric tangency -> enumerate configurations -> equation/generalisation"
+    },
+    {
+      "reference_id": "REF-OX-2026-FLOOR-LOG-INTEGRAL",
+      "source_url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/visualisation-solutions",
+      "evidence_classification": "official-preparation-material",
+      "provenance_strength": "first-party current Oxford Maths admissions preparation",
+      "usage_status": "official-preparation",
+      "broad_area": [
+        "calculus",
+        "functions",
+        "sequences-recurrences"
+      ],
+      "fingerprint": "a floor-log function becomes a step graph whose definite integral reduces to a geometric sum; modify the floor/log rule for transfer",
+      "central_mechanism": "step-function partition plus geometric series",
+      "progression_signature": "sketch steps -> partition integral -> geometric sum -> modified step-function extension"
+    },
+    {
+      "reference_id": "REF-OX-2026-GRAPH-IMPLICIT-PRODUCT",
+      "source_url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/graphs-solutions",
+      "evidence_classification": "official-preparation-example",
+      "provenance_strength": "first-party current Oxford Maths admissions preparation",
+      "usage_status": "official-preparation-interview-style",
+      "broad_area": [
+        "graph-sketching",
+        "algebra"
+      ],
+      "fingerprint": "start from inequalities involving two familiar curves, then build toward an implicit product equation and analyse branches for each x, especially asymptotically",
+      "central_mechanism": "factor/product structure controls implicit-curve branches",
+      "progression_signature": "region inequalities -> counterexample/check -> implicit equation -> branch count -> large-x approximation"
+    },
+    {
+      "reference_id": "REF-OX-2026-TRIG-RATIONAL-EXTREMES",
+      "source_url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/trigonometry-solutions",
+      "evidence_classification": "official-preparation-example",
+      "provenance_strength": "first-party current Oxford Maths admissions preparation",
+      "usage_status": "official-preparation-interview-style",
+      "broad_area": [
+        "trigonometry",
+        "graph-sketching",
+        "algebra"
+      ],
+      "fingerprint": "rewrite a rational trigonometric expression using one trig variable, simplify structurally, sketch its range, then perturb coefficients so cancellation is less direct",
+      "central_mechanism": "substitution and factor cancellation followed by range/monotonicity analysis",
+      "progression_signature": "identity substitution -> factorise/simplify -> sketch/range -> perturbed harder function"
+    },
+    {
+      "reference_id": "REF-OX-2026-ALGEBRA-ROOT-COUNT-CURVE",
+      "source_url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/algebra-solutions",
+      "evidence_classification": "official-preparation-example",
+      "provenance_strength": "first-party current Oxford Maths admissions preparation",
+      "usage_status": "official-preparation-interview-style",
+      "broad_area": [
+        "algebra",
+        "graph-sketching"
+      ],
+      "fingerprint": "classify parameter values by the number of distinct roots of a factored equation, then reinterpret the classification as intersections with a planar algebraic set and vary a linear factor",
+      "central_mechanism": "root multiplicity/count corresponds to intersections of factor-defined curves",
+      "progression_signature": "root-count cases -> parameter regions -> plane-curve sketch -> geometric interpretation -> coefficient perturbation"
+    },
+    {
+      "reference_id": "REF-OX-2026-ALGEBRA-TANGENT-QUADRATIC",
+      "source_url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/algebra-solutions",
+      "evidence_classification": "official-preparation-example",
+      "provenance_strength": "first-party current Oxford Maths admissions preparation",
+      "usage_status": "official-preparation-interview-style",
+      "broad_area": [
+        "algebra",
+        "coordinate-geometry"
+      ],
+      "fingerprint": "find a monic quadratic tangent to two specified lines via discriminant conditions, then generalise existence to arbitrary line pairs",
+      "central_mechanism": "tangency encoded by repeated-root/discriminant constraints",
+      "progression_signature": "two tangency equations -> solve coefficients -> sketch/check -> arbitrary-line condition"
+    },
+    {
+      "reference_id": "REF-OX-2026-SEQUENCES-GEOMETRIC-SUMS",
+      "source_url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/sequences-solutions",
+      "evidence_classification": "official-preparation-example",
+      "provenance_strength": "first-party current Oxford Maths admissions preparation",
+      "usage_status": "official-preparation-interview-style",
+      "broad_area": [
+        "sequences-recurrences",
+        "algebra"
+      ],
+      "fingerprint": "a relation between partial sums of a geometric sequence collapses after factoring; candidate then identifies a shifted geometric block and tests exceptional ratios",
+      "central_mechanism": "factor/cancel common geometric-series block",
+      "progression_signature": "partial-sum algebra -> key factor cancellation -> reinterpret difference as shifted series -> exceptional parameter cases"
+    }
+  ]
+}
