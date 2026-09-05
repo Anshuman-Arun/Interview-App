@@ -34,7 +34,7 @@ describe("Oxford mathematical correctness audit gate", () => {
     for (const record of authorRecords) {
       const expectedHead =
         record.source.authorAgent === "C — Cantor"
-          ? "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf"
+          ? "794fe2282c2c8ef265869ccf84bb955695fbaa7f"
           : record.source.authorAgent === "D — Dirichlet"
             ? "ecece22058c997d37c4b352fa5ed32bd1daf5243"
             : "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6";
