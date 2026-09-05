@@ -9,9 +9,25 @@
   },
   "scopeNote": "Independent taxonomy/difficulty/timing review proposals for the existing Oxford bank. These records do not mutate problem metadata, do not make a family recommendation-ready, and do not claim Agent H originality/fidelity or Agent I mathematical-correctness approval.",
   "crossAgentSnapshot": {
-    "checkedAt": "2026-09-04T22:38-07:00",
-    "openAgentCDEPullRequests": [],
-    "note": "No open pull request whose title begins with the required Agent C, D, or E marker was present at the final pre-PR sweep. Concurrent Agent I PR #128 and handoff issue #129 were inspected because their prerequisite/solvability findings materially affect calibration."
+    "checkedAt": "2026-09-05T10:00-07:00",
+    "openAgentCDEPullRequests": [
+      {
+        "agent": "C — Cantor",
+        "prNumber": 132,
+        "headSha": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9"
+      },
+      {
+        "agent": "D — Dirichlet",
+        "prNumber": 133,
+        "headSha": "017759febfd7d49ea032d6474bcc9177a76b2c2b"
+      },
+      {
+        "agent": "E — Euler",
+        "prNumber": 134,
+        "headSha": "a18db48700800c1987e2abd43726254ba25267dd"
+      }
+    ],
+    "note": "These PRs appeared after the initial Gauss pre-PR snapshot. A representative six-family late review is retained separately in docs/oxford-research/gauss-cross-agent-review.json. Author branches were not modified."
   },
   "summary": {
     "reviewedFamilies": 14,
