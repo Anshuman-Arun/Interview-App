@@ -31,6 +31,7 @@ import {
   quantCuratedEntries,
   quantCuratedReviewEntries
 } from "../packages/problems/src/index.js";
+import { eulerOxfordCandidateEntries } from "../packages/problems/src/curated/oxford-euler-candidates.js";
 import { quantMontyHallSpec } from "../packages/problems/src/curated/quant-monty-hall.js";
 import {
   ClosedWorldDisclosureAnalyzer,
@@ -64,13 +65,20 @@ const NEW_PROBLEM_IDS = [
   "quant-random-walk-drawdown"
 ] as const;
 
-const EXPERT_REVIEW_IDS = new Set([
+const EULER_EXPERT_REVIEW_IDS = eulerOxfordCandidateEntries
+  .map((entry) => entry.problem.id)
+  .sort();
+
+const EXPECTED_EXPERT_REVIEW_IDS = [
   "oxford-catalan-paths",
+  ...EULER_EXPERT_REVIEW_IDS,
   "quant-random-walk-drawdown"
-]);
+].sort();
+
+const EXPERT_REVIEW_IDS = new Set(EXPECTED_EXPERT_REVIEW_IDS);
 
 describe("curated problem bank", () => {
-  it("admits 24 reviewed problems while keeping two expert-review fixtures isolated", () => {
+  it("admits 24 reviewed problems while keeping expert-review fixtures isolated", () => {
     expect(problemCatalog).toHaveLength(24);
     expect(ALL_PROBLEMS).toHaveLength(24);
     expect(Object.isFrozen(problemCatalog)).toBe(true);
@@ -153,14 +161,19 @@ describe("curated problem bank", () => {
     expect(getProblemsByCategory("   ")).toEqual([]);
   });
 
-  it("compiles all 21 authored fixtures to five protected disclosures without assuming stage equals severity", () => {
+  it("compiles every authored fixture to five protected disclosures without assuming stage equals severity", () => {
     const curatedEntries = [
       ...oxfordCuratedEntries,
       ...quantCuratedEntries,
       ...oxfordCuratedReviewEntries,
       ...quantCuratedReviewEntries
     ];
-    expect(curatedEntries).toHaveLength(21);
+    expect(curatedEntries).toHaveLength(
+      oxfordCuratedEntries.length
+      + quantCuratedEntries.length
+      + oxfordCuratedReviewEntries.length
+      + quantCuratedReviewEntries.length
+    );
 
     for (const entry of curatedEntries) {
       const disclosures = entry.problem.interviewer.protectedDisclosures;
@@ -180,14 +193,10 @@ describe("curated problem bank", () => {
   });
 
   it("exposes expert-review fixtures only through the isolated review tooling surface", () => {
-    expect(EXPERT_REVIEW_PROBLEMS.map((problem) => problem.id).sort()).toEqual([
-      "oxford-catalan-paths",
-      "quant-random-walk-drawdown"
-    ]);
-    expect(EXPERT_REVIEW_METADATA.map((metadata) => metadata.id).sort()).toEqual([
-      "oxford-catalan-paths",
-      "quant-random-walk-drawdown"
-    ]);
+    expect(EXPERT_REVIEW_PROBLEMS.map((problem) => problem.id).sort())
+      .toEqual(EXPECTED_EXPERT_REVIEW_IDS);
+    expect(EXPERT_REVIEW_METADATA.map((metadata) => metadata.id).sort())
+      .toEqual(EXPECTED_EXPERT_REVIEW_IDS);
     expect(Object.isFrozen(EXPERT_REVIEW_PROBLEMS)).toBe(true);
     expect(Object.isFrozen(EXPERT_REVIEW_METADATA)).toBe(true);
 
@@ -222,10 +231,7 @@ describe("curated problem bank", () => {
     const reviewEntries = [...oxfordCuratedReviewEntries, ...quantCuratedReviewEntries];
     const reviewIds = reviewEntries.map((entry) => entry.problem.id).sort();
 
-    expect(reviewIds).toEqual([
-      "oxford-catalan-paths",
-      "quant-random-walk-drawdown"
-    ]);
+    expect(reviewIds).toEqual(EXPECTED_EXPERT_REVIEW_IDS);
     expect(PROBLEM_METADATA.every((metadata) => metadata.reviewStatus === "ready")).toBe(true);
     for (const entry of reviewEntries) {
       expect(entry.metadata.reviewStatus).toBe("expert-review");
