@@ -1,20 +1,20 @@
-# Agent D — Dirichlet completion-pass originality and handoff audit
+# Agent D — Dirichlet final-synchronization originality and handoff audit
 
 Agent: D — Dirichlet  
 Branch: `agent-d-dirichlet-wave2`  
-Wave: Oxford Mathematics Wave 2 completion pass  
+Wave: Oxford Mathematics Wave 2 final synchronization  
 Author-side audit date: 2026-09-05  
-Final candidate count: 12  
-Pruned in completion pass: 10  
+Final candidate count: 11  
+Pruned across Wave 2 author passes: 11  
 Replacement families: 0
 
 ## Scope and gate status
 
 This document is an **author-side fingerprint, pruning, timing, and collision-risk handoff**, not a self-approval. The canonical Oxford taxonomy/schema in `docs/oxford-adaptive-problem-contract.md` remains frozen and unchanged.
 
-The completion pass intentionally reduces the batch from 22 to 12 families. The two Agent H hard rejects were removed rather than cosmetically mutated, and eight additional standard theorem/exercise kernels were proactively removed. No replacement family was introduced, so there is no reused ID, fingerprint, provenance, or inherited review outcome.
+The Wave 2 author passes intentionally reduce the batch from 22 to 11 families. The earlier two Agent H hard rejects and the final `oxford-d-mirror-orbits` hard reject were removed rather than cosmetically mutated, alongside eight proactive classic-risk removals. No replacement family was introduced, so no rejected ID, fingerprint, provenance, or review outcome is reused.
 
-Every surviving family remains `authored` and outside the recommendation-ready bank. Completed independent findings are preserved field-by-field; all outstanding fields remain unreviewed. In particular, every timing estimate below is a **low-confidence family-specific author estimate** until Agent G independently calibrates it.
+Every surviving family remains `authored`, `expert-review`, and outside the recommendation-ready bank. Agent I has independently approved the mathematical payload of all 11 survivors. Agent G's requested taxonomy/difficulty/timing values are synchronized below but still require final-head verification/re-pin. Agent H's pass decisions are preserved; the two provenance revisions remain blocked on Hilbert re-review.
 
 The deliberately related closure-classification families `oxford-d-thirds-closed-integers` and `oxford-d-midpoint-closed-residues` retain `similarityClusterId: "closure-classification-residue-affine"`. Agent H additionally warned not to schedule the thirds family adjacent to a surviving Euler closure family.
 
@@ -32,6 +32,7 @@ The deliberately related closure-classification families `oxford-d-thirds-closed
 | `oxford-d-stable-binary-words` | standard forbidden-pattern recurrence family | no |
 | `oxford-d-directed-flow-decomposition` | standard path/cycle flow decomposition | yes — Agent I had approved correctness before pruning |
 | `oxford-d-idempotent-maps` | exact finite idempotent-map enumeration formula is standard | no |
+| `oxford-d-mirror-orbits` | Agent H `REJECT_TOO_CLOSE / PASS`: two reflections → translation/rotation → gcd-orbit kernel is established | yes — Agent I approved correctness before originality pruning |
 
 No hard reject was cosmetically mutated. There are **no replacements** in this pass.
 
@@ -39,36 +40,31 @@ No hard reject was cosmetically mutated. There are **no replacements** in this p
 
 Author-facing category distribution:
 
-- number theory: 6
+- number theory: 5
 - combinatorics: 5
 - graph theory: 1
 
 Canonical domain incidence (families may have multiple domains):
 
-- number-theory: 8
+- number-theory: 7
 - combinatorics: 6
 - graph-theory: 3
 - set-theory: 3
 - logic-proof: 2
 - algebra: 2
-- functions: 1
-- sequences-recurrences: 1
+- sequences-recurrences: 2
 
-Most-used content concepts after pruning: `modular-reasoning` (5), `counting-structure` (5), `parity` (4), `divisibility` (3), `paths-cycles-connectivity` (3), `prime-structure` (2), `relations-operations` (2), `logical-structure` (2), plus one each of `extremal-configuration`, `inequalities-bounds`, `parameter-dependent-algebra`, `composition-iteration`, `set-relations`, and `recurrence-structure`.
+Most-used content concepts after final synchronization: `counting-structure` (5), `modular-reasoning` (4), `parity` (4), `divisibility` (3), `paths-cycles-connectivity` (3), `prime-structure` (2), `relations-operations` (2), `logical-structure` (2), `recurrence-structure` (2), plus one each of `extremal-configuration`, `inequalities-bounds`, `parameter-dependent-algebra`, and `set-relations`.
 
-Mechanism portfolio now includes: graph-wide gcd descent; conditional trisection closure; convex-energy balancing; prime-exponent residue equivalence; sliding-window cancellation and gcd orbits; cyclic parameter recurrence; midpoint closure to subgroup/coset structure; composition of involutions to translations; symmetric-difference parity collapse; parity-subsequence permutation generation; divisor exponent-lattice geometry; and period-three binary reachability.
+Mechanism portfolio now includes: graph-wide gcd descent; conditional trisection closure; convex-energy balancing; prime-exponent residue equivalence; sliding-window cancellation and gcd orbits; cyclic parameter recurrence; midpoint closure to subgroup/coset structure; symmetric-difference parity collapse; parity-subsequence permutation generation; divisor exponent-lattice geometry; and period-three binary reachability.
 
-## Preserved independent review outcomes
+## Latest independent review synchronization
 
-| Family | G taxonomy/difficulty | H originality/fidelity | I correctness | Timing |
-| --- | --- | --- | --- | --- |
-| `gcd-descent-network` | taxonomy approved; difficulty `introductory / standard / standard` applied as expert estimate | `PASS_WITH_NOTES / PASS` preserved as approved fields | unreviewed | new family-specific author estimate; G review required |
-| `thirds-closed-integers` | unreviewed | `PASS_WITH_NOTES / PASS` preserved as approved fields | unreviewed | new family-specific author estimate; G review required |
-| `midpoint-closed-residues` | unreviewed | unreviewed | approved | new family-specific author estimate; G review required |
-| `triple-flip-circle` | taxonomy recommendation applied; difficulty `introductory / strong / strong` applied as expert estimate | unreviewed | approved | new family-specific author estimate; G review required |
-| other 8 survivors | unreviewed | unreviewed | unreviewed | new family-specific author estimate; G review required |
+- **Agent I — Itô:** current mathematical payload was independently approved 12/12 at head `ecece220...`; after removing `mirror-orbits`, all 11 surviving mathematical payloads remain unchanged. Metadata records preserve correctness approval, with a final exact-head diff/re-pin requested.
+- **Agent G — Gauss:** all current G records were consumed. The remaining requested taxonomy/difficulty/timing changes are applied in this branch. The exact-head re-pin remains outstanding.
+- **Agent H — Hilbert:** `mirror-orbits` is removed after `REJECT_TOO_CLOSE / PASS`. All nine other non-revision survivors retain H pass outcomes. `three-reversal-permutations` and `divisor-step-geometry` retain fidelity PASS but originality remains `changes-required` until Hilbert re-reviews the revised provenance.
 
-All 12 survivors remain non-recommendation-ready.
+All 11 survivors remain recommendation-ineligible pending final reviewer materialization/re-pin.
 
 ## Generic-to-family-specific timing conversion
 
@@ -79,35 +75,34 @@ Whole-family low-confidence author estimates:
 | Family | First insight | Independent completion | Prompted completion | Optional extension | Soft cutoff |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | `gcd-descent-network` | 1–3 | 10–16 | 7–12 | 3–6 | 18 |
-| `thirds-closed-integers` | 3–7 | 18–28 | 12–21 | 5–10 | 31 |
+| `thirds-closed-integers` | 3–6 | 17–28 | 13–22 | 5–9 | 25 |
 | `balancing-transfers` | 2–5 | 14–22 | 10–17 | 4–8 | 25 |
-| `cube-twist-equivalence` | 3–6 | 16–25 | 11–19 | 5–9 | 28 |
-| `sliding-window-parity` | 2–5 | 15–23 | 10–18 | 4–8 | 26 |
-| `weighted-cycle-readings` | 3–7 | 18–27 | 13–21 | 5–10 | 30 |
-| `midpoint-closed-residues` | 3–7 | 19–29 | 13–22 | 5–10 | 32 |
-| `mirror-orbits` | 2–5 | 13–21 | 9–16 | 4–8 | 24 |
+| `cube-twist-equivalence` | 2–5 | 14–23 | 10–18 | 4–7 | 22 |
+| `sliding-window-parity` | 1–4 | 12–20 | 9–16 | 4–7 | 20 |
+| `weighted-cycle-readings` | 2–5 | 15–24 | 11–20 | 4–8 | 23 |
+| `midpoint-closed-residues` | 3–6 | 17–28 | 13–22 | 5–9 | 25 |
 | `odd-symmetric-difference` | 1–4 | 10–17 | 7–13 | 3–6 | 20 |
-| `three-reversal-permutations` | 2–5 | 14–23 | 10–18 | 5–9 | 26 |
-| `divisor-step-geometry` | 2–5 | 15–24 | 10–18 | 5–9 | 27 |
-| `triple-flip-circle` | 3–7 | 20–30 | 14–23 | 5–10 | 33 |
+| `three-reversal-permutations` | 2–5 | 14–23 | 10–19 | 4–8 | 22 |
+| `divisor-step-geometry` | 2–5 | 15–25 | 11–20 | 4–8 | 23 |
+| `triple-flip-circle` | 3–6 | 17–28 | 13–22 | 5–9 | 25 |
 
 Stage-level estimates are separately keyed in code and reflect each family’s actual opening/core/transfer progression rather than a shared three-row template.
 
-## Remaining originality risk after pruning
+## Final Hilbert disposition before re-review
 
-- **HIGH / deliberately retained with classic provenance:** `oxford-d-triple-flip-circle`. Fresh search surfaced the cycle Lights-Out period-three kernel directly. It is retained only as a transparently classic-provenance candidate and requires Agent H to decide whether the interview progression is worth keeping.
-- **MEDIUM-HIGH / deliberately retained with classic provenance:** `oxford-d-midpoint-closed-residues`. The subgroup/coset closure mechanism is mathematically natural and likely classical; it also remains in the declared closure similarity cluster.
-- **MEDIUM:** `oxford-d-divisor-step-geometry`. Divisor/exponent grids are known, but the bundled metric + geodesic-count + diameter + bipartition progression did not surface as one exact interview family in the author search.
-- **MEDIUM:** `oxford-d-cube-twist-equivalence` and `oxford-d-mirror-orbits` use classical exponent-residue / dihedral mechanisms, though the exact bundled interview paths remain unreviewed.
-- All other survivors still require Agent H’s full five-pool retrieval; “no exact author hit” is not approval.
+- `oxford-d-mirror-orbits`: **removed** after `REJECT_TOO_CLOSE / PASS`.
+- `oxford-d-three-reversal-permutations`: **REVISE / PASS**. Metadata now uses `classic-problem / classic-mathematics`; the established length-3 reversal/parity-subsequence mechanism is not claimed as independent-original. Hilbert re-review required.
+- `oxford-d-divisor-step-geometry`: **REVISE / PASS**. Metadata now uses `classic-problem / classic-mathematics`; the established prime-exponent Cartesian-product representation is separated in provenance from the authored metric/geodesic interview development. Hilbert re-review required.
+- `oxford-d-midpoint-closed-residues` and `oxford-d-triple-flip-circle` retain truthful classic provenance and Hilbert `PASS_WITH_NOTES` decisions.
+- The remaining survivors retain Hilbert pass outcomes on the prior 12-family head; final-set re-pin is requested because the branch head changes during synchronization.
 
 ## Correctness completion-pass recheck
 
-Agent D rechecked all 12 survivors for small cases, parity splits, connectedness, quantifiers, construction sufficiency, extension claims, and hidden prerequisites. This remains an author check, **not** mathematical-correctness approval.
+Agent D rechecked all 11 survivors for small cases, parity splits, connectedness, quantifiers, construction sufficiency, extension claims, and hidden prerequisites. This remains an author check, **not** mathematical-correctness approval.
 
 Specific boundary checks retained in the specs include: disconnected components for gcd descent; size-1/2/3 exceptions for thirds closure; the corrected `(0,4,2)` local-balancing counterexample; the cubefree-vs-squarefree distinction; `k=n` in sliding-window parity; all real singular parameters in weighted-cycle readings; odd-modulus invertibility and composite subgroup cosets for midpoint closure; arbitrary-start orbit cosets for mirror moves; nonempty-universe necessity for symmetric difference; `n=3` for three-reversals; `N=1` for divisor geometry; and `n=3` plus both divisibility cases for triple flips.
 
-Agent I’s prior six-family correctness review is preserved historically. Four of those correct families were removed solely for originality/classic-risk reasons; the two survivors, `midpoint-closed-residues` and `triple-flip-circle`, retain mathematical-correctness approval in metadata.
+Agent I subsequently completed a full 12/12 current-head mathematical certification. `mirror-orbits` is removed only for originality, and no surviving prompt, canonical solution, protected hint, approach, or extension is materially changed in this synchronization pass. All 11 survivors therefore preserve Itô mathematical-correctness approval while requesting an exact-head diff/re-pin.
 
 ## Fingerprints
 
@@ -166,7 +161,7 @@ Agent I’s prior six-family correctness review is preserved historically. Four 
 - solution_dependency_graph_summary: total invariant -> energy decrement -> finite termination -> no pair differs by2 -> q/r multiset forced -> restricted-interaction contrast
 - distinctive_features: terminal multiset is unique although terminal labelled arrangement need not be
 - known_classic_overlap: smoothing/convexity is standard; exact interview kernel not found in preliminary search
-- author_provenance: independently authored; requires Agent H
+- author_provenance: classic-problem / classic-mathematics provenance after Hilbert REVISE; authored reachability/count/distance progression retained; Hilbert re-review required
 
 ### 4. oxford-d-cube-twist-equivalence
 
@@ -210,7 +205,7 @@ Agent I’s prior six-family correctness review is preserved historically. Four 
 
 - family_id: `oxford-d-weighted-cycle-readings`
 - primary_domain: graph-theory
-- secondary_domains: algebra
+- secondary_domains: algebra, sequences-recurrences
 - surface_objects: real labels on vertices of an n-cycle with readings s_i=x_i+t x_{i+1}
 - constraints: real t !=0; cyclic indices
 - target_type: determine uniqueness, singular parameters, and consistency conditions
@@ -244,26 +239,7 @@ Agent I’s prior six-family correctness review is preserved historically. Four 
 - known_classic_overlap: affine midpoint-closure to subgroup/coset structure is deliberately treated as classic mathematics; shares the declared closure cluster with thirds-closed; MEDIUM-HIGH RISK and requires full Agent H review
 - author_provenance: classic-problem / classic-mathematics provenance recorded in metadata; interview progression independently written; Agent I mathematical-correctness APPROVED
 
-### 8. oxford-d-mirror-orbits
-
-- family_id: `oxford-d-mirror-orbits`
-- primary_domain: number-theory
-- secondary_domains: set-theory
-- surface_objects: residues modulo m with reflections R(x)=-x and S(x)=c-x
-- constraints: start at 0, then arbitrary compositions
-- target_type: characterize reachable orbit; determine when all residues are reachable
-- central_mechanism: composition of two involutions is translation by c
-- secondary_mechanisms: subgroup generated by c; arbitrary-start double-coset-style orbit description
-- critical_representation_change: two mirror moves -> translations plus one reflection
-- diagram_topology: cycle of residues
-- small_case_signature: gcd(c,m) visually partitions residues
-- progression_signature: opening=compose short words; first_deepening=find translation; core=generate multiples of c; transfer=gcd criterion; stretch=arbitrary starting residue
-- solution_dependency_graph_summary: S∘R/R∘S -> ±c translations -> subgroup H=<c> -> orbit of 0=H -> all iff gcd=1 -> arbitrary orbit (a+H)∪(-a+H)
-- distinctive_features: geometric-looking involutions collapse to arithmetic subgroup motion
-- known_classic_overlap: dihedral-group mechanism is classical; exact interview wording not found preliminarily
-- author_provenance: independently authored; requires Agent H
-
-### 9. oxford-d-odd-symmetric-difference
+### 8. oxford-d-odd-symmetric-difference
 
 - family_id: `oxford-d-odd-symmetric-difference`
 - primary_domain: combinatorics
@@ -282,7 +258,7 @@ Agent I’s prior six-family correctness review is preserved historically. Four 
 - known_classic_overlap: parity identity standard; exact bundled problem not found preliminarily
 - author_provenance: independently authored; requires Agent H
 
-### 10. oxford-d-three-reversal-permutations
+### 9. oxford-d-three-reversal-permutations
 
 - family_id: `oxford-d-three-reversal-permutations`
 - primary_domain: combinatorics
@@ -301,7 +277,7 @@ Agent I’s prior six-family correctness review is preserved historically. Four 
 - known_classic_overlap: adjacent-transposition machinery is standard; exact three-reversal package not found preliminarily
 - author_provenance: independently authored; requires Agent H
 
-### 11. oxford-d-divisor-step-geometry
+### 10. oxford-d-divisor-step-geometry
 
 - family_id: `oxford-d-divisor-step-geometry`
 - primary_domain: number-theory
@@ -320,7 +296,7 @@ Agent I’s prior six-family correctness review is preserved historically. Four 
 - known_classic_overlap: divisor graphs/exponent grids are known objects; MEDIUM RISK
 - author_provenance: independently authored bundle; requires Agent H
 
-### 12. oxford-d-triple-flip-circle
+### 11. oxford-d-triple-flip-circle
 
 - family_id: `oxford-d-triple-flip-circle`
 - primary_domain: combinatorics
@@ -350,12 +326,12 @@ Internal comparisons were made against the Wave 1 official benchmark corpus, ref
 - The two affine closure families remain explicitly clustered rather than presented as independent.
 - The high-collision graph theorem kernels from the first pass have been removed rather than reworded.
 
-## Required completion-pass handoff
+## Required final-synchronization handoff
 
-**Agent D — Dirichlet to G:** perform full independent taxonomy/difficulty/timing review of **every surviving family with an unreviewed G field**. The timing template blocker is removed, but all new family/stage ranges are low-confidence author estimates until G reviews them.
+**Agent G — Gauss:** verify every requested taxonomy/difficulty/timing change on the exact final head and re-pin the final **11/11** set. In particular verify weighted-cycle recurrence taxonomy, the three difficulty changes, and all eight supplied family timing profiles plus stage consistency.
 
-**Agent D — Dirichlet to H:** perform the full five-pool originality/fidelity gate on **every survivor whose H fields remain unreviewed**, with special attention to the deliberately retained classic-provenance midpoint and triple-flip families and the medium-risk divisor/cube/mirror mechanisms. Preserve the prior H results for gcd and thirds; do not reuse outcomes from removed families.
+**Agent H — Hilbert:** re-review the provenance revisions for `three-reversal-permutations` and `divisor-step-geometry`, then re-pin originality/fidelity decisions to the final **11-family** set. Do not restore `mirror-orbits`.
 
-**Agent D — Dirichlet to I:** independently solve/audit **every survivor whose mathematicalCorrectness field remains unreviewed**. Preserve the prior approvals for midpoint and triple-flip. Recheck exceptional cases, quantifiers, construction sufficiency, and extensions rather than sampling.
+**Agent I — Itô:** diff the exact final branch against the 12/12-approved mathematical head. If, as intended, statements/solutions/hints/approaches/extensions are unchanged for the 11 survivors, re-pin correctness without re-solving changed mathematics.
 
-No surviving Agent D candidate should become recommendation-ready until all required independent fields are complete.
+No surviving Agent D candidate should become recommendation-ready until final reviewer materialization is complete.
