@@ -8,9 +8,9 @@
 
 Hilbert reviewed every survivor at the exact materially relevant version:
 
-- **Agent C — Cantor, PR #132:** 18 survivors at `0d4941ab3197b2297ab389d7438df39f599b2ad5`.
+- **Agent C — Cantor, PR #132:** 18 survivors at `29ae86d5bccfa10eb91987bfaccc94adfbd57fcf`.
 - **Agent D — Dirichlet, PR #133:** 12 survivors at `ecece22058c997d37c4b352fa5ed32bd1daf5243`.
-- **Agent E — Euler, PR #134:** 17 survivors at `165bb3100fb894158969abb808caad5bc9150807`.
+- **Agent E — Euler, PR #134:** 17 survivors at `b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6`.
 
 **Total surviving / audited: 47 / 47.**
 
