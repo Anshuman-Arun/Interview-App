@@ -85,6 +85,7 @@ export function NewInterviewPage({
   activeSessionCount = activeSessionId === null ? 0 : 1,
   startPending,
   sessionAuthorityChecking = false,
+  sessionAuthorityUnavailable = false,
   onRefreshCatalog,
   onRefreshProviderOptions,
   onStart,
@@ -100,6 +101,7 @@ export function NewInterviewPage({
   readonly activeSessionCount?: number;
   readonly startPending: boolean;
   readonly sessionAuthorityChecking?: boolean;
+  readonly sessionAuthorityUnavailable?: boolean;
   readonly onRefreshCatalog: () => Promise<readonly InterviewCatalogEntry[]>;
   readonly onRefreshProviderOptions: () => Promise<readonly ProviderLaunchOption[]>;
   readonly onStart: (configuration: InterviewSessionConfiguration) => Promise<void>;
@@ -224,6 +226,10 @@ export function NewInterviewPage({
       setFormError("Launch readiness is still being verified. Try again when checking finishes.");
       return;
     }
+    if (sessionAuthorityUnavailable) {
+      setFormError("Stored session authority could not be verified. Retry from Sessions before starting another interview.");
+      return;
+    }
     if (catalogError !== null || providerOptionsError !== null) {
       setFormError("Resolve launch readiness before starting the interview.");
       return;
@@ -304,6 +310,7 @@ export function NewInterviewPage({
   const launchBlocked =
     metadataUnavailable
     || sessionAuthorityBlocked
+    || sessionAuthorityUnavailable
     || launchChecking
     || selectedTarget === null
     || selectedProvider?.availability !== "AVAILABLE"
@@ -447,7 +454,7 @@ export function NewInterviewPage({
             <div><span>Duration</span><strong>{durationInvalid ? "Invalid" : durationText.trim().length === 0 ? "Open" : `${durationText} min`}</strong></div>
           </div>
           <button className="new-interview__start" type="submit" disabled={startPending || launchBlocked} data-testid="start-configured-session-btn"><span>{startPending ? "Starting…" : "Start interview"}</span><em aria-hidden="true">→</em></button>
-          <div className="new-interview__ready-note"><i data-ready={String(!launchBlocked)} aria-hidden="true" /><span>{activeSessionCount > 1 ? "Resolve the active-session conflict from Sessions." : activeSessionCount > 0 && activeSessionId === null ? "Resolve the stored active session from Sessions." : activeSessionId !== null ? "Current interview owns session authority." : durationInvalid ? "Duration must be a whole number from 5 to 480 minutes." : sessionAuthorityChecking ? "Checking stored session authority…" : launchChecking ? "Revalidating launch readiness…" : metadataUnavailable || selectedTarget === null || selectedProvider?.availability !== "AVAILABLE" ? "Resolve launch readiness first." : "Server revalidates this configuration on start."}</span></div>
+          <div className="new-interview__ready-note"><i data-ready={String(!launchBlocked)} aria-hidden="true" /><span>{activeSessionCount > 1 ? "Resolve the active-session conflict from Sessions." : activeSessionCount > 0 && activeSessionId === null ? "Resolve the stored active session from Sessions." : activeSessionId !== null ? "Current interview owns session authority." : durationInvalid ? "Duration must be a whole number from 5 to 480 minutes." : sessionAuthorityChecking ? "Checking stored session authority…" : sessionAuthorityUnavailable ? "Stored session authority unavailable — retry from Sessions." : launchChecking ? "Revalidating launch readiness…" : metadataUnavailable || selectedTarget === null || selectedProvider?.availability !== "AVAILABLE" ? "Resolve launch readiness first." : "Server revalidates this configuration on start."}</span></div>
         </aside>
       </form>
     </div>
