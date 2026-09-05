@@ -95,7 +95,7 @@ describe("Agent E — Euler Oxford candidate batch", () => {
     const timings = eulerOxfordCandidateEntries.map((entry) => {
       const adaptive = entry.metadata.oxfordAdaptive;
       if (adaptive?.timing === undefined) throw new Error("Euler candidate missing family timing");
-      expect(adaptive.stages.every((stage) => stage.timing !== undefined)).toBe(true);
+      expect(adaptive.stages.every((stage) => stage.timing.softCutoffMinutes > 0)).toBe(true);
       return JSON.stringify(adaptive.timing);
     });
     expect(new Set(timings).size).toBe(eulerOxfordCandidateEntries.length);
