@@ -133,6 +133,7 @@ export const cantorFunctionFamiliesA: readonly CantorFamilyAuthoring[] = [
     finalRole: "transfer",
     novelty: "moderate",
     abstraction: "moderate",
+    similarityClusterId: "cantor-reciprocal-symmetry",
     originalityRisk: "medium",
     correctnessRisk: "low",
     calibrationRisk: "medium"
@@ -402,6 +403,7 @@ export const cantorFunctionFamiliesA: readonly CantorFamilyAuthoring[] = [
     novelty: "moderate",
     abstraction: "moderate",
     provenance: { originType: "classic-problem", sourceCategory: "secondary-reference" },
+    similarityClusterId: "mobius-iteration",
     originalityRisk: "high",
     correctnessRisk: "medium",
     calibrationRisk: "medium"
