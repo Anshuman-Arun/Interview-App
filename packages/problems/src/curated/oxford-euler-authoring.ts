@@ -155,6 +155,25 @@ function milestoneEvidenceFor(
   );
 }
 
+function stageIdAt(
+  family: EulerFamilyDefinition,
+  index: number
+): string {
+  const stage = family.stages[index];
+  if (stage === undefined) {
+    throw new Error(`Euler family "${family.id}" has no stage at index ${String(index)}`);
+  }
+  return stage.id;
+}
+
+function stageTimingAt(index: number): OxfordTimingEstimate {
+  const timing = STAGE_TIMING[index];
+  if (timing === undefined) {
+    throw new Error(`Euler stage timing is missing at index ${String(index)}`);
+  }
+  return timing;
+}
+
 function stageRoleFor(
   family: EulerFamilyDefinition,
   index: number
@@ -183,12 +202,12 @@ export function makeEulerCandidateSpec(family: EulerFamilyDefinition): CuratedPr
     id: stage.id,
     description: stage.description,
     approachIds: ["primary"],
-    ...(index === 0 ? {} : { prerequisiteIds: [family.stages[index - 1]!.id] }),
+    ...(index === 0 ? {} : { prerequisiteIds: [stageIdAt(family, index - 1)] }),
     hintLevels: [index + 1 as 1 | 2 | 3 | 4 | 5]
   }));
 
   const edges = family.stages.slice(1).map((stage, index) => ({
-    from: family.stages[index]!.id,
+    from: stageIdAt(family, index),
     to: stage.id
   }));
 
@@ -228,7 +247,7 @@ export function makeEulerCandidateSpec(family: EulerFamilyDefinition): CuratedPr
         ? family.extensions.map((extension) => extension.id)
         : [],
       difficulty: stage.difficulty,
-      timing: STAGE_TIMING[index]!,
+      timing: stageTimingAt(index),
       novelty: stage.novelty,
       abstraction: stage.abstraction,
       introducesNewDefinition: family.introducesNewDefinition && index === 0
