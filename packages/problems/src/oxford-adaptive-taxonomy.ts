@@ -603,6 +603,7 @@ function assertAuthoredStages(
 ): void {
   const stageIds = new Set<string>();
   const familyDomains = new Set<string>(metadata.domains);
+  const problemContentConcepts = new Set<string>(metadata.contentConcepts);
   const problemSkills = new Set<string>(metadata.skillEvidence.map((item) => item.skill));
   const milestoneOwners = new Map<string, string>();
   const extensionOwners = new Map<string, string>();
@@ -630,6 +631,27 @@ function assertAuthoredStages(
     for (const domain of stage.domains) {
       if (!familyDomains.has(domain)) {
         throw new Error(`Oxford stage "${stage.id}" domain "${domain}" is not declared at problem level`);
+      }
+    }
+
+    assertCanonicalMembers(
+      stage.contentConcepts,
+      CONTENT_CONCEPT_SET,
+      `Oxford stage "${stage.id}" content concept`
+    );
+    if (stage.contentConcepts.length === 0) {
+      throw new Error(`Oxford stage "${stage.id}" must define at least one assessed content concept`);
+    }
+    assertContentConceptHierarchy(
+      stage.contentConcepts,
+      stage.domains,
+      `Oxford stage "${stage.id}"`
+    );
+    for (const concept of stage.contentConcepts) {
+      if (!problemContentConcepts.has(concept)) {
+        throw new Error(
+          `Oxford stage "${stage.id}" content concept "${concept}" is not declared at problem level`
+        );
       }
     }
 
@@ -678,7 +700,7 @@ function assertAuthoredStages(
           `Oxford stage "${stage.id}" references unknown reasoning milestone "${milestone.milestoneId}"`
         );
       }
-      assertSkillEvidence(
+      assertMilestoneSkillEvidence(
         milestone.skillEvidence,
         `Oxford milestone "${milestone.milestoneId}"`
       );
@@ -686,6 +708,18 @@ function assertAuthoredStages(
         throw new Error(
           `Oxford milestone "${milestone.milestoneId}" must define at least one reasoning skill`
         );
+      }
+      assertCanonicalMembers(
+        milestone.contentConcepts,
+        CONTENT_CONCEPT_SET,
+        `Oxford milestone "${milestone.milestoneId}" content concept`
+      );
+      for (const concept of milestone.contentConcepts) {
+        if (!stage.contentConcepts.includes(concept)) {
+          throw new Error(
+            `Oxford milestone "${milestone.milestoneId}" content concept "${concept}" is not declared at stage level`
+          );
+        }
       }
       for (const item of milestone.skillEvidence) {
         if (!stageSkills.has(item.skill)) {
