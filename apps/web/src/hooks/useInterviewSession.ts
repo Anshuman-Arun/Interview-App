@@ -1640,12 +1640,47 @@ export function useInterviewSession(
       sessionId === null
       || sessionStatus !== "ACTIVE"
       || !isSessionStarted
-      || !sessionMutationAdmissionRef.current
+      || isPaused
+      || terminalTransitionInFlightRef.current
     ) return;
-    await synchronizeWhiteboardFor(sessionId, {
-      allowLocalSupersetRepair: true
-    });
+    const targetSessionId = sessionId;
+    try {
+      await synchronizeWhiteboardFor(targetSessionId, {
+        allowLocalSupersetRepair: true
+      });
+      const coordinator = boardSyncRef.current;
+      const snapshot = coordinator?.snapshot();
+      if (
+        boardSyncSessionRef.current !== targetSessionId
+        || coordinator === null
+        || snapshot?.status !== "SYNCED"
+      ) {
+        const reason = snapshot?.reason ?? "Whiteboard authority could not be verified";
+        setError(`Whiteboard reconnect failed: ${reason}`);
+        throw new Error(reason);
+      }
+      // Explicit reconnect is allowed to restore mutation admission for the
+      // still-attached ACTIVE session. AI presentation remains fail-closed
+      // through canBindCurrentCanvasToAuthority() until this point.
+      sessionMutationAdmissionRef.current = true;
+      setError(null);
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : "Whiteboard authority could not be verified";
+      setWhiteboardSync((current) => ({
+        status: "UNSYNCHRONIZED",
+        pendingMutationCount: 0,
+        ...(current.authoritativeRevision === undefined
+          ? {}
+          : { authoritativeRevision: current.authoritativeRevision }),
+        reason: message
+      }));
+      setError(`Whiteboard reconnect failed: ${message}`);
+      throw error;
+    }
   }, [
+    isPaused,
     isSessionStarted,
     sessionId,
     sessionStatus,
