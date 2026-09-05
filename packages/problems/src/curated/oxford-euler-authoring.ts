@@ -319,7 +319,8 @@ const EULER_PROVENANCE_OVERRIDES: Readonly<
 > = Object.freeze({
   "oxford-euler-quadrilateral-balance": Object.freeze({
     originType: "structural-adaptation",
-    sourceCategory: "classic-mathematics"
+    sourceCategory: "classic-mathematics",
+    referenceFamilyId: "british-flag-theorem"
   })
 });
 
