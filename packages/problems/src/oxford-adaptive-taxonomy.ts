@@ -346,6 +346,25 @@ export function assertOxfordAdaptiveMetadataIntegrity(
   ) {
     throw new Error("Authored Oxford metadata cannot use legacy/unknown provenance");
   }
+  if (
+    metadata.provenance.originType === "structural-adaptation"
+    && metadata.provenance.referenceFamilyId === undefined
+  ) {
+    throw new Error("Structural-adaptation provenance requires a reference family id");
+  }
+  if (
+    metadata.provenance.sourceCategory === "independent-original"
+    && metadata.provenance.originType !== "original"
+  ) {
+    throw new Error("Independent-original source category requires original provenance");
+  }
+  if (
+    metadata.provenance.originType === "classic-problem"
+    && metadata.provenance.sourceCategory !== "classic-mathematics"
+    && metadata.provenance.sourceCategory !== "secondary-reference"
+  ) {
+    throw new Error("Classic-problem provenance requires a classic/secondary source category");
+  }
 
   assertDifficultyProfile(metadata.difficulty);
   assertTimingEstimate(metadata.timing, "Oxford problem");
