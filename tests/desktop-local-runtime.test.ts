@@ -79,6 +79,27 @@ describe("desktop local model runtime", () => {
   });
 
 
+  it("detects prepared persistent views for the post-install activation budget", async () => {
+    const appDataRoot = temporaryRoot("desktop-prepared-runtime-view-");
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot,
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+
+    await expect(composition.hasPreparedRuntimeViews()).resolves.toBe(false);
+
+    mkdirSync(
+      join(appDataRoot, "runtime-models", `view-${"a".repeat(64)}`),
+      { recursive: true }
+    );
+    await expect(composition.hasPreparedRuntimeViews()).resolves.toBe(true);
+  });
+
+
   it("honors cancellation before stale runtime-view cleanup", async () => {
     const root = temporaryRoot("desktop-runtime-view-cleanup-cancel-");
     const controller = new AbortController();
