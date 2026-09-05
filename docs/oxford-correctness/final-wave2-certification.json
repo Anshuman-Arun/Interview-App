@@ -18,7 +18,7 @@
       {
         "agent": "D — Dirichlet",
         "number": 133,
-        "head": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
+        "head": "44b13bab28e315d3c76a177904bec47c884ef470",
         "surviving": 11,
         "approved": 11
       },
@@ -53,12 +53,12 @@
     },
     "dirichlet": {
       "priorReviewedHead": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
-      "finalHead": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
+      "finalHead": "44b13bab28e315d3c76a177904bec47c884ef470",
       "removed": [
         "oxford-d-mirror-orbits"
       ],
       "materialPayloadChanges": [],
-      "otherSurvivors": "re-pinned; final changes are pruning plus provenance/taxonomy/difficulty/timing/support metadata only"
+      "otherSurvivors": "re-pinned; final author increment after mathematical certification changes tests only"
     },
     "euler": {
       "priorReviewedHead": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
@@ -240,7 +240,7 @@
         "kind": "author-pr",
         "authorAgent": "D — Dirichlet",
         "prNumber": 133,
-        "reviewedAuthorHead": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c"
+        "reviewedAuthorHead": "44b13bab28e315d3c76a177904bec47c884ef470"
       },
       "independentlySolved": true,
       "statementChecked": true,
@@ -266,7 +266,7 @@
         "kind": "author-pr",
         "authorAgent": "D — Dirichlet",
         "prNumber": 133,
-        "reviewedAuthorHead": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c"
+        "reviewedAuthorHead": "44b13bab28e315d3c76a177904bec47c884ef470"
       },
       "independentlySolved": true,
       "statementChecked": true,
@@ -762,7 +762,7 @@
         "kind": "author-pr",
         "authorAgent": "D — Dirichlet",
         "prNumber": 133,
-        "reviewedAuthorHead": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c"
+        "reviewedAuthorHead": "44b13bab28e315d3c76a177904bec47c884ef470"
       },
       "independentlySolved": true,
       "statementChecked": true,
@@ -790,7 +790,7 @@
         "kind": "author-pr",
         "authorAgent": "D — Dirichlet",
         "prNumber": 133,
-        "reviewedAuthorHead": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c"
+        "reviewedAuthorHead": "44b13bab28e315d3c76a177904bec47c884ef470"
       },
       "independentlySolved": true,
       "statementChecked": true,
@@ -818,7 +818,7 @@
         "kind": "author-pr",
         "authorAgent": "D — Dirichlet",
         "prNumber": 133,
-        "reviewedAuthorHead": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c"
+        "reviewedAuthorHead": "44b13bab28e315d3c76a177904bec47c884ef470"
       },
       "independentlySolved": true,
       "statementChecked": true,
@@ -844,7 +844,7 @@
         "kind": "author-pr",
         "authorAgent": "D — Dirichlet",
         "prNumber": 133,
-        "reviewedAuthorHead": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c"
+        "reviewedAuthorHead": "44b13bab28e315d3c76a177904bec47c884ef470"
       },
       "independentlySolved": true,
       "statementChecked": true,
@@ -870,7 +870,7 @@
         "kind": "author-pr",
         "authorAgent": "D — Dirichlet",
         "prNumber": 133,
-        "reviewedAuthorHead": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c"
+        "reviewedAuthorHead": "44b13bab28e315d3c76a177904bec47c884ef470"
       },
       "independentlySolved": true,
       "statementChecked": true,
@@ -898,7 +898,7 @@
         "kind": "author-pr",
         "authorAgent": "D — Dirichlet",
         "prNumber": 133,
-        "reviewedAuthorHead": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c"
+        "reviewedAuthorHead": "44b13bab28e315d3c76a177904bec47c884ef470"
       },
       "independentlySolved": true,
       "statementChecked": true,
@@ -924,7 +924,7 @@
         "kind": "author-pr",
         "authorAgent": "D — Dirichlet",
         "prNumber": 133,
-        "reviewedAuthorHead": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c"
+        "reviewedAuthorHead": "44b13bab28e315d3c76a177904bec47c884ef470"
       },
       "independentlySolved": true,
       "statementChecked": true,
@@ -950,7 +950,7 @@
         "kind": "author-pr",
         "authorAgent": "D — Dirichlet",
         "prNumber": 133,
-        "reviewedAuthorHead": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c"
+        "reviewedAuthorHead": "44b13bab28e315d3c76a177904bec47c884ef470"
       },
       "independentlySolved": true,
       "statementChecked": true,
@@ -978,7 +978,7 @@
         "kind": "author-pr",
         "authorAgent": "D — Dirichlet",
         "prNumber": 133,
-        "reviewedAuthorHead": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c"
+        "reviewedAuthorHead": "44b13bab28e315d3c76a177904bec47c884ef470"
       },
       "independentlySolved": true,
       "statementChecked": true,
