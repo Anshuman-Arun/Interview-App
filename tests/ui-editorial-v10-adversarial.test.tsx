@@ -673,7 +673,7 @@ describe("editorial v10 adversarial UI states", () => {
     );
     expect(editorialCss).toContain("@media (max-height: 360px)");
     expect(editorialCss).toMatch(
-      /@media \(max-height: 360px\)[\s\S]*?\.problem-block\s*\{[\s\S]*?max-height:\s*36px;[\s\S]*?overflow-y:\s*auto;[\s\S]*?\.input-dock \.reasoning-composer__textarea\s*\{[\s\S]*?min-height:\s*28px;/u
+      /@media \(max-height: 360px\)[\s\S]*?\.problem-block\s*\{[\s\S]*?max-height:\s*36px;[\s\S]*?overflow-y:\s*auto;[\s\S]*?padding:\s*0;[\s\S]*?\.input-dock \.reasoning-composer__textarea\s*\{[\s\S]*?min-height:\s*28px;/u
     );
     expect(editorialCss).not.toMatch(
       /@media \(max-height: 360px\)[\s\S]{0,240}\.problem-block\s*\{[^}]*display:\s*none;/u
