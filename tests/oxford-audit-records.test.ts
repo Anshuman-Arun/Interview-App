@@ -97,6 +97,8 @@ describe("Oxford originality/fidelity audit records", () => {
         retrieval: Record<string, { completed: boolean }>;
         externalSearchQueries: string[];
         nearestMatches: Array<{ pool: string }>;
+        originalityDecision: "PASS" | "PASS_WITH_NOTES" | "REVISE" | "REJECT_TOO_CLOSE";
+        fidelityDecision: "PASS" | "PASS_WITH_NOTES" | "REVISE" | "REJECT_NOT_OXFORD_LIKE";
       }>;
     };
 
