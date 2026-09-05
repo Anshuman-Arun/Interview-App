@@ -1,0 +1,272 @@
+{
+  "schema_version": 1,
+  "owner": "Agent B",
+  "target_family_count": 72,
+  "policy_note": "Internal simulator portfolio recommendation. These counts are not claimed to represent historical Oxford interview frequencies.",
+  "primary_domain_distribution": {
+    "algebra": 5,
+    "functions": 5,
+    "graph-sketching": 7,
+    "sequences-recurrences": 5,
+    "trigonometry": 2,
+    "coordinate-geometry": 4,
+    "euclidean-geometry": 6,
+    "calculus": 6,
+    "elementary-analysis": 4,
+    "probability": 4,
+    "combinatorics": 7,
+    "number-theory": 6,
+    "graph-theory": 3,
+    "logic-proof": 2,
+    "functional-equations": 3,
+    "set-theory": 3
+  },
+  "cross_cut_targets": [
+    {
+      "feature": "accessible-opening",
+      "min": 60,
+      "max": 72
+    },
+    {
+      "feature": "high-ceiling-extension",
+      "min": 45,
+      "max": 72
+    },
+    {
+      "feature": "proof-explanation-core",
+      "min": 40,
+      "max": 72
+    },
+    {
+      "feature": "transfer-generalization",
+      "min": 35,
+      "max": 72
+    },
+    {
+      "feature": "representation-switching",
+      "min": 25,
+      "max": 72
+    },
+    {
+      "feature": "small-case-exploration",
+      "min": 18,
+      "max": 72
+    },
+    {
+      "feature": "graph-curve-heavy",
+      "min": 14,
+      "max": 18
+    },
+    {
+      "feature": "geometry-diagram-heavy",
+      "min": 14,
+      "max": 18
+    },
+    {
+      "feature": "new-definition-mini-theory",
+      "min": 10,
+      "max": 14
+    },
+    {
+      "feature": "technique-warm-up-capable",
+      "min": 10,
+      "max": 14
+    },
+    {
+      "feature": "modelling-translation",
+      "min": 8,
+      "max": 12
+    },
+    {
+      "feature": "counterexample-boundary-testing",
+      "min": 8,
+      "max": 12
+    }
+  ],
+  "abstract_family_patterns": [
+    {
+      "id": "F1",
+      "name": "visual-model-proof-parameter",
+      "skills": [
+        "visualization",
+        "modelling",
+        "representation-switching",
+        "generalization"
+      ]
+    },
+    {
+      "id": "F2",
+      "name": "small-cases-recurrence-transfer",
+      "skills": [
+        "small-case-exploration",
+        "pattern-recognition",
+        "proof-construction",
+        "transfer"
+      ]
+    },
+    {
+      "id": "F3",
+      "name": "sketch-compose-iterate-prove",
+      "skills": [
+        "graph-sketching",
+        "representation-switching",
+        "conjecture-formation",
+        "proof-construction"
+      ]
+    },
+    {
+      "id": "F4",
+      "name": "new-definition-consequences-boundaries",
+      "skills": [
+        "definition-exploration",
+        "proof-construction",
+        "counterexample-construction",
+        "generalization"
+      ]
+    },
+    {
+      "id": "F5",
+      "name": "technique-perturb-structure",
+      "skills": [
+        "technique",
+        "pattern-recognition",
+        "proof-construction"
+      ]
+    },
+    {
+      "id": "F6",
+      "name": "construction-obstruction-generator",
+      "skills": [
+        "small-case-exploration",
+        "visualization",
+        "invariants",
+        "proof-construction"
+      ]
+    },
+    {
+      "id": "F7",
+      "name": "apparent-search-hidden-invariant",
+      "skills": [
+        "pattern-recognition",
+        "invariants",
+        "proof-construction",
+        "generalization"
+      ]
+    },
+    {
+      "id": "F8",
+      "name": "geometry-representation-optimization",
+      "skills": [
+        "visualization",
+        "representation-switching",
+        "modelling",
+        "proof-construction"
+      ]
+    },
+    {
+      "id": "F9",
+      "name": "special-case-mechanism-restore-generality",
+      "skills": [
+        "strategic-simplification",
+        "guided-adaptation",
+        "proof-construction",
+        "generalization"
+      ]
+    },
+    {
+      "id": "F10",
+      "name": "context-abstraction-sanity-generalize",
+      "skills": [
+        "modelling",
+        "abstraction",
+        "representation-switching",
+        "generalization"
+      ]
+    }
+  ],
+  "current_bank_snapshot": {
+    "based_on_main_commit": "d7f4e93195a1e9458f9ca0d88e2f7ca4bd2c1d17",
+    "default_oxford_problem_count": 13,
+    "curated_oxford_problem_count": 10,
+    "expert_review_oxford_problem_count": 1,
+    "curated_number_theory_count": 4,
+    "curated_number_theory_share": 0.4,
+    "default_discrete_category_min_count": 9,
+    "default_discrete_category_min_share": 0.6923,
+    "explicit_graph_sketching_primary_family_count": 0,
+    "primary_geometry_category_count": 1,
+    "priority_gaps": [
+      "graph-sketching",
+      "geometric-visualization",
+      "new-definition-mini-theory",
+      "modelling",
+      "technique-warm-ups",
+      "accessible-start-high-ceiling"
+    ]
+  },
+  "calibration_policy": {
+    "difficulty_bands": [
+      "warm-up",
+      "introductory",
+      "introductory-plus",
+      "standard",
+      "strong",
+      "stretch"
+    ],
+    "profile_axes": [
+      "entry",
+      "core",
+      "ceiling"
+    ],
+    "difficulty_factors": [
+      "prerequisite-burden",
+      "initial-insight-barrier",
+      "conceptual-jumps",
+      "abstraction",
+      "proof-rigor-burden",
+      "representation-changes",
+      "productive-prompt-dependency",
+      "extension-ceiling"
+    ],
+    "official_timing_anchor_minutes": {
+      "typical_range": [
+        20,
+        30
+      ],
+      "maths_specific_approximate": 25
+    },
+    "internal_stage_planning_minutes": {
+      "setup-warm-up": [
+        1,
+        4
+      ],
+      "exploration-representation": [
+        3,
+        6
+      ],
+      "core-reasoning": [
+        7,
+        12
+      ],
+      "extension-transfer": [
+        4,
+        8
+      ]
+    },
+    "timing_warning": "Stage ranges are internal low-confidence authoring heuristics, not Oxford-published expected times."
+  },
+  "agent_a_mapping": {
+    "branch_commit_reviewed": "6fd99b418b92e6b754b9f4f3138af420480ab730",
+    "contract_fit": "strong",
+    "requested_additions_only": [
+      {
+        "proposed_skill": "guided-adaptation",
+        "reason": "Official evidence repeatedly treats absorbing and using tutor prompts/new ideas as an assessment signal."
+      },
+      {
+        "proposed_skill": "precision-checking",
+        "reason": "Official sample and preparation material explicitly value checking omitted cases, assumptions, and argument sufficiency."
+      }
+    ]
+  }
+}
