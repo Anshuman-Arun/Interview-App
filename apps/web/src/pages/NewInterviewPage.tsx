@@ -312,13 +312,13 @@ export function NewInterviewPage({
             </p>
           </div>
           {onResumeActive !== null && (
-            <button type="button" onClick={onResumeActive}>Resume current interview</button>
+            <button type="button" disabled={startPending} onClick={onResumeActive}>Resume current interview</button>
           )}
         </section>
       ) : activeSessionId !== null && (
         <section className="new-interview__active" aria-live="polite">
           <div><span>ACTIVE SESSION</span><strong>Finish or resume the current interview first.</strong><p>Starting a second authoritative session is disabled.</p></div>
-          {onResumeActive !== null && <button type="button" onClick={onResumeActive}>Resume interview</button>}
+          {onResumeActive !== null && <button type="button" disabled={startPending} onClick={onResumeActive}>Resume interview</button>}
         </section>
       )}
       <form className="new-interview__layout" onSubmit={(event) => void submit(event)}>
@@ -333,7 +333,7 @@ export function NewInterviewPage({
                 const available = modes.includes(entryMode);
                 const tag = entryMode === "OXFORD_MATHEMATICS" ? "Socratic + board" : entryMode === "QUANT_TRADING" ? "Market making" : "Research";
                 return (
-                  <button key={entryMode} type="button" className="new-interview__choice" aria-pressed={mode === entryMode} disabled={!available || catalogLoading} onClick={() => setMode(entryMode)}>
+                  <button key={entryMode} type="button" className="new-interview__choice" aria-pressed={mode === entryMode} disabled={!available || catalogLoading || startPending} onClick={() => setMode(entryMode)}>
                     <span>{tag}</span><strong>{MODE_LABELS[entryMode]}</strong>
                   </button>
                 );
@@ -344,7 +344,7 @@ export function NewInterviewPage({
             ) : modes.length === 0 ? <p className="new-interview__status">No interview targets are currently available.</p> : (
               <div className="new-interview__basics">
                 <label className="new-interview__field"><span>{mode === "OXFORD_MATHEMATICS" ? "Problem" : "Scenario"}</span><div className="new-interview__select-wrap">
-                  <select value={selectedTargetKey} onChange={(event) => setSelectedTargetKey(event.target.value)} data-testid="interview-target-select">
+                  <select value={selectedTargetKey} onChange={(event) => setSelectedTargetKey(event.target.value)} disabled={startPending || catalogLoading} data-testid="interview-target-select">
                     {targets.map((entry) => <option key={targetKey(entry)} value={targetKey(entry)}>{entry.title}</option>)}
                   </select><i aria-hidden="true">⌄</i>
                 </div></label>
@@ -355,6 +355,7 @@ export function NewInterviewPage({
                     max={480}
                     step={1}
                     value={durationText}
+                    disabled={startPending}
                     onChange={(event) => {
                       setDurationText(event.target.value);
                       if (formError !== null) setFormError(null);
@@ -378,7 +379,7 @@ export function NewInterviewPage({
               ) : (
                 <div className="new-interview__provider-main">
                   <label className="new-interview__field"><span>Model</span><div className="new-interview__select-wrap new-interview__select-wrap--model">
-                    <select value={selectedProviderKey} onChange={(event) => setSelectedProviderKey(event.target.value)} disabled={availableProviders.length === 0} data-testid="provider-select">
+                    <select value={selectedProviderKey} onChange={(event) => setSelectedProviderKey(event.target.value)} disabled={startPending || providerOptionsLoading || availableProviders.length === 0} data-testid="provider-select">
                       {availableProviders.length === 0 && <option value="">No launch-ready provider</option>}
                       {availableProviders.map((option) => <option key={providerKey(option)} value={providerKey(option)}>{option.providerDisplayName} · {option.modelDisplayName}</option>)}
                     </select><i aria-hidden="true">⌄</i>
@@ -399,7 +400,7 @@ export function NewInterviewPage({
             </select>
             <div className="new-interview__session-fields">
               <div className="new-interview__field"><span>Intervention</span><div className="new-interview__segments">
-                {(Object.keys(INTERVENTION_LABELS) as Array<keyof typeof INTERVENTION_LABELS>).map((policy) => <button key={policy} type="button" aria-pressed={interventionPolicy === policy} onClick={() => setInterventionPolicy(policy)} data-testid={`intervention-${policy.toLowerCase()}`}>{INTERVENTION_LABELS[policy]}</button>)}
+                {(Object.keys(INTERVENTION_LABELS) as Array<keyof typeof INTERVENTION_LABELS>).map((policy) => <button key={policy} type="button" aria-pressed={interventionPolicy === policy} disabled={startPending} onClick={() => setInterventionPolicy(policy)} data-testid={`intervention-${policy.toLowerCase()}`}>{INTERVENTION_LABELS[policy]}</button>)}
               </div></div>
               <div className="new-interview__input-note"><span>Input</span><strong>{mode === "OXFORD_MATHEMATICS" ? "Voice + tldraw + text" : "Structured actions"}</strong></div>
             </div>
