@@ -57,7 +57,8 @@ import {
   createSecureWebPreferences
 } from "./window-config.js";
 
-const OPTIONAL_LOCAL_RUNTIME_STARTUP_BUDGET_MS = 15_000;
+const OPTIONAL_LOCAL_RUNTIME_COLD_STARTUP_BUDGET_MS = 15_000;
+const OPTIONAL_LOCAL_RUNTIME_PREPARED_STARTUP_BUDGET_MS = 60_000;
 const PACKAGED_SMOKE_PROOF_MAX_BYTES = 64 * 1024;
 const MAX_APPEARANCE_SETTINGS_BYTES = 4 * 1024;
 const PACKAGED_SMOKE_INPUT = "Packaged Windows desktop smoke input.";
@@ -212,9 +213,16 @@ async function startDesktop(): Promise<void> {
     app.quit();
     return;
   }
+  // No-model launches stay fast. After an explicit model install has
+  // materialized verified persistent views, allow enough time on the next
+  // launch for Windows to verify and initialize the real workers instead of
+  // cancelling at 15s and making a successful install look like it vanished.
+  const optionalRuntimeStartupBudgetMs = await runtime.hasPreparedRuntimeViews()
+    ? OPTIONAL_LOCAL_RUNTIME_PREPARED_STARTUP_BUDGET_MS
+    : OPTIONAL_LOCAL_RUNTIME_COLD_STARTUP_BUDGET_MS;
   const optionalRuntimeSignal = AbortSignal.any([
     startupAbort.signal,
-    AbortSignal.timeout(OPTIONAL_LOCAL_RUNTIME_STARTUP_BUDGET_MS)
+    AbortSignal.timeout(optionalRuntimeStartupBudgetMs)
   ]);
   await runtime.start({ signal: optionalRuntimeSignal });
   if (shuttingDown || startupAbort.signal.aborted) return;
@@ -548,7 +556,7 @@ async function installLocalModelAssets(
     } else {
       await runtime.installVisionAssets(startupAbort.signal);
     }
-    setSetupState(kind, "INSTALLED", true);
+    setSetupState(kind, "INSTALLED", kind !== "PYTHON");
     return localRuntimeStatusForRenderer();
   } catch (error) {
     if (startupAbort.signal.aborted) {
