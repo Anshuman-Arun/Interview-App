@@ -1,0 +1,635 @@
+{
+  "schema_version": 1,
+  "owner": "Agent B",
+  "purpose": "Structural benchmark corpus for Oxford-like problem authoring without reproducing source questions.",
+  "copyright_policy": "Store source references and abstract structural summaries only. Do not copy full problem statements, full transcripts, or solution prose.",
+  "evidence_labels": {
+    "official-sample": "University/department publishes the item specifically as a sample interview question.",
+    "actual-used": "First-party source says the problem or an adapted version was used in an Oxford interview.",
+    "official-demonstration": "Official recorded mock/demonstration interview.",
+    "interview-style-extension": "Oxford preparation material explicitly says an item/extension could or has been used to begin an interview.",
+    "subject-adjacent-actual-used": "Actual Oxford Maths/CS or CS interview evidence; useful but not treated as pure Maths frequency evidence."
+  },
+  "benchmarks": [
+    {
+      "benchmark_id": "OX-SAMPLE-LADDER-TRACE",
+      "source": {
+        "url": "https://www.ox.ac.uk/admissions/undergraduate/applying/guide-for-applicants/interviews/sample_questions",
+        "classification": "official",
+        "evidence_kind": "official-sample",
+        "subject_scope": "Mathematics"
+      },
+      "broad_area": [
+        "coordinate-geometry",
+        "euclidean-geometry",
+        "modelling"
+      ],
+      "assumed_prerequisites": [
+        "right-triangle geometry",
+        "Pythagoras",
+        "basic coordinates"
+      ],
+      "opening_style": "Concrete visual motion with an intuitive prediction before formal modelling.",
+      "reasoning_skills": [
+        "visualization",
+        "conjecture-formation",
+        "modelling",
+        "representation-switching",
+        "proof-construction",
+        "generalization",
+        "guided-adaptation"
+      ],
+      "progression": [
+        {
+          "role": "accessible-opening",
+          "summary": "Predict and/or sketch the locus traced by a marked point during a constrained motion."
+        },
+        {
+          "role": "experiment",
+          "summary": "Draw several positions and form a hypothesis."
+        },
+        {
+          "role": "representation-switch",
+          "summary": "Replace the sketch with variables and a geometric constraint."
+        },
+        {
+          "role": "core-proof",
+          "summary": "Use the invariant geometric relation to characterize the locus."
+        },
+        {
+          "role": "transfer",
+          "summary": "Move the marked point away from the midpoint and determine how the locus changes."
+        }
+      ],
+      "tutor_interventions": [
+        "Ask how the candidate could test an initially visual hypothesis.",
+        "If stuck, direct attention to the geometric shape formed at every position rather than giving the locus."
+      ],
+      "pedagogical_value": "Makes abstraction and modelling visible; an intuitive answer can be checked and corrected mathematically.",
+      "oxford_like_features": [
+        "accessible visual entry",
+        "candidate narration",
+        "promptable representation change",
+        "surprising result",
+        "natural parameterized extension"
+      ],
+      "abstraction_pattern": "physical motion -> geometric constraint -> algebraic locus -> parameterized family",
+      "role_fit": [
+        "core",
+        "deep-dive",
+        "transfer"
+      ],
+      "assessment_commentary": "Tutor commentary explicitly emphasizes abstraction, modelling, testing a hypothesis, and generalising beyond an inaccurate sketch.",
+      "source_reproduction": "No full source wording stored."
+    },
+    {
+      "benchmark_id": "OX-SAMPLE-TILING-RECURRENCE",
+      "source": {
+        "url": "https://www.ox.ac.uk/admissions/undergraduate/applying/guide-for-applicants/interviews/sample_questions",
+        "classification": "official",
+        "evidence_kind": "official-sample",
+        "subject_scope": "Mathematics"
+      },
+      "broad_area": [
+        "combinatorics",
+        "sequences-recurrences"
+      ],
+      "assumed_prerequisites": [
+        "elementary counting",
+        "basic diagrams"
+      ],
+      "opening_style": "Low-prerequisite enumeration of the first few small cases.",
+      "reasoning_skills": [
+        "small-case-exploration",
+        "case-analysis",
+        "pattern-recognition",
+        "conjecture-formation",
+        "proof-construction",
+        "transfer",
+        "guided-adaptation",
+        "precision-checking"
+      ],
+      "progression": [
+        {
+          "role": "accessible-opening",
+          "summary": "Draw/count cases for the first few sizes."
+        },
+        {
+          "role": "precision-check",
+          "summary": "Explain systematically why a listed case count has no omissions."
+        },
+        {
+          "role": "pattern",
+          "summary": "Use additional values to identify a recurrence-like pattern; knowing its conventional name is irrelevant."
+        },
+        {
+          "role": "core-proof",
+          "summary": "Explain structurally why the recurrence occurs."
+        },
+        {
+          "role": "transfer",
+          "summary": "Change grid dimension and tile shape, then reuse or revise the learned decomposition."
+        }
+      ],
+      "tutor_interventions": [
+        "Explicitly reassure that an immediate answer is not expected and suggest small cases.",
+        "Provide later numerical values to expose a pattern when useful.",
+        "Continue giving hints in the modified problem while testing whether earlier ideas were absorbed."
+      ],
+      "pedagogical_value": "Very low knowledge burden with a high ceiling and repeated opportunities to show learning.",
+      "oxford_like_features": [
+        "productive small cases",
+        "systematic diagrams",
+        "learn-during-interview",
+        "why-not-just-what",
+        "transfer to changed rules"
+      ],
+      "abstraction_pattern": "finite examples -> recurrence -> structural decomposition -> altered combinatorial system",
+      "role_fit": [
+        "warm-up",
+        "core",
+        "stretch"
+      ],
+      "assessment_commentary": "Tutor explicitly says the knowledge content is no more than GCSE while the internal complexity can test very strong candidates.",
+      "source_reproduction": "No full source wording stored."
+    },
+    {
+      "benchmark_id": "OX-2026-ITERATED-FUNCTION-SKETCH",
+      "source": {
+        "url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/visualisation",
+        "supporting_url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/visualisation-solutions",
+        "classification": "official",
+        "evidence_kind": "actual-used",
+        "subject_scope": "Mathematics",
+        "provenance_note": "Oxford states this is adapted from a question James Munro used for Maths interviews."
+      },
+      "broad_area": [
+        "graph-sketching",
+        "functions",
+        "sequences-recurrences",
+        "elementary-analysis"
+      ],
+      "assumed_prerequisites": [
+        "functions-graphs",
+        "differentiation",
+        "simple recurrence intuition"
+      ],
+      "opening_style": "Sketch a simple parameterised function using qualitative behavior before deep calculation.",
+      "reasoning_skills": [
+        "graph-sketching",
+        "visualization",
+        "representation-switching",
+        "conjecture-formation",
+        "proof-construction",
+        "generalization",
+        "transfer",
+        "precision-checking"
+      ],
+      "progression": [
+        {
+          "role": "technique-check",
+          "summary": "Describe small/large-input behavior and locate the turning point of a parameterised curve."
+        },
+        {
+          "role": "deep-dive",
+          "summary": "Reason qualitatively about composing the function without expanding everything."
+        },
+        {
+          "role": "conjecture",
+          "summary": "Iterate the map and predict the long-run behavior."
+        },
+        {
+          "role": "stretch",
+          "summary": "Prove a quantitative local bound and interpret the speed of convergence."
+        }
+      ],
+      "tutor_interventions": [
+        "Prompt with asymptotic behavior at small and large inputs.",
+        "Ask for qualitative composition reasoning before algebraic substitution.",
+        "Escalate to a quantitative bound only if the interview supports it."
+      ],
+      "pedagogical_value": "Combines school-level technique with genuine mathematical thinking, iteration, and a very high ceiling.",
+      "oxford_like_features": [
+        "curve sketching",
+        "technique-to-concept transition",
+        "composition without brute force",
+        "optional proof ceiling"
+      ],
+      "abstraction_pattern": "graph features -> function composition -> dynamical iteration -> local quantitative estimate",
+      "role_fit": [
+        "technique-check",
+        "core",
+        "stretch"
+      ],
+      "assessment_commentary": "The official solution explicitly makes the final quantitative proof contingent on how the interview is going.",
+      "source_reproduction": "Only structural description stored; formula omitted from this corpus."
+    },
+    {
+      "benchmark_id": "OX-DEMO-ASPECT-RATIO-TILING",
+      "source": {
+        "url": "https://www.youtube.com/watch?v=nietXNrjKD8",
+        "classification": "official",
+        "evidence_kind": "official-demonstration",
+        "subject_scope": "Mathematics",
+        "transcript_navigation_only": "https://sozai.app/transcript/mathematics-demonstration-interview/"
+      },
+      "broad_area": [
+        "euclidean-geometry",
+        "combinatorics",
+        "construction"
+      ],
+      "assumed_prerequisites": [
+        "rectangle geometry",
+        "ratio reasoning",
+        "elementary algebra"
+      ],
+      "opening_style": "Classify feasible small sizes for a geometric tiling construction.",
+      "reasoning_skills": [
+        "small-case-exploration",
+        "visualization",
+        "pattern-recognition",
+        "proof-construction",
+        "strategic-simplification",
+        "guided-adaptation",
+        "error-recovery",
+        "generalization"
+      ],
+      "progression": [
+        {
+          "role": "exploration",
+          "summary": "Try small values and draw explicit constructions."
+        },
+        {
+          "role": "obstruction",
+          "summary": "Strengthen an informal impossibility claim by focusing on local/corner structure."
+        },
+        {
+          "role": "construction",
+          "summary": "Recognize operations that generate further feasible sizes."
+        },
+        {
+          "role": "classification",
+          "summary": "Combine impossibility reasoning and constructions into a broader description."
+        }
+      ],
+      "tutor_interventions": [
+        "Redirect a weak impossibility argument to a more local geometric feature.",
+        "Ask targeted questions about corners/rectangle placement.",
+        "Use earlier constructions to prompt a reusable growth rule."
+      ],
+      "pedagogical_value": "Shows real-time recovery from mistakes and how tutor input can reveal, rather than replace, a candidate's thinking.",
+      "oxford_like_features": [
+        "collaborative problem solving",
+        "mistakes tolerated",
+        "progressive hints",
+        "pattern use",
+        "construction plus impossibility"
+      ],
+      "abstraction_pattern": "small constructions -> local obstruction -> generative construction -> classification",
+      "role_fit": [
+        "core",
+        "deep-dive",
+        "stretch"
+      ],
+      "assessment_commentary": "Post-interview tutor commentary emphasizes thought process, creativity, pattern spotting, persistence, and use of a newly noticed construction.",
+      "source_reproduction": "No transcript or full statement reproduced."
+    },
+    {
+      "benchmark_id": "OX-MATHCS-SQUARE-CUBE-CONSTRAINT",
+      "source": {
+        "url": "https://www.cs.ox.ac.uk/people/varun.kanade/website/post/2022/09/15/interview-question1-discussion.html",
+        "classification": "official-oxford-academic",
+        "evidence_kind": "subject-adjacent-actual-used",
+        "subject_scope": "Maths/CS",
+        "caveat": "Use for structural evidence, not pure Mathematics topic-frequency estimates."
+      },
+      "broad_area": [
+        "combinatorics",
+        "number-theory"
+      ],
+      "assumed_prerequisites": [
+        "integer arithmetic",
+        "squares/cubes",
+        "basic set selection"
+      ],
+      "opening_style": "Constrained selection problem where small cases expose interaction between two rules.",
+      "reasoning_skills": [
+        "small-case-exploration",
+        "case-analysis",
+        "representation-switching",
+        "proof-construction",
+        "strategic-simplification",
+        "transfer",
+        "guided-adaptation"
+      ],
+      "progression": [
+        {
+          "role": "exploration",
+          "summary": "Test small admissible values and try a simple selection strategy."
+        },
+        {
+          "role": "structure",
+          "summary": "Pair complementary objects so one global constraint becomes local."
+        },
+        {
+          "role": "connection",
+          "summary": "Notice when the forbidden-object condition interacts with the pairing rule."
+        },
+        {
+          "role": "transfer",
+          "summary": "Change the power/forbidden class and determine what carries over."
+        },
+        {
+          "role": "extension",
+          "summary": "If time remains, count the valid selections rather than only decide existence."
+        }
+      ],
+      "tutor_interventions": [
+        "Suggest small cases early if the candidate does not.",
+        "Help isolate the interaction of the two constraints rather than naming a theorem."
+      ],
+      "pedagogical_value": "Tests whether a candidate can connect two elementary areas without being told the connection.",
+      "oxford_like_features": [
+        "small-case on-ramp",
+        "constraint interaction",
+        "connection across areas",
+        "optional extension"
+      ],
+      "abstraction_pattern": "examples -> complementary pairing -> hidden interaction -> altered exponent/class",
+      "role_fit": [
+        "core",
+        "transfer"
+      ],
+      "assessment_commentary": "Tutor explicitly says complete polished solutions are not the point and that small cases may be prompted.",
+      "source_reproduction": "Problem details deliberately abstracted."
+    },
+    {
+      "benchmark_id": "OX-MATHCS-DIGIT-PROCESS",
+      "source": {
+        "url": "https://www.cs.ox.ac.uk/people/varun.kanade/website/post/2022/12/04/interview-question2-discussion.html",
+        "classification": "official-oxford-academic",
+        "evidence_kind": "subject-adjacent-actual-used",
+        "subject_scope": "Maths/CS",
+        "caveat": "Use for structural evidence, not pure Mathematics topic-frequency estimates."
+      },
+      "broad_area": [
+        "number-theory",
+        "algorithms",
+        "algebra"
+      ],
+      "assumed_prerequisites": [
+        "place value",
+        "long multiplication",
+        "elementary algebra"
+      ],
+      "opening_style": "Concrete digit manipulation admits an algorithmic trial approach before formalization.",
+      "reasoning_skills": [
+        "technique",
+        "pattern-recognition",
+        "representation-switching",
+        "proof-construction",
+        "generalization",
+        "guided-adaptation",
+        "precision-checking"
+      ],
+      "progression": [
+        {
+          "role": "accessible-opening",
+          "summary": "Run a familiar digit-by-digit procedure to generate information."
+        },
+        {
+          "role": "algorithmic-structure",
+          "summary": "Notice that a small state determines the next state."
+        },
+        {
+          "role": "proof",
+          "summary": "Use finite-state repetition/uniqueness to justify why the procedure eventually cycles or terminates as claimed."
+        },
+        {
+          "role": "representation-switch",
+          "summary": "Encode the digit movement as an algebraic equation."
+        },
+        {
+          "role": "generalization",
+          "summary": "Replace the digit and multiplier with parameters and ask when the construction exists."
+        }
+      ],
+      "tutor_interventions": [
+        "Encourage starting the mechanical process rather than waiting for a closed form.",
+        "Prompt the candidate to identify what information determines the next step.",
+        "Accept either procedural or algebraic routes and compare them."
+      ],
+      "pedagogical_value": "Creates multiple viable representations and lets the candidate develop an algorithm into a proof.",
+      "oxford_like_features": [
+        "familiar technique start",
+        "algorithm-to-proof transition",
+        "multiple approaches",
+        "parameter generalization"
+      ],
+      "abstraction_pattern": "concrete process -> state machine -> finiteness argument -> algebraic encoding -> parameterized family",
+      "role_fit": [
+        "technique-check",
+        "core",
+        "stretch"
+      ],
+      "assessment_commentary": "Tutor commentary says the subtle full proof was not expected without help and values the mathematical reasoning about the procedure.",
+      "source_reproduction": "Problem details deliberately abstracted."
+    },
+    {
+      "benchmark_id": "OX-2026-GEOMETRY-CENTRE-BISECTION",
+      "source": {
+        "url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/geometry-solutions",
+        "classification": "official",
+        "evidence_kind": "interview-style-extension",
+        "subject_scope": "Mathematics preparation",
+        "provenance_note": "The author explicitly describes how the underlying item could begin an interview."
+      },
+      "broad_area": [
+        "euclidean-geometry",
+        "logic-proof"
+      ],
+      "assumed_prerequisites": [
+        "regular polygons",
+        "area intuition",
+        "symmetry"
+      ],
+      "opening_style": "Begin from an elementary symmetry/area observation in a familiar regular shape.",
+      "reasoning_skills": [
+        "visualization",
+        "conjecture-formation",
+        "definition-exploration",
+        "proof-construction",
+        "counterexample-construction",
+        "generalization",
+        "precision-checking"
+      ],
+      "progression": [
+        {
+          "role": "opening",
+          "summary": "Identify an area-bisecting line in a symmetric figure."
+        },
+        {
+          "role": "generalization",
+          "summary": "Ask whether the same centre/bisection relationship holds for other regular polygons."
+        },
+        {
+          "role": "definition",
+          "summary": "Make the meaning of 'centre' precise enough for the discussion."
+        },
+        {
+          "role": "logic-check",
+          "summary": "Separate a sufficient-looking symmetry observation from what is actually proved."
+        },
+        {
+          "role": "transfer",
+          "summary": "Search for other shapes where centre lines bisect area and test converses."
+        }
+      ],
+      "tutor_interventions": [
+        "Avoid detailed area calculation and focus on symmetry/definition.",
+        "Ask whether the observed property is sufficient or merely suggestive."
+      ],
+      "pedagogical_value": "Turns an easy-looking geometry fact into a proof/definition/generalization discussion.",
+      "oxford_like_features": [
+        "accessible geometry",
+        "definition precision",
+        "generalization",
+        "proof-vs-intuition distinction"
+      ],
+      "abstraction_pattern": "familiar symmetry -> generalized claim -> define centre -> test sufficiency/converse",
+      "role_fit": [
+        "warm-up",
+        "deep-dive",
+        "transfer"
+      ],
+      "assessment_commentary": "Official preparation material explicitly frames this as an interview continuation.",
+      "source_reproduction": "No original wording stored."
+    },
+    {
+      "benchmark_id": "OX-2026-GEOMETRY-AMGM-TRANSFER",
+      "source": {
+        "url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/geometry-solutions",
+        "classification": "official",
+        "evidence_kind": "interview-style-extension",
+        "subject_scope": "Mathematics preparation"
+      },
+      "broad_area": [
+        "euclidean-geometry",
+        "algebra",
+        "optimization"
+      ],
+      "assumed_prerequisites": [
+        "circle geometry",
+        "Pythagoras",
+        "basic inequalities"
+      ],
+      "opening_style": "A geometric relation is derived first; its algebraic meaning is then extracted.",
+      "reasoning_skills": [
+        "visualization",
+        "representation-switching",
+        "proof-construction",
+        "transfer",
+        "generalization"
+      ],
+      "progression": [
+        {
+          "role": "geometry",
+          "summary": "Establish a length relation in a simple circle configuration."
+        },
+        {
+          "role": "representation-switch",
+          "summary": "Recognize the relation as a general inequality between positive quantities."
+        },
+        {
+          "role": "proof",
+          "summary": "Use the geometry to justify the inequality."
+        },
+        {
+          "role": "transfer",
+          "summary": "Apply it to reciprocal expressions or fixed-perimeter optimization."
+        }
+      ],
+      "tutor_interventions": [
+        "Keep the geometric interpretation active rather than immediately naming the inequality.",
+        "After deriving it, ask for applications in algebra/optimization."
+      ],
+      "pedagogical_value": "Strong example of learning a tool inside the interview and immediately transferring it.",
+      "oxford_like_features": [
+        "geometry-to-algebra switch",
+        "new tool learned in conversation",
+        "multiple applications"
+      ],
+      "abstraction_pattern": "geometric identity -> inequality -> algebraic applications -> optimization",
+      "role_fit": [
+        "core",
+        "transfer"
+      ],
+      "assessment_commentary": "Official material explicitly suggests this kind of extension as an interview continuation.",
+      "source_reproduction": "No source formulas or full problem text stored."
+    },
+    {
+      "benchmark_id": "OX-2026-RADIAL-GRAPH-EXTENSION",
+      "source": {
+        "url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/graphs-solutions",
+        "classification": "official",
+        "evidence_kind": "interview-style-extension",
+        "subject_scope": "Mathematics preparation"
+      },
+      "broad_area": [
+        "graph-sketching",
+        "coordinate-geometry",
+        "trigonometry"
+      ],
+      "assumed_prerequisites": [
+        "trigonometric graphs",
+        "circle equations",
+        "square-root behavior"
+      ],
+      "opening_style": "Interpret a two-variable equation geometrically instead of solving point-by-point.",
+      "reasoning_skills": [
+        "visualization",
+        "graph-sketching",
+        "representation-switching",
+        "pattern-recognition",
+        "generalization"
+      ],
+      "progression": [
+        {
+          "role": "representation-switch",
+          "summary": "Replace an expression in x and y by a radial variable."
+        },
+        {
+          "role": "visualization",
+          "summary": "Interpret allowed radial values as families of concentric curves."
+        },
+        {
+          "role": "qualitative-analysis",
+          "summary": "Reason about spacing as a nonlinear transformation changes."
+        },
+        {
+          "role": "transfer",
+          "summary": "Change the outer function and predict the new radial graph family."
+        }
+      ],
+      "tutor_interventions": [
+        "Suggest thinking in terms of radius rather than separate coordinates.",
+        "Ask how a nonlinear square-root map changes equal spacings."
+      ],
+      "pedagogical_value": "Demonstrates that graph sketching can test structure and representation rather than routine plotting.",
+      "oxford_like_features": [
+        "visual graph reasoning",
+        "coordinate-to-radial representation",
+        "qualitative spacing",
+        "function substitution extension"
+      ],
+      "abstraction_pattern": "two-variable equation -> radius parameter -> family of level sets -> changed outer function",
+      "role_fit": [
+        "technique-check",
+        "core",
+        "transfer"
+      ],
+      "assessment_commentary": "Official solutions explicitly describe a related graph as a possible next interview question.",
+      "source_reproduction": "No full equation or answer choices stored."
+    }
+  ]
+}
