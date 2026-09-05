@@ -44,7 +44,10 @@ export function ProductFrame({
 
   const readinessChecking = reasoningChecking || authorityChecking;
   const readinessReady =
-    reasoningReady && !authorityChecking && !authorityUnavailable;
+    reasoningReady
+    && !reasoningChecking
+    && !authorityChecking
+    && !authorityUnavailable;
   const readinessLabel = readinessChecking
     ? "Checking"
     : authorityUnavailable
