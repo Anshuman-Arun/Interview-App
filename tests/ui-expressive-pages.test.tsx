@@ -178,14 +178,16 @@ describe("expressive product page layer", () => {
 
 
   it("surfaces multiple active sessions instead of offering a false new-room state", () => {
+    const firstSession = sessions[0];
+    if (firstSession === undefined) throw new Error("Expected active fixture");
     const markup = renderToStaticMarkup(
       React.createElement(HomePage, {
         activeSessionId: null,
         activeSessionCount: 2,
         activeProblemTitle: null,
         sessions: [
-          sessions[0]!,
-          { ...sessions[0]!, sessionId: COMPLETE, updatedAt: "2026-09-01T20:21:00.000Z" }
+          firstSession,
+          { ...firstSession, sessionId: COMPLETE, updatedAt: "2026-09-01T20:21:00.000Z" }
         ],
         onStartInterview: vi.fn(),
         onResumeInterview: vi.fn(),
