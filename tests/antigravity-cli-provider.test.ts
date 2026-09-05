@@ -556,7 +556,7 @@ describe("Antigravity CLI one-turn protocol", () => {
     await session.close();
   });
 
-  it("maps a logical low tier to the documented medium slug plus explicit low effort", async () => {
+  it("uses the published low model slug plus explicit low effort", async () => {
     let captured: SupervisedCliExecutionRequest | undefined;
     const provider = createAntigravityCliReasoningProvider(
       fakeExecutor(async (request) => {
@@ -574,7 +574,7 @@ describe("Antigravity CLI one-turn protocol", () => {
     const args = captured?.args ?? [];
     const modelIndex = args.indexOf("--model");
     const effortIndex = args.indexOf("--effort");
-    expect(args[modelIndex + 1]).toBe("gemini-3.8-flash-medium");
+    expect(args[modelIndex + 1]).toBe("gemini-3.8-flash-low");
     expect(args[effortIndex + 1]).toBe("low");
     await session.close();
   });
