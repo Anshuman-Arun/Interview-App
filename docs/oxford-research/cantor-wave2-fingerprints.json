@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "agent": "C — Cantor",
-  "purpose": "Source-independent mathematical fingerprints for the 18 surviving Agent C — Cantor Wave 2 families after the completion pass. Removed Hilbert hard rejects are intentionally excluded.",
+  "purpose": "Source-independent mathematical fingerprints for the 17 surviving Agent C — Cantor Wave 2 families after the completion pass. All Hilbert hard rejects are intentionally excluded.",
   "families": [
     {
       "family_id": "oxford-cantor-moving-v-envelope",
@@ -581,51 +581,6 @@
       ],
       "known_classic_overlap": "Variable-limit integral differentiation is standard; exact window/integrand family not identified.",
       "author_provenance": "Independently designed; pending H."
-    },
-    {
-      "family_id": "oxford-cantor-reciprocal-implicit-curve",
-      "primary_domain": "graph-sketching",
-      "secondary_domains": [
-        "coordinate-geometry",
-        "functions",
-        "algebra",
-        "elementary-analysis"
-      ],
-      "surface_objects": [
-        "implicit quartic curve",
-        "isolated origin",
-        "reciprocal-coordinate circle"
-      ],
-      "constraints": [
-        "x^2 y^2=x^2+y^2"
-      ],
-      "target_type": "fully sketch components/asymptotes and locate closest nonzero branch points",
-      "central_mechanism": "separate origin, then divide nonzero branch equation to 1/x^2+1/y^2=1",
-      "secondary_mechanisms": [
-        "solve y^2 for branch domain",
-        "symmetries",
-        "positive-variable inequality for branch distance"
-      ],
-      "critical_representation_change": "original (x,y) plane -> reciprocal coordinates (1/x,1/y) on a circle",
-      "diagram_topology": "isolated origin plus four outer hyperbola-like branches with asymptotes x=±1,y=±1",
-      "small_case_signature": [
-        "(0,0)",
-        "diagonal points with |x|=|y|",
-        "large |x|"
-      ],
-      "progression_signature": {
-        "opening": "test axes and symmetries",
-        "first_deepening": "reciprocal circle",
-        "core": "domain/asymptotes and complete sketch",
-        "transfer": "scaled c",
-        "stretch": "circle parametrization/branch closest points"
-      },
-      "solution_dependency_graph_summary": "origin check -> legal division -> reciprocal circle -> solved branch equation -> asymptotes -> branch-distance inequality",
-      "distinctive_features": [
-        "tempting division deletes an isolated component, making precision/error recovery mathematically substantive"
-      ],
-      "known_classic_overlap": "Reciprocal-coordinate implicit-curve transformation is a general technique; exact equation not identified.",
-      "author_provenance": "Independently designed; correctness/calibration flagged because of isolated-component trap."
     },
     {
       "family_id": "oxford-cantor-three-cycle-map",
