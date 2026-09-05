@@ -1271,6 +1271,17 @@ describe("editorial v10 adversarial UI states", () => {
     }
     expect(document.querySelector(".product-frame")?.getAttribute("aria-busy"))
       .toBe("true");
+
+    for (const stylesheet of [
+      "apps/web/src/components/ProductFrame.css",
+      "apps/web/src/styles/editorial-v10.css"
+    ]) {
+      const css = fs.readFileSync(path.resolve(process.cwd(), stylesheet), "utf8");
+      expect(css).toContain(".product-frame__brand:hover:not(:disabled)");
+      expect(css).toContain(".product-frame__new:hover:not(:disabled)");
+      expect(css).toContain(".product-frame__brand:disabled");
+      expect(css).toContain(".product-frame__new:disabled");
+    }
   });
 
 });
