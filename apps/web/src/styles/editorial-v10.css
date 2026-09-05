@@ -2230,6 +2230,7 @@ summary:focus-visible,
     display: block;
     max-height: 36px;
     overflow-y: auto;
+    padding: 0;
   }
 
   .live-problem-meta,
