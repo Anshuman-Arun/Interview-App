@@ -128,6 +128,30 @@ describe("expressive product page layer", () => {
     expect(markup).toContain("Review");
   });
 
+  it("visually interlocks the Sessions ledger while a recovery is pending", () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(SessionsPage, {
+        sessions,
+        currentSessionId: ACTIVE,
+        canReview: (session) => session.status === "COMPLETED",
+        onResume: vi.fn(),
+        onReview: vi.fn(),
+        onRefresh: vi.fn(),
+        history: null,
+        historyLoading: false,
+        historyError: null,
+        sessionEntryPending: true
+      })
+    );
+
+    expect(markup).toContain('aria-busy="true"');
+    expect(markup).toMatch(
+      /class="expressive-sessions__refresh"[^>]*disabled=""/u
+    );
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Current<\/button>/u);
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Review<\/button>/u);
+  });
+
   it("does not render ACTIVE-session problem identity on Home or Sessions", () => {
     const activeOnly: readonly StoredSessionSummary[] = [{
       sessionId: ACTIVE,
