@@ -196,6 +196,7 @@ export const oxfordDThirdsClosedIntegersSpec: CuratedProblemSpec = {
   reviewNotes: DIRICHLET_CANDIDATE_REVIEW_NOTES,
   oxfordAdaptive: makeDirichletAdaptive({
     familyId: "oxford-d-thirds-closed-integers",
+    similarityClusterId: "closure-classification-residue-affine",
     domains: ["number-theory", "logic-proof"],
     contentConcepts: ["modular-reasoning", "logical-structure"],
     prerequisiteConcepts: ["arithmetic", "modular-arithmetic", "logical-quantifiers"],
