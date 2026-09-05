@@ -90,9 +90,9 @@ Agent I — Itô completed independent current-version mathematical certificatio
 
 | Author PR | Reviewed head | Surviving families | Approved | Changes required |
 | --- | --- | ---: | ---: | ---: |
-| Agent C — Cantor #132 | `0d4941ab3197b2297ab389d7438df39f599b2ad5` | 18 | 18 | 0 |
+| Agent C — Cantor #132 | `29ae86d5bccfa10eb91987bfaccc94adfbd57fcf` | 18 | 18 | 0 |
 | Agent D — Dirichlet #133 | `ecece22058c997d37c4b352fa5ed32bd1daf5243` | 12 | 12 | 0 |
-| Agent E — Euler #134 | `165bb3100fb894158969abb808caad5bc9150807` | 17 | 17 | 0 |
+| Agent E — Euler #134 | `b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6` | 17 | 17 | 0 |
 
 **Surviving total: 47. Correctness approvals: 47. Current C/D/E blockers: 0.**
 
@@ -100,7 +100,7 @@ The review standard for every retained family was: solve the candidate-visible p
 
 ### Cantor current-version recheck
 
-All 18 surviving Cantor families are correctness-approved at head `0d4941ab...`.
+All 18 surviving Cantor families are correctness-approved at head `29ae86d5...`.
 
 The previously repaired `oxford-cantor-reciprocal-implicit-curve` remains correct: the isolated origin is preserved separately from the four closest points on the nonzero branches, and the scaled extension retains that distinction.
 
@@ -119,7 +119,7 @@ Cantor pruned `oxford-cantor-tangent-intersection-locus` and `oxford-cantor-line
 - `oxford-cantor-shifted-cubic-intersections`;
 - `oxford-cantor-reciprocal-implicit-curve`.
 
-The revised material remains mathematically valid and route-consistent. The current Möbius-involution hint explicitly defines the self-inverse composition property, resolving the earlier vocabulary concern. No replacement family was introduced.
+The revised material remains mathematically valid and route-consistent. The current Möbius-involution hint explicitly defines the self-inverse composition property, resolving the earlier vocabulary concern. No replacement family was introduced. Latest post-certification Cantor commits were also diffed field-by-field and do not change any family statement, canonical solution, hint, extension, approach, or given; the decisions are therefore re-pinned to the newest head.
 
 One non-blocking wording warning remains recorded: the `three-cycle-map` stretch asks broadly for “simple algebraic relations” rather than one unique target. This does not create a false mathematical claim or block correctness.
 
@@ -146,7 +146,7 @@ Important discrete checks included small-cardinality exceptions for thirds-closu
 
 ### Euler current-version recheck and repairs
 
-Euler pruned two previously present candidate families, leaving 17 survivors. Mathematical source was certified at `e5f5b431...`; the latest head `165bb310...` adds only a test-file change, so Agent I re-pinned the unchanged mathematical decisions after inspecting that diff. The removed families are not counted as current certifications.
+Euler pruned two previously present candidate families, leaving 17 survivors. Mathematical source was certified at `e5f5b431...`; the subsequent `b0ac8821...` commits do not change mathematical family source, so Agent I re-pinned the unchanged mathematical decisions after inspecting that diff. The removed families are not counted as current certifications.
 
 The earlier queue specification blocker is repaired and independently reverified. The current `oxford-euler-periodic-queue-model` now explicitly states:
 
@@ -229,9 +229,9 @@ Specify `n` as an integer in the candidate-visible statement. Keep the reflectio
 
 Agent I — Itô full-certification state is head-pinned and current:
 
-- Cantor #132: 18/18 surviving families approved at `0d4941ab...`;
+- Cantor #132: 18/18 surviving families approved at `29ae86d5...`;
 - Dirichlet #133: 12/12 surviving families approved at `ecece220...`;
-- Euler #134: 17/17 surviving families approved at `165bb310...`.
+- Euler #134: 17/17 surviving families approved at `b0ac8821...`.
 
 Removed author families are not retained as current certifications. Correctness decisions remain separate from Agent G taxonomy/difficulty/timing and Agent H originality/fidelity decisions.
 
