@@ -3,16 +3,17 @@
   "agent": "H — Hilbert",
   "basedOnMainCommit": "454a2fe993c8fd70676d04e5d262a1780161f0d6",
   "reviewedAt": "2026-09-05",
-  "scopeNote": "Full post-pruning certification of every surviving Agent C/D/E family at the exact author heads listed in summary. Earlier risk-prioritized sample is archival only.",
+  "scopeNote": "Full post-pruning certification of every surviving Agent C/D/E family at the exact author heads listed in summary. No replacement families were introduced in the completion passes; removed hard rejects are not counted as survivors.",
   "summary": {
-    "totalFamilies": 49,
-    "survivingTotal": 49,
+    "totalFamilies": 47,
+    "survivingTotal": 47,
     "authorPrs": [
       {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
-        "surviving": 20
+        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5",
+        "surviving": 18,
+        "prunedSinceInitial": 2
       },
       {
         "agent": "D — Dirichlet",
@@ -24,7 +25,7 @@
       {
         "agent": "E — Euler",
         "number": 134,
-        "head": "ee52c053f0c38d7874be2bfdb5a506e0426d341f",
+        "head": "165bb3100fb894158969abb808caad5bc9150807",
         "surviving": 17,
         "prunedSinceInitial": 2
       }
@@ -33,12 +34,12 @@
     "replacementCount": 0,
     "originality": {
       "PASS": 0,
-      "PASS_WITH_NOTES": 32,
-      "REVISE": 7,
-      "REJECT_TOO_CLOSE": 10
+      "PASS_WITH_NOTES": 35,
+      "REVISE": 6,
+      "REJECT_TOO_CLOSE": 6
     },
     "fidelity": {
-      "PASS": 42,
+      "PASS": 40,
       "PASS_WITH_NOTES": 7,
       "REVISE": 0,
       "REJECT_NOT_OXFORD_LIKE": 0
@@ -107,12 +108,12 @@
   "audits": [
     {
       "familyId": "oxford-cantor-moving-v-envelope",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9"
+        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -151,12 +152,12 @@
           "quadratic central envelope with linear tails",
           "switch points arise from optimizer feasibility rather than curve intersections"
         ],
-        "knownClassicOverlap": "Generic envelope/convex-optimization structure; no exact classic match identified in author spot-check.",
-        "authorProvenance": "Independently designed from target graph-sketching + parameter-optimization behaviors; originality pending Agent H."
+        "knownClassicOverlap": "Hilbert five-pool review identified the construction as the Moreau-Yosida envelope of |x|, equivalently a scaled Huber function after a variable substitution.",
+        "authorProvenance": "Structural adaptation / classic-mathematics. Moving-V interview progression is retained, but the mathematical construction is not claimed independent-original."
       },
-      "originalityDecision": "REVISE",
+      "originalityDecision": "PASS_WITH_NOTES",
       "fidelityDecision": "PASS",
-      "provenanceDisposition": "change-to-structural-adaptation-or-classic-adjacent",
+      "provenanceDisposition": "structural-adaptation-classic-mathematics",
       "retrieval": {
         "A": {
           "completed": true,
@@ -172,7 +173,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-cantor-cubic-two-thresholds; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -240,8 +241,8 @@
         }
       ],
       "classicProblemCheck": {
-        "result": "CLASSIC_ADJACENT_OR_PROVENANCE_OVERSTATED",
-        "notes": "The family adds material structure, but the established kernel is central enough that provenance or core design needs revision."
+        "result": "TRUTHFUL_STRUCTURAL_ADAPTATION",
+        "notes": "Current author provenance now truthfully presents the Moreau/Huber construction as structural adaptation rather than independent-original."
       },
       "fidelityNotes": {
         "accessibleOpening": "The opening is candidate-accessible: sketch moving V-shapes.",
@@ -252,26 +253,26 @@
         "prerequisiteBurden": "Prerequisites are controlled by the authored setup and do not require obscure external facts."
       },
       "requiredChanges": [
-        "Revise provenance and/or the mathematically central kernel so the retained record truthfully distinguishes established structure from the authored extension."
+        "Retain structural-adaptation / classic-mathematics provenance; do not relabel the Moreau/Huber kernel independent-original."
       ],
       "bankDisposition": [
-        "Hilbert re-review required after revision",
+        "Hilbert originality gate cleared with truthful provenance",
         "Oxford-fidelity gate cleared"
       ],
       "wouldRejectIfClaimedOriginal": true,
       "handoff": {
-        "canProgressAfterGI": false,
-        "note": "Hilbert originality revision/replacement is required before recommendation readiness."
+        "canProgressAfterGI": true,
+        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires remaining G/I gates."
       }
     },
     {
       "familyId": "oxford-cantor-reciprocal-root-parabolas",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9"
+        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -331,7 +332,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-cantor-absolute-quadratic-crossings; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -429,12 +430,12 @@
     },
     {
       "familyId": "oxford-cantor-cubic-two-thresholds",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9"
+        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -493,7 +494,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-cantor-shifted-cubic-intersections; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -591,12 +592,12 @@
     },
     {
       "familyId": "oxford-cantor-cubic-divided-difference",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9"
+        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -634,12 +635,12 @@
         "distinctiveFeatures": [
           "two separate special a-values: stationary basepoint and merger of the other two preimages"
         ],
-        "knownClassicOverlap": "Divided differences and cubic level sets are standard tools; exact combination not identified.",
-        "authorProvenance": "Independently designed kernel; correctness/calibration intentionally flagged for Agent I/G."
+        "knownClassicOverlap": "Exact equal-height equation x^3-x=a^3-a and factorization by x-a are documented as an established exercise; the quotient/removable-hole progression is author-structured.",
+        "authorProvenance": "Classic problem / secondary reference; no independent-original claim."
       },
       "originalityDecision": "PASS_WITH_NOTES",
       "fidelityDecision": "PASS",
-      "provenanceDisposition": "independent-original-with-common-technique",
+      "provenanceDisposition": "truthful-classic",
       "retrieval": {
         "A": {
           "completed": true,
@@ -655,11 +656,11 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-cantor-shifted-cubic-intersections; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
-          "note": "Independent external/classic search completed with query \"x^3-x divided difference equal height roots parameter\". Nearest retained external evidence: Wolfram Function Repository — PolynomialDividedDifference."
+          "note": "Independent external/classic search completed. Nearest retained evidence: Mathematics Stack Exchange — exact x^3-x=a^3-a equal-height equation."
         }
       },
       "externalSearchQueries": [
@@ -704,27 +705,27 @@
         },
         {
           "pool": "E",
-          "source": "Wolfram Function Repository — PolynomialDividedDifference",
-          "url": "https://resources.wolframcloud.com/FunctionRepository/resources/PolynomialDividedDifference",
+          "source": "Mathematics Stack Exchange — exact x^3-x=a^3-a equal-height equation",
+          "url": "https://math.stackexchange.com/questions/3786413/how-to-find-the-number-of-solutions-for-x-in-x3-%E2%88%92-x-a3-%E2%88%92-a",
           "matchedFingerprintFeatures": [
-            "standard mathematical mechanism or classic-adjacent structure"
+            "same equal-height equation and factorization kernel"
           ],
           "similarity": {
             "wording": 0,
-            "setup": 0,
-            "target": 1,
-            "kernel": 1,
-            "decisiveMechanism": 1,
-            "diagram": 0,
-            "progression": 0,
-            "transferStretch": 0
+            "setup": 3,
+            "target": 3,
+            "kernel": 3,
+            "decisiveMechanism": 3,
+            "diagram": 2,
+            "progression": 2,
+            "transferStretch": 1
           },
-          "explanation": "External retrieval establishes standard ingredients, but no same full target + kernel + reveal sequence was retained in the independent search."
+          "explanation": "Exact/classical kernel is acceptable only because current provenance is truthful; it would fail an independent-original claim."
         }
       ],
       "classicProblemCheck": {
-        "result": "NO_HARD_CLASSIC_COLLISION_RETAINED",
-        "notes": "External search found standard techniques/nearby mathematics but not a hard-fail match to the full authored mathematical fingerprint."
+        "result": "TRUTHFULLY_LABELLED_CLASSIC",
+        "notes": "Current author provenance truthfully labels the externally established kernel classic; H evaluates the authored interview progression separately."
       },
       "fidelityNotes": {
         "accessibleOpening": "The opening is candidate-accessible: factor difference.",
@@ -735,13 +736,13 @@
         "prerequisiteBurden": "Prerequisites are controlled by the authored setup and do not require obscure external facts."
       },
       "requiredChanges": [
-        "Retain nearest-neighbour/repetition notes when promoting; do not infer originality from local-corpus absence."
+        "Retain classic-problem / secondary-reference provenance; the divided-difference interview staging does not make the equal-height kernel original."
       ],
       "bankDisposition": [
-        "Hilbert originality gate cleared",
+        "Hilbert originality gate cleared with truthful provenance",
         "Oxford-fidelity gate cleared"
       ],
-      "wouldRejectIfClaimedOriginal": false,
+      "wouldRejectIfClaimedOriginal": true,
       "similarityClusterRecommendation": {
         "action": "propose",
         "id": "cantor-cubic-graph-structure",
@@ -749,17 +750,17 @@
       },
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
+        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires remaining G/I gates."
       }
     },
     {
       "familyId": "oxford-cantor-integral-sign-landscape",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9"
+        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -815,7 +816,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-cantor-moving-integral-window; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -908,12 +909,12 @@
     },
     {
       "familyId": "oxford-cantor-reciprocal-paired-inputs",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9"
+        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -970,7 +971,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-cantor-moving-integral-window; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -1067,172 +1068,13 @@
       }
     },
     {
-      "familyId": "oxford-cantor-tangent-intersection-locus",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
-      "subjectKind": "same-wave-proposal",
-      "authorPr": {
-        "agent": "C — Cantor",
-        "number": 132,
-        "head": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9"
-      },
-      "reviewedAt": "2026-09-05",
-      "reviewer": {
-        "agent": "H",
-        "name": "Hilbert"
-      },
-      "fingerprint": {
-        "surfaceObjects": [
-          "parabola",
-          "two moving tangents",
-          "intersection locus"
-        ],
-        "constraints": [
-          "y=x^2",
-          "contact parameters u and u+h",
-          "h fixed positive"
-        ],
-        "targetType": "derive locus of intersections for fixed separation of tangency parameters",
-        "centralMechanism": "tangents at u,v intersect at ((u+v)/2,uv), then fixed gap converts product to midpoint square minus h^2/4",
-        "secondaryMechanisms": [
-          "parameter elimination",
-          "slope verification",
-          "scaled parabola"
-        ],
-        "criticalRepresentationChange": "pair of tangent equations -> midpoint/product coordinates -> eliminated locus",
-        "diagramTopology": "two tangents to one parabola whose intersection traces a vertically shifted parallel parabola",
-        "smallCaseSignature": "u=0,h=1; u=1,h=1",
-        "progressionSignature": {
-          "opening": "general tangent line",
-          "firstDeepening": "symmetric intersection formula",
-          "core": "fixed-gap locus",
-          "transfer": "arbitrary h",
-          "stretch": "scaled parabola"
-        },
-        "solutionDependencyGraphSummary": "tangent equation -> intersect -> set v=u+h -> complete square -> surjectivity -> scaled curve",
-        "distinctiveFeatures": [
-          "fixed tangency-parameter separation yields a parallel parabola with exact shift h^2/4"
-        ],
-        "knownClassicOverlap": "Parabola tangent-intersection geometry is classical; exact fixed-gap formulation not confirmed. High originality risk.",
-        "authorProvenance": "Author-created formulation from classical tangent geometry; should receive aggressive Agent H search."
-      },
-      "originalityDecision": "REJECT_TOO_CLOSE",
-      "fidelityDecision": "PASS",
-      "provenanceDisposition": "reject-as-new-original",
-      "retrieval": {
-        "A": {
-          "completed": true,
-          "note": "Deep official benchmark corpus checked. Strongest structural retrieval: OX-2026-TRIG-OSCILLATORY-ROOTS; treated as pedagogy/structure evidence, not originality proof."
-        },
-        "B": {
-          "completed": true,
-          "note": "Broader Oxford reference inventory checked. Strongest structural retrieval: REF-OX-2026-PARABOLA-TRIANGLE-AREA; no absence claim is used as evidence of originality."
-        },
-        "C": {
-          "completed": true,
-          "note": "Current Interview App bank checked against the retained Hilbert baseline. Strongest structural retrieval: oxford-divisors-square-parity."
-        },
-        "D": {
-          "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-cantor-line-envelope; final collision judgments are manual and mechanism-based."
-        },
-        "E": {
-          "completed": true,
-          "note": "Independent external/classic search completed with query \"parabola tangents t1 t2 fixed difference intersection locus\". Nearest retained external evidence: Classical parabola tangent-intersection locus exercises."
-        }
-      },
-      "externalSearchQueries": [
-        "parabola tangents t1 t2 fixed difference intersection locus"
-      ],
-      "nearestMatches": [
-        {
-          "pool": "A",
-          "source": "OX-2026-TRIG-OSCILLATORY-ROOTS",
-          "matchedFingerprintFeatures": [
-            "broad-area or progression neighbour"
-          ],
-          "similarity": {
-            "wording": 0,
-            "setup": 0,
-            "target": 0,
-            "kernel": 0,
-            "decisiveMechanism": 0,
-            "diagram": 0,
-            "progression": 1,
-            "transferStretch": 1
-          },
-          "explanation": "Official benchmark retrieval is used to compare interview shape and progression; it is not treated as an originality match unless mathematics also aligns."
-        },
-        {
-          "pool": "D",
-          "source": "oxford-cantor-line-envelope",
-          "matchedFingerprintFeatures": [
-            "same-wave structural neighbour"
-          ],
-          "similarity": {
-            "wording": 0,
-            "setup": 0,
-            "target": 0,
-            "kernel": 1,
-            "decisiveMechanism": 0,
-            "diagram": 0,
-            "progression": 1,
-            "transferStretch": 1
-          },
-          "explanation": "Nearest same-wave retrieval is retained for global repetition review; broad technique overlap alone does not trigger rejection."
-        },
-        {
-          "pool": "E",
-          "source": "Classical parabola tangent-intersection locus exercises",
-          "url": "https://www.scribd.com/document/40338306/Parabola",
-          "matchedFingerprintFeatures": [
-            "same or near-exact mathematical kernel"
-          ],
-          "similarity": {
-            "wording": 0,
-            "setup": 3,
-            "target": 3,
-            "kernel": 3,
-            "decisiveMechanism": 3,
-            "diagram": 2,
-            "progression": 2,
-            "transferStretch": 1
-          },
-          "explanation": "External retrieval preserves the same or near-same kernel/decisive mechanism strongly enough to control the originality decision."
-        }
-      ],
-      "classicProblemCheck": {
-        "result": "TOO_CLOSE_TO_ESTABLISHED_KERNEL",
-        "notes": "The external match preserves enough of the mathematical fingerprint to fail the independent-original gate."
-      },
-      "fidelityNotes": {
-        "accessibleOpening": "The opening is candidate-accessible: general tangent line.",
-        "promptability": "The progression exposes intermediate tutor checkpoints before the core: symmetric intersection formula.",
-        "reasoningEvidence": "The family elicits observable representation change and proof structure rather than recall alone: pair of tangent equations -> midpoint/product coordinates -> eliminated locus.",
-        "transfer": "The retained transfer/stretch remains inside the same mathematical family: arbitrary h; scaled parabola.",
-        "ceiling": "The core-to-extension progression supplies a credible standard-to-strong ceiling.",
-        "prerequisiteBurden": "Prerequisites are controlled by the authored setup and do not require obscure external facts."
-      },
-      "requiredChanges": [
-        "Do not keep this as a new independent-original family; replace the mathematical kernel or retain only with truthful classic provenance where product policy permits."
-      ],
-      "bankDisposition": [
-        "originality gate blocks current authored family",
-        "Oxford-fidelity gate cleared"
-      ],
-      "wouldRejectIfClaimedOriginal": true,
-      "handoff": {
-        "canProgressAfterGI": false,
-        "note": "Hilbert originality revision/replacement is required before recommendation readiness."
-      }
-    },
-    {
       "familyId": "oxford-cantor-exponential-rotating-line",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9"
+        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -1291,7 +1133,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-cantor-squared-error-recurrence; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -1385,12 +1227,12 @@
     },
     {
       "familyId": "oxford-cantor-mobius-recurrence",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9"
+        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -1428,12 +1270,12 @@
         "distinctiveFeatures": [
           "parabolic fixed point becomes translation y->y+1 under a reciprocal-error coordinate"
         ],
-        "knownClassicOverlap": "Möbius-iteration linearization is classical in spirit; exact recurrence not matched in spot-check.",
-        "authorProvenance": "Independently selected recurrence/progression; correctness edge case above 1 flagged for I."
+        "knownClassicOverlap": "Exact recurrence x_{n+1}=1/(2-x_n), including the reciprocal-error transform y_n=1/(1-x_n), is documented as an established recurrence exercise.",
+        "authorProvenance": "Classic problem / secondary reference; domain/pole extension remains author-structured."
       },
-      "originalityDecision": "REJECT_TOO_CLOSE",
+      "originalityDecision": "PASS_WITH_NOTES",
       "fidelityDecision": "PASS",
-      "provenanceDisposition": "reject-as-new-original",
+      "provenanceDisposition": "truthful-classic",
       "retrieval": {
         "A": {
           "completed": true,
@@ -1449,7 +1291,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-cantor-squared-error-recurrence; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -1517,8 +1359,8 @@
         }
       ],
       "classicProblemCheck": {
-        "result": "TOO_CLOSE_TO_ESTABLISHED_KERNEL",
-        "notes": "The external match preserves enough of the mathematical fingerprint to fail the independent-original gate."
+        "result": "TRUTHFULLY_LABELLED_CLASSIC",
+        "notes": "Current author provenance truthfully labels the externally established kernel classic; H evaluates the authored interview progression separately."
       },
       "fidelityNotes": {
         "accessibleOpening": "The opening is candidate-accessible: compute orbits.",
@@ -1529,26 +1371,26 @@
         "prerequisiteBurden": "Prerequisites are controlled by the authored setup and do not require obscure external facts."
       },
       "requiredChanges": [
-        "Do not keep this as a new independent-original family; replace the mathematical kernel or retain only with truthful classic provenance where product policy permits."
+        "Retain classic-problem / secondary-reference provenance for the exact recurrence and reciprocal-error transform."
       ],
       "bankDisposition": [
-        "originality gate blocks current authored family",
+        "Hilbert originality gate cleared with truthful provenance",
         "Oxford-fidelity gate cleared"
       ],
       "wouldRejectIfClaimedOriginal": true,
       "handoff": {
-        "canProgressAfterGI": false,
-        "note": "Hilbert originality revision/replacement is required before recommendation readiness."
+        "canProgressAfterGI": true,
+        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires remaining G/I gates."
       }
     },
     {
       "familyId": "oxford-cantor-squared-error-recurrence",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9"
+        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -1606,7 +1448,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-cantor-three-cycle-map; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -1700,12 +1542,12 @@
     },
     {
       "familyId": "oxford-cantor-absolute-quadratic-crossings",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9"
+        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -1762,7 +1604,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-cantor-quartic-horizontal-levels; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -1855,12 +1697,12 @@
     },
     {
       "familyId": "oxford-cantor-radical-asymptote",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9"
+        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -1918,7 +1760,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-cantor-shifted-cubic-intersections; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -2011,12 +1853,12 @@
     },
     {
       "familyId": "oxford-cantor-shifted-cubic-intersections",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9"
+        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -2076,7 +1918,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-cantor-cubic-divided-difference; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -2174,12 +2016,12 @@
     },
     {
       "familyId": "oxford-cantor-moving-integral-window",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9"
+        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -2237,7 +2079,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-cantor-integral-sign-landscape; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -2330,12 +2172,12 @@
     },
     {
       "familyId": "oxford-cantor-reciprocal-implicit-curve",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9"
+        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -2393,7 +2235,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-cantor-mobius-involution; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -2487,12 +2329,12 @@
     },
     {
       "familyId": "oxford-cantor-three-cycle-map",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9"
+        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -2551,7 +2393,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-cantor-squared-error-recurrence; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -2650,12 +2492,12 @@
     },
     {
       "familyId": "oxford-cantor-quartic-horizontal-levels",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9"
+        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -2713,7 +2555,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-cantor-absolute-quadratic-crossings; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -2806,12 +2648,12 @@
     },
     {
       "familyId": "oxford-cantor-reciprocal-increment-recurrence",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9"
+        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -2848,12 +2690,12 @@
         "distinctiveFeatures": [
           "constant leading squared increment with logarithmically accumulated correction"
         ],
-        "knownClassicOverlap": "Related asymptotic recurrences are classical; exact author spot-check did not identify this progression.",
-        "authorProvenance": "Independently chosen recurrence/progression; I/G high-risk review requested."
+        "knownClassicOverlap": "Exact recurrence a_{n+1}=a_n+1/a_n and leading asymptotic a_n~sqrt(2n) are documented in public recurrence/asymptotics discussions.",
+        "authorProvenance": "Classic problem / secondary reference; interview staging and c/a_n transfer remain author-structured."
       },
-      "originalityDecision": "REJECT_TOO_CLOSE",
+      "originalityDecision": "PASS_WITH_NOTES",
       "fidelityDecision": "PASS",
-      "provenanceDisposition": "reject-as-new-original",
+      "provenanceDisposition": "truthful-classic",
       "retrieval": {
         "A": {
           "completed": true,
@@ -2869,7 +2711,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-cantor-mobius-recurrence; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -2937,8 +2779,8 @@
         }
       ],
       "classicProblemCheck": {
-        "result": "TOO_CLOSE_TO_ESTABLISHED_KERNEL",
-        "notes": "The external match preserves enough of the mathematical fingerprint to fail the independent-original gate."
+        "result": "TRUTHFULLY_LABELLED_CLASSIC",
+        "notes": "Current author provenance truthfully labels the externally established kernel classic; H evaluates the authored interview progression separately."
       },
       "fidelityNotes": {
         "accessibleOpening": "The opening is candidate-accessible: positivity/monotonicity.",
@@ -2949,183 +2791,26 @@
         "prerequisiteBurden": "Prerequisites are controlled by the authored setup and do not require obscure external facts."
       },
       "requiredChanges": [
-        "Do not keep this as a new independent-original family; replace the mathematical kernel or retain only with truthful classic provenance where product policy permits."
+        "Retain classic-problem / secondary-reference provenance for the exact recurrence/asymptotic kernel."
       ],
       "bankDisposition": [
-        "originality gate blocks current authored family",
+        "Hilbert originality gate cleared with truthful provenance",
         "Oxford-fidelity gate cleared"
       ],
       "wouldRejectIfClaimedOriginal": true,
       "handoff": {
-        "canProgressAfterGI": false,
-        "note": "Hilbert originality revision/replacement is required before recommendation readiness."
-      }
-    },
-    {
-      "familyId": "oxford-cantor-line-envelope",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
-      "subjectKind": "same-wave-proposal",
-      "authorPr": {
-        "agent": "C — Cantor",
-        "number": 132,
-        "head": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9"
-      },
-      "reviewedAt": "2026-09-05",
-      "reviewer": {
-        "agent": "H",
-        "name": "Hilbert"
-      },
-      "fingerprint": {
-        "surfaceObjects": [
-          "one-parameter lines",
-          "upper envelope parabola"
-        ],
-        "constraints": [
-          "L_t(x)=t x-t^2-t",
-          "t real"
-        ],
-        "targetType": "derive pointwise envelope and prove each family member is tangent",
-        "centralMechanism": "for fixed x maximize a concave quadratic in t, then rewrite envelope-minus-line as a square",
-        "secondaryMechanisms": [
-          "slope/contact check",
-          "dual tangent reconstruction",
-          "alpha,beta generalization"
-        ],
-        "criticalRepresentationChange": "family of lines -> optimization in parameter t -> envelope graph",
-        "diagramTopology": "fan of lines tangent from below to a single upward parabola",
-        "smallCaseSignature": "t=-1; t=0; t=1",
-        "progressionSignature": {
-          "opening": "draw lines and conjecture boundary",
-          "firstDeepening": "fix x/optimize t",
-          "core": "complete square + global inequality",
-          "transfer": "alpha,beta family",
-          "stretch": "derive line family back from parabola tangents"
-        },
-        "solutionDependencyGraphSummary": "samples -> parameter optimization -> envelope -> square-difference proof -> tangency -> general coefficients",
-        "distinctiveFeatures": [
-          "parameter equals tangent slope and contact coordinate is 2t+1"
-        ],
-        "knownClassicOverlap": "Envelope-of-lines methodology is classical; exact line family not confirmed. High originality risk.",
-        "authorProvenance": "Author-created simple envelope family from generic classical technique; aggressive H review requested."
-      },
-      "originalityDecision": "REJECT_TOO_CLOSE",
-      "fidelityDecision": "PASS",
-      "provenanceDisposition": "reject-as-new-original",
-      "retrieval": {
-        "A": {
-          "completed": true,
-          "note": "Deep official benchmark corpus checked. Strongest structural retrieval: OX-2026-TRIG-OSCILLATORY-ROOTS; treated as pedagogy/structure evidence, not originality proof."
-        },
-        "B": {
-          "completed": true,
-          "note": "Broader Oxford reference inventory checked. Strongest structural retrieval: REF-OX-2026-ALGEBRA-TANGENT-QUADRATIC; no absence claim is used as evidence of originality."
-        },
-        "C": {
-          "completed": true,
-          "note": "Current Interview App bank checked against the retained Hilbert baseline. Strongest structural retrieval: oxford-even-odd-degrees."
-        },
-        "D": {
-          "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-cantor-tangent-intersection-locus; final collision judgments are manual and mechanism-based."
-        },
-        "E": {
-          "completed": true,
-          "note": "Independent external/classic search completed with query \"parabola tangent line family envelope y=2tx-t^2\". Nearest retained external evidence: Wikipedia — envelope of tangent lines to a parabola."
-        }
-      },
-      "externalSearchQueries": [
-        "parabola tangent line family envelope y=2tx-t^2"
-      ],
-      "nearestMatches": [
-        {
-          "pool": "A",
-          "source": "OX-2026-TRIG-OSCILLATORY-ROOTS",
-          "matchedFingerprintFeatures": [
-            "broad-area or progression neighbour"
-          ],
-          "similarity": {
-            "wording": 0,
-            "setup": 0,
-            "target": 0,
-            "kernel": 0,
-            "decisiveMechanism": 0,
-            "diagram": 0,
-            "progression": 1,
-            "transferStretch": 1
-          },
-          "explanation": "Official benchmark retrieval is used to compare interview shape and progression; it is not treated as an originality match unless mathematics also aligns."
-        },
-        {
-          "pool": "D",
-          "source": "oxford-cantor-tangent-intersection-locus",
-          "matchedFingerprintFeatures": [
-            "same-wave structural neighbour"
-          ],
-          "similarity": {
-            "wording": 0,
-            "setup": 0,
-            "target": 0,
-            "kernel": 1,
-            "decisiveMechanism": 0,
-            "diagram": 0,
-            "progression": 1,
-            "transferStretch": 1
-          },
-          "explanation": "Nearest same-wave retrieval is retained for global repetition review; broad technique overlap alone does not trigger rejection."
-        },
-        {
-          "pool": "E",
-          "source": "Wikipedia — envelope of tangent lines to a parabola",
-          "url": "https://en.wikipedia.org/wiki/Envelope_%28mathematics%29",
-          "matchedFingerprintFeatures": [
-            "same or near-exact mathematical kernel"
-          ],
-          "similarity": {
-            "wording": 0,
-            "setup": 3,
-            "target": 3,
-            "kernel": 3,
-            "decisiveMechanism": 3,
-            "diagram": 2,
-            "progression": 2,
-            "transferStretch": 1
-          },
-          "explanation": "External retrieval preserves the same or near-same kernel/decisive mechanism strongly enough to control the originality decision."
-        }
-      ],
-      "classicProblemCheck": {
-        "result": "TOO_CLOSE_TO_ESTABLISHED_KERNEL",
-        "notes": "The external match preserves enough of the mathematical fingerprint to fail the independent-original gate."
-      },
-      "fidelityNotes": {
-        "accessibleOpening": "The opening is candidate-accessible: draw lines and conjecture boundary.",
-        "promptability": "The progression exposes intermediate tutor checkpoints before the core: fix x/optimize t.",
-        "reasoningEvidence": "The family elicits observable representation change and proof structure rather than recall alone: family of lines -> optimization in parameter t -> envelope graph.",
-        "transfer": "The retained transfer/stretch remains inside the same mathematical family: alpha,beta family; derive line family back from parabola tangents.",
-        "ceiling": "The core-to-extension progression supplies a credible standard-to-strong ceiling.",
-        "prerequisiteBurden": "Prerequisites are controlled by the authored setup and do not require obscure external facts."
-      },
-      "requiredChanges": [
-        "Do not keep this as a new independent-original family; replace the mathematical kernel or retain only with truthful classic provenance where product policy permits."
-      ],
-      "bankDisposition": [
-        "originality gate blocks current authored family",
-        "Oxford-fidelity gate cleared"
-      ],
-      "wouldRejectIfClaimedOriginal": true,
-      "handoff": {
-        "canProgressAfterGI": false,
-        "note": "Hilbert originality revision/replacement is required before recommendation readiness."
+        "canProgressAfterGI": true,
+        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires remaining G/I gates."
       }
     },
     {
       "familyId": "oxford-cantor-mobius-involution",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ 0d4941ab3197b2297ab389d7438df39f599b2ad5",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9"
+        "head": "0d4941ab3197b2297ab389d7438df39f599b2ad5"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -3183,7 +2868,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-cantor-three-cycle-map; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -3340,7 +3025,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-d-balancing-transfers; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -3492,7 +3177,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-d-midpoint-closed-residues; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -3650,7 +3335,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-d-gcd-descent-network; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -3802,7 +3487,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-d-divisor-step-geometry; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -3954,7 +3639,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-d-weighted-cycle-readings; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -4111,7 +3796,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-d-sliding-window-parity; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -4263,7 +3948,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-d-triple-flip-circle; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -4420,7 +4105,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-d-odd-symmetric-difference; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -4572,7 +4257,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-d-three-reversal-permutations; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -4724,7 +4409,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-d-odd-symmetric-difference; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -4876,7 +4561,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-d-cube-twist-equivalence; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -5028,7 +4713,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-d-midpoint-closed-residues; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -5126,12 +4811,12 @@
     },
     {
       "familyId": "oxford-euler-box-diagonal-bisector",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-box-diagonal-bisector.ts @ ee52c053f0c38d7874be2bfdb5a506e0426d341f",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-box-diagonal-bisector.ts @ 165bb3100fb894158969abb808caad5bc9150807",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "ee52c053f0c38d7874be2bfdb5a506e0426d341f"
+        "head": "165bb3100fb894158969abb808caad5bc9150807"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -5191,7 +4876,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-euler-random-chord-midpoint; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -5285,12 +4970,12 @@
     },
     {
       "familyId": "oxford-euler-circle-sweep",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-circle-sweep.ts @ ee52c053f0c38d7874be2bfdb5a506e0426d341f",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-circle-sweep.ts @ 165bb3100fb894158969abb808caad5bc9150807",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "ee52c053f0c38d7874be2bfdb5a506e0426d341f"
+        "head": "165bb3100fb894158969abb808caad5bc9150807"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -5350,7 +5035,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-euler-random-adjacent-consecutives; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -5448,12 +5133,12 @@
     },
     {
       "familyId": "oxford-euler-cooling-data-model",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-cooling-data-model.ts @ ee52c053f0c38d7874be2bfdb5a506e0426d341f",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-cooling-data-model.ts @ 165bb3100fb894158969abb808caad5bc9150807",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "ee52c053f0c38d7874be2bfdb5a506e0426d341f"
+        "head": "165bb3100fb894158969abb808caad5bc9150807"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -5513,7 +5198,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-euler-tank-gauge-model; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -5607,12 +5292,12 @@
     },
     {
       "familyId": "oxford-euler-corner-balanced-tables",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-corner-balanced-tables.ts @ ee52c053f0c38d7874be2bfdb5a506e0426d341f",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-corner-balanced-tables.ts @ 165bb3100fb894158969abb808caad5bc9150807",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "ee52c053f0c38d7874be2bfdb5a506e0426d341f"
+        "head": "165bb3100fb894158969abb808caad5bc9150807"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -5673,7 +5358,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-euler-random-adjacent-consecutives; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -5766,12 +5451,12 @@
     },
     {
       "familyId": "oxford-euler-diagonal-blend-transform",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-diagonal-blend-transform.ts @ ee52c053f0c38d7874be2bfdb5a506e0426d341f",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-diagonal-blend-transform.ts @ 165bb3100fb894158969abb808caad5bc9150807",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "ee52c053f0c38d7874be2bfdb5a506e0426d341f"
+        "head": "165bb3100fb894158969abb808caad5bc9150807"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -5832,7 +5517,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-euler-triangle-midpoint-cycle; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -5930,12 +5615,12 @@
     },
     {
       "familyId": "oxford-euler-kiosk-grid-model",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-kiosk-grid-model.ts @ ee52c053f0c38d7874be2bfdb5a506e0426d341f",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-kiosk-grid-model.ts @ 165bb3100fb894158969abb808caad5bc9150807",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "ee52c053f0c38d7874be2bfdb5a506e0426d341f"
+        "head": "165bb3100fb894158969abb808caad5bc9150807"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -5996,7 +5681,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-euler-tank-gauge-model; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -6089,12 +5774,12 @@
     },
     {
       "familyId": "oxford-euler-locally-balanced-labels",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-locally-balanced-labels.ts @ ee52c053f0c38d7874be2bfdb5a506e0426d341f",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-locally-balanced-labels.ts @ 165bb3100fb894158969abb808caad5bc9150807",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "ee52c053f0c38d7874be2bfdb5a506e0426d341f"
+        "head": "165bb3100fb894158969abb808caad5bc9150807"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -6155,7 +5840,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-euler-random-adjacent-consecutives; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -6248,12 +5933,12 @@
     },
     {
       "familyId": "oxford-euler-periodic-queue-model",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-periodic-queue-model.ts @ ee52c053f0c38d7874be2bfdb5a506e0426d341f",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-periodic-queue-model.ts @ 165bb3100fb894158969abb808caad5bc9150807",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "ee52c053f0c38d7874be2bfdb5a506e0426d341f"
+        "head": "165bb3100fb894158969abb808caad5bc9150807"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -6315,7 +6000,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-euler-stop-on-change; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -6409,12 +6094,12 @@
     },
     {
       "familyId": "oxford-euler-quadrilateral-balance",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-quadrilateral-balance.ts @ ee52c053f0c38d7874be2bfdb5a506e0426d341f",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-quadrilateral-balance.ts @ 165bb3100fb894158969abb808caad5bc9150807",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "ee52c053f0c38d7874be2bfdb5a506e0426d341f"
+        "head": "165bb3100fb894158969abb808caad5bc9150807"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -6475,7 +6160,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-euler-triangle-midpoint-cycle; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -6561,7 +6246,7 @@
         "Hilbert originality gate cleared",
         "Oxford-fidelity gate cleared"
       ],
-      "wouldRejectIfClaimedOriginal": false,
+      "wouldRejectIfClaimedOriginal": true,
       "similarityClusterRecommendation": {
         "action": "retain",
         "id": "euler-distance-loci",
@@ -6574,12 +6259,12 @@
     },
     {
       "familyId": "oxford-euler-random-adjacent-consecutives",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-random-adjacent-consecutives.ts @ ee52c053f0c38d7874be2bfdb5a506e0426d341f",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-random-adjacent-consecutives.ts @ 165bb3100fb894158969abb808caad5bc9150807",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "ee52c053f0c38d7874be2bfdb5a506e0426d341f"
+        "head": "165bb3100fb894158969abb808caad5bc9150807"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -6640,7 +6325,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-euler-random-subset-blocks; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -6733,12 +6418,12 @@
     },
     {
       "familyId": "oxford-euler-random-chord-midpoint",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-random-chord-midpoint.ts @ ee52c053f0c38d7874be2bfdb5a506e0426d341f",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-random-chord-midpoint.ts @ 165bb3100fb894158969abb808caad5bc9150807",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "ee52c053f0c38d7874be2bfdb5a506e0426d341f"
+        "head": "165bb3100fb894158969abb808caad5bc9150807"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -6798,7 +6483,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-euler-triangle-midpoint-cycle; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -6891,12 +6576,12 @@
     },
     {
       "familyId": "oxford-euler-random-halving-interval",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-random-halving-interval.ts @ ee52c053f0c38d7874be2bfdb5a506e0426d341f",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-random-halving-interval.ts @ 165bb3100fb894158969abb808caad5bc9150807",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "ee52c053f0c38d7874be2bfdb5a506e0426d341f"
+        "head": "165bb3100fb894158969abb808caad5bc9150807"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -6958,7 +6643,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-euler-stop-on-change; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -7051,12 +6736,12 @@
     },
     {
       "familyId": "oxford-euler-random-subset-blocks",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-random-subset-blocks.ts @ ee52c053f0c38d7874be2bfdb5a506e0426d341f",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-random-subset-blocks.ts @ 165bb3100fb894158969abb808caad5bc9150807",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "ee52c053f0c38d7874be2bfdb5a506e0426d341f"
+        "head": "165bb3100fb894158969abb808caad5bc9150807"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -7116,7 +6801,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-euler-random-adjacent-consecutives; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -7210,12 +6895,12 @@
     },
     {
       "familyId": "oxford-euler-self-averaging-sets",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-self-averaging-sets.ts @ ee52c053f0c38d7874be2bfdb5a506e0426d341f",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-self-averaging-sets.ts @ 165bb3100fb894158969abb808caad5bc9150807",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "ee52c053f0c38d7874be2bfdb5a506e0426d341f"
+        "head": "165bb3100fb894158969abb808caad5bc9150807"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -7275,7 +6960,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-euler-triangle-midpoint-cycle; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -7368,12 +7053,12 @@
     },
     {
       "familyId": "oxford-euler-stop-on-change",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-stop-on-change.ts @ ee52c053f0c38d7874be2bfdb5a506e0426d341f",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-stop-on-change.ts @ 165bb3100fb894158969abb808caad5bc9150807",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "ee52c053f0c38d7874be2bfdb5a506e0426d341f"
+        "head": "165bb3100fb894158969abb808caad5bc9150807"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -7434,7 +7119,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-euler-random-halving-interval; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -7528,12 +7213,12 @@
     },
     {
       "familyId": "oxford-euler-tank-gauge-model",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-tank-gauge-model.ts @ ee52c053f0c38d7874be2bfdb5a506e0426d341f",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-tank-gauge-model.ts @ 165bb3100fb894158969abb808caad5bc9150807",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "ee52c053f0c38d7874be2bfdb5a506e0426d341f"
+        "head": "165bb3100fb894158969abb808caad5bc9150807"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -7593,7 +7278,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-euler-cooling-data-model; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
@@ -7686,12 +7371,12 @@
     },
     {
       "familyId": "oxford-euler-triangle-midpoint-cycle",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-triangle-midpoint-cycle.ts @ ee52c053f0c38d7874be2bfdb5a506e0426d341f",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-triangle-midpoint-cycle.ts @ 165bb3100fb894158969abb808caad5bc9150807",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "ee52c053f0c38d7874be2bfdb5a506e0426d341f"
+        "head": "165bb3100fb894158969abb808caad5bc9150807"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -7751,7 +7436,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 49 post-pruning C/D/E survivors compared at heads C=c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=ee52c053f0c38d7874be2bfdb5a506e0426d341f. Strongest automated structural retrieval: oxford-euler-random-chord-midpoint; final collision judgments are manual and mechanism-based."
+          "note": "All 47 post-pruning C/D/E survivors compared at heads C=0d4941ab3197b2297ab389d7438df39f599b2ad5, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=165bb3100fb894158969abb808caad5bc9150807. Final collision judgments are manual and mechanism-based."
         },
         "E": {
           "completed": true,
