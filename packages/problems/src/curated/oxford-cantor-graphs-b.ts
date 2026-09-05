@@ -28,7 +28,7 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
       {
         id: "fold-negative-arc",
         description: "Construct |q(x)| by reflecting only the portion of q below the x-axis.",
-        skills: cantorSkills(["visualization", "primary"], ["function-transformations", "supporting"] as never),
+        skills: cantorSkills(["visualization", "primary"], ["representation-switching", "supporting"]),
         concepts: ["function-transformations", "qualitative-function-behavior"]
       },
       {
@@ -228,7 +228,7 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
     canonicalSolution:
       "For |a|<2 the radicand q=x²+a x+1 has negative discriminant and positive leading coefficient, so q>0 on R. Rationalizing gives R_a(x)=(a x+1)/(sqrt(q)+x); after dividing numerator and denominator by x for x→∞, the limit is a/2. For x→-∞, sqrt(q)=-x-a/2+o(1), so R_a(x)=-2x-a/2+o(1)→∞. Differentiating gives R_a'=(2x+a)/(2sqrt(q))-1. If 2x+a≤0, this is plainly negative. If 2x+a>0, then (2x+a)²<4q is equivalent to a²<4, so again the first fraction is <1 and R_a'<0. Thus R_a is strictly decreasing from ∞ toward the unattained limit a/2, so its range is (a/2,∞). At a=2, q=(x+1)² and R_2=|x+1|-x; at a=-2, q=(x-1)² and R_{-2}=|x-1|-x. For |a|>2, q has two real roots and the domain is the union of two exterior intervals.",
     verificationNotes:
-      "At a=2: R_2=1 for x≥-1 and -2x-1 for x<-1. At a=-2: R_{-2}=-1 for x≤1 and 2x? Check: |x-1|-x equals 1-2x for x<1 and -1 for x≥1. Keep this exact in review. For |a|>2, domain is x≤r_- or x≥r_+ where r_±=(-a±sqrt(a²-4))/2.",
+      "At a=2: R_2=1 for x≥-1 and -2x-1 for x<-1. At a=-2: R_{-2}=1-2x for x<1 and R_{-2}=-1 for x≥1. Keep this exact in review. For |a|>2, domain is x≤r_- or x≥r_+ where r_±=(-a±sqrt(a²-4))/2.",
     domains: ["functions", "graph-sketching", "elementary-analysis", "calculus", "algebra"],
     contentConcepts: [
       "asymptotic-behavior",
@@ -307,7 +307,7 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
       {
         id: "small-shift-limit",
         description: "Show the two intersection x-coordinates approach ±1/sqrt(3) as h→0+ and relate these to f'(x)=0.",
-        skills: cantorSkills(["limiting-arguments", "supporting"] as never, ["generalization", "primary"]),
+        skills: cantorSkills(["precision-checking", "supporting"], ["generalization", "primary"]),
         concepts: ["limiting-arguments", "derivative-structure", "turning-points-extrema"]
       }
     ],
@@ -436,7 +436,7 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
       {
         id: "end-limit-without-arctan",
         description: "Prove W(x)→0 as x→∞ using comparison rather than an antiderivative.",
-        skills: cantorSkills(["proof-construction", "primary"], ["limiting-arguments", "supporting"] as never),
+        skills: cantorSkills(["proof-construction", "primary"], ["precision-checking", "supporting"]),
         concepts: ["limiting-arguments", "integral-accumulation"]
       },
       {
@@ -549,7 +549,7 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
     milestones: [
       {
         id: "exclude-axes-and-symmetry",
-        description: "Show x and y are nonzero on the curve and identify sign-change and coordinate-swap symmetries.",
+        description: "Identify (0,0) as an isolated solution; then show every other point has x and y nonzero and record the sign-change and coordinate-swap symmetries.",
         skills: cantorSkills(["precision-checking", "primary"], ["visualization", "supporting"]),
         concepts: ["analytic-curve-geometry", "symmetry-periodicity"]
       },
@@ -575,7 +575,7 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
         id: "closest-points",
         description: "Minimize x²+y² subject to 1/x²+1/y²=1 and find the four closest points (±sqrt(2),±sqrt(2)).",
         skills: cantorSkills(["strategic-simplification", "supporting"], ["proof-construction", "primary"], ["generalization", "supporting"]),
-        concepts: ["optimization-extrema", "inequalities-bounds", "analytic-curve-geometry"]
+        concepts: ["inequalities-bounds", "analytic-curve-geometry"]
       }
     ],
     commonErrors: [
@@ -636,7 +636,6 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
       "roots-intersections",
       "qualitative-function-behavior",
       "asymptotic-behavior",
-      "optimization-extrema",
       "inequalities-bounds"
     ],
     prerequisiteConcepts: ["algebraic-manipulation", "equations-inequalities", "coordinate-geometry-basics", "functions-graphs"],
