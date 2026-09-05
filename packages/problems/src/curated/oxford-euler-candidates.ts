@@ -1,12 +1,10 @@
 import { oxfordEulerQuadrilateralBalanceEntry, oxfordEulerQuadrilateralBalanceSpec } from "./oxford-euler-quadrilateral-balance.js";
-import { oxfordEulerRectangleAreaTableEntry, oxfordEulerRectangleAreaTableSpec } from "./oxford-euler-rectangle-area-table.js";
 import { oxfordEulerRandomChordMidpointEntry, oxfordEulerRandomChordMidpointSpec } from "./oxford-euler-random-chord-midpoint.js";
 import { oxfordEulerCircleSweepEntry, oxfordEulerCircleSweepSpec } from "./oxford-euler-circle-sweep.js";
 import { oxfordEulerTriangleMidpointCycleEntry, oxfordEulerTriangleMidpointCycleSpec } from "./oxford-euler-triangle-midpoint-cycle.js";
 import { oxfordEulerBoxDiagonalBisectorEntry, oxfordEulerBoxDiagonalBisectorSpec } from "./oxford-euler-box-diagonal-bisector.js";
 import { oxfordEulerLocallyBalancedLabelsEntry, oxfordEulerLocallyBalancedLabelsSpec } from "./oxford-euler-locally-balanced-labels.js";
 import { oxfordEulerDiagonalBlendTransformEntry, oxfordEulerDiagonalBlendTransformSpec } from "./oxford-euler-diagonal-blend-transform.js";
-import { oxfordEulerDifferenceClosedSetsEntry, oxfordEulerDifferenceClosedSetsSpec } from "./oxford-euler-difference-closed-sets.js";
 import { oxfordEulerSelfAveragingSetsEntry, oxfordEulerSelfAveragingSetsSpec } from "./oxford-euler-self-averaging-sets.js";
 import { oxfordEulerCornerBalancedTablesEntry, oxfordEulerCornerBalancedTablesSpec } from "./oxford-euler-corner-balanced-tables.js";
 import { oxfordEulerTankGaugeModelEntry, oxfordEulerTankGaugeModelSpec } from "./oxford-euler-tank-gauge-model.js";
@@ -20,14 +18,12 @@ import { oxfordEulerRandomHalvingIntervalEntry, oxfordEulerRandomHalvingInterval
 
 export const eulerOxfordCandidateSpecs = Object.freeze([
   oxfordEulerQuadrilateralBalanceSpec,
-  oxfordEulerRectangleAreaTableSpec,
   oxfordEulerRandomChordMidpointSpec,
   oxfordEulerCircleSweepSpec,
   oxfordEulerTriangleMidpointCycleSpec,
   oxfordEulerBoxDiagonalBisectorSpec,
   oxfordEulerLocallyBalancedLabelsSpec,
   oxfordEulerDiagonalBlendTransformSpec,
-  oxfordEulerDifferenceClosedSetsSpec,
   oxfordEulerSelfAveragingSetsSpec,
   oxfordEulerCornerBalancedTablesSpec,
   oxfordEulerTankGaugeModelSpec,
@@ -42,14 +38,12 @@ export const eulerOxfordCandidateSpecs = Object.freeze([
 
 export const eulerOxfordCandidateEntries = Object.freeze([
   oxfordEulerQuadrilateralBalanceEntry,
-  oxfordEulerRectangleAreaTableEntry,
   oxfordEulerRandomChordMidpointEntry,
   oxfordEulerCircleSweepEntry,
   oxfordEulerTriangleMidpointCycleEntry,
   oxfordEulerBoxDiagonalBisectorEntry,
   oxfordEulerLocallyBalancedLabelsEntry,
   oxfordEulerDiagonalBlendTransformEntry,
-  oxfordEulerDifferenceClosedSetsEntry,
   oxfordEulerSelfAveragingSetsEntry,
   oxfordEulerCornerBalancedTablesEntry,
   oxfordEulerTankGaugeModelEntry,
