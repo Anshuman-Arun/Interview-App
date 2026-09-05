@@ -15,7 +15,7 @@ describe("Oxford mathematical correctness audit gate", () => {
     const parsed = JSON.parse(raw) as unknown;
     expect(() => assertOxfordCorrectnessReviewBatch(parsed)).not.toThrow();
     if (!Array.isArray(parsed)) throw new Error("Expected review record array");
-    expect(parsed).toHaveLength(63);
+    expect(parsed).toHaveLength(61);
   });
 
   it("pins every current C/D/E review to an author head", () => {
@@ -25,19 +25,19 @@ describe("Oxford mathematical correctness audit gate", () => {
     );
     const parsed = JSON.parse(raw) as OxfordCorrectnessReviewRecord[];
     const authorRecords = parsed.filter((record) => record.source.kind === "author-pr");
-    expect(authorRecords).toHaveLength(49);
-    expect(authorRecords.filter((record) => record.source.authorAgent === "C — Cantor")).toHaveLength(20);
+    expect(authorRecords).toHaveLength(47);
+    expect(authorRecords.filter((record) => record.source.authorAgent === "C — Cantor")).toHaveLength(18);
     expect(authorRecords.filter((record) => record.source.authorAgent === "D — Dirichlet")).toHaveLength(12);
     expect(authorRecords.filter((record) => record.source.authorAgent === "E — Euler")).toHaveLength(17);
-    expect(authorRecords.filter((record) => record.mathematicalCorrectness === "approved")).toHaveLength(49);
+    expect(authorRecords.filter((record) => record.mathematicalCorrectness === "approved")).toHaveLength(47);
     expect(authorRecords.filter((record) => record.mathematicalCorrectness === "changes-required")).toHaveLength(0);
     for (const record of authorRecords) {
       const expectedHead =
         record.source.authorAgent === "C — Cantor"
-          ? "5499bdc6dfc3ce40b127e8c9fa2a0722c8021a7a"
+          ? "0d4941ab3197b2297ab389d7438df39f599b2ad5"
           : record.source.authorAgent === "D — Dirichlet"
             ? "ecece22058c997d37c4b352fa5ed32bd1daf5243"
-            : "e5f5b431a5dea843d69e6451b1114c7aa0c76532";
+            : "165bb3100fb894158969abb808caad5bc9150807";
       expect(record.source.reviewedAuthorHead).toBe(expectedHead);
     }
   });
