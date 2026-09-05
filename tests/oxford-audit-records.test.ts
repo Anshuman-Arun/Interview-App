@@ -108,8 +108,8 @@ describe("Oxford originality/fidelity audit records", () => {
 
     const expected = new Map<number, { head: string; surviving: number }>([
       [132, { head: "8b22dc5df99111fb95e27a2c006d5e74544dd385", surviving: 17 }],
-      [133, { head: "65d570a1f6dad3773edb7eea4568d9399f3164c8", surviving: 11 }],
-      [134, { head: "1ce96b5b89be971399cab5080d4487a908ea294d", surviving: 13 }]
+      [133, { head: "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c", surviving: 11 }],
+      [134, { head: "8846c612825d2b8ae53a81f6f8861fd851f452c6", surviving: 13 }]
     ]);
 
     for (const [pr, expectedState] of expected) {
