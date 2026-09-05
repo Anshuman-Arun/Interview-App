@@ -8,7 +8,7 @@ export const oxfordDIdempotentMapsSpec: CuratedProblemSpec = {
   category: "logic and proof",
   topics: ["finite functions", "counting", "structure"],
   difficulty: "uncalibrated-oxford-candidate",
-  prompt: "Let X be an n-element labelled set and let f:X->X satisfy f(f(x))=f(x) for every x. First understand what such a map must look like. Then count how many such maps exist, and refine the count when exactly k points occur in the image.",
+  prompt: "Let X be an n-element labelled set with n>=1, and let f:X->X satisfy f(f(x))=f(x) for every x. First understand what such a map must look like. Then count how many such maps exist, and refine the count when exactly k points occur in the image.",
   givenInformation: ["The condition f(f(x))=f(x) is often called idempotence, but no prior knowledge of that term is needed.", "The set X is labelled, so different choices of fixed points count separately."],
   approaches: [{ id: "image-fixed-points", label: "Identify image points with fixed points, then count by choosing the image first" }],
   milestones: [
