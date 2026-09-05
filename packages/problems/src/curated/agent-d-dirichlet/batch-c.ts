@@ -6,7 +6,7 @@ export const oxfordDDiscreteMaximumPrincipleSpec: CuratedProblemSpec = {
   title: "A Discrete Maximum Principle on a Graph",
   mode: "OXFORD_MATHEMATICS",
   category: "graph theory",
-  topics: ["graph theory", "extremal reasoning", "averages"],
+  topics: ["extremal reasoning", "averages"],
   difficulty: "uncalibrated-oxford-candidate",
   prompt: "Let G be a finite connected graph with at least two vertices. Put a real number f(v) at every vertex, and suppose each vertex value equals the average of the values at its neighbors. Prove that all vertex values are equal. Then investigate what remains true if the averaging rule is imposed only away from a nonempty set of boundary vertices.",
   givenInformation: ["The graph is finite, connected, and has no isolated vertices.", "Each average is taken over all neighbors of the vertex."],
