@@ -1,0 +1,1922 @@
+{
+  "schemaVersion": 1,
+  "agent": "H — Hilbert",
+  "basedOnMainCommit": "454a2fe993c8fd70676d04e5d262a1780161f0d6",
+  "reviewedAt": "2026-09-05",
+  "scopeNote": "Risk-prioritized same-wave batch: four families from each of Agent C PR #132, Agent D PR #133, and Agent E PR #134. Every record independently completes all five required pools; author self-assessment is treated only as a retrieval lead.",
+  "summary": {
+    "totalFamilies": 12,
+    "authorPrs": [
+      {
+        "agent": "C — Cantor",
+        "number": 132,
+        "count": 4
+      },
+      {
+        "agent": "D — Dirichlet",
+        "number": 133,
+        "count": 4
+      },
+      {
+        "agent": "E — Euler",
+        "number": 134,
+        "count": 4
+      }
+    ],
+    "originality": {
+      "PASS": 0,
+      "PASS_WITH_NOTES": 4,
+      "REVISE": 2,
+      "REJECT_TOO_CLOSE": 6
+    },
+    "fidelity": {
+      "PASS": 9,
+      "PASS_WITH_NOTES": 3,
+      "REVISE": 0,
+      "REJECT_NOT_OXFORD_LIKE": 0
+    },
+    "clusters": [
+      {
+        "id": "parameter-envelope",
+        "action": "retain",
+        "families": [
+          "oxford-cantor-moving-v-envelope",
+          "oxford-cantor-line-envelope"
+        ]
+      },
+      {
+        "id": "closure-classification-residue-affine",
+        "action": "retain/consider-broader-cross-agent-cluster",
+        "families": [
+          "oxford-d-thirds-closed-integers",
+          "oxford-d-midpoint-closed-residues"
+        ]
+      },
+      {
+        "id": "euler-distance-loci",
+        "action": "retain",
+        "families": [
+          "oxford-euler-quadrilateral-balance",
+          "oxford-euler-circle-sweep"
+        ]
+      },
+      {
+        "id": "euler-affine-dynamics",
+        "action": "retain",
+        "families": [
+          "oxford-euler-diagonal-blend-transform",
+          "oxford-euler-triangle-midpoint-cycle"
+        ]
+      },
+      {
+        "id": "finite-closure-arithmetic-structure",
+        "action": "propose-if-revised-euler-closure-survives",
+        "families": [
+          "oxford-d-thirds-closed-integers",
+          "oxford-euler-difference-closed-sets"
+        ]
+      }
+    ]
+  },
+  "audits": [
+    {
+      "familyId": "oxford-cantor-moving-v-envelope",
+      "sourceRef": "PR #132 packages/problems/src/curated/oxford-cantor-graphs-a.ts",
+      "subjectKind": "same-wave-proposal",
+      "authorPr": {
+        "agent": "C — Cantor",
+        "number": 132,
+        "head": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9"
+      },
+      "reviewedAt": "2026-09-05",
+      "reviewer": {
+        "agent": "H",
+        "name": "Hilbert"
+      },
+      "fingerprint": {
+        "surfaceObjects": [
+          "one-parameter V-shaped absolute-value graphs",
+          "pointwise lower envelope"
+        ],
+        "constraints": [
+          "g_t(x)=|x-t|+t^2",
+          "t ranges over all reals",
+          "minimize over t for fixed x"
+        ],
+        "targetType": "derive, sketch, and generalize the lower envelope",
+        "centralMechanism": "infimal convolution of absolute value with a quadratic; branch-constrained quadratic minimization produces a Huber/Moreau envelope",
+        "secondaryMechanisms": [
+          "moving-vertex visualization",
+          "branch-feasibility checks",
+          "smooth-join verification"
+        ],
+        "criticalRepresentationChange": "freeze x and optimize over the parameter t",
+        "diagramTopology": "moving V-shaped graphs with vertices on a parabola and a three-piece lower boundary",
+        "smallCaseSignature": "t=-1,0,1 reveal moving vertices before the optimizer switch",
+        "progressionSignature": {
+          "opening": "sketch V-shapes",
+          "firstDeepening": "treat t as optimization variable",
+          "core": "solve constrained branch minima",
+          "transfer": "scale the quadratic penalty",
+          "stretch": "check smoothness at joins"
+        },
+        "solutionDependencyGraphSummary": "moving graphs -> parameter optimization -> two constrained quadratics -> feasibility thresholds -> quadratic-center/linear-tail envelope",
+        "distinctiveFeatures": [
+          "quadratic middle with linear tails",
+          "switches at optimizer-feasibility boundaries"
+        ],
+        "knownClassicOverlap": "The resulting construction is the Moreau-Yosida envelope of |x|, i.e. a scaled Huber function, after a variable substitution.",
+        "authorProvenance": "Metadata currently defaults to original / independent-original; author fingerprint reported no exact classic match."
+      },
+      "originalityDecision": "REVISE",
+      "fidelityDecision": "PASS",
+      "provenanceDisposition": "change-to-structural-adaptation-or-classic-adjacent",
+      "retrieval": {
+        "A": {
+          "completed": true,
+          "note": "Deep benchmark corpus checked; no benchmark has the Huber/Moreau kernel. OX-2026-ITERATED-FUNCTION-SKETCH is only a broad graph/parameter neighbour."
+        },
+        "B": {
+          "completed": true,
+          "note": "Broad inventory checked; no exact infimal-convolution/envelope fingerprint appears."
+        },
+        "C": {
+          "completed": true,
+          "note": "Current app bank checked; no matching parameter-envelope family exists."
+        },
+        "D": {
+          "completed": true,
+          "note": "Compared all C/D/E proposals. Cantor's line-envelope is the strongest same-wave neighbour and is already author-clustered with this family as parameter-envelope."
+        },
+        "E": {
+          "completed": true,
+          "note": "External search identified the exact Moreau-envelope/Huber mathematical construction."
+        }
+      },
+      "externalSearchQueries": [
+        "min_t |x-t| + t^2 Huber Moreau envelope absolute value",
+        "absolute value quadratic infimal convolution piecewise quadratic linear"
+      ],
+      "nearestMatches": [
+        {
+          "pool": "D",
+          "source": "oxford-cantor-line-envelope",
+          "matchedFingerprintFeatures": [
+            "pointwise optimization over a real parameter",
+            "three-step sketch→optimize→prove envelope progression"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 1,
+            "target": 1,
+            "kernel": 1,
+            "decisiveMechanism": 1,
+            "diagram": 1,
+            "progression": 2,
+            "transferStretch": 2
+          },
+          "explanation": "Same author cluster and repeated parameter-envelope pedagogy, but lower-V infimal convolution and tangent-line supremum are different kernels."
+        },
+        {
+          "pool": "E",
+          "source": "Moreau-Yosida envelope of absolute value / Huber function",
+          "url": "https://www.tandfonline.com/doi/full/10.1080/00031305.2024.2308821",
+          "matchedFingerprintFeatures": [
+            "minimization of absolute value plus quadratic",
+            "piecewise quadratic/linear envelope",
+            "scaled threshold parameter"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 2,
+            "target": 2,
+            "kernel": 2,
+            "decisiveMechanism": 1,
+            "diagram": 0,
+            "progression": 1,
+            "transferStretch": 2
+          },
+          "explanation": "The mathematical object is standard and exact after substituting y=x-t, but the moving-V interview representation and discovery path are not copied from this source."
+        }
+      ],
+      "classicProblemCheck": {
+        "result": "CLASSIC_CONSTRUCTION",
+        "notes": "Underlying envelope is standard Huber/Moreau mathematics; current independent-original provenance overstates novelty."
+      },
+      "fidelityNotes": {
+        "accessibleOpening": "Strong visual opening with easy sample sketches.",
+        "promptability": "Tutor can redirect from x to the parameter without revealing the branch calculation.",
+        "reasoningEvidence": "Graph sketching, representation switching, case analysis, proof and precision are all observable.",
+        "transfer": "Scaling the penalty and checking join smoothness remain in-family.",
+        "ceiling": "Good standard-to-strong ceiling without an unrelated topic jump.",
+        "prerequisiteBurden": "Low; completing the square suffices."
+      },
+      "requiredChanges": [
+        "Change provenance away from independent-original and explicitly note the Huber/Moreau classic construction.",
+        "Retain the existing parameter-envelope similarity cluster."
+      ],
+      "bankDisposition": [
+        "Oxford-fidelity approved",
+        "originality revision required before recommendation readiness"
+      ],
+      "wouldRejectIfClaimedOriginal": true,
+      "similarityClusterRecommendation": {
+        "action": "retain",
+        "id": "parameter-envelope",
+        "note": "Correctly groups the two Cantor envelope families for repetition control."
+      },
+      "handoff": {
+        "canProgressAfterGI": false,
+        "note": "Fidelity can progress; originality/provenance must be revised and re-approved by Hilbert first."
+      }
+    },
+    {
+      "familyId": "oxford-cantor-tangent-intersection-locus",
+      "sourceRef": "PR #132 packages/problems/src/curated/oxford-cantor-functions-a.ts",
+      "subjectKind": "same-wave-proposal",
+      "authorPr": {
+        "agent": "C — Cantor",
+        "number": 132,
+        "head": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9"
+      },
+      "reviewedAt": "2026-09-05",
+      "reviewer": {
+        "agent": "H",
+        "name": "Hilbert"
+      },
+      "fingerprint": {
+        "surfaceObjects": [
+          "parabola y=x^2",
+          "two tangents with fixed contact-parameter gap",
+          "moving intersection"
+        ],
+        "constraints": [
+          "contacts u and u+h",
+          "h>0 fixed"
+        ],
+        "targetType": "derive and sketch the locus of tangent intersections",
+        "centralMechanism": "intersection coordinates are midpoint/product of contact parameters; fixed difference eliminates the parameter into a parallel parabola",
+        "secondaryMechanisms": [
+          "tangent equation",
+          "completing the square",
+          "surjectivity of the parameterization"
+        ],
+        "criticalRepresentationChange": "two tangent equations -> symmetric midpoint/product coordinates -> eliminated locus",
+        "diagramTopology": "two tangents to one parabola whose intersection traces a vertically shifted parallel parabola",
+        "smallCaseSignature": "u=0 and u=1 at gap 1 expose the shifted-parabola pattern",
+        "progressionSignature": {
+          "opening": "derive a tangent",
+          "firstDeepening": "intersect tangents at u,v",
+          "core": "impose fixed gap",
+          "transfer": "eliminate parameter",
+          "stretch": "generalize gap and parabola scale"
+        },
+        "solutionDependencyGraphSummary": "tangent formula -> symmetric intersection -> v=u+h -> midpoint substitution -> y=x^2-h^2/4",
+        "distinctiveFeatures": [
+          "fixed tangency-parameter separation",
+          "parallel-parabola locus",
+          "midpoint/product intersection coordinates"
+        ],
+        "knownClassicOverlap": "Classical parabola tangent-locus exercises use the same t1,t2 intersection coordinates and fixed relations between tangent parameters to derive a locus.",
+        "authorProvenance": "Metadata defaults to original / independent-original; author itself flagged high originality risk."
+      },
+      "originalityDecision": "REJECT_TOO_CLOSE",
+      "fidelityDecision": "PASS",
+      "provenanceDisposition": "reject-as-new-original",
+      "retrieval": {
+        "A": {
+          "completed": true,
+          "note": "OX-SAMPLE-LADDER-TRACE is the nearest deep benchmark at the pedagogical level (visual locus→algebra), but its moving-object constraint and decisive mechanism differ."
+        },
+        "B": {
+          "completed": true,
+          "note": "REF-OX-SAMPLE-LADDER-TRACE is the nearest broad-inventory shape; no exact tangent-locus record exists."
+        },
+        "C": {
+          "completed": true,
+          "note": "Current bank checked; triangle-medians and other geometry fixtures do not share this tangent parameter kernel."
+        },
+        "D": {
+          "completed": true,
+          "note": "Compared C/D/E. Cantor's line-envelope shares parabola tangent parameter geometry but asks for an envelope rather than intersections; no exact same-wave duplicate."
+        },
+        "E": {
+          "completed": true,
+          "note": "External conic-geometry sources contain the standard two-tangent parameter formula and tangent-locus exercises driven by conditions on t1,t2; the candidate preserves that kernel and reveal path."
+        }
+      },
+      "externalSearchQueries": [
+        "parabola tangents t1 t2 intersection fixed difference locus parallel parabola",
+        "two tangents parabola point intersection t1-t2 constant locus"
+      ],
+      "nearestMatches": [
+        {
+          "pool": "A",
+          "source": "OX-SAMPLE-LADDER-TRACE",
+          "url": "https://www.ox.ac.uk/admissions/undergraduate/applying/guide-for-applicants/interviews/sample_questions",
+          "matchedFingerprintFeatures": [
+            "moving locus",
+            "visual conjecture then algebraic characterization",
+            "parameterized transfer"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 1,
+            "target": 1,
+            "kernel": 0,
+            "decisiveMechanism": 0,
+            "diagram": 1,
+            "progression": 2,
+            "transferStretch": 1
+          },
+          "explanation": "Interview shape is related, but the physical ladder locus and tangent-parameter mechanism are mathematically distinct."
+        },
+        {
+          "pool": "D",
+          "source": "oxford-cantor-line-envelope",
+          "matchedFingerprintFeatures": [
+            "parabola tangents",
+            "parameterized tangent lines",
+            "coordinate/parameter elimination"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 1,
+            "target": 1,
+            "kernel": 1,
+            "decisiveMechanism": 1,
+            "diagram": 1,
+            "progression": 1,
+            "transferStretch": 1
+          },
+          "explanation": "Creates repetition risk inside Cantor's graph/calculus batch, but target and core kernel differ."
+        },
+        {
+          "pool": "E",
+          "source": "Classical parabola tangent-locus exercises",
+          "url": "https://www.scribd.com/document/40338306/Parabola",
+          "matchedFingerprintFeatures": [
+            "intersection of tangents parameterized by t1,t2",
+            "fixed relation involving t1-t2",
+            "eliminate tangent parameters to obtain a locus"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 3,
+            "target": 3,
+            "kernel": 3,
+            "decisiveMechanism": 3,
+            "diagram": 3,
+            "progression": 2,
+            "transferStretch": 2
+          },
+          "explanation": "This is not merely a shared tangent technique: it is the same parametric tangent-intersection kernel and the same eliminate-a-fixed-parameter-relation discovery route."
+        }
+      ],
+      "classicProblemCheck": {
+        "result": "TOO_CLOSE_TO_CLASSIC_FAMILY",
+        "notes": "Fixed-gap phrasing is a cosmetic/specialized member of a classical tangent-intersection locus family."
+      },
+      "fidelityNotes": {
+        "accessibleOpening": "Tangent-at-u is a productive technique check.",
+        "promptability": "Intersection coordinates and fixed-gap elimination support natural incremental prompts.",
+        "reasoningEvidence": "Technique, representation switching, locus reasoning, proof, graph sketching and transfer are visible.",
+        "transfer": "Changing h and scaling the parabola are coherent.",
+        "ceiling": "Solid strong ceiling without excessive prerequisites.",
+        "prerequisiteBurden": "Standard differentiation and coordinate algebra only."
+      },
+      "requiredChanges": [
+        "Do not merge this family as a new independent-original production candidate; replace it with a mathematically different kernel rather than cosmetic tangent-parameter changes."
+      ],
+      "bankDisposition": [
+        "Oxford-like but too close to a classical problem family",
+        "reject from adaptive-original candidate pool"
+      ],
+      "wouldRejectIfClaimedOriginal": true,
+      "similarityClusterRecommendation": {
+        "action": "none",
+        "note": "Rejection is stronger than clustering; no new cluster is needed for this family."
+      },
+      "handoff": {
+        "canProgressAfterGI": false,
+        "note": "Fidelity passes independently, but originality is a hard rejection."
+      }
+    },
+    {
+      "familyId": "oxford-cantor-exponential-rotating-line",
+      "sourceRef": "PR #132 packages/problems/src/curated/oxford-cantor-functions-a.ts",
+      "subjectKind": "same-wave-proposal",
+      "authorPr": {
+        "agent": "C — Cantor",
+        "number": 132,
+        "head": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9"
+      },
+      "reviewedAt": "2026-09-05",
+      "reviewer": {
+        "agent": "H",
+        "name": "Hilbert"
+      },
+      "fingerprint": {
+        "surfaceObjects": [
+          "exponential graph",
+          "line through the origin with variable slope"
+        ],
+        "constraints": [
+          "e^x=a x",
+          "a>0"
+        ],
+        "targetType": "classify root count and exact transition slope, then scale the exponent",
+        "centralMechanism": "minimize e^x/x or identify the tangent line from the origin; threshold is a=e",
+        "secondaryMechanisms": [
+          "sign restriction",
+          "convex/monotone ratio analysis",
+          "parameter scaling"
+        ],
+        "criticalRepresentationChange": "intersection equation -> required-slope function e^x/x",
+        "diagramTopology": "rotating rays through the origin intersect a convex exponential zero/one/two times",
+        "smallCaseSignature": "a=1,e,3 distinguish the regimes",
+        "progressionSignature": {
+          "opening": "predict graph intersections",
+          "firstDeepening": "restrict x>0",
+          "core": "minimize e^x/x",
+          "transfer": "prove root-count regimes",
+          "stretch": "transfer to e^(bx)=a x"
+        },
+        "solutionDependencyGraphSummary": "sign -> ratio -> derivative -> unique minimum e -> 0/1/2 roots -> rescaled threshold be",
+        "distinctiveFeatures": [
+          "threshold at x=1,a=e",
+          "rotating-line tangency interpretation"
+        ],
+        "knownClassicOverlap": "Exact standard calculus/root-count exercise.",
+        "authorProvenance": "Author metadata truthfully sets originType classic-problem and sourceCategory secondary-reference."
+      },
+      "originalityDecision": "PASS_WITH_NOTES",
+      "fidelityDecision": "PASS_WITH_NOTES",
+      "provenanceDisposition": "truthful-classic",
+      "retrieval": {
+        "A": {
+          "completed": true,
+          "note": "Deep corpus checked; no exact exponential-line benchmark. OX-2026-ITERATED-FUNCTION-SKETCH shares technique-to-concept graph work only."
+        },
+        "B": {
+          "completed": true,
+          "note": "Broad inventory checked; graph-intersection/root-count references are structural neighbours, not this exact equation."
+        },
+        "C": {
+          "completed": true,
+          "note": "Current bank checked; no exponential root-count duplicate."
+        },
+        "D": {
+          "completed": true,
+          "note": "Compared all C/D/E proposals; no same-wave family shares the e^x/x threshold kernel."
+        },
+        "E": {
+          "completed": true,
+          "note": "External search confirms the exact e^x=a x threshold-at-e problem is standard."
+        }
+      },
+      "externalSearchQueries": [
+        "e^x = a x number real solutions threshold e",
+        "Ax=e^x two solutions A>e"
+      ],
+      "nearestMatches": [
+        {
+          "pool": "B",
+          "source": "REF-OX-2026-QUADRATIC-COSINE-CROSSINGS",
+          "url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/visualisation-solutions",
+          "matchedFingerprintFeatures": [
+            "graph intersection counting",
+            "prove no hidden crossings"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 1,
+            "target": 1,
+            "kernel": 0,
+            "decisiveMechanism": 0,
+            "diagram": 1,
+            "progression": 1,
+            "transferStretch": 0
+          },
+          "explanation": "Shared graph-root-count pedagogy only; functions and decisive mechanism differ."
+        },
+        {
+          "pool": "E",
+          "source": "Mathematics Stack Exchange — Ax=e^x threshold",
+          "url": "https://math.stackexchange.com/a/243797",
+          "matchedFingerprintFeatures": [
+            "same equation family",
+            "same threshold a=e",
+            "same zero/one/two root classification"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 3,
+            "target": 3,
+            "kernel": 3,
+            "decisiveMechanism": 3,
+            "diagram": 2,
+            "progression": 2,
+            "transferStretch": 1
+          },
+          "explanation": "Exact classic kernel. This is acceptable here only because the candidate is already truthfully labelled classic rather than independent-original."
+        }
+      ],
+      "classicProblemCheck": {
+        "result": "TRUTHFULLY_LABELLED_CLASSIC",
+        "notes": "The mathematical kernel is standard; author provenance is accurate and the interview progression is independently packaged."
+      },
+      "fidelityNotes": {
+        "accessibleOpening": "Graphing an exponential and rotating line is immediate.",
+        "promptability": "Sign restriction, ratio reformulation and tangency can be prompted separately.",
+        "reasoningEvidence": "Graph sketching, representation switching, calculus, proof and case analysis are all observable.",
+        "transfer": "The b-parameter scaling is natural.",
+        "ceiling": "Moderate-to-strong but somewhat familiar for candidates with calculus practice.",
+        "prerequisiteBurden": "Requires basic exponential differentiation."
+      },
+      "requiredChanges": [
+        "Retain explicit classic provenance and do not describe the kernel as original.",
+        "Treat prior exposure as a selection/repetition consideration."
+      ],
+      "bankDisposition": [
+        "truthfully-classic family may remain eligible after other independent gates",
+        "not an adaptive-original family"
+      ],
+      "wouldRejectIfClaimedOriginal": true,
+      "similarityClusterRecommendation": {
+        "action": "none",
+        "note": "No same-wave repetition cluster is justified beyond its classic provenance."
+      },
+      "handoff": {
+        "canProgressAfterGI": true,
+        "note": "Hilbert originality/provenance and fidelity pass with notes; can progress once G and I also pass it."
+      }
+    },
+    {
+      "familyId": "oxford-cantor-line-envelope",
+      "sourceRef": "PR #132 packages/problems/src/curated/oxford-cantor-functions-b.ts",
+      "subjectKind": "same-wave-proposal",
+      "authorPr": {
+        "agent": "C — Cantor",
+        "number": 132,
+        "head": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9"
+      },
+      "reviewedAt": "2026-09-05",
+      "reviewer": {
+        "agent": "H",
+        "name": "Hilbert"
+      },
+      "fingerprint": {
+        "surfaceObjects": [
+          "one-parameter family of lines",
+          "parabolic upper envelope"
+        ],
+        "constraints": [
+          "L_t(x)=t x-t^2-t",
+          "t real"
+        ],
+        "targetType": "derive pointwise envelope, prove side inequality, and identify tangency",
+        "centralMechanism": "maximize a concave quadratic in t and rewrite envelope-minus-line as a square",
+        "secondaryMechanisms": [
+          "contact slope check",
+          "dual tangent reconstruction",
+          "coefficient generalization"
+        ],
+        "criticalRepresentationChange": "line family -> optimization over tangent parameter -> envelope curve",
+        "diagramTopology": "fan of lines tangent from below to a single parabola",
+        "smallCaseSignature": "t=-1,0,1 visibly suggest the parabolic boundary",
+        "progressionSignature": {
+          "opening": "draw lines",
+          "firstDeepening": "fix x and optimize t",
+          "core": "complete square for envelope",
+          "transfer": "prove global side inequality",
+          "stretch": "recover tangency/general family"
+        },
+        "solutionDependencyGraphSummary": "sample lines -> parameter quadratic -> maximum parabola -> square identity -> unique contact/tangent slope",
+        "distinctiveFeatures": [
+          "parameter is tangent slope",
+          "contact coordinate affine in t"
+        ],
+        "knownClassicOverlap": "Standard textbook envelope of tangent lines to a parabola, up to affine rescaling/translation.",
+        "authorProvenance": "Metadata defaults to original / independent-original; author flagged high originality risk."
+      },
+      "originalityDecision": "REJECT_TOO_CLOSE",
+      "fidelityDecision": "PASS",
+      "provenanceDisposition": "reject-as-new-original",
+      "retrieval": {
+        "A": {
+          "completed": true,
+          "note": "Deep corpus checked; no exact line-envelope benchmark."
+        },
+        "B": {
+          "completed": true,
+          "note": "Broad inventory checked; no line-envelope fingerprint, though parameterized graph work is common."
+        },
+        "C": {
+          "completed": true,
+          "note": "Current bank checked; no tangent-envelope duplicate."
+        },
+        "D": {
+          "completed": true,
+          "note": "Compared C/D/E. Moving-V envelope is deliberately in the same author similarity cluster parameter-envelope."
+        },
+        "E": {
+          "completed": true,
+          "note": "External references give the canonical tangent family y=2tx-t^2 with envelope y=x^2; the candidate is an affine/scaled version with the same optimization, inequality, tangency and reverse-reconstruction path."
+        }
+      },
+      "externalSearchQueries": [
+        "parabola tangent line family envelope y=2tx-t^2",
+        "envelope of tangent lines parabola parameter quadratic"
+      ],
+      "nearestMatches": [
+        {
+          "pool": "D",
+          "source": "oxford-cantor-moving-v-envelope",
+          "matchedFingerprintFeatures": [
+            "pointwise optimization over t",
+            "sketch→optimize→assemble envelope",
+            "parameter-generalization extension"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 1,
+            "target": 1,
+            "kernel": 1,
+            "decisiveMechanism": 1,
+            "diagram": 1,
+            "progression": 2,
+            "transferStretch": 2
+          },
+          "explanation": "Same-wave repetition is already correctly recognized by the parameter-envelope cluster."
+        },
+        {
+          "pool": "E",
+          "source": "Envelope (mathematics) — tangent lines to y=x^2",
+          "url": "https://en.wikipedia.org/wiki/Envelope_%28mathematics%29",
+          "matchedFingerprintFeatures": [
+            "one-parameter tangent lines",
+            "parabola as envelope",
+            "same complete-square/optimization structure after affine change"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 3,
+            "target": 3,
+            "kernel": 3,
+            "decisiveMechanism": 3,
+            "diagram": 3,
+            "progression": 3,
+            "transferStretch": 2
+          },
+          "explanation": "The candidate changes coefficients and translates the parabola but preserves the mathematical kernel, decisive mechanism, diagram topology and reveal path."
+        }
+      ],
+      "classicProblemCheck": {
+        "result": "TOO_CLOSE_TO_CLASSIC_FAMILY",
+        "notes": "This is the standard tangent-line envelope of a parabola in new coefficients."
+      },
+      "fidelityNotes": {
+        "accessibleOpening": "Drawing several lines is an excellent low-barrier start.",
+        "promptability": "Parameter optimization and equality/tangency can be prompted independently.",
+        "reasoningEvidence": "Graph sketching, conjecture, representation switch, inequalities and proof are visible.",
+        "transfer": "General alpha,beta line family stays coherent.",
+        "ceiling": "Good ceiling.",
+        "prerequisiteBurden": "Only algebra and elementary graphs are required."
+      },
+      "requiredChanges": [
+        "Replace with a different mathematical kernel; coefficient/translation changes to the tangent-envelope classic are insufficient."
+      ],
+      "bankDisposition": [
+        "Oxford-like but too close to a standard classic",
+        "reject from adaptive-original candidate pool"
+      ],
+      "wouldRejectIfClaimedOriginal": true,
+      "similarityClusterRecommendation": {
+        "action": "none",
+        "note": "The existing parameter-envelope cluster is sensible, but this family should not survive the originality gate as a new original."
+      },
+      "handoff": {
+        "canProgressAfterGI": false,
+        "note": "Fidelity passes; originality hard-rejects this candidate as authored."
+      }
+    },
+    {
+      "familyId": "oxford-d-gcd-descent-network",
+      "sourceRef": "PR #133 packages/problems/src/curated/agent-d-dirichlet/batch-a.ts",
+      "subjectKind": "same-wave-proposal",
+      "authorPr": {
+        "agent": "D — Dirichlet",
+        "number": 133,
+        "head": "017759febfd7d49ea032d6474bcc9177a76b2c2b"
+      },
+      "reviewedAt": "2026-09-05",
+      "reviewer": {
+        "agent": "H",
+        "name": "Hilbert"
+      },
+      "fingerprint": {
+        "surfaceObjects": [
+          "finite connected graph",
+          "positive integer labels on vertices",
+          "edge subtraction moves"
+        ],
+        "constraints": [
+          "on an edge x>y replace x by x-y",
+          "only one endpoint changes"
+        ],
+        "targetType": "prove termination, classify terminal states, identify terminal label",
+        "centralMechanism": "strict descent of total label sum plus global gcd invariance; connected terminal state must be constant",
+        "secondaryMechanisms": [
+          "subtractive Euclidean algorithm",
+          "componentwise transfer"
+        ],
+        "criticalRepresentationChange": "local edge process -> global monovariant and invariant",
+        "diagramTopology": "arbitrary finite connected graph, then disconnected components",
+        "smallCaseSignature": "paths and triangles expose Euclidean-style subtraction and convergence",
+        "progressionSignature": {
+          "opening": "simulate small graphs",
+          "firstDeepening": "find total-sum descent",
+          "core": "prove gcd invariant",
+          "transfer": "classify constant terminal state",
+          "stretch": "drop connectedness"
+        },
+        "solutionDependencyGraphSummary": "legal move -> positive integer sum decreases -> gcd preserved -> no legal edge means adjacent equality -> connectedness gives global constant -> constant equals gcd",
+        "distinctiveFeatures": [
+          "graph-wide Euclidean algorithm",
+          "choice-independent terminal gcd without a pivot"
+        ],
+        "knownClassicOverlap": "Subtractive Euclidean algorithm is classic, but no exact graph-wide terminal-classification problem was found.",
+        "authorProvenance": "Metadata defaults to original / independent-original; author search flagged only the Euclidean ingredient as classic."
+      },
+      "originalityDecision": "PASS_WITH_NOTES",
+      "fidelityDecision": "PASS",
+      "provenanceDisposition": "independent-original-with-common-technique",
+      "retrieval": {
+        "A": {
+          "completed": true,
+          "note": "Deep corpus checked; no graph-wide Euclidean process benchmark. OX-MATHCS-DIGIT-PROCESS is only a generic process→structure neighbour."
+        },
+        "B": {
+          "completed": true,
+          "note": "Broad inventory checked; no gcd-on-network fingerprint."
+        },
+        "C": {
+          "completed": true,
+          "note": "Current bank checked; divisibility-chain shares number theory but not this dynamic graph kernel."
+        },
+        "D": {
+          "completed": true,
+          "note": "Compared C/D/E. Euler difference-closed sets also uses repeated subtraction/minimum structure, but setup, target and dependency graph differ."
+        },
+        "E": {
+          "completed": true,
+          "note": "External search confirms the subtractive Euclidean algorithm as a standard ingredient, but did not surface the graph process with this terminal-state theorem."
+        }
+      },
+      "externalSearchQueries": [
+        "graph vertex labels subtract smaller adjacent gcd invariant termination",
+        "subtractive Euclidean algorithm gcd repeated subtraction termination"
+      ],
+      "nearestMatches": [
+        {
+          "pool": "D",
+          "source": "oxford-euler-difference-closed-sets",
+          "matchedFingerprintFeatures": [
+            "repeated subtraction",
+            "gcd/arithmetic-grid structure",
+            "strict descent idea"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 0,
+            "target": 0,
+            "kernel": 1,
+            "decisiveMechanism": 1,
+            "diagram": 0,
+            "progression": 1,
+            "transferStretch": 0
+          },
+          "explanation": "Shared Euclidean subtraction technique creates mild repetition risk, but one is a graph process and the other a closure classification."
+        },
+        {
+          "pool": "E",
+          "source": "Euclidean algorithm — subtraction-based version",
+          "url": "https://en.wikipedia.org/wiki/Euclidean_algorithm",
+          "matchedFingerprintFeatures": [
+            "replace larger integer by a difference",
+            "gcd invariance",
+            "termination"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 1,
+            "target": 1,
+            "kernel": 1,
+            "decisiveMechanism": 2,
+            "diagram": 0,
+            "progression": 1,
+            "transferStretch": 0
+          },
+          "explanation": "The core two-number technique is classic, but the connected-graph lifting, terminal constancy and component transfer are materially new structure."
+        }
+      ],
+      "classicProblemCheck": {
+        "result": "COMMON_TECHNIQUE_NO_EXACT_CLASSIC_FOUND",
+        "notes": "Use of subtractive Euclid is not by itself a lift of a known graph problem."
+      },
+      "fidelityNotes": {
+        "accessibleOpening": "Small path/triangle simulations are immediately productive.",
+        "promptability": "Monovariant, gcd invariant and connectedness can be elicited as separate insights.",
+        "reasoningEvidence": "Small cases, invariants, proof construction, precision and generalization are observable.",
+        "transfer": "Disconnected components are a natural same-family extension.",
+        "ceiling": "Strong enough for a substantial interview.",
+        "prerequisiteBurden": "Low: gcd and elementary graph connectivity."
+      },
+      "requiredChanges": [
+        "Retain provenance notes acknowledging subtractive Euclid as a standard ingredient.",
+        "Consider repetition control with closure/descent families, but no mandatory cluster is needed."
+      ],
+      "bankDisposition": [
+        "originality pass with common-technique note",
+        "Oxford-fidelity approved"
+      ],
+      "wouldRejectIfClaimedOriginal": false,
+      "similarityClusterRecommendation": {
+        "action": "none",
+        "note": "Overlap with difference-closed sets is technique-level, below the cluster threshold."
+      },
+      "handoff": {
+        "canProgressAfterGI": true,
+        "note": "Hilbert gates pass; can progress once Agent G and Agent I also pass it."
+      }
+    },
+    {
+      "familyId": "oxford-d-switching-cuts",
+      "sourceRef": "PR #133 packages/problems/src/curated/agent-d-dirichlet/batch-a.ts",
+      "subjectKind": "same-wave-proposal",
+      "authorPr": {
+        "agent": "D — Dirichlet",
+        "number": 133,
+        "head": "017759febfd7d49ea032d6474bcc9177a76b2c2b"
+      },
+      "reviewedAt": "2026-09-05",
+      "reviewer": {
+        "agent": "H",
+        "name": "Hilbert"
+      },
+      "fingerprint": {
+        "surfaceObjects": [
+          "finite connected graph",
+          "two-coloured edges",
+          "vertex switch flips all incident edges"
+        ],
+        "constraints": [
+          "start all-white",
+          "each vertex may be switched any number of times"
+        ],
+        "targetType": "characterize exactly which target black-edge sets are reachable",
+        "centralMechanism": "switch parity vector is a cut; a target is reachable iff it has even intersection with every cycle, with spanning-tree reconstruction",
+        "secondaryMechanisms": [
+          "GF(2) parity",
+          "fundamental cycles",
+          "tree potentials"
+        ],
+        "criticalRepresentationChange": "sequence of switches -> parity vector of switched vertices -> cut-space element",
+        "diagramTopology": "arbitrary connected graph with cycle/tree decomposition",
+        "smallCaseSignature": "triangle and square expose even cycle-intersection invariant",
+        "progressionSignature": {
+          "opening": "try switches",
+          "firstDeepening": "collapse switch counts mod 2",
+          "core": "derive cycle parity",
+          "transfer": "reconstruct on spanning tree",
+          "stretch": "interpret components/nonuniqueness"
+        },
+        "solutionDependencyGraphSummary": "switch parity -> cut representation -> cycle orthogonality necessity -> tree assignment -> non-tree edge verification -> sufficiency",
+        "distinctiveFeatures": [
+          "physical switch process reveals cut space",
+          "cycle parity characterization"
+        ],
+        "knownClassicOverlap": "Exact classical theorem: cut space is the orthogonal complement of the cycle space over GF(2).",
+        "authorProvenance": "Metadata defaults to original / independent-original despite author-side high-risk warning."
+      },
+      "originalityDecision": "REJECT_TOO_CLOSE",
+      "fidelityDecision": "PASS",
+      "provenanceDisposition": "reject-as-new-original",
+      "retrieval": {
+        "A": {
+          "completed": true,
+          "note": "Deep benchmark corpus checked; no exact cut-space problem."
+        },
+        "B": {
+          "completed": true,
+          "note": "Broad inventory checked; no cut/cycle-space record."
+        },
+        "C": {
+          "completed": true,
+          "note": "Current bank has graph fixtures but none with cut/cycle orthogonality."
+        },
+        "D": {
+          "completed": true,
+          "note": "Compared C/D/E; no same-wave duplicate changes the external hard collision."
+        },
+        "E": {
+          "completed": true,
+          "note": "External graph-theory references state exactly the cut-space/cycle-space orthogonal-complement characterization used by the candidate."
+        }
+      },
+      "externalSearchQueries": [
+        "cut space cycle space orthogonal complement GF2 even intersection every cycle",
+        "vertex switches edges reachable cut space cycle parity"
+      ],
+      "nearestMatches": [
+        {
+          "pool": "E",
+          "source": "Cycle space / cut-space orthogonality",
+          "url": "https://en.wikipedia.org/wiki/Cycle_space",
+          "matchedFingerprintFeatures": [
+            "edge set is a cut iff it meets every cycle evenly",
+            "GF(2) edge-space representation",
+            "cut/cycle orthogonal complements"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 3,
+            "target": 3,
+            "kernel": 3,
+            "decisiveMechanism": 3,
+            "diagram": 2,
+            "progression": 2,
+            "transferStretch": 2
+          },
+          "explanation": "The switch story is a wrapper around the standard theorem; the target, kernel and decisive parity characterization are the same."
+        }
+      ],
+      "classicProblemCheck": {
+        "result": "EXACT_CLASSICAL_THEOREM",
+        "notes": "Author-side warning was correct; this is cut-space/cycle-space orthogonality in a switching narrative."
+      },
+      "fidelityNotes": {
+        "accessibleOpening": "Vertex flips on triangles/squares are concrete and exploratory.",
+        "promptability": "Cycle invariant and spanning-tree reconstruction give excellent tutor checkpoints.",
+        "reasoningEvidence": "Small cases, invariants, representation switching and constructive proof are rich.",
+        "transfer": "Tree vacuity/components/nonuniqueness stay coherent.",
+        "ceiling": "High enough for strong candidates.",
+        "prerequisiteBurden": "Low if cut-space terminology is withheld until after discovery."
+      },
+      "requiredChanges": [
+        "Do not present this as independent-original; a new production family needs a different kernel, not merely a switching wrapper around cut-space orthogonality."
+      ],
+      "bankDisposition": [
+        "excellent Oxford shape but originality hard-reject",
+        "retain only as truthfully-classic/manual material if desired"
+      ],
+      "wouldRejectIfClaimedOriginal": true,
+      "similarityClusterRecommendation": {
+        "action": "none",
+        "note": "External classic collision is decisive."
+      },
+      "handoff": {
+        "canProgressAfterGI": false,
+        "note": "Fidelity passes independently; originality blocks recommendation readiness."
+      }
+    },
+    {
+      "familyId": "oxford-d-thirds-closed-integers",
+      "sourceRef": "PR #133 packages/problems/src/curated/agent-d-dirichlet/batch-a.ts",
+      "subjectKind": "same-wave-proposal",
+      "authorPr": {
+        "agent": "D — Dirichlet",
+        "number": 133,
+        "head": "017759febfd7d49ea032d6474bcc9177a76b2c2b"
+      },
+      "reviewedAt": "2026-09-05",
+      "reviewer": {
+        "agent": "H",
+        "name": "Hilbert"
+      },
+      "fingerprint": {
+        "surfaceObjects": [
+          "finite set of integers",
+          "two trisection points between congruent elements"
+        ],
+        "constraints": [
+          "if x≡y mod 3, both (2x+y)/3 and (x+2y)/3 must lie in the set"
+        ],
+        "targetType": "classify every finite thirds-closed set, including small exceptional sizes",
+        "centralMechanism": "ordered residue pattern plus forced insertion of trisection points rigidifies adjacent gaps into an arithmetic progression",
+        "secondaryMechanisms": [
+          "mod-3 pigeonhole",
+          "small-cardinality case analysis"
+        ],
+        "criticalRepresentationChange": "pairwise affine closure -> ordered residue/gap structure",
+        "diagramTopology": "ordered points on a number line",
+        "smallCaseSignature": "sizes 1,2,3 are flexible; four points force residue repetition and rigidity",
+        "progressionSignature": {
+          "opening": "classify tiny cases",
+          "firstDeepening": "order points and inspect residues",
+          "core": "force equal gaps",
+          "transfer": "classify arithmetic progressions",
+          "stretch": "compare related affine closure rules"
+        },
+        "solutionDependencyGraphSummary": "small cases -> residue repetition -> closure inserts interior thirds -> adjacency forbids unequal gaps -> global AP with modular restriction",
+        "distinctiveFeatures": [
+          "threshold at four points",
+          "both trisection points",
+          "mod-3 admissibility"
+        ],
+        "knownClassicOverlap": "General integer sets closed under affine operators are classical, but no exact finite trisection-classification problem was located.",
+        "authorProvenance": "Metadata defaults to original / independent-original; author already clusters it with a midpoint-closure family."
+      },
+      "originalityDecision": "PASS_WITH_NOTES",
+      "fidelityDecision": "PASS",
+      "provenanceDisposition": "independent-original-with-neighbour-cluster",
+      "retrieval": {
+        "A": {
+          "completed": true,
+          "note": "Deep corpus checked; no affine-closure classification benchmark."
+        },
+        "B": {
+          "completed": true,
+          "note": "Broad inventory checked; no exact trisection-closure fingerprint."
+        },
+        "C": {
+          "completed": true,
+          "note": "Current bank checked; no finite-set affine closure theorem."
+        },
+        "D": {
+          "completed": true,
+          "note": "Same-wave comparison finds Dirichlet midpoint-closed-residues as an intentional near-neighbour and Euler difference-closed-sets as a cross-agent closure→arithmetic-grid neighbour."
+        },
+        "E": {
+          "completed": true,
+          "note": "External search found a classical literature on sets of integers closed under affine operators, but not this exact finite conditional trisection theorem or its four-point reveal."
+        }
+      },
+      "externalSearchQueries": [
+        "finite integers closed under trisection congruent mod 3 arithmetic progression",
+        "sets of integers closed under affine operators"
+      ],
+      "nearestMatches": [
+        {
+          "pool": "D",
+          "source": "oxford-d-midpoint-closed-residues",
+          "matchedFingerprintFeatures": [
+            "finite affine-closure classification",
+            "number-line representation",
+            "arithmetic-structure conclusion"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 2,
+            "target": 2,
+            "kernel": 2,
+            "decisiveMechanism": 1,
+            "diagram": 1,
+            "progression": 2,
+            "transferStretch": 1
+          },
+          "explanation": "Author already recognizes this as a deliberate related closure family; cluster should be retained."
+        },
+        {
+          "pool": "D",
+          "source": "oxford-euler-difference-closed-sets",
+          "matchedFingerprintFeatures": [
+            "finite-set closure definition",
+            "small examples→minimum/order structure→arithmetic grid",
+            "classification target"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 1,
+            "target": 2,
+            "kernel": 1,
+            "decisiveMechanism": 1,
+            "diagram": 1,
+            "progression": 2,
+            "transferStretch": 1
+          },
+          "explanation": "Different operation and proof mechanism, but close enough pedagogically to create cross-agent repetition risk."
+        },
+        {
+          "pool": "E",
+          "source": "Hoffman–Klarner, Sets of integers closed under affine operators",
+          "url": "https://msp.org/pjm/1979/83-1/pjm-v83-n1-p08-s.pdf",
+          "matchedFingerprintFeatures": [
+            "integer closure under affine operators",
+            "arithmetic-progression structure in closure theory"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 1,
+            "target": 1,
+            "kernel": 1,
+            "decisiveMechanism": 1,
+            "diagram": 0,
+            "progression": 0,
+            "transferStretch": 0
+          },
+          "explanation": "Establishes that affine-closure mathematics is classical at a broad level; it does not reproduce this conditional trisection problem."
+        }
+      ],
+      "classicProblemCheck": {
+        "result": "CLASSIC_AREA_BUT_NO_EXACT_MATCH_FOUND",
+        "notes": "No hard external neighbour with the same operation, finite classification and reveal path was found."
+      },
+      "fidelityNotes": {
+        "accessibleOpening": "Tiny sets make the new definition immediately testable.",
+        "promptability": "Residues, ordering and forced insertions provide natural hints.",
+        "reasoningEvidence": "Definition exploration, small cases, modular reasoning, classification proof and precision are visible.",
+        "transfer": "Comparing affine closure rules is coherent.",
+        "ceiling": "Strong and flexible.",
+        "prerequisiteBurden": "Low modular arithmetic and ordering."
+      },
+      "requiredChanges": [
+        "Retain the existing closure-classification-residue-affine cluster.",
+        "Add a cross-agent repetition note for Euler difference-closed sets; do not schedule these adjacent by default."
+      ],
+      "bankDisposition": [
+        "originality pass with neighbour notes",
+        "Oxford-fidelity approved"
+      ],
+      "wouldRejectIfClaimedOriginal": false,
+      "similarityClusterRecommendation": {
+        "action": "expand",
+        "id": "closure-classification-residue-affine",
+        "note": "Keep Dirichlet's existing closure cluster and consider including Euler difference-closed-sets under a broader finite-closure-arithmetic-structure umbrella if that family survives originality review."
+      },
+      "handoff": {
+        "canProgressAfterGI": true,
+        "note": "Hilbert gates pass with repetition notes; can progress after G/I."
+      }
+    },
+    {
+      "familyId": "oxford-d-laminar-family",
+      "sourceRef": "PR #133 packages/problems/src/curated/agent-d-dirichlet/batch-b.ts",
+      "subjectKind": "same-wave-proposal",
+      "authorPr": {
+        "agent": "D — Dirichlet",
+        "number": 133,
+        "head": "017759febfd7d49ea032d6474bcc9177a76b2c2b"
+      },
+      "reviewedAt": "2026-09-05",
+      "reviewer": {
+        "agent": "H",
+        "name": "Hilbert"
+      },
+      "fingerprint": {
+        "surfaceObjects": [
+          "laminar family of nonempty subsets of an n-element set",
+          "inclusion forest/tree"
+        ],
+        "constraints": [
+          "every two sets are disjoint or nested",
+          "family contains U and all singletons"
+        ],
+        "targetType": "prove sharp maximum size and characterize equality",
+        "centralMechanism": "turn containment into a rooted inclusion tree/forest and bound internal nodes by leaves",
+        "secondaryMechanisms": [
+          "full-binary equality structure",
+          "extremal construction"
+        ],
+        "criticalRepresentationChange": "set system -> rooted inclusion tree",
+        "diagramTopology": "laminar inclusion tree with singleton leaves and internal union nodes",
+        "smallCaseSignature": "n=2,3 suggests 2n-1 and binary hierarchical merging",
+        "progressionSignature": {
+          "opening": "build large examples",
+          "firstDeepening": "draw inclusion tree",
+          "core": "count leaves/internal nodes",
+          "transfer": "achieve 2n-1",
+          "stretch": "classify equality"
+        },
+        "solutionDependencyGraphSummary": "laminarity -> unique containment parent -> rooted tree -> at least two children/internal node -> internal≤leaves-1 -> total≤2n-1",
+        "distinctiveFeatures": [
+          "2n-1 extremal bound",
+          "binary hierarchical equality case"
+        ],
+        "knownClassicOverlap": "Exact standard laminar-family theorem.",
+        "authorProvenance": "Metadata defaults to original / independent-original; author explicitly reports exact/near-exact theorem collision."
+      },
+      "originalityDecision": "REJECT_TOO_CLOSE",
+      "fidelityDecision": "PASS_WITH_NOTES",
+      "provenanceDisposition": "reject-as-new-original",
+      "retrieval": {
+        "A": {
+          "completed": true,
+          "note": "Deep corpus checked; no exact laminar theorem."
+        },
+        "B": {
+          "completed": true,
+          "note": "Broad inventory checked; no laminar-family entry."
+        },
+        "C": {
+          "completed": true,
+          "note": "Current bank checked; no set-family extremal duplicate."
+        },
+        "D": {
+          "completed": true,
+          "note": "Compared all C/D/E proposals; no same-wave duplicate is stronger than the exact external theorem."
+        },
+        "E": {
+          "completed": true,
+          "note": "External search returned the same maximum 2n-1 laminar-family problem."
+        }
+      },
+      "externalSearchQueries": [
+        "laminar family n elements maximum 2n-1",
+        "laminar family pairwise nested disjoint at most 2n-1"
+      ],
+      "nearestMatches": [
+        {
+          "pool": "E",
+          "source": "Mathematics Stack Exchange — laminar family at most 2n-1",
+          "url": "https://math.stackexchange.com/questions/3469490/laminar-family-of-pairwise-distinct-non-empty-sets-has-at-most-2n-1",
+          "matchedFingerprintFeatures": [
+            "laminar family on n-element ground set",
+            "sharp 2n-1 bound",
+            "hierarchical decomposition proof"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 3,
+            "target": 3,
+            "kernel": 3,
+            "decisiveMechanism": 3,
+            "diagram": 2,
+            "progression": 2,
+            "transferStretch": 2
+          },
+          "explanation": "The candidate asks the exact standard extremal theorem and uses the same inclusion hierarchy mechanism."
+        }
+      ],
+      "classicProblemCheck": {
+        "result": "EXACT_STANDARD_THEOREM",
+        "notes": "Cannot enter an adaptive-original bank as authored."
+      },
+      "fidelityNotes": {
+        "accessibleOpening": "Building examples for n=2,3,4 is productive.",
+        "promptability": "The inclusion-tree representation is a natural tutor prompt.",
+        "reasoningEvidence": "Small cases, representation switching, extremal proof and equality reasoning are strong.",
+        "transfer": "Equality structure deepens the same problem.",
+        "ceiling": "Good, though abstract.",
+        "prerequisiteBurden": "Low if laminarity is defined in the prompt."
+      },
+      "requiredChanges": [
+        "Replace with a different mathematical kernel for the original bank; otherwise retain only with truthful classic provenance."
+      ],
+      "bankDisposition": [
+        "Oxford-like but too close to exact standard theorem",
+        "reject from adaptive-original candidate pool"
+      ],
+      "wouldRejectIfClaimedOriginal": true,
+      "similarityClusterRecommendation": {
+        "action": "none",
+        "note": "External exact collision dominates."
+      },
+      "handoff": {
+        "canProgressAfterGI": false,
+        "note": "Fidelity is acceptable; originality hard-rejects the proposal as a new original."
+      }
+    },
+    {
+      "familyId": "oxford-euler-quadrilateral-balance",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-quadrilateral-balance.ts",
+      "subjectKind": "same-wave-proposal",
+      "authorPr": {
+        "agent": "E — Euler",
+        "number": 134,
+        "head": "a18db48700800c1987e2abd43726254ba25267dd"
+      },
+      "reviewedAt": "2026-09-05",
+      "reviewer": {
+        "agent": "H",
+        "name": "Hilbert"
+      },
+      "fingerprint": {
+        "surfaceObjects": [
+          "convex quadrilateral",
+          "variable point P",
+          "alternating sums of squared distances"
+        ],
+        "constraints": [
+          "PA^2+PC^2=PB^2+PD^2"
+        ],
+        "targetType": "classify the complete locus, including all-line/all-plane/empty degeneracies",
+        "centralMechanism": "expand squared distances so quadratic P terms cancel; the residual affine equation degenerates exactly for parallelograms",
+        "secondaryMechanisms": [
+          "centering at diagonal midpoint",
+          "equal-diagonal rectangle characterization",
+          "weighted extension"
+        ],
+        "criticalRepresentationChange": "geometric distance locus -> affine equation in position vectors",
+        "diagramTopology": "convex four-cycle with free point P; exceptional parallelogram/rectangle cases",
+        "smallCaseSignature": "rectangle and slanted parallelogram distinguish whole-plane from empty exceptional cases",
+        "progressionSignature": {
+          "opening": "sketch symmetric examples",
+          "firstDeepening": "expand squared distances",
+          "core": "classify affine versus degenerate cases",
+          "transfer": "resolve parallelogram boundary",
+          "stretch": "prove geometric converse/weighted transfer"
+        },
+        "solutionDependencyGraphSummary": "distance expansion -> p^2 cancellation -> nonzero linear coefficient gives line -> zero coefficient gives parallelogram -> constant sign/equality distinguishes empty/all plane",
+        "distinctiveFeatures": [
+          "general quadrilateral locus plus rectangle degeneration",
+          "alternating four-distance identity"
+        ],
+        "knownClassicOverlap": "Contains the classic British-flag/rectangle squared-distance identity as its exceptional all-points case, but extends to a full arbitrary-quadrilateral locus classification.",
+        "authorProvenance": "Euler metadata currently marks every family original / independent-original."
+      },
+      "originalityDecision": "REVISE",
+      "fidelityDecision": "PASS",
+      "provenanceDisposition": "change-to-structural-adaptation-or-classic-adjacent",
+      "retrieval": {
+        "A": {
+          "completed": true,
+          "note": "OX-SAMPLE-LADDER-TRACE is the nearest deep benchmark in moving-point locus pedagogy, but not in squared-distance mechanism."
+        },
+        "B": {
+          "completed": true,
+          "note": "Broad inventory checked; no exact alternating four-distance locus fingerprint."
+        },
+        "C": {
+          "completed": true,
+          "note": "Current bank triangle-medians shares vector geometry only."
+        },
+        "D": {
+          "completed": true,
+          "note": "Euler's circle-sweep is author-clustered with this family as euler-distance-loci; retain that repetition control."
+        },
+        "E": {
+          "completed": true,
+          "note": "External search confirms the exact rectangle identity PA^2+PC^2=PB^2+PD^2 as a standard theorem; the general quadrilateral line/empty/all-plane classification is a material extension."
+        }
+      },
+      "externalSearchQueries": [
+        "quadrilateral point PA^2 PC^2 PB^2 PD^2 rectangle identity",
+        "balanced point quadrilateral alternating squared distances locus"
+      ],
+      "nearestMatches": [
+        {
+          "pool": "A",
+          "source": "OX-SAMPLE-LADDER-TRACE",
+          "url": "https://www.ox.ac.uk/admissions/undergraduate/applying/guide-for-applicants/interviews/sample_questions",
+          "matchedFingerprintFeatures": [
+            "moving-point locus",
+            "visual conjecture then algebra",
+            "parameter/generalization"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 1,
+            "target": 1,
+            "kernel": 0,
+            "decisiveMechanism": 0,
+            "diagram": 1,
+            "progression": 2,
+            "transferStretch": 1
+          },
+          "explanation": "Pedagogical neighbour only; the mathematical constraint and locus mechanism differ."
+        },
+        {
+          "pool": "D",
+          "source": "oxford-euler-circle-sweep",
+          "matchedFingerprintFeatures": [
+            "moving-point geometric locus",
+            "diagram→algebra representation switch"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 1,
+            "target": 1,
+            "kernel": 0,
+            "decisiveMechanism": 0,
+            "diagram": 1,
+            "progression": 1,
+            "transferStretch": 1
+          },
+          "explanation": "Existing euler-distance-loci cluster is appropriate for sequencing, not an originality collision."
+        },
+        {
+          "pool": "E",
+          "source": "Rectangle squared-distance identity",
+          "url": "https://www.shaalaa.com/question-bank-solutions/p-is-any-point-inside-the-rectangle-abcd-prove-that-pa2-pc2-pb2-pd2_425244",
+          "matchedFingerprintFeatures": [
+            "same alternating squared-distance equality",
+            "rectangle case valid for every P"
+          ],
+          "similarity": {
+            "wording": 1,
+            "setup": 2,
+            "target": 1,
+            "kernel": 1,
+            "decisiveMechanism": 2,
+            "diagram": 2,
+            "progression": 1,
+            "transferStretch": 1
+          },
+          "explanation": "The candidate contains a standard classic identity as a major exceptional case, but its main target classifies all quadrilaterals rather than proving only the rectangle identity."
+        }
+      ],
+      "classicProblemCheck": {
+        "result": "CLASSIC_ADJACENT_EXTENSION",
+        "notes": "Not a cosmetic copy of the rectangle theorem, but independent-original provenance is too strong because the classic identity is structurally central."
+      },
+      "fidelityNotes": {
+        "accessibleOpening": "Excellent whiteboard-native conjecture phase.",
+        "promptability": "Coordinates, cancellation, and exceptional cases can be prompted incrementally.",
+        "reasoningEvidence": "Visualization, conjecture, representation switching, case analysis, proof and precision are all visible.",
+        "transfer": "Weighted four-point version and converse stay coherent.",
+        "ceiling": "Strong.",
+        "prerequisiteBurden": "Moderate basic coordinate/vector algebra only."
+      },
+      "requiredChanges": [
+        "Change provenance to structural-adaptation/classic-adjacent and retain explicit nearest-classic note.",
+        "Retain euler-distance-loci similarity cluster."
+      ],
+      "bankDisposition": [
+        "Oxford-fidelity approved",
+        "originality/provenance revision required"
+      ],
+      "wouldRejectIfClaimedOriginal": true,
+      "similarityClusterRecommendation": {
+        "action": "retain",
+        "id": "euler-distance-loci",
+        "note": "Useful repetition-control cluster with circle-sweep."
+      },
+      "handoff": {
+        "canProgressAfterGI": false,
+        "note": "Fidelity passes; provenance must be revised and Hilbert re-approved before G/I can complete readiness."
+      }
+    },
+    {
+      "familyId": "oxford-euler-rectangle-area-table",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-rectangle-area-table.ts",
+      "subjectKind": "same-wave-proposal",
+      "authorPr": {
+        "agent": "E — Euler",
+        "number": 134,
+        "head": "a18db48700800c1987e2abd43726254ba25267dd"
+      },
+      "reviewedAt": "2026-09-05",
+      "reviewer": {
+        "agent": "H",
+        "name": "Hilbert"
+      },
+      "fingerprint": {
+        "surfaceObjects": [
+          "rectangle cut by one horizontal and one vertical line",
+          "four subrectangle areas"
+        ],
+        "constraints": [
+          "point is interior",
+          "areas a,b,c,d in cyclic order"
+        ],
+        "targetType": "derive necessary multiplicative relation and prove converse; generalize to grids",
+        "centralMechanism": "rank-one factorization of area table: a=xu,b=yu,c=yv,d=xv, hence opposite products agree",
+        "secondaryMechanisms": [
+          "constructive converse",
+          "scaling nonuniqueness",
+          "m×n rank-one transfer"
+        ],
+        "criticalRepresentationChange": "diagram side segments -> outer-product area table",
+        "diagramTopology": "rectangle divided into a 2×2 grid by full cross through an interior point",
+        "smallCaseSignature": "four symbolic products expose ac=bd immediately",
+        "progressionSignature": {
+          "opening": "name side segments",
+          "firstDeepening": "eliminate them to get opposite-product relation",
+          "core": "construct converse",
+          "transfer": "check zero/boundary cases",
+          "stretch": "generalize to m×n rank-one tables"
+        },
+        "solutionDependencyGraphSummary": "segment products -> ac=bd -> choose normalized side length -> reconstruct all segments -> rank-one grid generalization",
+        "distinctiveFeatures": [
+          "opposite-area product relation",
+          "full converse",
+          "rank-one grid extension"
+        ],
+        "knownClassicOverlap": "The 2×2 rectangle missing-area/opposite-product puzzle is extremely common and uses the exact same setup and decisive relation.",
+        "authorProvenance": "Euler metadata marks the family original / independent-original."
+      },
+      "originalityDecision": "REJECT_TOO_CLOSE",
+      "fidelityDecision": "PASS_WITH_NOTES",
+      "provenanceDisposition": "reject-as-new-original",
+      "retrieval": {
+        "A": {
+          "completed": true,
+          "note": "Deep corpus checked; no exact 2×2 area-product benchmark."
+        },
+        "B": {
+          "completed": true,
+          "note": "Broad inventory checked; no exact area-table fingerprint."
+        },
+        "C": {
+          "completed": true,
+          "note": "Current bank domino chessboard shares rectangle/tiling surface only, not the area-product kernel."
+        },
+        "D": {
+          "completed": true,
+          "note": "Euler corner-balanced-tables is a same-wave table/grid neighbour but uses additive mixed differences rather than multiplicative rank one."
+        },
+        "E": {
+          "completed": true,
+          "note": "External puzzle sources repeatedly use the identical four-subrectangle diagram and opposite-product relation to recover the fourth area."
+        }
+      },
+      "externalSearchQueries": [
+        "rectangle divided into four smaller rectangles opposite areas product equal puzzle",
+        "four rectangles areas ac=bd interior point"
+      ],
+      "nearestMatches": [
+        {
+          "pool": "D",
+          "source": "oxford-euler-corner-balanced-tables",
+          "matchedFingerprintFeatures": [
+            "2D table/grid representation",
+            "local 2×2 condition",
+            "global decomposition transfer"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 1,
+            "target": 1,
+            "kernel": 1,
+            "decisiveMechanism": 1,
+            "diagram": 1,
+            "progression": 1,
+            "transferStretch": 1
+          },
+          "explanation": "Same-wave table pedagogy could repeat, but additive versus multiplicative kernels are distinct."
+        },
+        {
+          "pool": "E",
+          "source": "Four-subrectangle missing-area puzzle",
+          "url": "https://medium.com/puzzle-sphere/can-you-solve-this-interview-puzzle-in-under-60-seconds-7d88e600461a",
+          "matchedFingerprintFeatures": [
+            "same 2×2 rectangle subdivision",
+            "same four product variables",
+            "same opposite-product relation"
+          ],
+          "similarity": {
+            "wording": 1,
+            "setup": 3,
+            "target": 3,
+            "kernel": 3,
+            "decisiveMechanism": 3,
+            "diagram": 3,
+            "progression": 2,
+            "transferStretch": 1
+          },
+          "explanation": "The candidate's converse/grid extensions add depth, but its opening and core preserve the exact classic puzzle kernel and discovery path."
+        }
+      ],
+      "classicProblemCheck": {
+        "result": "TOO_CLOSE_TO_CLASSIC_PUZZLE",
+        "notes": "Converse/generalization does not make the core 2×2 area-product problem original."
+      },
+      "fidelityNotes": {
+        "accessibleOpening": "Very low prerequisite and visually immediate.",
+        "promptability": "Side variables, multiplicative invariant and converse can be separated cleanly.",
+        "reasoningEvidence": "Modelling, representation switching, proof, converse checking and abstraction are visible.",
+        "transfer": "Rank-one grid extension gives useful ceiling.",
+        "ceiling": "Good after the classic opening, but familiarity can trivialize the core.",
+        "prerequisiteBurden": "Very low."
+      },
+      "requiredChanges": [
+        "Replace the opening/core with a genuinely different mathematical kernel if this is intended for the adaptive-original bank; do not rely on converse/generalization to sanitize a classic puzzle."
+      ],
+      "bankDisposition": [
+        "Oxford-like but too close to famous area-product puzzle",
+        "reject from adaptive-original candidate pool"
+      ],
+      "wouldRejectIfClaimedOriginal": true,
+      "similarityClusterRecommendation": {
+        "action": "none",
+        "note": "Classic collision is stronger than a new cluster."
+      },
+      "handoff": {
+        "canProgressAfterGI": false,
+        "note": "Fidelity is usable, but originality hard-rejects the proposed original family."
+      }
+    },
+    {
+      "familyId": "oxford-euler-diagonal-blend-transform",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-diagonal-blend-transform.ts",
+      "subjectKind": "same-wave-proposal",
+      "authorPr": {
+        "agent": "E — Euler",
+        "number": 134,
+        "head": "a18db48700800c1987e2abd43726254ba25267dd"
+      },
+      "reviewedAt": "2026-09-05",
+      "reviewer": {
+        "agent": "H",
+        "name": "Hilbert"
+      },
+      "fingerprint": {
+        "surfaceObjects": [
+          "custom planar coordinate transformation T(x,y)=(x+2y,2x-y)",
+          "points, shapes, invariant lines"
+        ],
+        "constraints": [
+          "avoid matrix/eigenvalue vocabulary in the candidate prompt"
+        ],
+        "targetType": "discover composition, metric scale, invariant directions, and parameter generalization",
+        "centralMechanism": "direct composition gives T^2=5I; norm expansion gives uniform scale sqrt(5); invariant slopes solve a quadratic",
+        "secondaryMechanisms": [
+          "golden-ratio slopes",
+          "inverse via second application",
+          "T_a^2=(1+a^2)I"
+        ],
+        "criticalRepresentationChange": "coordinate rule -> geometric similarity/reflection-like behavior",
+        "diagramTopology": "coordinate plane with transformed shapes and two invariant lines through origin",
+        "smallCaseSignature": "images of a few points/square reveal uniform geometry before proof",
+        "progressionSignature": {
+          "opening": "plot examples",
+          "firstDeepening": "compute T twice",
+          "core": "prove distance scaling",
+          "transfer": "classify invariant lines",
+          "stretch": "generalize coefficient a"
+        },
+        "solutionDependencyGraphSummary": "examples -> composition identity -> norm identity -> invariant-slope equation -> parameter family",
+        "distinctiveFeatures": [
+          "T^2=5I discovered without matrices",
+          "golden-ratio invariant slopes",
+          "all distances scale uniformly"
+        ],
+        "knownClassicOverlap": "Generic linear-transformation/eigenvector exercises are standard, but no exact rule with this full interview progression was located.",
+        "authorProvenance": "Euler metadata marks original / independent-original."
+      },
+      "originalityDecision": "PASS_WITH_NOTES",
+      "fidelityDecision": "PASS",
+      "provenanceDisposition": "independent-original-with-generic-linear-algebra-overlap",
+      "retrieval": {
+        "A": {
+          "completed": true,
+          "note": "Deep corpus checked; OX-2026-ITERATED-FUNCTION-SKETCH shares composition/iteration language but is mathematically unrelated."
+        },
+        "B": {
+          "completed": true,
+          "note": "Broad inventory checked; no planar-transform fingerprint."
+        },
+        "C": {
+          "completed": true,
+          "note": "Current bank checked; no 2D linear transformation mini-theory."
+        },
+        "D": {
+          "completed": true,
+          "note": "Euler triangle-midpoint-cycle is intentionally clustered with this family as euler-affine-dynamics; mechanisms remain distinct."
+        },
+        "E": {
+          "completed": true,
+          "note": "External search found generic linear-transformation exercises and one coincidental appearance of the coordinate pair, but no exact T^2/metric/invariant-line problem family."
+        }
+      },
+      "externalSearchQueries": [
+        "linear transformation x+2y 2x-y T squared 5",
+        "(x+2y,2x-y) invariant lines transformation"
+      ],
+      "nearestMatches": [
+        {
+          "pool": "D",
+          "source": "oxford-euler-triangle-midpoint-cycle",
+          "matchedFingerprintFeatures": [
+            "affine iteration",
+            "fixed/invariant geometric structure",
+            "visual examples→compressed map"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 1,
+            "target": 1,
+            "kernel": 1,
+            "decisiveMechanism": 1,
+            "diagram": 1,
+            "progression": 1,
+            "transferStretch": 1
+          },
+          "explanation": "Existing euler-affine-dynamics cluster is warranted, but the midpoint contraction and diagonal-blend similarity map are not duplicates."
+        },
+        {
+          "pool": "E",
+          "source": "UVic linear-transformations example containing x+2y, 2x-y coordinates",
+          "url": "https://web.uvic.ca/~eaglec/Math110/sec-BasicOperations.html",
+          "matchedFingerprintFeatures": [
+            "same coordinate expressions appear as part of a transformation sum",
+            "linear transformation context"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 1,
+            "target": 0,
+            "kernel": 0,
+            "decisiveMechanism": 0,
+            "diagram": 0,
+            "progression": 0,
+            "transferStretch": 0
+          },
+          "explanation": "Coincidental coordinate overlap only; it does not contain T^2=5I, metric scaling, invariant directions, or the candidate progression."
+        }
+      ],
+      "classicProblemCheck": {
+        "result": "NO_EXACT_CLASSIC_FOUND",
+        "notes": "Underlying matrix ideas are standard; exact custom mini-theory appears sufficiently distinct in the searched corpus."
+      },
+      "fidelityNotes": {
+        "accessibleOpening": "Plotting points/shapes makes the unfamiliar definition approachable.",
+        "promptability": "Composition, metric, invariant-line and parameter stages are naturally separable.",
+        "reasoningEvidence": "Definition exploration, visualization, algebraic proof, case analysis, abstraction and transfer are rich.",
+        "transfer": "T_a is a clean generalization.",
+        "ceiling": "Strong without requiring university linear algebra vocabulary.",
+        "prerequisiteBurden": "Basic coordinates and algebra only."
+      },
+      "requiredChanges": [
+        "Retain euler-affine-dynamics similarity cluster.",
+        "Do not describe generic eigenvector/similarity ideas themselves as novel; novelty lies in the self-contained rule/progression."
+      ],
+      "bankDisposition": [
+        "originality pass with generic-technique note",
+        "Oxford-fidelity approved"
+      ],
+      "wouldRejectIfClaimedOriginal": false,
+      "similarityClusterRecommendation": {
+        "action": "retain",
+        "id": "euler-affine-dynamics",
+        "note": "Appropriate sequencing control with triangle-midpoint-cycle."
+      },
+      "handoff": {
+        "canProgressAfterGI": true,
+        "note": "Hilbert gates pass; can progress after G/I."
+      }
+    },
+    {
+      "familyId": "oxford-euler-difference-closed-sets",
+      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-difference-closed-sets.ts",
+      "subjectKind": "same-wave-proposal",
+      "authorPr": {
+        "agent": "E — Euler",
+        "number": 134,
+        "head": "a18db48700800c1987e2abd43726254ba25267dd"
+      },
+      "reviewedAt": "2026-09-05",
+      "reviewer": {
+        "agent": "H",
+        "name": "Hilbert"
+      },
+      "fingerprint": {
+        "surfaceObjects": [
+          "finite nonnegative real set",
+          "absolute-difference closure"
+        ],
+        "constraints": [
+          "|x-y| belongs to S for every x,y in S"
+        ],
+        "targetType": "classify all finite difference-closed sets and then the signed-difference variant",
+        "centralMechanism": "least positive element plus repeated subtraction forces every element onto one arithmetic grid; the maximum then fills all intermediate multiples",
+        "secondaryMechanisms": [
+          "finiteness for minimum/maximum",
+          "signed closure generates infinitely many multiples unless zero"
+        ],
+        "criticalRepresentationChange": "closure operation -> Euclidean descent/arithmetic-grid structure",
+        "diagramTopology": "number line, optional",
+        "smallCaseSignature": "{0,d,...,nd} examples expose the candidate classification",
+        "progressionSignature": {
+          "opening": "generate examples",
+          "firstDeepening": "choose least positive element",
+          "core": "force multiples and fill gaps",
+          "transfer": "prove converse",
+          "stretch": "switch to signed differences"
+        },
+        "solutionDependencyGraphSummary": "0 in S -> minimal d -> repeated differences force x=kd -> maximum nd -> repeated subtraction fills 0..nd -> converse",
+        "distinctiveFeatures": [
+          "finite absolute-difference closure",
+          "complete equally spaced initial grid",
+          "signed-difference transfer"
+        ],
+        "knownClassicOverlap": "A published MathOverflow discussion gives the same finite absolute-difference closure classification using Euclidean/repeated-subtraction reasoning (for positive integers); the candidate extends the ambient set to nonnegative reals but preserves the kernel.",
+        "authorProvenance": "Euler metadata marks original / independent-original."
+      },
+      "originalityDecision": "REJECT_TOO_CLOSE",
+      "fidelityDecision": "PASS",
+      "provenanceDisposition": "reject-as-new-original",
+      "retrieval": {
+        "A": {
+          "completed": true,
+          "note": "Deep corpus checked; no exact closure problem."
+        },
+        "B": {
+          "completed": true,
+          "note": "Broad inventory checked; no absolute-difference-set fingerprint."
+        },
+        "C": {
+          "completed": true,
+          "note": "Current bank checked; no exact set-closure classification."
+        },
+        "D": {
+          "completed": true,
+          "note": "Dirichlet thirds-closed/midpoint-closed families are same-wave closure-classification neighbours; gcd-descent also shares Euclidean subtraction."
+        },
+        "E": {
+          "completed": true,
+          "note": "External search found essentially the same finite set closed under absolute differences and the same arithmetic-progression conclusion/proof mechanism."
+        }
+      },
+      "externalSearchQueries": [
+        "finite set closed under absolute differences arithmetic progression",
+        "distance among integer set absolute differences still in set arithmetic progression"
+      ],
+      "nearestMatches": [
+        {
+          "pool": "D",
+          "source": "oxford-d-thirds-closed-integers",
+          "matchedFingerprintFeatures": [
+            "finite closure definition",
+            "classification into arithmetic structure",
+            "small-case/order progression"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 1,
+            "target": 2,
+            "kernel": 1,
+            "decisiveMechanism": 1,
+            "diagram": 1,
+            "progression": 2,
+            "transferStretch": 1
+          },
+          "explanation": "Different operation and decisive argument, but substantial repetition risk if both survive."
+        },
+        {
+          "pool": "D",
+          "source": "oxford-d-gcd-descent-network",
+          "matchedFingerprintFeatures": [
+            "repeated subtraction",
+            "Euclidean descent",
+            "gcd/minimal-step structure"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 0,
+            "target": 0,
+            "kernel": 1,
+            "decisiveMechanism": 1,
+            "diagram": 0,
+            "progression": 1,
+            "transferStretch": 0
+          },
+          "explanation": "Technique overlap only."
+        },
+        {
+          "pool": "E",
+          "source": "MathOverflow — Distance among integer set",
+          "url": "https://mathoverflow.net/questions/426770/distance-among-integer-set/426786",
+          "matchedFingerprintFeatures": [
+            "finite set closed under |x-y|",
+            "arithmetic progression classification",
+            "Euclidean/repeated-difference proof"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 3,
+            "target": 3,
+            "kernel": 3,
+            "decisiveMechanism": 3,
+            "diagram": 0,
+            "progression": 2,
+            "transferStretch": 2
+          },
+          "explanation": "Changing positive integers to nonnegative reals does not alter the decisive finite-minimum/repeated-subtraction kernel; this is too close to the known result."
+        }
+      ],
+      "classicProblemCheck": {
+        "result": "TOO_CLOSE_TO_KNOWN_RESULT",
+        "notes": "Same closure operation, classification and decisive Euclidean mechanism; ambient-domain change is insufficient."
+      },
+      "fidelityNotes": {
+        "accessibleOpening": "New definition plus small examples is excellent.",
+        "promptability": "Minimum positive element, repeated subtraction and converse provide clean tutor interventions.",
+        "reasoningEvidence": "Definition exploration, pattern recognition, strategic simplification, proof and transfer are visible.",
+        "transfer": "Signed differences is a natural stronger closure condition.",
+        "ceiling": "Good.",
+        "prerequisiteBurden": "Very low."
+      },
+      "requiredChanges": [
+        "Do not keep this as independent-original; replace the closure operation or target deeply enough to change the mathematical kernel.",
+        "If a replacement remains a finite closure→arithmetic-structure family, coordinate similarity clustering with Dirichlet's closure candidates."
+      ],
+      "bankDisposition": [
+        "excellent Oxford fidelity but originality hard-reject",
+        "reject from adaptive-original candidate pool"
+      ],
+      "wouldRejectIfClaimedOriginal": true,
+      "similarityClusterRecommendation": {
+        "action": "propose",
+        "id": "finite-closure-arithmetic-structure",
+        "note": "If a revised Euler closure family survives, group it with Dirichlet's closure-classification cluster to avoid adjacent repetition."
+      },
+      "handoff": {
+        "canProgressAfterGI": false,
+        "note": "Fidelity passes; originality blocks the candidate as authored."
+      }
+    }
+  ]
+}
