@@ -133,6 +133,7 @@ export const cantorFunctionFamiliesB: readonly CantorFamilyAuthoring[] = [
     novelty: "high",
     abstraction: "moderate",
     similarityClusterId: "mobius-iteration",
+    provenance: { originType: "classic-problem", sourceCategory: "secondary-reference" },
     originalityRisk: "medium",
     correctnessRisk: "low",
     calibrationRisk: "medium"
