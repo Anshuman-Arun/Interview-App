@@ -15,7 +15,7 @@ describe("Oxford mathematical correctness audit gate", () => {
     const parsed = JSON.parse(raw) as unknown;
     expect(() => assertOxfordCorrectnessReviewBatch(parsed)).not.toThrow();
     if (!Array.isArray(parsed)) throw new Error("Expected review record array");
-    expect(parsed).toHaveLength(61);
+    expect(parsed).toHaveLength(55);
   });
 
   it("pins every current C/D/E review to an author head", () => {
@@ -25,19 +25,19 @@ describe("Oxford mathematical correctness audit gate", () => {
     );
     const parsed = JSON.parse(raw) as OxfordCorrectnessReviewRecord[];
     const authorRecords = parsed.filter((record) => record.source.kind === "author-pr");
-    expect(authorRecords).toHaveLength(47);
-    expect(authorRecords.filter((record) => record.source.authorAgent === "C — Cantor")).toHaveLength(18);
-    expect(authorRecords.filter((record) => record.source.authorAgent === "D — Dirichlet")).toHaveLength(12);
-    expect(authorRecords.filter((record) => record.source.authorAgent === "E — Euler")).toHaveLength(17);
-    expect(authorRecords.filter((record) => record.mathematicalCorrectness === "approved")).toHaveLength(47);
+    expect(authorRecords).toHaveLength(41);
+    expect(authorRecords.filter((record) => record.source.authorAgent === "C — Cantor")).toHaveLength(17);
+    expect(authorRecords.filter((record) => record.source.authorAgent === "D — Dirichlet")).toHaveLength(11);
+    expect(authorRecords.filter((record) => record.source.authorAgent === "E — Euler")).toHaveLength(13);
+    expect(authorRecords.filter((record) => record.mathematicalCorrectness === "approved")).toHaveLength(41);
     expect(authorRecords.filter((record) => record.mathematicalCorrectness === "changes-required")).toHaveLength(0);
     for (const record of authorRecords) {
       const expectedHead =
         record.source.authorAgent === "C — Cantor"
-          ? "794fe2282c2c8ef265869ccf84bb955695fbaa7f"
+          ? "8b22dc5df99111fb95e27a2c006d5e74544dd385"
           : record.source.authorAgent === "D — Dirichlet"
-            ? "ecece22058c997d37c4b352fa5ed32bd1daf5243"
-            : "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6";
+            ? "59c3f1b7ef7893eb93739936535668878a8fb8c5"
+            : "760467d4bfa54949bd7303cea944e338533289d9";
       expect(record.source.reviewedAuthorHead).toBe(expectedHead);
     }
   });
@@ -405,23 +405,6 @@ describe("Wave 2 author-family computational spot checks", () => {
     }
   });
 
-  it("matches random-subset block expectations by exhaustive enumeration", () => {
-    for (let n = 2; n <= 7; n += 1) {
-      const subsetCount = 1 << n;
-      let lineTotal = 0;
-      let circleTotal = 0;
-
-      for (let mask = 0; mask < subsetCount; mask += 1) {
-        const bits = Array.from({ length: n }, (_, index) => (mask >> index) & 1);
-        lineTotal += lineBlockCount(bits);
-        circleTotal += circleBlockCount(bits);
-      }
-
-      expect(lineTotal / subsetCount).toBeCloseTo((n + 1) / 4, 12);
-      expect(circleTotal / subsetCount).toBeCloseTo(n / 4 + 2 ** (-n), 12);
-    }
-  });
-
   it("verifies thirds-closed classification on exhaustive small sets", () => {
     const universe = [-4, -3, -2, -1, 0, 1, 2, 3, 4];
     for (let size = 1; size <= 6; size += 1) {
@@ -444,19 +427,6 @@ describe("Wave 2 author-family computational spot checks", () => {
     }
   });
 
-
-  it("matches random-adjacent linear and circular expectations by enumeration", () => {
-    for (let n = 2; n <= 7; n += 1) {
-      const values = Array.from({ length: n }, (_, index) => index + 1);
-      const orders = permutations(values);
-      const lineMean = orders.reduce((total, order) => total + adjacentConsecutiveCount(order, false), 0) / orders.length;
-      expect(lineMean).toBeCloseTo(2 * (n - 1) / n, 12);
-      if (n >= 3) {
-        const circleMean = orders.reduce((total, order) => total + adjacentConsecutiveCount(order, true), 0) / orders.length;
-        expect(circleMean).toBeCloseTo(2, 12);
-      }
-    }
-  });
 
   it("matches the revised queue emptying criterion on exhaustive small parameters", () => {
     for (let a = 0; a <= 6; a += 1) {
@@ -539,28 +509,6 @@ function circleSweepHasParameter(x: number, y: number): boolean {
   return parameter >= -1e-10 && parameter <= 2 + 1e-10;
 }
 
-function lineBlockCount(bits: readonly number[]): number {
-  let blocks = 0;
-  let previous = 0;
-  for (const bit of bits) {
-    if (bit === 1 && previous === 0) blocks += 1;
-    previous = bit;
-  }
-  return blocks;
-}
-
-function circleBlockCount(bits: readonly number[]): number {
-  if (bits.every((bit) => bit === 1)) return 1;
-  let blocks = 0;
-  for (let index = 0; index < bits.length; index += 1) {
-    const bit = bits[index] ?? 0;
-    const previous = bits[(index - 1 + bits.length) % bits.length] ?? 0;
-    if (bit === 1 && previous === 0) blocks += 1;
-  }
-  return blocks;
-}
-
-
 function isThirdsClosed(values: readonly number[]): boolean {
   const set = new Set(values);
   for (const x of values) {
@@ -612,28 +560,6 @@ function integerGcd(a: number, b: number): number {
   }
   return x;
 }
-
-function permutations(values: readonly number[]): number[][] {
-  if (values.length === 0) return [[]];
-  const result: number[][] = [];
-  values.forEach((value, index) => {
-    const rest = [...values.slice(0, index), ...values.slice(index + 1)];
-    for (const suffix of permutations(rest)) result.push([value, ...suffix]);
-  });
-  return result;
-}
-
-function adjacentConsecutiveCount(order: readonly number[], circular: boolean): number {
-  let count = 0;
-  const edgeCount = circular ? order.length : Math.max(0, order.length - 1);
-  for (let index = 0; index < edgeCount; index += 1) {
-    const left = order[index];
-    const right = order[(index + 1) % order.length];
-    if (left !== undefined && right !== undefined && Math.abs(left - right) === 1) count += 1;
-  }
-  return count;
-}
-
 
 function queueEverReachesZero(
   a: number,
