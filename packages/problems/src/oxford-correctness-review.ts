@@ -136,10 +136,10 @@ export function assertOxfordCorrectnessReviewRecord(
   for (const finding of value.findings) {
     if (!isRecord(finding)) throw new Error("each correctness finding must be an object");
     assertCanonicalId(finding.id, "finding.id");
-    if (findingIds.has(finding.id as string)) {
-      throw new Error(`duplicate correctness finding id "${String(finding.id)}"`);
+    if (findingIds.has(finding.id)) {
+      throw new Error(`duplicate correctness finding id "${finding.id}"`);
     }
-    findingIds.add(finding.id as string);
+    findingIds.add(finding.id);
     if (typeof finding.area !== "string" || !FINDING_AREA_SET.has(finding.area)) {
       throw new Error("finding.area is invalid");
     }
