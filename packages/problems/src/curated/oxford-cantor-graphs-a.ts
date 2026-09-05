@@ -121,7 +121,8 @@ export const cantorGraphFamiliesA: readonly CantorFamilyAuthoring[] = [
       ["precision-checking", "primary"],
       ["proof-construction", "primary"],
       ["generalization", "supporting"],
-      ["guided-adaptation", "supporting"]
+      ["guided-adaptation", "supporting"],
+      ["transfer", "supporting"]
     ),
     difficulty: { entry: "introductory", core: "standard", ceiling: "strong" },
     timing: cantorTiming([2, 5], [15, 24], [12, 20], [4, 8], 24),
@@ -253,7 +254,8 @@ export const cantorGraphFamiliesA: readonly CantorFamilyAuthoring[] = [
       ["precision-checking", "supporting"],
       ["technique", "supporting"],
       ["generalization", "primary"],
-      ["guided-adaptation", "supporting"]
+      ["guided-adaptation", "supporting"],
+      ["transfer", "primary"]
     ),
     difficulty: { entry: "introductory", core: "standard", ceiling: "strong" },
     timing: cantorTiming([2, 5], [15, 23], [12, 20], [4, 7], 23),
@@ -383,7 +385,9 @@ export const cantorGraphFamiliesA: readonly CantorFamilyAuthoring[] = [
       ["precision-checking", "supporting"],
       ["graph-sketching", "primary"],
       ["representation-switching", "supporting"],
-      ["proof-construction", "supporting"]
+      ["proof-construction", "supporting"],
+      ["generalization", "primary"],
+      ["transfer", "primary"]
     ),
     difficulty: { entry: "introductory-plus", core: "standard", ceiling: "strong" },
     timing: cantorTiming([2, 5], [16, 24], [13, 21], [4, 8], 24),
@@ -644,7 +648,9 @@ export const cantorGraphFamiliesA: readonly CantorFamilyAuthoring[] = [
       ["strategic-simplification", "supporting"],
       ["precision-checking", "primary"],
       ["case-analysis", "supporting"],
-      ["representation-switching", "primary"]
+      ["representation-switching", "primary"],
+      ["generalization", "primary"],
+      ["transfer", "primary"]
     ),
     difficulty: { entry: "introductory-plus", core: "standard", ceiling: "strong" },
     timing: cantorTiming([2, 5], [16, 24], [13, 21], [4, 8], 24),
