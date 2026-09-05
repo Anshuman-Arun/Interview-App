@@ -1,74 +1,6 @@
 import { authorCuratedProblem, type CuratedProblemSpec } from "../../curated-authoring.js";
 import { DIRICHLET_CANDIDATE_REVIEW_NOTES, evidence, makeDirichletAdaptive } from "./support.js";
 
-export const oxfordDIdempotentMapsSpec: CuratedProblemSpec = {
-  id: "oxford-d-idempotent-maps",
-  title: "Maps That Stabilize After One Step",
-  mode: "OXFORD_MATHEMATICS",
-  category: "logic and proof",
-  topics: ["finite functions", "counting", "structure"],
-  difficulty: "uncalibrated-oxford-candidate",
-  prompt: "Let X be an n-element labelled set with n>=1, and let f:X->X satisfy f(f(x))=f(x) for every x. First understand what such a map must look like. Then count how many such maps exist, and refine the count when exactly k points occur in the image.",
-  givenInformation: ["The condition f(f(x))=f(x) is often called idempotence, but no prior knowledge of that term is needed.", "The set X is labelled, so different choices of fixed points count separately."],
-  approaches: [{ id: "image-fixed-points", label: "Identify image points with fixed points, then count by choosing the image first" }],
-  milestones: [
-    { id: "draw-small-idempotent-maps", description: "Construct examples on two and three points and notice that every arrow lands at a fixed point.", approachIds: ["image-fixed-points"], hintLevels: [1] },
-    { id: "prove-image-equals-fixed", description: "Show every image point is fixed and every fixed point belongs to the image.", approachIds: ["image-fixed-points"], prerequisiteIds: ["draw-small-idempotent-maps"], hintLevels: [2] },
-    { id: "characterize-star-components", description: "Describe the directed graph as fixed roots with all remaining vertices pointing directly to one root.", approachIds: ["image-fixed-points"], prerequisiteIds: ["prove-image-equals-fixed"], hintLevels: [3] },
-    { id: "count-by-image-size", description: "Choose k fixed/image points and map each of the other n-k points independently to one of them, obtaining C(n,k)k^(n-k).", approachIds: ["image-fixed-points"], prerequisiteIds: ["characterize-star-components"], hintLevels: [4] },
-    { id: "sum-and-refine", description: "Sum over k to count all idempotent maps and analyze simple consequences such as the possible image sizes and extremal counts.", approachIds: ["image-fixed-points"], prerequisiteIds: ["count-by-image-size"], hintLevels: [5] }
-  ],
-  edges: [
-    { from: "draw-small-idempotent-maps", to: "prove-image-equals-fixed" },
-    { from: "prove-image-equals-fixed", to: "characterize-star-components" },
-    { from: "characterize-star-components", to: "count-by-image-size" },
-    { from: "count-by-image-size", to: "sum-and-refine" }
-  ],
-  commonErrors: [
-    { id: "fixed-subset-empty", description: "Allows k=0 even though a function from a nonempty finite set has a nonempty image." },
-    { id: "roots-may-map-between", description: "Chooses an image set and then permits image points to map to other image points; idempotence forces every image point to fix itself." },
-    { id: "unlabelled-partition-count", description: "Counts only component sizes and forgets X is labelled, so choosing which k points are fixed contributes a binomial factor." }
-  ],
-  followUps: ["What is the number with image size exactly one? Exactly n?", "How would the picture change if only f(f(f(x)))=f(x) were required?"],
-  extensions: [
-    { id: "exact-k-fixed-points", prompt: "Prove that the number of idempotent maps with exactly k fixed points is C(n,k)k^(n-k)." },
-    { id: "third-iterate-contrast", prompt: "Explore f^3=f on a finite set. Which cycle lengths can now appear among points in the image?" }
-  ],
-  hints: [
-    { level: 1, text: "If y=f(x), apply f once more. The defining equation immediately tells you what f(y) is.", formulations: ["look at a point in the image", "apply the condition to an arrow endpoint"] },
-    { level: 2, text: "Every y in the image satisfies f(y)=y. Conversely every fixed point y equals f(y), so it is in the image.", formulations: ["image equals fixed-point set", "the roots are exactly the image"] },
-    { level: 3, text: "Once the fixed points are chosen, every nonfixed point must point directly to one of them; there are no longer tails or nontrivial cycles.", formulations: ["components are depth-one stars", "all nonroots choose a root"] },
-    { level: 4, text: "For image size k, first choose the k fixed points, then give each of the remaining n-k labelled points one of k possible images.", formulations: ["choose roots then assignments", "binomial times k to the n-k"] },
-    { level: 5, text: "Sum the exact-k count over k=1,...,n. The k=1 and k=n cases are useful checks on the formula.", formulations: ["sum over image size", "check constant maps and the identity"] }
-  ],
-  canonicalSolution: "If y is in the image, write y=f(x). Then f(y)=f(f(x))=f(x)=y, so every image point is fixed. Conversely, if f(y)=y then y=f(y), so every fixed point is in the image. Thus the image is exactly the fixed-point set. The functional digraph therefore consists of fixed vertices, each with any number of nonfixed vertices pointing directly to it; there are no longer tails and no nontrivial cycles. If the image has size k, choose those k fixed points in C(n,k) ways. Each of the remaining n-k labelled points may map independently to any of the k fixed points, giving k^(n-k) choices. Hence the number with image size exactly k is C(n,k)k^(n-k), and the total number is sum_{k=1}^n C(n,k)k^(n-k). For f^3=f, every image point y satisfies f^2(y)=y, so the image may contain fixed points and 2-cycles, showing a genuine structural change.",
-  verificationNotes: "For n>=1 the image is nonempty. The exact-k formula correctly gives n constant maps at k=1 and one identity map at k=n. In the extension f^3=f, if y=f(x) then f^2(y)=f^3(x)=f(x)=y, so image points have period 1 or 2; this is only a contrast prompt, not a full count.",
-  reviewStatus: "expert-review",
-  reviewNotes: DIRICHLET_CANDIDATE_REVIEW_NOTES,
-  oxfordAdaptive: makeDirichletAdaptive({
-    familyId: "oxford-d-idempotent-maps",
-    domains: ["set-theory", "functions", "combinatorics"],
-    contentConcepts: ["set-maps", "composition-iteration", "counting-structure"],
-    prerequisiteConcepts: ["set-notation", "functions-graphs", "counting-principles"],
-    skillEvidence: [evidence("definition-exploration", "primary"), evidence("representation-switching", "supporting"), evidence("proof-construction", "primary"), evidence("technique", "secondary"), evidence("generalization", "supporting"), evidence("small-case-exploration", "supporting"), evidence("precision-checking", "supporting")],
-    difficulty: { entry: "introductory", core: "standard", ceiling: "strong" },
-    novelty: "moderate",
-    abstraction: "moderate",
-    introducesNewDefinition: true,
-    stages: [
-      { id: "idempotent-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["set-theory", "functions", "combinatorics"], contentConcepts: ["set-maps", "composition-iteration"], skillEvidence: [evidence("definition-exploration", "primary"), evidence("small-case-exploration", "supporting")], milestones: [{ milestoneId: "draw-small-idempotent-maps", skillEvidence: [evidence("small-case-exploration", "primary"), evidence("definition-exploration", "supporting")], contentConcepts: ["set-maps"] }], extensionIds: [], difficulty: "introductory", timingKind: "opening", introducesNewDefinition: true },
-      { id: "idempotent-core", role: "core", prerequisiteStageIds: ["idempotent-opening"], domains: ["set-theory", "functions", "combinatorics"], contentConcepts: ["set-maps", "composition-iteration", "counting-structure"], skillEvidence: [evidence("proof-construction", "primary"), evidence("representation-switching", "supporting"), evidence("technique", "supporting")], milestones: [
-        { milestoneId: "prove-image-equals-fixed", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["set-maps", "composition-iteration"] },
-        { milestoneId: "characterize-star-components", skillEvidence: [evidence("representation-switching", "primary")], contentConcepts: ["set-maps"] },
-        { milestoneId: "count-by-image-size", skillEvidence: [evidence("technique", "primary")], contentConcepts: ["counting-structure"] }
-      ], extensionIds: [], difficulty: "standard", timingKind: "core" },
-      { id: "idempotent-transfer", role: "transfer", prerequisiteStageIds: ["idempotent-core"], domains: ["set-theory", "functions", "combinatorics"], contentConcepts: ["set-maps", "composition-iteration", "counting-structure"], skillEvidence: [evidence("generalization", "primary"), evidence("precision-checking", "supporting")], milestones: [{ milestoneId: "sum-and-refine", skillEvidence: [evidence("generalization", "primary"), evidence("precision-checking", "supporting")], contentConcepts: ["counting-structure"] }], extensionIds: ["exact-k-fixed-points", "third-iterate-contrast"], difficulty: "strong", timingKind: "transfer"
-      }
-    ]
-  })
-};
-export const oxfordDIdempotentMapsEntry = authorCuratedProblem(oxfordDIdempotentMapsSpec);
-
 export const oxfordDThreeReversalPermutationsSpec: CuratedProblemSpec = {
   id: "oxford-d-three-reversal-permutations",
   title: "Permutations Generated by Reversing Three Consecutive Cards",
@@ -124,13 +56,13 @@ export const oxfordDThreeReversalPermutationsSpec: CuratedProblemSpec = {
     abstraction: "low",
     introducesNewDefinition: false,
     stages: [
-      { id: "three-reversal-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["combinatorics"], contentConcepts: ["parity"], skillEvidence: [evidence("small-case-exploration", "primary"), evidence("invariants", "supporting")], milestones: [{ milestoneId: "inspect-single-reversal", skillEvidence: [evidence("small-case-exploration", "primary")], contentConcepts: ["parity"] }], extensionIds: [], difficulty: "introductory", timingKind: "opening" },
+      { id: "three-reversal-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["combinatorics"], contentConcepts: ["parity"], skillEvidence: [evidence("small-case-exploration", "primary"), evidence("invariants", "supporting")], milestones: [{ milestoneId: "inspect-single-reversal", skillEvidence: [evidence("small-case-exploration", "primary")], contentConcepts: ["parity"] }], extensionIds: [], difficulty: "introductory" },
       { id: "three-reversal-core", role: "core", prerequisiteStageIds: ["three-reversal-opening"], domains: ["combinatorics"], contentConcepts: ["parity", "counting-structure"], skillEvidence: [evidence("invariants", "primary"), evidence("representation-switching", "primary"), evidence("proof-construction", "primary")], milestones: [
         { milestoneId: "state-parity-obstruction", skillEvidence: [evidence("invariants", "primary")], contentConcepts: ["parity"] },
         { milestoneId: "reinterpret-as-adjacent-swaps", skillEvidence: [evidence("representation-switching", "primary")], contentConcepts: ["parity"] },
         { milestoneId: "construct-all-parity-preserving-targets", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["counting-structure"] }
-      ], extensionIds: [], difficulty: "standard", timingKind: "core" },
-      { id: "three-reversal-transfer", role: "transfer", prerequisiteStageIds: ["three-reversal-core"], domains: ["combinatorics"], contentConcepts: ["parity", "counting-structure"], skillEvidence: [evidence("technique", "primary"), evidence("precision-checking", "supporting")], milestones: [{ milestoneId: "count-and-minimize-moves", skillEvidence: [evidence("technique", "primary"), evidence("precision-checking", "supporting")], contentConcepts: ["counting-structure"] }], extensionIds: ["maximum-minimum-moves", "add-length-two-swap"], difficulty: "strong", timingKind: "transfer"
+      ], extensionIds: [], difficulty: "standard" },
+      { id: "three-reversal-transfer", role: "transfer", prerequisiteStageIds: ["three-reversal-core"], domains: ["combinatorics"], contentConcepts: ["parity", "counting-structure"], skillEvidence: [evidence("technique", "primary"), evidence("precision-checking", "supporting")], milestones: [{ milestoneId: "count-and-minimize-moves", skillEvidence: [evidence("technique", "primary"), evidence("precision-checking", "supporting")], contentConcepts: ["counting-structure"] }], extensionIds: ["maximum-minimum-moves", "add-length-two-swap"], difficulty: "strong"
       }
     ]
   })
@@ -192,13 +124,13 @@ export const oxfordDDivisorStepGeometrySpec: CuratedProblemSpec = {
     abstraction: "moderate",
     introducesNewDefinition: true,
     stages: [
-      { id: "divisor-geometry-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["number-theory", "graph-theory", "combinatorics"], contentConcepts: ["prime-structure", "divisibility", "paths-cycles-connectivity"], skillEvidence: [evidence("visualization", "primary"), evidence("small-case-exploration", "supporting")], milestones: [{ milestoneId: "draw-small-divisor-graphs", skillEvidence: [evidence("visualization", "primary"), evidence("small-case-exploration", "supporting")], contentConcepts: ["divisibility", "paths-cycles-connectivity"] }], extensionIds: [], difficulty: "introductory", timingKind: "opening", introducesNewDefinition: true },
+      { id: "divisor-geometry-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["number-theory", "graph-theory", "combinatorics"], contentConcepts: ["prime-structure", "divisibility", "paths-cycles-connectivity"], skillEvidence: [evidence("visualization", "primary"), evidence("small-case-exploration", "supporting")], milestones: [{ milestoneId: "draw-small-divisor-graphs", skillEvidence: [evidence("visualization", "primary"), evidence("small-case-exploration", "supporting")], contentConcepts: ["divisibility", "paths-cycles-connectivity"] }], extensionIds: [], difficulty: "introductory", introducesNewDefinition: true },
       { id: "divisor-geometry-core", role: "core", prerequisiteStageIds: ["divisor-geometry-opening"], domains: ["number-theory", "graph-theory", "combinatorics"], contentConcepts: ["prime-structure", "divisibility", "paths-cycles-connectivity", "counting-structure"], skillEvidence: [evidence("representation-switching", "primary"), evidence("proof-construction", "primary"), evidence("technique", "supporting")], milestones: [
         { milestoneId: "encode-exponent-vectors", skillEvidence: [evidence("representation-switching", "primary")], contentConcepts: ["prime-structure", "divisibility"] },
         { milestoneId: "identify-edge-coordinate-change", skillEvidence: [evidence("proof-construction", "supporting")], contentConcepts: ["paths-cycles-connectivity"] },
         { milestoneId: "derive-distance-and-path-count", skillEvidence: [evidence("proof-construction", "primary"), evidence("technique", "supporting")], contentConcepts: ["counting-structure", "paths-cycles-connectivity"] }
-      ], extensionIds: [], difficulty: "standard", timingKind: "core" },
-      { id: "divisor-geometry-transfer", role: "transfer", prerequisiteStageIds: ["divisor-geometry-core"], domains: ["number-theory", "graph-theory", "combinatorics"], contentConcepts: ["prime-structure", "divisibility", "paths-cycles-connectivity", "counting-structure"], skillEvidence: [evidence("generalization", "primary"), evidence("precision-checking", "supporting")], milestones: [{ milestoneId: "find-diameter-and-bipartition", skillEvidence: [evidence("generalization", "primary"), evidence("precision-checking", "supporting")], contentConcepts: ["paths-cycles-connectivity", "prime-structure"] }], extensionIds: ["vertex-count", "tree-classification"], difficulty: "strong", timingKind: "transfer"
+      ], extensionIds: [], difficulty: "standard" },
+      { id: "divisor-geometry-transfer", role: "transfer", prerequisiteStageIds: ["divisor-geometry-core"], domains: ["number-theory", "graph-theory", "combinatorics"], contentConcepts: ["prime-structure", "divisibility", "paths-cycles-connectivity", "counting-structure"], skillEvidence: [evidence("generalization", "primary"), evidence("precision-checking", "supporting")], milestones: [{ milestoneId: "find-diameter-and-bipartition", skillEvidence: [evidence("generalization", "primary"), evidence("precision-checking", "supporting")], contentConcepts: ["paths-cycles-connectivity", "prime-structure"] }], extensionIds: ["vertex-count", "tree-classification"], difficulty: "strong"
       }
     ]
   })
@@ -251,22 +183,23 @@ export const oxfordDTripleFlipCircleSpec: CuratedProblemSpec = {
   reviewNotes: DIRICHLET_CANDIDATE_REVIEW_NOTES,
   oxfordAdaptive: makeDirichletAdaptive({
     familyId: "oxford-d-triple-flip-circle",
-    domains: ["combinatorics", "number-theory"],
-    contentConcepts: ["parity", "modular-reasoning", "counting-structure"],
+    domains: ["combinatorics", "number-theory", "sequences-recurrences"],
+    contentConcepts: ["parity", "modular-reasoning", "counting-structure", "recurrence-structure"],
     prerequisiteConcepts: ["modular-arithmetic", "counting-principles"],
     skillEvidence: [evidence("small-case-exploration", "primary"), evidence("representation-switching", "primary"), evidence("invariants", "primary"), evidence("proof-construction", "primary"), evidence("precision-checking", "supporting"), evidence("generalization", "supporting")],
-    difficulty: { entry: "introductory", core: "standard", ceiling: "strong" },
+    difficulty: { entry: "introductory", core: "strong", ceiling: "strong" },
     novelty: "high",
     abstraction: "moderate",
     introducesNewDefinition: false,
+    provenance: { originType: "classic-problem", sourceCategory: "classic-mathematics" },
     stages: [
-      { id: "triple-flip-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["combinatorics", "number-theory"], contentConcepts: ["parity", "modular-reasoning"], skillEvidence: [evidence("small-case-exploration", "primary")], milestones: [{ milestoneId: "explore-small-circles", skillEvidence: [evidence("small-case-exploration", "primary")], contentConcepts: ["parity"] }], extensionIds: [], difficulty: "introductory", timingKind: "opening" },
-      { id: "triple-flip-core", role: "core", prerequisiteStageIds: ["triple-flip-opening"], domains: ["combinatorics", "number-theory"], contentConcepts: ["parity", "modular-reasoning", "counting-structure"], skillEvidence: [evidence("representation-switching", "primary"), evidence("invariants", "primary"), evidence("proof-construction", "primary")], milestones: [
+      { id: "triple-flip-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["combinatorics", "number-theory"], contentConcepts: ["parity", "modular-reasoning"], skillEvidence: [evidence("small-case-exploration", "primary")], milestones: [{ milestoneId: "explore-small-circles", skillEvidence: [evidence("small-case-exploration", "primary")], contentConcepts: ["parity"] }], extensionIds: [], difficulty: "introductory" },
+      { id: "triple-flip-core", role: "core", prerequisiteStageIds: ["triple-flip-opening"], domains: ["combinatorics", "number-theory", "sequences-recurrences"], contentConcepts: ["parity", "modular-reasoning", "counting-structure", "recurrence-structure"], skillEvidence: [evidence("representation-switching", "primary"), evidence("invariants", "primary"), evidence("proof-construction", "primary")], milestones: [
         { milestoneId: "encode-move-equations", skillEvidence: [evidence("representation-switching", "primary")], contentConcepts: ["parity"] },
         { milestoneId: "analyze-zero-effect-moves", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["modular-reasoning"] },
         { milestoneId: "classify-reachability", skillEvidence: [evidence("invariants", "primary"), evidence("proof-construction", "supporting")], contentConcepts: ["parity"] }
-      ], extensionIds: [], difficulty: "standard", timingKind: "core" },
-      { id: "triple-flip-transfer", role: "transfer", prerequisiteStageIds: ["triple-flip-core"], domains: ["combinatorics", "number-theory"], contentConcepts: ["parity", "modular-reasoning", "counting-structure"], skillEvidence: [evidence("precision-checking", "primary"), evidence("generalization", "supporting")], milestones: [{ milestoneId: "prove-sufficiency-by-counting", skillEvidence: [evidence("precision-checking", "primary")], contentConcepts: ["counting-structure", "parity"] }], extensionIds: ["two-lamp-transfer", "move-multiplicity"], difficulty: "strong", timingKind: "transfer"
+      ], extensionIds: [], difficulty: "strong" },
+      { id: "triple-flip-transfer", role: "transfer", prerequisiteStageIds: ["triple-flip-core"], domains: ["combinatorics", "number-theory"], contentConcepts: ["parity", "modular-reasoning", "counting-structure"], skillEvidence: [evidence("precision-checking", "primary"), evidence("generalization", "supporting")], milestones: [{ milestoneId: "prove-sufficiency-by-counting", skillEvidence: [evidence("precision-checking", "primary")], contentConcepts: ["counting-structure", "parity"] }], extensionIds: ["two-lamp-transfer", "move-multiplicity"], difficulty: "strong"
       }
     ]
   })
@@ -274,7 +207,6 @@ export const oxfordDTripleFlipCircleSpec: CuratedProblemSpec = {
 export const oxfordDTripleFlipCircleEntry = authorCuratedProblem(oxfordDTripleFlipCircleSpec);
 
 export const dirichletBatchDEntries = Object.freeze([
-  oxfordDIdempotentMapsEntry,
   oxfordDThreeReversalPermutationsEntry,
   oxfordDDivisorStepGeometryEntry,
   oxfordDTripleFlipCircleEntry
