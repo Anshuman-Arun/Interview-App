@@ -1,0 +1,417 @@
+[
+  {
+    "schemaVersion": 1,
+    "problemVersion": "1.0.0",
+    "reviewerAgent": "I — Itô",
+    "reviewedAt": "2026-09-04",
+    "source": {
+      "kind": "existing-bank"
+    },
+    "independentlySolved": true,
+    "statementChecked": true,
+    "approachesChecked": true,
+    "canonicalSolutionChecked": true,
+    "hintsChecked": true,
+    "extensionsChecked": true,
+    "prerequisitesChecked": true,
+    "unresolvedUncertainties": [],
+    "familyId": "oxford-six-people",
+    "mathematicalCorrectness": "approved",
+    "recommendation": "approve",
+    "independentSolutionSummary": "Model the six people as a two-colouring of K6. From any vertex, at least three of the five incident edges share a colour. If any edge among those three endpoints has that colour, it closes a monochromatic triangle; otherwise the three internal edges all have the opposite colour. For five people, a 5-cycle and its complement give a colouring with no monochromatic triangle.",
+    "computationalChecks": [
+      "Exhaustive enumeration of all 2^15 two-colourings of K6; explicit 5-cycle counterexample for K5."
+    ],
+    "findings": []
+  },
+  {
+    "schemaVersion": 1,
+    "problemVersion": "1.0.0",
+    "reviewerAgent": "I — Itô",
+    "reviewedAt": "2026-09-04",
+    "source": {
+      "kind": "existing-bank"
+    },
+    "independentlySolved": true,
+    "statementChecked": true,
+    "approachesChecked": true,
+    "canonicalSolutionChecked": true,
+    "hintsChecked": true,
+    "extensionsChecked": true,
+    "prerequisitesChecked": true,
+    "unresolvedUncertainties": [],
+    "familyId": "oxford-hilbert-hotel",
+    "mathematicalCorrectness": "approved",
+    "recommendation": "approve",
+    "independentSolutionSummary": "For one new guest, shift old guest n to room n+1 and use room 1. For one countably infinite bus, send old guest n to room 2n and bus guest k to room 2k-1. The two image sets are disjoint and exhaust the positive integers, so the assignment is collision-free and complete. Countably many buses can be handled by any explicit bijection from N×N to N after reserving a countable subset for existing guests.",
+    "computationalChecks": [],
+    "findings": []
+  },
+  {
+    "schemaVersion": 1,
+    "problemVersion": "1.0.0",
+    "reviewerAgent": "I — Itô",
+    "reviewedAt": "2026-09-04",
+    "source": {
+      "kind": "existing-bank"
+    },
+    "independentlySolved": true,
+    "statementChecked": true,
+    "approachesChecked": true,
+    "canonicalSolutionChecked": true,
+    "hintsChecked": true,
+    "extensionsChecked": true,
+    "prerequisitesChecked": true,
+    "unresolvedUncertainties": [],
+    "familyId": "oxford-prisoner-hats",
+    "mathematicalCorrectness": "approved",
+    "recommendation": "approve",
+    "independentSolutionSummary": "Encode two colours by 0 and 1. The back prisoner announces the parity of the 99 visible hats. Each later prisoner subtracts the visible hats and the already-deduced hats behind them from that announced parity, uniquely determining their own bit. Induction gives correctness for prisoners 99 through 1; only the first speaker is not guaranteed.",
+    "computationalChecks": [
+      "Exhaustive verification of the parity strategy for every hat assignment in a six-prisoner analogue."
+    ],
+    "findings": []
+  },
+  {
+    "schemaVersion": 1,
+    "problemVersion": "1.0.0",
+    "reviewerAgent": "I — Itô",
+    "reviewedAt": "2026-09-04",
+    "source": {
+      "kind": "existing-bank"
+    },
+    "independentlySolved": true,
+    "statementChecked": true,
+    "approachesChecked": true,
+    "canonicalSolutionChecked": true,
+    "hintsChecked": true,
+    "extensionsChecked": true,
+    "prerequisitesChecked": true,
+    "unresolvedUncertainties": [],
+    "familyId": "oxford-domino-chessboard",
+    "mathematicalCorrectness": "approved",
+    "recommendation": "approve",
+    "independentSolutionSummary": "A standard checkerboard colouring gives 32 squares of each colour. The specified opposite corners have the same colour, so removing them leaves a 30/32 imbalance. Every edge-adjacent domino covers one square of each colour, hence 31 dominoes would require 31 of each colour, which is impossible.",
+    "computationalChecks": [],
+    "findings": []
+  },
+  {
+    "schemaVersion": 1,
+    "problemVersion": "1.0.0",
+    "reviewerAgent": "I — Itô",
+    "reviewedAt": "2026-09-04",
+    "source": {
+      "kind": "existing-bank"
+    },
+    "independentlySolved": true,
+    "statementChecked": true,
+    "approachesChecked": true,
+    "canonicalSolutionChecked": true,
+    "hintsChecked": true,
+    "extensionsChecked": true,
+    "prerequisitesChecked": true,
+    "unresolvedUncertainties": [],
+    "familyId": "oxford-divisors-square-parity",
+    "mathematicalCorrectness": "approved",
+    "recommendation": "approve",
+    "independentSolutionSummary": "Pair each positive divisor d of n with n/d. This involution has a fixed point exactly when d^2=n. A nonsquare therefore has only two-element divisor pairs, while a square has exactly one fixed divisor sqrt(n), proving the parity characterization in both directions. The prime-exponent product formula gives the same equivalence.",
+    "computationalChecks": [],
+    "findings": []
+  },
+  {
+    "schemaVersion": 1,
+    "problemVersion": "1.0.0",
+    "reviewerAgent": "I — Itô",
+    "reviewedAt": "2026-09-04",
+    "source": {
+      "kind": "existing-bank"
+    },
+    "independentlySolved": true,
+    "statementChecked": true,
+    "approachesChecked": true,
+    "canonicalSolutionChecked": true,
+    "hintsChecked": true,
+    "extensionsChecked": true,
+    "prerequisitesChecked": true,
+    "unresolvedUncertainties": [],
+    "familyId": "oxford-euclid-primes",
+    "mathematicalCorrectness": "approved",
+    "recommendation": "approve",
+    "independentSolutionSummary": "Assume a complete finite prime list p1,...,pk and set N=p1...pk+1. N is greater than 1, so it has a prime divisor q. Every listed prime leaves remainder 1 on N and therefore cannot be q, contradicting completeness. N itself need not be prime.",
+    "computationalChecks": [
+      "Retained explicit composite Euclid number 2·3·5·7·11·13+1=30031=59·509."
+    ],
+    "findings": []
+  },
+  {
+    "schemaVersion": 1,
+    "problemVersion": "1.0.0",
+    "reviewerAgent": "I — Itô",
+    "reviewedAt": "2026-09-04",
+    "source": {
+      "kind": "existing-bank"
+    },
+    "independentlySolved": true,
+    "statementChecked": true,
+    "approachesChecked": true,
+    "canonicalSolutionChecked": true,
+    "hintsChecked": true,
+    "extensionsChecked": true,
+    "prerequisitesChecked": true,
+    "unresolvedUncertainties": [],
+    "familyId": "oxford-nested-radical-sequence",
+    "mathematicalCorrectness": "approved",
+    "recommendation": "approve",
+    "independentSolutionSummary": "Inductively 0<=x_n<=2. On that interval, sqrt(2+x)>=x because (2-x)(x+1)>=0, so the sequence is increasing and bounded and therefore converges. Passing to the limit gives L^2-L-2=0, and nonnegativity selects L=2. The stated error identity follows by rationalizing 2-sqrt(2+x).",
+    "computationalChecks": [
+      "Numerical identity and invariant-interval sweep for x in {0,0.1,...,2}; this is a regression check, not the proof."
+    ],
+    "findings": []
+  },
+  {
+    "schemaVersion": 1,
+    "problemVersion": "1.0.0",
+    "reviewerAgent": "I — Itô",
+    "reviewedAt": "2026-09-04",
+    "source": {
+      "kind": "existing-bank"
+    },
+    "independentlySolved": true,
+    "statementChecked": true,
+    "approachesChecked": true,
+    "canonicalSolutionChecked": true,
+    "hintsChecked": true,
+    "extensionsChecked": true,
+    "prerequisitesChecked": true,
+    "unresolvedUncertainties": [],
+    "familyId": "oxford-even-odd-degrees",
+    "mathematicalCorrectness": "changes-required",
+    "recommendation": "revise",
+    "independentSolutionSummary": "The core claim follows because the degree sum is twice the edge count, hence even, so the number of odd summands is even. Equivalently, starting from the empty graph, each added edge flips degree parity at exactly two endpoints.",
+    "computationalChecks": [],
+    "findings": [
+      {
+        "id": "euler-extension-undeclared",
+        "area": "extension",
+        "severity": "error",
+        "status": "open",
+        "summary": "The `components` extension asks the candidate to discuss Euler trails without defining the object or stating the intended theorem.",
+        "evidence": "The candidate-visible problem supplies only the graph model. The extension introduces an additional graph-theory concept not supplied by the family; under the Wave 2 prerequisite rule it should define the term and a precise target, or be removed."
+      }
+    ]
+  },
+  {
+    "schemaVersion": 1,
+    "problemVersion": "1.0.0",
+    "reviewerAgent": "I — Itô",
+    "reviewedAt": "2026-09-04",
+    "source": {
+      "kind": "existing-bank"
+    },
+    "independentlySolved": true,
+    "statementChecked": true,
+    "approachesChecked": true,
+    "canonicalSolutionChecked": true,
+    "hintsChecked": true,
+    "extensionsChecked": true,
+    "prerequisitesChecked": true,
+    "unresolvedUncertainties": [],
+    "familyId": "oxford-divisibility-chain",
+    "mathematicalCorrectness": "changes-required",
+    "recommendation": "revise",
+    "independentSolutionSummary": "Write each selected integer uniquely as 2^k times an odd number. There are exactly n possible odd parts among 1,...,2n, so n+1 selected numbers force two with the same odd part. Ordering their exponents of 2 shows the smaller divides the larger. Sharpness is witnessed by {n+1,...,2n}.",
+    "computationalChecks": [
+      "Exhaustive enumeration of every (n+1)-subset of {1,...,2n} for n<=6 confirms a divisibility pair in all tested cases."
+    ],
+    "findings": [
+      {
+        "id": "poset-extension-undeclared",
+        "area": "extension",
+        "severity": "error",
+        "status": "open",
+        "summary": "The `poset-view` extension relies on the definition and language of partially ordered sets without supplying it.",
+        "evidence": "The core family assumes only elementary divisibility and pigeonhole reasoning. `Interpret the problem as ... a divisibility poset` is not self-contained under the stated prerequisites."
+      }
+    ]
+  },
+  {
+    "schemaVersion": 1,
+    "problemVersion": "1.0.0",
+    "reviewerAgent": "I — Itô",
+    "reviewedAt": "2026-09-04",
+    "source": {
+      "kind": "existing-bank"
+    },
+    "independentlySolved": true,
+    "statementChecked": true,
+    "approachesChecked": true,
+    "canonicalSolutionChecked": true,
+    "hintsChecked": true,
+    "extensionsChecked": true,
+    "prerequisitesChecked": true,
+    "unresolvedUncertainties": [],
+    "familyId": "oxford-continuous-fixed-point",
+    "mathematicalCorrectness": "changes-required",
+    "recommendation": "revise",
+    "independentSolutionSummary": "Let g(x)=f(x)-x. Continuity of f makes g continuous, while f([0,1])⊆[0,1] gives g(0)>=0 and g(1)<=0. Endpoint equality already gives a fixed point; otherwise IVT supplies an interior zero. The same argument works on any interval [a,b].",
+    "computationalChecks": [],
+    "findings": [
+      {
+        "id": "brouwer-extension-prerequisite",
+        "area": "extension",
+        "severity": "error",
+        "status": "open",
+        "summary": "The higher-dimensional extension invokes Brouwer's fixed-point theorem as expected discussion content without providing the higher-dimensional statement or needed concepts.",
+        "evidence": "The core problem explicitly grants IVT, but the stretch prompt jumps to an advanced theorem outside the supplied assumptions. It should be reframed as interviewer background only or made self-contained."
+      }
+    ]
+  },
+  {
+    "schemaVersion": 1,
+    "problemVersion": "1.0.0",
+    "reviewerAgent": "I — Itô",
+    "reviewedAt": "2026-09-04",
+    "source": {
+      "kind": "existing-bank"
+    },
+    "independentlySolved": true,
+    "statementChecked": true,
+    "approachesChecked": true,
+    "canonicalSolutionChecked": true,
+    "hintsChecked": true,
+    "extensionsChecked": true,
+    "prerequisitesChecked": true,
+    "unresolvedUncertainties": [],
+    "familyId": "oxford-prefix-sums-mod-n",
+    "mathematicalCorrectness": "changes-required",
+    "recommendation": "revise",
+    "independentSolutionSummary": "Let S_k=a_1+...+a_k. If some S_k is 0 modulo n, that prefix is a valid block. Otherwise n prefix sums occupy only n-1 nonzero residue classes, so two are congruent; their difference is a nonempty consecutive block divisible by n. Equivalently include S_0=0 and apply pigeonhole to n+1 residues.",
+    "computationalChecks": [
+      "Exhaustive test of all length-n sequences over {-2,-1,0,1,2} for n<=5."
+    ],
+    "findings": [
+      {
+        "id": "cyclic-extension-underspecified",
+        "area": "extension",
+        "severity": "error",
+        "status": "open",
+        "summary": "The `cyclic-blocks` extension does not state a determinate mathematical claim.",
+        "evidence": "`Explore the analogous statement for cyclic consecutive blocks` leaves open whether ordinary blocks are allowed, whether wrap-around is required, and what must be proved. Under the Wave 2 solvability gate the extension needs explicit quantifiers and a target."
+      }
+    ]
+  },
+  {
+    "schemaVersion": 1,
+    "problemVersion": "1.0.0",
+    "reviewerAgent": "I — Itô",
+    "reviewedAt": "2026-09-04",
+    "source": {
+      "kind": "existing-bank"
+    },
+    "independentlySolved": true,
+    "statementChecked": true,
+    "approachesChecked": true,
+    "canonicalSolutionChecked": true,
+    "hintsChecked": true,
+    "extensionsChecked": true,
+    "prerequisitesChecked": true,
+    "unresolvedUncertainties": [],
+    "familyId": "oxford-triangle-medians",
+    "mathematicalCorrectness": "changes-required",
+    "recommendation": "revise",
+    "independentSolutionSummary": "With position vectors, M_A=(B+C)/2 and G=(A+B+C)/3 satisfy G=A+(2/3)(M_A-A), so G lies two-thirds of the way from A to M_A. Cyclic repetition places the same G on all three medians and yields the 2:1 ratio.",
+    "computationalChecks": [],
+    "findings": [
+      {
+        "id": "mass-points-undeclared",
+        "area": "approach",
+        "severity": "error",
+        "status": "open",
+        "summary": "The declared `mass-points` approach assumes a nonstandard barycentric/mass-points method that is neither defined nor listed as a prerequisite.",
+        "evidence": "The vector route is self-contained, but Wave 2 requires every intended approach to be valid under intended knowledge assumptions. The mass-points branch should define its balancing rule or be removed as an authored route."
+      }
+    ]
+  },
+  {
+    "schemaVersion": 1,
+    "problemVersion": "1.0.0",
+    "reviewerAgent": "I — Itô",
+    "reviewedAt": "2026-09-04",
+    "source": {
+      "kind": "existing-bank"
+    },
+    "independentlySolved": true,
+    "statementChecked": true,
+    "approachesChecked": true,
+    "canonicalSolutionChecked": true,
+    "hintsChecked": true,
+    "extensionsChecked": true,
+    "prerequisitesChecked": true,
+    "unresolvedUncertainties": [],
+    "familyId": "oxford-monotone-cauchy",
+    "mathematicalCorrectness": "changes-required",
+    "recommendation": "revise",
+    "independentSolutionSummary": "Additivity yields f(0)=0, oddness, integer homogeneity, and then rational homogeneity f(q)=qf(1). Monotonicity gives c=f(1)>=0 and lets rational bounds r<x<s squeeze f(x) between cr and cs, proving f(x)=cx for every real x.",
+    "computationalChecks": [],
+    "findings": [
+      {
+        "id": "hamel-basis-extension-prerequisite",
+        "area": "extension",
+        "severity": "error",
+        "status": "open",
+        "summary": "The `pathological-note` extension requires the concept of a basis of R over Q (and the associated existence construction) without supplying that machinery.",
+        "evidence": "The core family is elementary additive/monotone reasoning. Asking why nonlinear additive functions depend on a Hamel basis is not self-contained for the intended prerequisite level."
+      }
+    ]
+  },
+  {
+    "schemaVersion": 1,
+    "problemVersion": "1.0.0",
+    "reviewerAgent": "I — Itô",
+    "reviewedAt": "2026-09-04",
+    "source": {
+      "kind": "existing-bank"
+    },
+    "independentlySolved": true,
+    "statementChecked": true,
+    "approachesChecked": true,
+    "canonicalSolutionChecked": true,
+    "hintsChecked": true,
+    "extensionsChecked": true,
+    "prerequisitesChecked": true,
+    "unresolvedUncertainties": [],
+    "familyId": "oxford-catalan-paths",
+    "mathematicalCorrectness": "changes-required",
+    "recommendation": "revise",
+    "independentSolutionSummary": "For the reflection route, unrestricted paths number C(2n,n). A bad path has a first Up step from y=x to y=x+1; swapping Right/Up on the prefix through that step gives a bijection with paths having n+1 Right and n-1 Up steps, so bad paths number C(2n,n-1) and the desired count is C(2n,n)/(n+1).",
+    "computationalChecks": [
+      "Enumeration of all monotone paths through n=8 matches C(2n,n)/(n+1)."
+    ],
+    "findings": [
+      {
+        "id": "n-domain-missing",
+        "area": "statement",
+        "severity": "error",
+        "status": "open",
+        "summary": "The candidate-visible statement never specifies that n is a nonnegative integer (or positive integer).",
+        "evidence": "The endpoint (n,n), the number of unit steps, and the binomial formula require an integer parameter. The domain should be explicit rather than inferred."
+      },
+      {
+        "id": "recurrence-route-does-not-reach-target",
+        "area": "approach",
+        "severity": "error",
+        "status": "open",
+        "summary": "The declared Catalan-recurrence approach does not independently derive the requested closed-form count.",
+        "evidence": "Its branch only says to obtain the Catalan recurrence; the shared final milestone then says to count bad paths and subtract, which is reflection-specific. Hints 3-5 are also reflection-only. Either the recurrence route must include a derivation of the closed form or it should not be represented as a complete alternate approach."
+      },
+      {
+        "id": "reflection-inverse-needs-explicitness",
+        "area": "canonical-solution",
+        "severity": "warning",
+        "status": "open",
+        "summary": "The reflection bijection is correct, but the inverse is described only as locating a 'corresponding shifted imbalance'.",
+        "evidence": "This is not a false claim; for auditability the inverse should identify the first point with x=y+1 in the transformed path and reflect the corresponding prefix."
+      }
+    ]
+  }
+]
