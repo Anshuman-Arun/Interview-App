@@ -866,13 +866,15 @@ export function useInterviewSession(
   ]);
 
   const synchronizeWhiteboardFor = useCallback(async (
-    targetSessionId: SessionId
+    targetSessionId: SessionId,
+    repair: { readonly allowLocalSupersetRepair?: boolean } = {}
   ): Promise<void> => {
     const adapter = options.whiteboardAdapter;
     if (adapter === undefined || adapter.getEditor() === null) return;
     const coordinator = getBoardSyncCoordinator(targetSessionId);
     const allowBootstrap =
-      boardBootstrapSessionRef.current === targetSessionId;
+      boardBootstrapSessionRef.current === targetSessionId
+      || repair.allowLocalSupersetRepair === true;
     const snapshot = await coordinator.synchronize(
       targetSessionId,
       adapter.getNormalizedStudentShapes(),
@@ -1580,7 +1582,9 @@ export function useInterviewSession(
       }
       if (sessionTransitionEpochRef.current !== transitionEpoch) return;
 
-      await synchronizeWhiteboardFor(targetSessionId);
+      await synchronizeWhiteboardFor(targetSessionId, {
+        allowLocalSupersetRepair: true
+      });
       if (sessionTransitionEpochRef.current !== transitionEpoch) return;
       const coordinator = boardSyncRef.current;
       if (
@@ -1631,7 +1635,9 @@ export function useInterviewSession(
       || !isSessionStarted
       || !sessionMutationAdmissionRef.current
     ) return;
-    await synchronizeWhiteboardFor(sessionId);
+    await synchronizeWhiteboardFor(sessionId, {
+      allowLocalSupersetRepair: true
+    });
   }, [
     isSessionStarted,
     sessionId,
@@ -1685,6 +1691,31 @@ export function useInterviewSession(
       }
       wakeCurrentScheduler();
     } catch (error) {
+      // If the mutation acknowledgement was lost, or a first local stroke was
+      // never committed, reconcile against server authority before collapsing
+      // the canvas into readonly mode. The repair is deliberately conservative:
+      // it succeeds only when remote authority is an exact subset of the local
+      // student canvas (or already matches it). Conflicting edits still fail
+      // closed.
+      const adapter = options.whiteboardAdapter;
+      if (isCurrentCoordinator() && adapter?.getEditor() !== null) {
+        try {
+          const repaired = await coordinator.synchronize(
+            targetSessionId,
+            adapter.getNormalizedStudentShapes(),
+            { allowBootstrapIntoEmptyAuthority: true }
+          );
+          if (isCurrentCoordinator()) {
+            setWhiteboardSync(repaired);
+          }
+          if (repaired.status === "SYNCED") {
+            wakeCurrentScheduler();
+            return;
+          }
+        } catch {
+          // Preserve the original authoritative mutation failure below.
+        }
+      }
       if (isCurrentCoordinator()) {
         setWhiteboardSync(coordinator.snapshot());
       }
@@ -1693,6 +1724,7 @@ export function useInterviewSession(
   }, [
     getBoardSyncCoordinator,
     getVisionScheduler,
+    options.whiteboardAdapter,
     sessionId,
     sessionStatus,
     synchronizeWhiteboardFor
