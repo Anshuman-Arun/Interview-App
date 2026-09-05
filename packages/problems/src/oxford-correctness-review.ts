@@ -17,6 +17,7 @@ export const OXFORD_CORRECTNESS_FINDING_AREAS = [
   "statement",
   "approach",
   "canonical-solution",
+  "common-error",
   "hint",
   "extension",
   "prerequisite",
