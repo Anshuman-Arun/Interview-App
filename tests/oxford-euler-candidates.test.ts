@@ -20,7 +20,6 @@ const EXPECTED_CORE_STAGE = Object.freeze({
   "oxford-euler-circle-sweep": "parameter-test",
   "oxford-euler-triangle-midpoint-cycle": "fixed-point",
   "oxford-euler-box-diagonal-bisector": "edge-test",
-  "oxford-euler-locally-balanced-labels": "path-proof",
   "oxford-euler-diagonal-blend-transform": "metric",
   "oxford-euler-self-averaging-sets": "finite-orbit",
   "oxford-euler-corner-balanced-tables": "classification",
@@ -28,16 +27,13 @@ const EXPECTED_CORE_STAGE = Object.freeze({
   "oxford-euler-periodic-queue-model": "classification",
   "oxford-euler-kiosk-grid-model": "objective",
   "oxford-euler-cooling-data-model": "structure",
-  "oxford-euler-random-adjacent-consecutives": "expectation",
-  "oxford-euler-stop-on-change": "expectation",
-  "oxford-euler-random-subset-blocks": "line-mean",
   "oxford-euler-random-halving-interval": "distribution"
 } as const);
 
 describe("Agent E — Euler Oxford candidate batch", () => {
-  it("authors exactly 17 unique surviving candidate families in the expert-review quarantine", () => {
-    expect(eulerOxfordCandidateSpecs).toHaveLength(17);
-    expect(eulerOxfordCandidateEntries).toHaveLength(17);
+  it("authors exactly 13 unique surviving candidate families in the expert-review quarantine", () => {
+    expect(eulerOxfordCandidateSpecs).toHaveLength(13);
+    expect(eulerOxfordCandidateEntries).toHaveLength(13);
     const ids = eulerOxfordCandidateSpecs.map((spec) => spec.id);
     expect(new Set(ids).size).toBe(ids.length);
     const liveIds = new Set(oxfordCuratedEntries.map((entry) => entry.problem.id));
@@ -91,14 +87,57 @@ describe("Agent E — Euler Oxford candidate batch", () => {
   });
 
 
-  it("uses independently authored family timing profiles rather than one shared timing table", () => {
-    const timings = eulerOxfordCandidateEntries.map((entry) => {
+  it("keeps explicit family and stage timing on every surviving family", () => {
+    for (const entry of eulerOxfordCandidateEntries) {
       const adaptive = entry.metadata.oxfordAdaptive;
       if (adaptive?.timing === undefined) throw new Error("Euler candidate missing family timing");
+      expect(adaptive.timing.softCutoffMinutes).toBeGreaterThan(0);
       expect(adaptive.stages.every((stage) => stage.timing.softCutoffMinutes > 0)).toBe(true);
-      return JSON.stringify(adaptive.timing);
-    });
-    expect(new Set(timings).size).toBe(eulerOxfordCandidateEntries.length);
+    }
+  });
+
+  it("applies the four final Gauss family timing corrections exactly", () => {
+    const expected = {
+      "oxford-euler-circle-sweep": {
+        firstMeaningfulInsightMinutes: { min: 1, max: 3 },
+        independentCompletionMinutes: { min: 16, max: 26 },
+        promptedCompletionMinutes: { min: 12, max: 22 },
+        optionalExtensionMinutes: { min: 5, max: 9 },
+        softCutoffMinutes: 25,
+        confidence: "low"
+      },
+      "oxford-euler-box-diagonal-bisector": {
+        firstMeaningfulInsightMinutes: { min: 1, max: 3 },
+        independentCompletionMinutes: { min: 17, max: 28 },
+        promptedCompletionMinutes: { min: 13, max: 23 },
+        optionalExtensionMinutes: { min: 5, max: 9 },
+        softCutoffMinutes: 25,
+        confidence: "low"
+      },
+      "oxford-euler-periodic-queue-model": {
+        firstMeaningfulInsightMinutes: { min: 1, max: 3 },
+        independentCompletionMinutes: { min: 15, max: 24 },
+        promptedCompletionMinutes: { min: 11, max: 20 },
+        optionalExtensionMinutes: { min: 5, max: 8 },
+        softCutoffMinutes: 23,
+        confidence: "low"
+      },
+      "oxford-euler-kiosk-grid-model": {
+        firstMeaningfulInsightMinutes: { min: 1, max: 3 },
+        independentCompletionMinutes: { min: 15, max: 24 },
+        promptedCompletionMinutes: { min: 11, max: 20 },
+        optionalExtensionMinutes: { min: 5, max: 8 },
+        softCutoffMinutes: 23,
+        confidence: "low"
+      }
+    } as const;
+
+    for (const [familyId, timing] of Object.entries(expected)) {
+      const adaptive = eulerOxfordCandidateEntries.find(
+        (entry) => entry.problem.id === familyId
+      )?.metadata.oxfordAdaptive;
+      expect(adaptive?.timing).toEqual(timing);
+    }
   });
 
   it("applies the Gauss circle-sweep calibration findings without self-approving calibration", () => {
@@ -145,20 +184,39 @@ describe("Agent E — Euler Oxford candidate batch", () => {
     });
   });
 
-  it("removes Hilbert hard rejects and records quadrilateral classic provenance", () => {
+  it("removes all Hilbert hard rejects and records truthful structural provenance", () => {
     const ids = new Set(eulerOxfordCandidateEntries.map((entry) => entry.problem.id));
-    expect(ids.has("oxford-euler-rectangle-area-table")).toBe(false);
-    expect(ids.has("oxford-euler-difference-closed-sets")).toBe(false);
-    const quadrilateral = eulerOxfordCandidateEntries.find(
-      (candidate) => candidate.problem.id === "oxford-euler-quadrilateral-balance"
-    )?.metadata.oxfordAdaptive;
-    expect(quadrilateral?.provenance).toEqual({
-      originType: "structural-adaptation",
-      sourceCategory: "classic-mathematics",
-      referenceFamilyId: "british-flag-theorem"
-    });
-    expect(quadrilateral?.review.originality).toBe("in-review");
-    expect(quadrilateral?.review.fidelity).toBe("in-review");
+    for (const rejected of [
+      "oxford-euler-rectangle-area-table",
+      "oxford-euler-difference-closed-sets",
+      "oxford-euler-locally-balanced-labels",
+      "oxford-euler-random-adjacent-consecutives",
+      "oxford-euler-stop-on-change",
+      "oxford-euler-random-subset-blocks"
+    ]) {
+      expect(ids.has(rejected)).toBe(false);
+    }
+
+    const expectedProvenance = {
+      "oxford-euler-quadrilateral-balance": "british-flag-theorem",
+      "oxford-euler-corner-balanced-tables": "additive-matrix-row-column-decomposition",
+      "oxford-euler-periodic-queue-model": "lindley-reflected-queue",
+      "oxford-euler-cooling-data-model": "newton-cooling-gap-decay",
+      "oxford-euler-random-halving-interval": "dyadic-binary-coin-encoding"
+    } as const;
+
+    for (const [familyId, referenceFamilyId] of Object.entries(expectedProvenance)) {
+      const adaptive = eulerOxfordCandidateEntries.find(
+        (entry) => entry.problem.id === familyId
+      )?.metadata.oxfordAdaptive;
+      expect(adaptive?.provenance).toEqual({
+        originType: "structural-adaptation",
+        sourceCategory: "classic-mathematics",
+        referenceFamilyId
+      });
+      expect(adaptive?.review.originality).toBe("in-review");
+      expect(adaptive?.review.fidelity).toBe("in-review");
+    }
   });
 
   it("makes the periodic queue initial state, domains, phase, and event order candidate-visible", () => {
@@ -199,19 +257,19 @@ describe("Agent E — Euler Oxford candidate batch", () => {
       if (adaptive === undefined) throw new Error("Euler candidate missing Oxford metadata");
       return adaptive;
     });
-    expect(metadata.filter((item) => item.introducesNewDefinition).length).toBeGreaterThanOrEqual(5);
+    expect(metadata.filter((item) => item.introducesNewDefinition).length).toBeGreaterThanOrEqual(4);
     expect(metadata.filter((item) => item.skillEvidence.some((e) => e.skill === "modelling")).length).toBeGreaterThanOrEqual(4);
-    expect(metadata.filter((item) => item.domains.includes("probability")).length).toBeGreaterThanOrEqual(5);
+    expect(metadata.filter((item) => item.domains.includes("probability")).length).toBeGreaterThanOrEqual(2);
     expect(metadata.filter((item) => item.skillEvidence.some((e) => e.skill === "visualization")).length).toBeGreaterThanOrEqual(7);
-    expect(metadata.filter((item) => item.skillEvidence.some((e) => e.skill === "representation-switching")).length).toBeGreaterThanOrEqual(17);
-    expect(metadata.filter((item) => item.skillEvidence.some((e) => e.skill === "transfer")).length).toBeGreaterThanOrEqual(16);
+    expect(metadata.filter((item) => item.skillEvidence.some((e) => e.skill === "representation-switching")).length).toBeGreaterThanOrEqual(13);
+    expect(metadata.filter((item) => item.skillEvidence.some((e) => e.skill === "transfer")).length).toBeGreaterThanOrEqual(12);
   });
 
   it("uses similarity clusters only for clear same-wave near-neighbor mechanisms", () => {
     const clustered = eulerOxfordCandidateEntries.map((entry) => entry.metadata.oxfordAdaptive).filter((adaptive) => adaptive?.similarityClusterId !== undefined);
-    expect(clustered.length).toBeGreaterThanOrEqual(8);
+    expect(clustered).toHaveLength(6);
     expect(new Set(clustered.map((adaptive) => adaptive?.similarityClusterId))).toEqual(new Set([
-      "euler-distance-loci", "euler-affine-dynamics", "euler-local-balance", "euler-discrete-dynamics-model", "euler-local-indicator-expectation"
+      "euler-distance-loci", "euler-affine-dynamics", "euler-discrete-dynamics-model"
     ]));
   });
 });
