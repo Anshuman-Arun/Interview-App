@@ -1325,15 +1325,6 @@ export const App: React.FC = () => {
                   Reconnect board
                 </button>
               )}
-              {paneFocus !== "split" && (
-                <button
-                  type="button"
-                  className="board-appbar__layout-action"
-                  onClick={() => setPaneFocus("split")}
-                >
-                  Restore split
-                </button>
-              )}
               <button
                 type="button"
                 className="board-appbar__layout-action"
@@ -1345,7 +1336,7 @@ export const App: React.FC = () => {
                   );
                 }}
               >
-                Focus whiteboard
+                {paneFocus === "whiteboard" ? "Restore split" : "Focus whiteboard"}
               </button>
               <button
                 type="button"
@@ -1372,7 +1363,6 @@ export const App: React.FC = () => {
                   || sessionEntryPending
                   || sessionTerminalPending
                   || session.whiteboardSync.status === "UNINITIALIZED"
-                  || session.whiteboardSync.status === "UNSYNCHRONIZED"
                 }
                 onEditorMount={handleWhiteboardEditorMount}
                 onNormalizedBoardChange={(change) => {
