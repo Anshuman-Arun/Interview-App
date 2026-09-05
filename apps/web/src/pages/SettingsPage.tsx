@@ -671,8 +671,10 @@ export function SettingsPage({
                     );
                     return;
                   }
+                  setupOperationInFlightRef.current = true;
                   setRestarting(true);
                   void restartApp().catch(() => {
+                    setupOperationInFlightRef.current = false;
                     setRestarting(false);
                     setRuntimeStatusError(
                       "Interview App could not restart automatically. Close and reopen the app."
