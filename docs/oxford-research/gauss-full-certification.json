@@ -32,8 +32,8 @@
     {
       "agent": "D — Dirichlet",
       "prNumber": 133,
-      "headSha": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
-      "survivingFamilyCount": 12,
+      "headSha": "65d570a1f6dad3773edb7eea4568d9399f3164c8",
+      "survivingFamilyCount": 11,
       "familiesReviewed": [
         "oxford-d-gcd-descent-network",
         "oxford-d-thirds-closed-integers",
@@ -42,7 +42,6 @@
         "oxford-d-sliding-window-parity",
         "oxford-d-weighted-cycle-readings",
         "oxford-d-midpoint-closed-residues",
-        "oxford-d-mirror-orbits",
         "oxford-d-odd-symmetric-difference",
         "oxford-d-three-reversal-permutations",
         "oxford-d-divisor-step-geometry",
@@ -52,15 +51,14 @@
     {
       "agent": "E — Euler",
       "prNumber": 134,
-      "headSha": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
-      "survivingFamilyCount": 17,
+      "headSha": "1ce96b5b89be971399cab5080d4487a908ea294d",
+      "survivingFamilyCount": 13,
       "familiesReviewed": [
         "oxford-euler-quadrilateral-balance",
         "oxford-euler-random-chord-midpoint",
         "oxford-euler-circle-sweep",
         "oxford-euler-triangle-midpoint-cycle",
         "oxford-euler-box-diagonal-bisector",
-        "oxford-euler-locally-balanced-labels",
         "oxford-euler-diagonal-blend-transform",
         "oxford-euler-self-averaging-sets",
         "oxford-euler-corner-balanced-tables",
@@ -68,9 +66,6 @@
         "oxford-euler-periodic-queue-model",
         "oxford-euler-kiosk-grid-model",
         "oxford-euler-cooling-data-model",
-        "oxford-euler-random-adjacent-consecutives",
-        "oxford-euler-stop-on-change",
-        "oxford-euler-random-subset-blocks",
         "oxford-euler-random-halving-interval"
       ]
     }
@@ -81,23 +76,31 @@
       "overlongCutoffsCorrected": true,
       "cubicDividedDifferenceCeilingCorrected": true,
       "prerequisiteWordingImproved": true,
-      "note": "Cantor now has 17 survivors. It pruned reciprocal-implicit-curve, adopted the strong core for cubic-two-thresholds, retained interview-scale family timing, improved prerequisite wording, and preserved family-level skill/content containment. All current Cantor G taxonomy/difficulty/timing decisions are approved."
+      "note": "Final 17-family Cantor head remains clean for G-owned fields; all current taxonomy/difficulty/timing decisions are approved.",
+      "finalApproved": true
     },
     "dirichlet": {
-      "headSha": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "headSha": "65d570a1f6dad3773edb7eea4568d9399f3164c8",
       "genericTimingTemplateRemoved": true,
       "tripleFlipRecurrenceTaxonomyCorrected": true,
       "knownDifficultyChangesApplied": true,
-      "note": "All 12 survivors now use family-specific author timings. GCD descent and Triple Flip first-round difficulty/taxonomy changes are present."
+      "mirrorOrbitsRemoved": true,
+      "weightedCycleRecurrenceTaxonomyFixed": true,
+      "eightTimingCorrectionsApplied": true,
+      "finalApproved": true,
+      "note": "Final 11-family D head removes mirror-orbits and exactly applies the remaining weighted-cycle taxonomy, three difficulty, and eight family timing findings."
     },
     "euler": {
-      "headSha": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
+      "headSha": "1ce96b5b89be971399cab5080d4487a908ea294d",
       "genericTimingTableRemoved": true,
       "mechanicalCoreAssignmentRemoved": true,
       "circleSweepCoreCorrected": true,
       "selfAveragingSetTaxonomyCorrected": true,
       "allStageRolesMathematicallyKeyed": true,
-      "note": "Roles and timings are explicitly keyed by family/stage. Circle Sweep and Self-Averaging fixes remain present. Latest increment is documentation-only."
+      "fourHardRejectsRemoved": true,
+      "fourTimingCorrectionsApplied": true,
+      "finalApproved": true,
+      "note": "Final 13-family E head removes the four H hard rejects, preserves approved G taxonomy/difficulty, and exactly applies all four G timing corrections."
     }
   },
   "records": [
@@ -4607,7 +4610,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-gcd-descent-network",
-      "authorHeadReviewed": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "authorHeadReviewed": "65d570a1f6dad3773edb7eea4568d9399f3164c8",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -4811,7 +4814,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-thirds-closed-integers",
-      "authorHeadReviewed": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "authorHeadReviewed": "65d570a1f6dad3773edb7eea4568d9399f3164c8",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -4947,10 +4950,10 @@
         "requestedChanges": []
       },
       "difficulty": {
-        "decision": "changes-required",
+        "decision": "approved",
         "author": {
           "entry": "introductory-plus",
-          "core": "standard",
+          "core": "strong",
           "ceiling": "strong"
         },
         "recommended": {
@@ -4969,9 +4972,9 @@
           {
             "stageId": "thirds-core",
             "role": "core",
-            "authorDifficulty": "standard",
+            "authorDifficulty": "strong",
             "recommendedDifficulty": "strong",
-            "decision": "changes-required"
+            "decision": "approved"
           },
           {
             "stageId": "thirds-transfer",
@@ -4985,7 +4988,7 @@
         "evidenceBasis": "expert-judgment"
       },
       "timing": {
-        "decision": "changes-required",
+        "decision": "approved",
         "recommended": {
           "firstMeaningfulInsightMinutes": {
             "min": 3,
@@ -5009,10 +5012,7 @@
         "confidence": "low",
         "evidenceBasis": "expert-judgment"
       },
-      "requestedChanges": [
-        "Use G difficulty introductory-plus / strong / strong.",
-        "Use the G family-specific timing estimate."
-      ],
+      "requestedChanges": [],
       "ownershipBoundaries": {
         "originality": "pending-agent-h",
         "fidelity": "pending-agent-h",
@@ -5024,7 +5024,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-balancing-transfers",
-      "authorHeadReviewed": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "authorHeadReviewed": "65d570a1f6dad3773edb7eea4568d9399f3164c8",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -5226,7 +5226,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-cube-twist-equivalence",
-      "authorHeadReviewed": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "authorHeadReviewed": "65d570a1f6dad3773edb7eea4568d9399f3164c8",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -5407,7 +5407,7 @@
         "evidenceBasis": "expert-judgment"
       },
       "timing": {
-        "decision": "changes-required",
+        "decision": "approved",
         "recommended": {
           "firstMeaningfulInsightMinutes": {
             "min": 2,
@@ -5431,9 +5431,7 @@
         "confidence": "low",
         "evidenceBasis": "expert-judgment"
       },
-      "requestedChanges": [
-        "Use the G family-specific timing estimate."
-      ],
+      "requestedChanges": [],
       "ownershipBoundaries": {
         "originality": "pending-agent-h",
         "fidelity": "pending-agent-h",
@@ -5445,7 +5443,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-sliding-window-parity",
-      "authorHeadReviewed": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "authorHeadReviewed": "65d570a1f6dad3773edb7eea4568d9399f3164c8",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -5617,7 +5615,7 @@
         "evidenceBasis": "expert-judgment"
       },
       "timing": {
-        "decision": "changes-required",
+        "decision": "approved",
         "recommended": {
           "firstMeaningfulInsightMinutes": {
             "min": 1,
@@ -5641,9 +5639,7 @@
         "confidence": "low",
         "evidenceBasis": "expert-judgment"
       },
-      "requestedChanges": [
-        "Use the G family-specific timing estimate."
-      ],
+      "requestedChanges": [],
       "ownershipBoundaries": {
         "originality": "pending-agent-h",
         "fidelity": "pending-agent-h",
@@ -5655,17 +5651,19 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-weighted-cycle-readings",
-      "authorHeadReviewed": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "authorHeadReviewed": "65d570a1f6dad3773edb7eea4568d9399f3164c8",
       "taxonomy": {
-        "decision": "changes-required",
+        "decision": "approved",
         "author": {
           "domains": [
             "graph-theory",
-            "algebra"
+            "algebra",
+            "sequences-recurrences"
           ],
           "contentConcepts": [
             "paths-cycles-connectivity",
-            "parameter-dependent-algebra"
+            "parameter-dependent-algebra",
+            "recurrence-structure"
           ],
           "prerequisiteConcepts": [
             "algebraic-manipulation",
@@ -5742,12 +5740,11 @@
               "representation-switching"
             ],
             "contentConcepts": [
-              "parameter-dependent-algebra"
+              "parameter-dependent-algebra",
+              "recurrence-structure"
             ],
-            "decision": "changes-required",
-            "requestedChanges": [
-              "Add recurrence-structure to the family/core and derive-one-step-recurrence / close-after-n-steps milestone content."
-            ]
+            "decision": "approved",
+            "requestedChanges": []
           },
           {
             "milestoneId": "close-after-n-steps",
@@ -5756,12 +5753,11 @@
             ],
             "contentConcepts": [
               "paths-cycles-connectivity",
-              "parameter-dependent-algebra"
+              "parameter-dependent-algebra",
+              "recurrence-structure"
             ],
-            "decision": "changes-required",
-            "requestedChanges": [
-              "Add recurrence-structure to the family/core and derive-one-step-recurrence / close-after-n-steps milestone content."
-            ]
+            "decision": "approved",
+            "requestedChanges": []
           },
           {
             "milestoneId": "classify-singular-parameters",
@@ -5791,15 +5787,13 @@
           "decision": "approved",
           "note": "No process-grounded skill is accepted from milestone completion."
         },
-        "requestedChanges": [
-          "Add recurrence-structure to the family/core and derive-one-step-recurrence / close-after-n-steps milestone content."
-        ]
+        "requestedChanges": []
       },
       "difficulty": {
-        "decision": "changes-required",
+        "decision": "approved",
         "author": {
           "entry": "introductory-plus",
-          "core": "standard",
+          "core": "strong",
           "ceiling": "strong"
         },
         "recommended": {
@@ -5818,9 +5812,9 @@
           {
             "stageId": "weighted-cycle-core",
             "role": "core",
-            "authorDifficulty": "standard",
+            "authorDifficulty": "strong",
             "recommendedDifficulty": "strong",
-            "decision": "changes-required"
+            "decision": "approved"
           },
           {
             "stageId": "weighted-cycle-transfer",
@@ -5834,7 +5828,7 @@
         "evidenceBasis": "expert-judgment"
       },
       "timing": {
-        "decision": "changes-required",
+        "decision": "approved",
         "recommended": {
           "firstMeaningfulInsightMinutes": {
             "min": 2,
@@ -5858,11 +5852,7 @@
         "confidence": "low",
         "evidenceBasis": "expert-judgment"
       },
-      "requestedChanges": [
-        "Add recurrence-structure to the family/core and derive-one-step-recurrence / close-after-n-steps milestone content.",
-        "Use G difficulty introductory-plus / strong / strong.",
-        "Use the G family-specific timing estimate."
-      ],
+      "requestedChanges": [],
       "ownershipBoundaries": {
         "originality": "pending-agent-h",
         "fidelity": "pending-agent-h",
@@ -5874,7 +5864,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-midpoint-closed-residues",
-      "authorHeadReviewed": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "authorHeadReviewed": "65d570a1f6dad3773edb7eea4568d9399f3164c8",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -6004,11 +5994,11 @@
         "requestedChanges": []
       },
       "difficulty": {
-        "decision": "changes-required",
+        "decision": "approved",
         "author": {
           "entry": "introductory-plus",
-          "core": "standard",
-          "ceiling": "strong"
+          "core": "strong",
+          "ceiling": "stretch"
         },
         "recommended": {
           "entry": "introductory-plus",
@@ -6026,23 +6016,23 @@
           {
             "stageId": "midpoint-core",
             "role": "core",
-            "authorDifficulty": "standard",
+            "authorDifficulty": "strong",
             "recommendedDifficulty": "strong",
-            "decision": "changes-required"
+            "decision": "approved"
           },
           {
             "stageId": "midpoint-transfer",
             "role": "transfer",
-            "authorDifficulty": "strong",
+            "authorDifficulty": "stretch",
             "recommendedDifficulty": "stretch",
-            "decision": "changes-required"
+            "decision": "approved"
           }
         ],
         "confidence": "low",
         "evidenceBasis": "expert-judgment"
       },
       "timing": {
-        "decision": "changes-required",
+        "decision": "approved",
         "recommended": {
           "firstMeaningfulInsightMinutes": {
             "min": 3,
@@ -6066,223 +6056,7 @@
         "confidence": "low",
         "evidenceBasis": "expert-judgment"
       },
-      "requestedChanges": [
-        "Use G difficulty introductory-plus / strong / stretch.",
-        "Use the G family-specific timing estimate."
-      ],
-      "ownershipBoundaries": {
-        "originality": "pending-agent-h",
-        "fidelity": "pending-agent-h",
-        "mathematicalCorrectness": "pending-agent-i"
-      }
-    },
-    {
-      "agent": "G — Gauss",
-      "authorAgent": "D — Dirichlet",
-      "prNumber": 133,
-      "familyId": "oxford-d-mirror-orbits",
-      "authorHeadReviewed": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
-      "taxonomy": {
-        "decision": "changes-required",
-        "author": {
-          "domains": [
-            "number-theory",
-            "functions"
-          ],
-          "contentConcepts": [
-            "modular-reasoning",
-            "composition-iteration"
-          ],
-          "prerequisiteConcepts": [
-            "modular-arithmetic",
-            "functions-graphs",
-            "divisibility"
-          ],
-          "reasoningSkills": [
-            "small-case-exploration",
-            "representation-switching",
-            "proof-construction",
-            "generalization",
-            "precision-checking"
-          ]
-        },
-        "recommended": {
-          "domains": [
-            "number-theory",
-            "functions"
-          ],
-          "contentConcepts": [
-            "modular-reasoning",
-            "composition-iteration",
-            "divisibility"
-          ],
-          "prerequisiteConcepts": [
-            "modular-arithmetic",
-            "functions-graphs",
-            "divisibility"
-          ],
-          "reasoningSkills": [
-            "small-case-exploration",
-            "representation-switching",
-            "proof-construction",
-            "generalization",
-            "precision-checking"
-          ]
-        },
-        "stageRoles": [
-          {
-            "stageId": "mirror-opening",
-            "authorRole": "warm-up",
-            "recommendedRole": "warm-up",
-            "decision": "approved"
-          },
-          {
-            "stageId": "mirror-core",
-            "authorRole": "core",
-            "recommendedRole": "core",
-            "decision": "approved"
-          },
-          {
-            "stageId": "mirror-transfer",
-            "authorRole": "transfer",
-            "recommendedRole": "transfer",
-            "decision": "approved"
-          }
-        ],
-        "milestoneContentSkillAttribution": [
-          {
-            "milestoneId": "experiment-small-clocks",
-            "skills": [
-              "small-case-exploration"
-            ],
-            "contentConcepts": [
-              "modular-reasoning"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          },
-          {
-            "milestoneId": "compose-to-translation",
-            "skills": [
-              "representation-switching"
-            ],
-            "contentConcepts": [
-              "composition-iteration"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          },
-          {
-            "milestoneId": "construct-all-multiples",
-            "skills": [
-              "proof-construction"
-            ],
-            "contentConcepts": [
-              "modular-reasoning"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          },
-          {
-            "milestoneId": "prove-gcd-obstruction",
-            "skills": [
-              "proof-construction"
-            ],
-            "contentConcepts": [
-              "modular-reasoning"
-            ],
-            "decision": "changes-required",
-            "requestedChanges": [
-              "Add divisibility to the family/core and prove-gcd-obstruction milestone content."
-            ]
-          },
-          {
-            "milestoneId": "general-starting-orbit",
-            "skills": [
-              "generalization"
-            ],
-            "contentConcepts": [
-              "composition-iteration",
-              "modular-reasoning"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          }
-        ],
-        "processGroundedSemantics": {
-          "decision": "approved",
-          "note": "No process-grounded skill is accepted from milestone completion."
-        },
-        "requestedChanges": [
-          "Add divisibility to the family/core and prove-gcd-obstruction milestone content."
-        ]
-      },
-      "difficulty": {
-        "decision": "approved",
-        "author": {
-          "entry": "introductory",
-          "core": "standard",
-          "ceiling": "strong"
-        },
-        "recommended": {
-          "entry": "introductory",
-          "core": "standard",
-          "ceiling": "strong"
-        },
-        "stageBands": [
-          {
-            "stageId": "mirror-opening",
-            "role": "warm-up",
-            "authorDifficulty": "introductory",
-            "recommendedDifficulty": "introductory",
-            "decision": "approved"
-          },
-          {
-            "stageId": "mirror-core",
-            "role": "core",
-            "authorDifficulty": "standard",
-            "recommendedDifficulty": "standard",
-            "decision": "approved"
-          },
-          {
-            "stageId": "mirror-transfer",
-            "role": "transfer",
-            "authorDifficulty": "strong",
-            "recommendedDifficulty": "strong",
-            "decision": "approved"
-          }
-        ],
-        "confidence": "low",
-        "evidenceBasis": "expert-judgment"
-      },
-      "timing": {
-        "decision": "approved",
-        "recommended": {
-          "firstMeaningfulInsightMinutes": {
-            "min": 2,
-            "max": 5
-          },
-          "independentCompletionMinutes": {
-            "min": 13,
-            "max": 21
-          },
-          "promptedCompletionMinutes": {
-            "min": 9,
-            "max": 16
-          },
-          "optionalExtensionMinutes": {
-            "min": 4,
-            "max": 8
-          },
-          "softCutoffMinutes": 24,
-          "confidence": "low"
-        },
-        "confidence": "low",
-        "evidenceBasis": "expert-judgment"
-      },
-      "requestedChanges": [
-        "Add divisibility to the family/core and prove-gcd-obstruction milestone content."
-      ],
+      "requestedChanges": [],
       "ownershipBoundaries": {
         "originality": "pending-agent-h",
         "fidelity": "pending-agent-h",
@@ -6294,7 +6068,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-odd-symmetric-difference",
-      "authorHeadReviewed": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "authorHeadReviewed": "65d570a1f6dad3773edb7eea4568d9399f3164c8",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -6502,7 +6276,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-three-reversal-permutations",
-      "authorHeadReviewed": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "authorHeadReviewed": "65d570a1f6dad3773edb7eea4568d9399f3164c8",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -6670,7 +6444,7 @@
         "evidenceBasis": "expert-judgment"
       },
       "timing": {
-        "decision": "changes-required",
+        "decision": "approved",
         "recommended": {
           "firstMeaningfulInsightMinutes": {
             "min": 2,
@@ -6694,9 +6468,7 @@
         "confidence": "low",
         "evidenceBasis": "expert-judgment"
       },
-      "requestedChanges": [
-        "Use the G family-specific timing estimate."
-      ],
+      "requestedChanges": [],
       "ownershipBoundaries": {
         "originality": "pending-agent-h",
         "fidelity": "pending-agent-h",
@@ -6708,7 +6480,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-divisor-step-geometry",
-      "authorHeadReviewed": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "authorHeadReviewed": "65d570a1f6dad3773edb7eea4568d9399f3164c8",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -6896,7 +6668,7 @@
         "evidenceBasis": "expert-judgment"
       },
       "timing": {
-        "decision": "changes-required",
+        "decision": "approved",
         "recommended": {
           "firstMeaningfulInsightMinutes": {
             "min": 2,
@@ -6920,9 +6692,7 @@
         "confidence": "low",
         "evidenceBasis": "expert-judgment"
       },
-      "requestedChanges": [
-        "Use the G family-specific timing estimate."
-      ],
+      "requestedChanges": [],
       "ownershipBoundaries": {
         "originality": "pending-agent-h",
         "fidelity": "pending-agent-h",
@@ -6934,7 +6704,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-triple-flip-circle",
-      "authorHeadReviewed": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "authorHeadReviewed": "65d570a1f6dad3773edb7eea4568d9399f3164c8",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -7111,7 +6881,7 @@
         "evidenceBasis": "expert-judgment"
       },
       "timing": {
-        "decision": "changes-required",
+        "decision": "approved",
         "recommended": {
           "firstMeaningfulInsightMinutes": {
             "min": 3,
@@ -7135,9 +6905,7 @@
         "confidence": "low",
         "evidenceBasis": "expert-judgment"
       },
-      "requestedChanges": [
-        "Use the G family-specific timing estimate."
-      ],
+      "requestedChanges": [],
       "ownershipBoundaries": {
         "originality": "pending-agent-h",
         "fidelity": "pending-agent-h",
@@ -7149,7 +6917,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-quadrilateral-balance",
-      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
+      "authorHeadReviewed": "1ce96b5b89be971399cab5080d4487a908ea294d",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -7399,7 +7167,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-random-chord-midpoint",
-      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
+      "authorHeadReviewed": "1ce96b5b89be971399cab5080d4487a908ea294d",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -7655,7 +7423,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-circle-sweep",
-      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
+      "authorHeadReviewed": "1ce96b5b89be971399cab5080d4487a908ea294d",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -7879,7 +7647,7 @@
         "evidenceBasis": "expert-judgment"
       },
       "timing": {
-        "decision": "changes-required",
+        "decision": "approved",
         "recommended": {
           "firstMeaningfulInsightMinutes": {
             "min": 1,
@@ -7903,9 +7671,7 @@
         "confidence": "low",
         "evidenceBasis": "expert-judgment"
       },
-      "requestedChanges": [
-        "Use the G family-specific timing estimate; retain it as low-confidence backend calibration."
-      ],
+      "requestedChanges": [],
       "ownershipBoundaries": {
         "originality": "pending-agent-h",
         "fidelity": "pending-agent-h",
@@ -7917,7 +7683,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-triangle-midpoint-cycle",
-      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
+      "authorHeadReviewed": "1ce96b5b89be971399cab5080d4487a908ea294d",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -8175,7 +7941,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-box-diagonal-bisector",
-      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
+      "authorHeadReviewed": "1ce96b5b89be971399cab5080d4487a908ea294d",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -8398,7 +8164,7 @@
         "evidenceBasis": "expert-judgment"
       },
       "timing": {
-        "decision": "changes-required",
+        "decision": "approved",
         "recommended": {
           "firstMeaningfulInsightMinutes": {
             "min": 1,
@@ -8422,264 +8188,6 @@
         "confidence": "low",
         "evidenceBasis": "expert-judgment"
       },
-      "requestedChanges": [
-        "Use the G family-specific timing estimate; retain it as low-confidence backend calibration."
-      ],
-      "ownershipBoundaries": {
-        "originality": "pending-agent-h",
-        "fidelity": "pending-agent-h",
-        "mathematicalCorrectness": "pending-agent-i"
-      }
-    },
-    {
-      "agent": "G — Gauss",
-      "authorAgent": "E — Euler",
-      "prNumber": 134,
-      "familyId": "oxford-euler-locally-balanced-labels",
-      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
-      "taxonomy": {
-        "decision": "approved",
-        "author": {
-          "domains": [
-            "graph-theory",
-            "sequences-recurrences",
-            "algebra"
-          ],
-          "contentConcepts": [
-            "paths-cycles-connectivity",
-            "recurrence-structure",
-            "equations-inequalities"
-          ],
-          "prerequisiteConcepts": [
-            "arithmetic",
-            "algebraic-manipulation",
-            "sequences-series",
-            "graph-basics"
-          ],
-          "reasoningSkills": [
-            "definition-exploration",
-            "small-case-exploration",
-            "pattern-recognition",
-            "proof-construction",
-            "representation-switching",
-            "generalization",
-            "precision-checking",
-            "strategic-simplification",
-            "abstraction",
-            "transfer"
-          ]
-        },
-        "recommended": {
-          "domains": [
-            "graph-theory",
-            "sequences-recurrences",
-            "algebra"
-          ],
-          "contentConcepts": [
-            "paths-cycles-connectivity",
-            "recurrence-structure",
-            "equations-inequalities"
-          ],
-          "prerequisiteConcepts": [
-            "arithmetic",
-            "algebraic-manipulation",
-            "sequences-series",
-            "graph-basics"
-          ],
-          "reasoningSkills": [
-            "definition-exploration",
-            "small-case-exploration",
-            "pattern-recognition",
-            "proof-construction",
-            "representation-switching",
-            "generalization",
-            "precision-checking",
-            "strategic-simplification",
-            "abstraction",
-            "transfer"
-          ]
-        },
-        "stageRoles": [
-          {
-            "stageId": "opening",
-            "authorRole": "warm-up",
-            "recommendedRole": "warm-up",
-            "decision": "approved"
-          },
-          {
-            "stageId": "structure",
-            "authorRole": "technique-check",
-            "recommendedRole": "technique-check",
-            "decision": "approved"
-          },
-          {
-            "stageId": "path-proof",
-            "authorRole": "core",
-            "recommendedRole": "core",
-            "decision": "approved"
-          },
-          {
-            "stageId": "cycle-proof",
-            "authorRole": "deep-dive",
-            "recommendedRole": "deep-dive",
-            "decision": "approved"
-          },
-          {
-            "stageId": "transfer",
-            "authorRole": "transfer",
-            "recommendedRole": "transfer",
-            "decision": "approved"
-          }
-        ],
-        "milestoneContentSkillAttribution": [
-          {
-            "milestoneId": "opening",
-            "skills": [
-              "definition-exploration",
-              "small-case-exploration"
-            ],
-            "contentConcepts": [
-              "paths-cycles-connectivity",
-              "recurrence-structure"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          },
-          {
-            "milestoneId": "structure",
-            "skills": [
-              "representation-switching",
-              "pattern-recognition"
-            ],
-            "contentConcepts": [
-              "recurrence-structure",
-              "equations-inequalities"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          },
-          {
-            "milestoneId": "path-proof",
-            "skills": [
-              "proof-construction",
-              "precision-checking"
-            ],
-            "contentConcepts": [
-              "recurrence-structure"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          },
-          {
-            "milestoneId": "cycle-proof",
-            "skills": [
-              "proof-construction",
-              "strategic-simplification"
-            ],
-            "contentConcepts": [
-              "paths-cycles-connectivity",
-              "equations-inequalities"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          },
-          {
-            "milestoneId": "transfer",
-            "skills": [
-              "abstraction",
-              "generalization",
-              "transfer"
-            ],
-            "contentConcepts": [
-              "paths-cycles-connectivity"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          }
-        ],
-        "processGroundedSemantics": {
-          "decision": "approved",
-          "note": "Euler helper filters process-grounded skills from milestone completion evidence."
-        },
-        "requestedChanges": []
-      },
-      "difficulty": {
-        "decision": "approved",
-        "author": {
-          "entry": "warm-up",
-          "core": "standard",
-          "ceiling": "strong"
-        },
-        "recommended": {
-          "entry": "warm-up",
-          "core": "standard",
-          "ceiling": "strong"
-        },
-        "stageBands": [
-          {
-            "stageId": "opening",
-            "role": "warm-up",
-            "authorDifficulty": "warm-up",
-            "recommendedDifficulty": "warm-up",
-            "decision": "approved"
-          },
-          {
-            "stageId": "structure",
-            "role": "technique-check",
-            "authorDifficulty": "introductory-plus",
-            "recommendedDifficulty": "introductory-plus",
-            "decision": "approved"
-          },
-          {
-            "stageId": "path-proof",
-            "role": "core",
-            "authorDifficulty": "standard",
-            "recommendedDifficulty": "standard",
-            "decision": "approved"
-          },
-          {
-            "stageId": "cycle-proof",
-            "role": "deep-dive",
-            "authorDifficulty": "standard",
-            "recommendedDifficulty": "standard",
-            "decision": "approved"
-          },
-          {
-            "stageId": "transfer",
-            "role": "transfer",
-            "authorDifficulty": "strong",
-            "recommendedDifficulty": "strong",
-            "decision": "approved"
-          }
-        ],
-        "confidence": "low",
-        "evidenceBasis": "expert-judgment"
-      },
-      "timing": {
-        "decision": "approved",
-        "recommended": {
-          "firstMeaningfulInsightMinutes": {
-            "min": 0.5,
-            "max": 2
-          },
-          "independentCompletionMinutes": {
-            "min": 14,
-            "max": 24
-          },
-          "promptedCompletionMinutes": {
-            "min": 10,
-            "max": 19
-          },
-          "optionalExtensionMinutes": {
-            "min": 5,
-            "max": 8
-          },
-          "softCutoffMinutes": 21,
-          "confidence": "low"
-        },
-        "confidence": "low",
-        "evidenceBasis": "expert-judgment"
-      },
       "requestedChanges": [],
       "ownershipBoundaries": {
         "originality": "pending-agent-h",
@@ -8692,7 +8200,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-diagonal-blend-transform",
-      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
+      "authorHeadReviewed": "1ce96b5b89be971399cab5080d4487a908ea294d",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -8953,7 +8461,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-self-averaging-sets",
-      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
+      "authorHeadReviewed": "1ce96b5b89be971399cab5080d4487a908ea294d",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -9212,7 +8720,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-corner-balanced-tables",
-      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
+      "authorHeadReviewed": "1ce96b5b89be971399cab5080d4487a908ea294d",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -9458,7 +8966,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-tank-gauge-model",
-      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
+      "authorHeadReviewed": "1ce96b5b89be971399cab5080d4487a908ea294d",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -9704,7 +9212,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-periodic-queue-model",
-      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
+      "authorHeadReviewed": "1ce96b5b89be971399cab5080d4487a908ea294d",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -9918,7 +9426,7 @@
         "evidenceBasis": "expert-judgment"
       },
       "timing": {
-        "decision": "changes-required",
+        "decision": "approved",
         "recommended": {
           "firstMeaningfulInsightMinutes": {
             "min": 1,
@@ -9942,9 +9450,7 @@
         "confidence": "low",
         "evidenceBasis": "expert-judgment"
       },
-      "requestedChanges": [
-        "Use the G family-specific timing estimate; retain it as low-confidence backend calibration."
-      ],
+      "requestedChanges": [],
       "ownershipBoundaries": {
         "originality": "pending-agent-h",
         "fidelity": "pending-agent-h",
@@ -9956,7 +9462,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-kiosk-grid-model",
-      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
+      "authorHeadReviewed": "1ce96b5b89be971399cab5080d4487a908ea294d",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -10170,7 +9676,7 @@
         "evidenceBasis": "expert-judgment"
       },
       "timing": {
-        "decision": "changes-required",
+        "decision": "approved",
         "recommended": {
           "firstMeaningfulInsightMinutes": {
             "min": 1,
@@ -10194,9 +9700,7 @@
         "confidence": "low",
         "evidenceBasis": "expert-judgment"
       },
-      "requestedChanges": [
-        "Use the G family-specific timing estimate; retain it as low-confidence backend calibration."
-      ],
+      "requestedChanges": [],
       "ownershipBoundaries": {
         "originality": "pending-agent-h",
         "fidelity": "pending-agent-h",
@@ -10208,7 +9712,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-cooling-data-model",
-      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
+      "authorHeadReviewed": "1ce96b5b89be971399cab5080d4487a908ea294d",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -10459,752 +9963,8 @@
       "agent": "G — Gauss",
       "authorAgent": "E — Euler",
       "prNumber": 134,
-      "familyId": "oxford-euler-random-adjacent-consecutives",
-      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
-      "taxonomy": {
-        "decision": "approved",
-        "author": {
-          "domains": [
-            "probability",
-            "combinatorics"
-          ],
-          "contentConcepts": [
-            "expectation-structure",
-            "counting-structure",
-            "independence-symmetry"
-          ],
-          "prerequisiteConcepts": [
-            "basic-probability",
-            "counting-principles"
-          ],
-          "reasoningSkills": [
-            "strategic-simplification",
-            "representation-switching",
-            "proof-construction",
-            "precision-checking",
-            "generalization",
-            "small-case-exploration",
-            "case-analysis",
-            "transfer"
-          ]
-        },
-        "recommended": {
-          "domains": [
-            "probability",
-            "combinatorics"
-          ],
-          "contentConcepts": [
-            "expectation-structure",
-            "counting-structure",
-            "independence-symmetry"
-          ],
-          "prerequisiteConcepts": [
-            "basic-probability",
-            "counting-principles"
-          ],
-          "reasoningSkills": [
-            "strategic-simplification",
-            "representation-switching",
-            "proof-construction",
-            "precision-checking",
-            "generalization",
-            "small-case-exploration",
-            "case-analysis",
-            "transfer"
-          ]
-        },
-        "stageRoles": [
-          {
-            "stageId": "opening",
-            "authorRole": "warm-up",
-            "recommendedRole": "warm-up",
-            "decision": "approved"
-          },
-          {
-            "stageId": "structure",
-            "authorRole": "technique-check",
-            "recommendedRole": "technique-check",
-            "decision": "approved"
-          },
-          {
-            "stageId": "expectation",
-            "authorRole": "core",
-            "recommendedRole": "core",
-            "decision": "approved"
-          },
-          {
-            "stageId": "circle",
-            "authorRole": "deep-dive",
-            "recommendedRole": "deep-dive",
-            "decision": "approved"
-          },
-          {
-            "stageId": "transfer",
-            "authorRole": "transfer",
-            "recommendedRole": "transfer",
-            "decision": "approved"
-          }
-        ],
-        "milestoneContentSkillAttribution": [
-          {
-            "milestoneId": "opening",
-            "skills": [
-              "small-case-exploration",
-              "strategic-simplification"
-            ],
-            "contentConcepts": [
-              "counting-structure"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          },
-          {
-            "milestoneId": "structure",
-            "skills": [
-              "proof-construction",
-              "representation-switching"
-            ],
-            "contentConcepts": [
-              "counting-structure",
-              "independence-symmetry"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          },
-          {
-            "milestoneId": "expectation",
-            "skills": [
-              "proof-construction",
-              "precision-checking"
-            ],
-            "contentConcepts": [
-              "expectation-structure"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          },
-          {
-            "milestoneId": "circle",
-            "skills": [
-              "case-analysis",
-              "proof-construction"
-            ],
-            "contentConcepts": [
-              "expectation-structure",
-              "independence-symmetry"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          },
-          {
-            "milestoneId": "transfer",
-            "skills": [
-              "generalization",
-              "transfer"
-            ],
-            "contentConcepts": [
-              "counting-structure",
-              "expectation-structure"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          }
-        ],
-        "processGroundedSemantics": {
-          "decision": "approved",
-          "note": "Euler helper filters process-grounded skills from milestone completion evidence."
-        },
-        "requestedChanges": []
-      },
-      "difficulty": {
-        "decision": "approved",
-        "author": {
-          "entry": "introductory",
-          "core": "standard",
-          "ceiling": "strong"
-        },
-        "recommended": {
-          "entry": "introductory",
-          "core": "standard",
-          "ceiling": "strong"
-        },
-        "stageBands": [
-          {
-            "stageId": "opening",
-            "role": "warm-up",
-            "authorDifficulty": "introductory",
-            "recommendedDifficulty": "introductory",
-            "decision": "approved"
-          },
-          {
-            "stageId": "structure",
-            "role": "technique-check",
-            "authorDifficulty": "standard",
-            "recommendedDifficulty": "standard",
-            "decision": "approved"
-          },
-          {
-            "stageId": "expectation",
-            "role": "core",
-            "authorDifficulty": "standard",
-            "recommendedDifficulty": "standard",
-            "decision": "approved"
-          },
-          {
-            "stageId": "circle",
-            "role": "deep-dive",
-            "authorDifficulty": "strong",
-            "recommendedDifficulty": "strong",
-            "decision": "approved"
-          },
-          {
-            "stageId": "transfer",
-            "role": "transfer",
-            "authorDifficulty": "strong",
-            "recommendedDifficulty": "strong",
-            "decision": "approved"
-          }
-        ],
-        "confidence": "low",
-        "evidenceBasis": "expert-judgment"
-      },
-      "timing": {
-        "decision": "approved",
-        "recommended": {
-          "firstMeaningfulInsightMinutes": {
-            "min": 0.5,
-            "max": 2
-          },
-          "independentCompletionMinutes": {
-            "min": 13,
-            "max": 22
-          },
-          "promptedCompletionMinutes": {
-            "min": 10,
-            "max": 18
-          },
-          "optionalExtensionMinutes": {
-            "min": 4,
-            "max": 7
-          },
-          "softCutoffMinutes": 20,
-          "confidence": "low"
-        },
-        "confidence": "low",
-        "evidenceBasis": "expert-judgment"
-      },
-      "requestedChanges": [],
-      "ownershipBoundaries": {
-        "originality": "pending-agent-h",
-        "fidelity": "pending-agent-h",
-        "mathematicalCorrectness": "pending-agent-i"
-      }
-    },
-    {
-      "agent": "G — Gauss",
-      "authorAgent": "E — Euler",
-      "prNumber": 134,
-      "familyId": "oxford-euler-stop-on-change",
-      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
-      "taxonomy": {
-        "decision": "approved",
-        "author": {
-          "domains": [
-            "probability"
-          ],
-          "contentConcepts": [
-            "random-processes",
-            "conditional-structure",
-            "expectation-structure",
-            "independence-symmetry"
-          ],
-          "prerequisiteConcepts": [
-            "basic-probability",
-            "conditional-probability",
-            "expectation"
-          ],
-          "reasoningSkills": [
-            "small-case-exploration",
-            "representation-switching",
-            "proof-construction",
-            "case-analysis",
-            "precision-checking",
-            "generalization",
-            "pattern-recognition",
-            "transfer"
-          ]
-        },
-        "recommended": {
-          "domains": [
-            "probability"
-          ],
-          "contentConcepts": [
-            "random-processes",
-            "conditional-structure",
-            "expectation-structure",
-            "independence-symmetry"
-          ],
-          "prerequisiteConcepts": [
-            "basic-probability",
-            "conditional-probability",
-            "expectation"
-          ],
-          "reasoningSkills": [
-            "small-case-exploration",
-            "representation-switching",
-            "proof-construction",
-            "case-analysis",
-            "precision-checking",
-            "generalization",
-            "pattern-recognition",
-            "transfer"
-          ]
-        },
-        "stageRoles": [
-          {
-            "stageId": "opening",
-            "authorRole": "warm-up",
-            "recommendedRole": "warm-up",
-            "decision": "approved"
-          },
-          {
-            "stageId": "distribution",
-            "authorRole": "technique-check",
-            "recommendedRole": "technique-check",
-            "decision": "approved"
-          },
-          {
-            "stageId": "expectation",
-            "authorRole": "core",
-            "recommendedRole": "core",
-            "decision": "approved"
-          },
-          {
-            "stageId": "bias",
-            "authorRole": "deep-dive",
-            "recommendedRole": "deep-dive",
-            "decision": "approved"
-          },
-          {
-            "stageId": "transfer",
-            "authorRole": "transfer",
-            "recommendedRole": "transfer",
-            "decision": "approved"
-          }
-        ],
-        "milestoneContentSkillAttribution": [
-          {
-            "milestoneId": "opening",
-            "skills": [
-              "small-case-exploration",
-              "pattern-recognition"
-            ],
-            "contentConcepts": [
-              "random-processes"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          },
-          {
-            "milestoneId": "distribution",
-            "skills": [
-              "proof-construction",
-              "precision-checking"
-            ],
-            "contentConcepts": [
-              "random-processes",
-              "independence-symmetry"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          },
-          {
-            "milestoneId": "expectation",
-            "skills": [
-              "representation-switching",
-              "proof-construction"
-            ],
-            "contentConcepts": [
-              "expectation-structure"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          },
-          {
-            "milestoneId": "bias",
-            "skills": [
-              "case-analysis",
-              "proof-construction"
-            ],
-            "contentConcepts": [
-              "conditional-structure",
-              "expectation-structure"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          },
-          {
-            "milestoneId": "transfer",
-            "skills": [
-              "generalization",
-              "precision-checking",
-              "transfer"
-            ],
-            "contentConcepts": [
-              "expectation-structure"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          }
-        ],
-        "processGroundedSemantics": {
-          "decision": "approved",
-          "note": "Euler helper filters process-grounded skills from milestone completion evidence."
-        },
-        "requestedChanges": []
-      },
-      "difficulty": {
-        "decision": "approved",
-        "author": {
-          "entry": "introductory",
-          "core": "standard",
-          "ceiling": "strong"
-        },
-        "recommended": {
-          "entry": "introductory",
-          "core": "standard",
-          "ceiling": "strong"
-        },
-        "stageBands": [
-          {
-            "stageId": "opening",
-            "role": "warm-up",
-            "authorDifficulty": "introductory",
-            "recommendedDifficulty": "introductory",
-            "decision": "approved"
-          },
-          {
-            "stageId": "distribution",
-            "role": "technique-check",
-            "authorDifficulty": "standard",
-            "recommendedDifficulty": "standard",
-            "decision": "approved"
-          },
-          {
-            "stageId": "expectation",
-            "role": "core",
-            "authorDifficulty": "standard",
-            "recommendedDifficulty": "standard",
-            "decision": "approved"
-          },
-          {
-            "stageId": "bias",
-            "role": "deep-dive",
-            "authorDifficulty": "strong",
-            "recommendedDifficulty": "strong",
-            "decision": "approved"
-          },
-          {
-            "stageId": "transfer",
-            "role": "transfer",
-            "authorDifficulty": "strong",
-            "recommendedDifficulty": "strong",
-            "decision": "approved"
-          }
-        ],
-        "confidence": "low",
-        "evidenceBasis": "expert-judgment"
-      },
-      "timing": {
-        "decision": "approved",
-        "recommended": {
-          "firstMeaningfulInsightMinutes": {
-            "min": 0.5,
-            "max": 2
-          },
-          "independentCompletionMinutes": {
-            "min": 14,
-            "max": 23
-          },
-          "promptedCompletionMinutes": {
-            "min": 10,
-            "max": 19
-          },
-          "optionalExtensionMinutes": {
-            "min": 4,
-            "max": 7
-          },
-          "softCutoffMinutes": 21,
-          "confidence": "low"
-        },
-        "confidence": "low",
-        "evidenceBasis": "expert-judgment"
-      },
-      "requestedChanges": [],
-      "ownershipBoundaries": {
-        "originality": "pending-agent-h",
-        "fidelity": "pending-agent-h",
-        "mathematicalCorrectness": "pending-agent-i"
-      }
-    },
-    {
-      "agent": "G — Gauss",
-      "authorAgent": "E — Euler",
-      "prNumber": 134,
-      "familyId": "oxford-euler-random-subset-blocks",
-      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
-      "taxonomy": {
-        "decision": "approved",
-        "author": {
-          "domains": [
-            "probability",
-            "combinatorics"
-          ],
-          "contentConcepts": [
-            "expectation-structure",
-            "random-processes",
-            "counting-structure",
-            "independence-symmetry"
-          ],
-          "prerequisiteConcepts": [
-            "basic-probability",
-            "counting-principles",
-            "expectation"
-          ],
-          "reasoningSkills": [
-            "small-case-exploration",
-            "representation-switching",
-            "strategic-simplification",
-            "proof-construction",
-            "precision-checking",
-            "case-analysis",
-            "generalization",
-            "transfer"
-          ]
-        },
-        "recommended": {
-          "domains": [
-            "probability",
-            "combinatorics"
-          ],
-          "contentConcepts": [
-            "expectation-structure",
-            "random-processes",
-            "counting-structure",
-            "independence-symmetry"
-          ],
-          "prerequisiteConcepts": [
-            "basic-probability",
-            "counting-principles",
-            "expectation"
-          ],
-          "reasoningSkills": [
-            "small-case-exploration",
-            "representation-switching",
-            "strategic-simplification",
-            "proof-construction",
-            "precision-checking",
-            "case-analysis",
-            "generalization",
-            "transfer"
-          ]
-        },
-        "stageRoles": [
-          {
-            "stageId": "opening",
-            "authorRole": "warm-up",
-            "recommendedRole": "warm-up",
-            "decision": "approved"
-          },
-          {
-            "stageId": "line-indicators",
-            "authorRole": "technique-check",
-            "recommendedRole": "technique-check",
-            "decision": "approved"
-          },
-          {
-            "stageId": "line-mean",
-            "authorRole": "core",
-            "recommendedRole": "core",
-            "decision": "approved"
-          },
-          {
-            "stageId": "circle",
-            "authorRole": "deep-dive",
-            "recommendedRole": "deep-dive",
-            "decision": "approved"
-          },
-          {
-            "stageId": "transfer",
-            "authorRole": "transfer",
-            "recommendedRole": "transfer",
-            "decision": "approved"
-          }
-        ],
-        "milestoneContentSkillAttribution": [
-          {
-            "milestoneId": "opening",
-            "skills": [
-              "small-case-exploration",
-              "strategic-simplification"
-            ],
-            "contentConcepts": [
-              "counting-structure"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          },
-          {
-            "milestoneId": "line-indicators",
-            "skills": [
-              "representation-switching",
-              "proof-construction"
-            ],
-            "contentConcepts": [
-              "expectation-structure",
-              "random-processes"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          },
-          {
-            "milestoneId": "line-mean",
-            "skills": [
-              "proof-construction",
-              "precision-checking"
-            ],
-            "contentConcepts": [
-              "expectation-structure",
-              "independence-symmetry"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          },
-          {
-            "milestoneId": "circle",
-            "skills": [
-              "case-analysis",
-              "precision-checking",
-              "proof-construction"
-            ],
-            "contentConcepts": [
-              "expectation-structure",
-              "random-processes"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          },
-          {
-            "milestoneId": "transfer",
-            "skills": [
-              "generalization",
-              "transfer",
-              "proof-construction"
-            ],
-            "contentConcepts": [
-              "expectation-structure",
-              "independence-symmetry"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          }
-        ],
-        "processGroundedSemantics": {
-          "decision": "approved",
-          "note": "Euler helper filters process-grounded skills from milestone completion evidence."
-        },
-        "requestedChanges": []
-      },
-      "difficulty": {
-        "decision": "approved",
-        "author": {
-          "entry": "introductory",
-          "core": "standard",
-          "ceiling": "strong"
-        },
-        "recommended": {
-          "entry": "introductory",
-          "core": "standard",
-          "ceiling": "strong"
-        },
-        "stageBands": [
-          {
-            "stageId": "opening",
-            "role": "warm-up",
-            "authorDifficulty": "introductory",
-            "recommendedDifficulty": "introductory",
-            "decision": "approved"
-          },
-          {
-            "stageId": "line-indicators",
-            "role": "technique-check",
-            "authorDifficulty": "standard",
-            "recommendedDifficulty": "standard",
-            "decision": "approved"
-          },
-          {
-            "stageId": "line-mean",
-            "role": "core",
-            "authorDifficulty": "standard",
-            "recommendedDifficulty": "standard",
-            "decision": "approved"
-          },
-          {
-            "stageId": "circle",
-            "role": "deep-dive",
-            "authorDifficulty": "strong",
-            "recommendedDifficulty": "strong",
-            "decision": "approved"
-          },
-          {
-            "stageId": "transfer",
-            "role": "transfer",
-            "authorDifficulty": "strong",
-            "recommendedDifficulty": "strong",
-            "decision": "approved"
-          }
-        ],
-        "confidence": "low",
-        "evidenceBasis": "expert-judgment"
-      },
-      "timing": {
-        "decision": "approved",
-        "recommended": {
-          "firstMeaningfulInsightMinutes": {
-            "min": 0.5,
-            "max": 2
-          },
-          "independentCompletionMinutes": {
-            "min": 14,
-            "max": 24
-          },
-          "promptedCompletionMinutes": {
-            "min": 11,
-            "max": 20
-          },
-          "optionalExtensionMinutes": {
-            "min": 4,
-            "max": 7
-          },
-          "softCutoffMinutes": 21,
-          "confidence": "low"
-        },
-        "confidence": "low",
-        "evidenceBasis": "expert-judgment"
-      },
-      "requestedChanges": [],
-      "ownershipBoundaries": {
-        "originality": "pending-agent-h",
-        "fidelity": "pending-agent-h",
-        "mathematicalCorrectness": "pending-agent-i"
-      }
-    },
-    {
-      "agent": "G — Gauss",
-      "authorAgent": "E — Euler",
-      "prNumber": 134,
       "familyId": "oxford-euler-random-halving-interval",
-      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
+      "authorHeadReviewed": "1ce96b5b89be971399cab5080d4487a908ea294d",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -11457,24 +10217,25 @@
     }
   ],
   "summary": {
-    "reviewed": 46,
-    "surviving": 46,
+    "reviewed": 41,
+    "surviving": 41,
     "byAuthor": {
       "cantor": 17,
-      "dirichlet": 12,
-      "euler": 17
+      "dirichlet": 11,
+      "euler": 13
     },
     "taxonomy": {
-      "approved": 44,
-      "changesRequired": 2
+      "approved": 41,
+      "changesRequired": 0
     },
     "difficulty": {
-      "approved": 43,
-      "changesRequired": 3
+      "approved": 41,
+      "changesRequired": 0
     },
     "timing": {
-      "approved": 34,
-      "changesRequired": 12
+      "approved": 41,
+      "changesRequired": 0
     }
-  }
+  },
+  "scopeNote": "Final Wave 2 Gauss snapshot: every surviving C/D/E family at the exact final author heads is approved for G-owned taxonomy, difficulty, and timing. H originality/fidelity and I mathematical correctness remain separately owned."
 }
