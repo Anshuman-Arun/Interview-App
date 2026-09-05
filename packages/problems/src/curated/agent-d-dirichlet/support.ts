@@ -78,11 +78,11 @@ const DIRICHLET_FAMILY_TIMING: Readonly<Record<string, DirichletFamilyTiming>> =
       }
     },
     "oxford-d-thirds-closed-integers": {
-      whole: timing(3, 7, 18, 28, 12, 21, 31, 5, 10),
+      whole: timing(3, 6, 17, 28, 13, 22, 25, 5, 9),
       stages: {
-        "thirds-opening": timing(2, 4, 4, 7, 3, 5, 8),
-        "thirds-core": timing(3, 6, 9, 15, 6, 11, 17),
-        "thirds-transfer": timing(2, 5, 6, 10, 4, 8, 12, 5, 9)
+        "thirds-opening": timing(2, 4, 3, 6, 2, 4, 7),
+        "thirds-core": timing(3, 6, 8, 14, 6, 11, 15),
+        "thirds-transfer": timing(2, 5, 6, 8, 5, 7, 10, 5, 9)
       }
     },
     "oxford-d-balancing-transfers": {
@@ -94,43 +94,35 @@ const DIRICHLET_FAMILY_TIMING: Readonly<Record<string, DirichletFamilyTiming>> =
       }
     },
     "oxford-d-cube-twist-equivalence": {
-      whole: timing(3, 6, 16, 25, 11, 19, 28, 5, 9),
+      whole: timing(2, 5, 14, 23, 10, 18, 22, 4, 7),
       stages: {
-        "cube-opening": timing(2, 4, 4, 7, 3, 5, 8),
-        "cube-core": timing(3, 5, 8, 13, 5, 10, 15),
-        "cube-transfer": timing(2, 4, 5, 9, 4, 7, 11, 4, 8)
+        "cube-opening": timing(1, 3, 3, 5, 2, 4, 6),
+        "cube-core": timing(2, 5, 7, 11, 5, 9, 12),
+        "cube-transfer": timing(2, 4, 4, 7, 3, 5, 8, 4, 7)
       }
     },
     "oxford-d-sliding-window-parity": {
-      whole: timing(2, 5, 15, 23, 10, 18, 26, 4, 8),
+      whole: timing(1, 4, 12, 20, 9, 16, 20, 4, 7),
       stages: {
-        "window-opening": timing(1, 3, 3, 6, 2, 4, 7),
-        "window-core": timing(2, 5, 8, 12, 5, 9, 14),
-        "window-transfer": timing(2, 4, 5, 8, 3, 7, 10, 3, 7)
+        "window-opening": timing(1, 2, 2, 4, 1, 3, 5),
+        "window-core": timing(1, 4, 6, 10, 5, 8, 11),
+        "window-transfer": timing(1, 3, 4, 6, 3, 5, 7, 4, 7)
       }
     },
     "oxford-d-weighted-cycle-readings": {
-      whole: timing(3, 7, 18, 27, 13, 21, 30, 5, 10),
+      whole: timing(2, 5, 15, 24, 11, 20, 23, 4, 8),
       stages: {
-        "weighted-cycle-opening": timing(2, 4, 4, 7, 3, 5, 8),
-        "weighted-cycle-core": timing(3, 6, 10, 15, 7, 11, 17),
-        "weighted-cycle-transfer": timing(2, 5, 6, 10, 4, 8, 12, 4, 9)
+        "weighted-cycle-opening": timing(1, 3, 3, 5, 2, 4, 6),
+        "weighted-cycle-core": timing(2, 5, 8, 13, 6, 11, 14),
+        "weighted-cycle-transfer": timing(2, 4, 4, 6, 3, 5, 8, 4, 8)
       }
     },
     "oxford-d-midpoint-closed-residues": {
-      whole: timing(3, 7, 19, 29, 13, 22, 32, 5, 10),
+      whole: timing(3, 6, 17, 28, 13, 22, 25, 5, 9),
       stages: {
-        "midpoint-opening": timing(2, 4, 4, 7, 3, 5, 8),
-        "midpoint-core": timing(3, 6, 10, 16, 7, 12, 18),
-        "midpoint-transfer": timing(2, 5, 6, 10, 4, 8, 12, 5, 9)
-      }
-    },
-    "oxford-d-mirror-orbits": {
-      whole: timing(2, 5, 13, 21, 9, 16, 24, 4, 8),
-      stages: {
-        "mirror-opening": timing(1, 3, 3, 5, 2, 4, 6),
-        "mirror-core": timing(2, 5, 7, 11, 5, 8, 13),
-        "mirror-transfer": timing(2, 4, 5, 8, 3, 6, 10, 4, 7)
+        "midpoint-opening": timing(2, 4, 4, 6, 3, 5, 7),
+        "midpoint-core": timing(3, 6, 8, 14, 6, 11, 15),
+        "midpoint-transfer": timing(2, 5, 5, 8, 4, 6, 10, 5, 9)
       }
     },
     "oxford-d-odd-symmetric-difference": {
@@ -142,27 +134,27 @@ const DIRICHLET_FAMILY_TIMING: Readonly<Record<string, DirichletFamilyTiming>> =
       }
     },
     "oxford-d-three-reversal-permutations": {
-      whole: timing(2, 5, 14, 23, 10, 18, 26, 5, 9),
+      whole: timing(2, 5, 14, 23, 10, 19, 22, 4, 8),
       stages: {
         "three-reversal-opening": timing(1, 3, 3, 5, 2, 4, 6),
-        "three-reversal-core": timing(2, 5, 7, 12, 5, 9, 14),
-        "three-reversal-transfer": timing(2, 4, 6, 9, 4, 7, 11, 4, 8)
+        "three-reversal-core": timing(2, 5, 7, 11, 5, 9, 12),
+        "three-reversal-transfer": timing(2, 4, 4, 7, 3, 6, 8, 4, 8)
       }
     },
     "oxford-d-divisor-step-geometry": {
-      whole: timing(2, 5, 15, 24, 10, 18, 27, 5, 9),
+      whole: timing(2, 5, 15, 25, 11, 20, 23, 4, 8),
       stages: {
-        "divisor-geometry-opening": timing(1, 3, 3, 6, 2, 4, 7),
-        "divisor-geometry-core": timing(2, 5, 8, 13, 5, 10, 15),
-        "divisor-geometry-transfer": timing(2, 4, 5, 9, 4, 7, 11, 4, 8)
+        "divisor-geometry-opening": timing(1, 3, 3, 5, 2, 4, 6),
+        "divisor-geometry-core": timing(2, 5, 8, 13, 6, 11, 14),
+        "divisor-geometry-transfer": timing(2, 4, 4, 7, 3, 5, 8, 4, 8)
       }
     },
     "oxford-d-triple-flip-circle": {
-      whole: timing(3, 7, 20, 30, 14, 23, 33, 5, 10),
+      whole: timing(3, 6, 17, 28, 13, 22, 25, 5, 9),
       stages: {
-        "triple-flip-opening": timing(2, 4, 4, 7, 3, 5, 8),
-        "triple-flip-core": timing(3, 7, 11, 17, 8, 13, 19),
-        "triple-flip-transfer": timing(2, 5, 7, 11, 5, 9, 13, 5, 9)
+        "triple-flip-opening": timing(2, 4, 4, 6, 3, 5, 7),
+        "triple-flip-core": timing(3, 6, 9, 15, 7, 12, 16),
+        "triple-flip-transfer": timing(2, 5, 4, 7, 3, 5, 9, 5, 9)
       }
     }
   });
@@ -174,17 +166,76 @@ const REVIEW_OVERRIDES: Readonly<
     taxonomyClassification: "approved",
     originality: "approved",
     fidelity: "approved",
+    mathematicalCorrectness: "approved",
     difficultyCalibration: "expert-estimate"
   },
   "oxford-d-thirds-closed-integers": {
+    taxonomyClassification: "approved",
     originality: "approved",
-    fidelity: "approved"
+    fidelity: "approved",
+    mathematicalCorrectness: "approved",
+    difficultyCalibration: "expert-estimate"
+  },
+  "oxford-d-balancing-transfers": {
+    taxonomyClassification: "approved",
+    originality: "approved",
+    fidelity: "approved",
+    mathematicalCorrectness: "approved",
+    difficultyCalibration: "expert-estimate"
+  },
+  "oxford-d-cube-twist-equivalence": {
+    taxonomyClassification: "approved",
+    originality: "approved",
+    fidelity: "approved",
+    mathematicalCorrectness: "approved",
+    difficultyCalibration: "expert-estimate"
+  },
+  "oxford-d-sliding-window-parity": {
+    taxonomyClassification: "approved",
+    originality: "approved",
+    fidelity: "approved",
+    mathematicalCorrectness: "approved",
+    difficultyCalibration: "expert-estimate"
+  },
+  "oxford-d-weighted-cycle-readings": {
+    taxonomyClassification: "in-review",
+    originality: "approved",
+    fidelity: "approved",
+    mathematicalCorrectness: "approved",
+    difficultyCalibration: "expert-estimate"
   },
   "oxford-d-midpoint-closed-residues": {
-    mathematicalCorrectness: "approved"
+    taxonomyClassification: "approved",
+    originality: "approved",
+    fidelity: "approved",
+    mathematicalCorrectness: "approved",
+    difficultyCalibration: "expert-estimate"
+  },
+  "oxford-d-odd-symmetric-difference": {
+    taxonomyClassification: "approved",
+    originality: "approved",
+    fidelity: "approved",
+    mathematicalCorrectness: "approved",
+    difficultyCalibration: "expert-estimate"
+  },
+  "oxford-d-three-reversal-permutations": {
+    taxonomyClassification: "approved",
+    originality: "changes-required",
+    fidelity: "approved",
+    mathematicalCorrectness: "approved",
+    difficultyCalibration: "expert-estimate"
+  },
+  "oxford-d-divisor-step-geometry": {
+    taxonomyClassification: "approved",
+    originality: "changes-required",
+    fidelity: "approved",
+    mathematicalCorrectness: "approved",
+    difficultyCalibration: "expert-estimate"
   },
   "oxford-d-triple-flip-circle": {
     taxonomyClassification: "approved",
+    originality: "approved",
+    fidelity: "approved",
     mathematicalCorrectness: "approved",
     difficultyCalibration: "expert-estimate"
   }
