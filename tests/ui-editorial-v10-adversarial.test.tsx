@@ -115,6 +115,18 @@ describe("editorial v10 adversarial UI states", () => {
     expect(document.querySelector(".transcript-feed__jump")).toBeNull();
   });
 
+  it("counts an attached active room separately when storage only lists another active room", () => {
+    const app = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+
+    expect(app).toContain("const attachedActiveMissingFromStored =");
+    expect(app).toContain(
+      "storedActiveSessions.length + (attachedActiveMissingFromStored ? 1 : 0)"
+    );
+  });
+
   it("does not offer a false new-session action when multiple active sessions exist", () => {
     const home = renderToStaticMarkup(
       <HomePage
