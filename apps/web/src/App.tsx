@@ -869,8 +869,16 @@ export const App: React.FC = () => {
                   aria-expanded={endConfirmOpen}
                   aria-haspopup="dialog"
                   aria-controls={endConfirmOpen ? "live-end-confirmation" : undefined}
+                  aria-label={sessionTerminalPending ? "Ending interview" : "End interview"}
                 >
-                  {sessionTerminalPending ? "Ending…" : "End interview"}
+                  {sessionTerminalPending
+                    ? "Ending…"
+                    : (
+                        <>
+                          <span className="app-header__end-short">End</span>
+                          <span className="app-header__end-long"> interview</span>
+                        </>
+                      )}
                 </button>
                 {endConfirmOpen && (
                   <div
