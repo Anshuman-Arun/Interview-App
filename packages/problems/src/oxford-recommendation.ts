@@ -225,24 +225,24 @@ export function recommendNextOxfordProblem(
         }
 
         const exactIdentity = problemIdentity(candidate.problemId, candidate.problemVersion);
-        if (
-          !deliberateRepeats.has(exactIdentity)
-          && isExactProblemCoolingDown(profile, candidate, exactCooldown)
-        ) {
-          exclusionCodes.push("EXACT_REPEAT_COOLDOWN");
-        }
-        if (isFamilyCoolingDown(profile, adaptive.familyId, familyCooldown)) {
-          exclusionCodes.push("FAMILY_COOLDOWN");
-        }
-        if (
-          adaptive.similarityClusterId !== undefined
-          && isSimilarityClusterCoolingDown(
-            profile,
-            adaptive.similarityClusterId,
-            clusterCooldown
-          )
-        ) {
-          exclusionCodes.push("SIMILARITY_CLUSTER_COOLDOWN");
+        const deliberateRepeat = deliberateRepeats.has(exactIdentity);
+        if (!deliberateRepeat) {
+          if (isExactProblemCoolingDown(profile, candidate, exactCooldown)) {
+            exclusionCodes.push("EXACT_REPEAT_COOLDOWN");
+          }
+          if (isFamilyCoolingDown(profile, adaptive.familyId, familyCooldown)) {
+            exclusionCodes.push("FAMILY_COOLDOWN");
+          }
+          if (
+            adaptive.similarityClusterId !== undefined
+            && isSimilarityClusterCoolingDown(
+              profile,
+              adaptive.similarityClusterId,
+              clusterCooldown
+            )
+          ) {
+            exclusionCodes.push("SIMILARITY_CLUSTER_COOLDOWN");
+          }
         }
         if (
           availableMinutes !== undefined
@@ -727,8 +727,9 @@ function hasUnknownPrerequisite(
   prerequisites: OxfordRecommendationOptions["prerequisites"]
 ): boolean {
   if (adaptive.prerequisiteConcepts.length === 0) return false;
+  if (prerequisites === undefined) return true;
   return adaptive.prerequisiteConcepts.some((concept) =>
-    prerequisites?.[concept] === undefined
+    prerequisites[concept] === undefined
     || prerequisites[concept] === "UNKNOWN"
   );
 }
