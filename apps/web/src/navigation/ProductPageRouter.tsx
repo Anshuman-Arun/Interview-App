@@ -162,6 +162,7 @@ export function ProductPageRouter({
           history={history}
           historyLoading={historyLoading}
           historyError={historyError}
+          sessionEntryPending={sessionEntryPending}
         />
       );
       break;
