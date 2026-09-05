@@ -521,7 +521,9 @@ export const cantorFunctionFamiliesB: readonly CantorFamilyAuthoring[] = [
       ["precision-checking", "primary"],
       ["case-analysis", "primary"],
       ["technique", "supporting"],
-      ["error-recovery", "supporting"]
+      ["error-recovery", "supporting"],
+      ["generalization", "primary"],
+      ["transfer", "primary"]
     ),
     difficulty: { entry: "introductory-plus", core: "strong", ceiling: "strong" },
     timing: cantorTiming([3, 6], [17, 26], [13, 22], [4, 8], 24),
