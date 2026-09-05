@@ -113,6 +113,7 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
       ["graph-sketching", "primary"],
       ["technique", "supporting"],
       ["visualization", "primary"],
+      ["representation-switching", "supporting"],
       ["strategic-simplification", "supporting"],
       ["precision-checking", "supporting"],
       ["case-analysis", "primary"],
