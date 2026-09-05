@@ -9,9 +9,11 @@ import { oxfordDivisibilityChainEntry } from "./curated/oxford-divisibility-chai
 import { oxfordContinuousFixedPointEntry } from "./curated/oxford-continuous-fixed-point.js";
 import { oxfordPrefixSumsModNEntry } from "./curated/oxford-prefix-sums-mod-n.js";
 import { oxfordTriangleMediansEntry } from "./curated/oxford-triangle-medians.js";
+import { eulerOxfordCandidateEntries } from "./curated/oxford-euler-candidates.js";
 
 export const oxfordCuratedReviewEntries = Object.freeze([
-  oxfordCatalanPathsEntry
+  oxfordCatalanPathsEntry,
+  ...eulerOxfordCandidateEntries
 ] as const);
 
 export const oxfordCuratedEntries = Object.freeze([
