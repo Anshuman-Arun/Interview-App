@@ -170,6 +170,7 @@
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 34px;
+  min-width: 0;
   gap: 6px;
   overflow: visible;
   border: 0;
@@ -177,9 +178,13 @@
   background: transparent;
 }
 .reasoning-composer--compact .reasoning-composer__textarea--compact {
+  display: block;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   height: 56px;
   min-height: 56px;
+  box-sizing: border-box;
   max-height: 112px;
   resize: none;
   padding: 9px 10px;
