@@ -342,7 +342,7 @@ describe("Wave 2 author-family computational spot checks", () => {
       expect(outcomeCounts.size).toBe(1 << (n - 2));
       for (const [key, count] of outcomeCounts) {
         expect(count).toBe(4);
-        const bits = [...key].map((bit) => Number(bit));
+        const bits = Array.from({ length: key.length }, (_, index) => Number(key[index] ?? "0"));
         const parities = [0, 1, 2].map((residue) =>
           bits.reduce((sum, bit, index) => index % 3 === residue ? sum ^ bit : sum, 0)
         );
