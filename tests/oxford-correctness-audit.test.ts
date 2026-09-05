@@ -458,6 +458,22 @@ describe("Wave 2 author-family computational spot checks", () => {
     }
   });
 
+  it("matches the revised queue emptying criterion on exhaustive small parameters", () => {
+    for (let a = 0; a <= 6; a += 1) {
+      for (let b = 0; b <= 6; b += 1) {
+        for (let s = 1; s <= 5; s += 1) {
+          for (let q0 = 0; q0 <= 7; q0 += 1) {
+            const delta = a + b - 2 * s;
+            const q1 = Math.max(0, q0 + a - s);
+            const q2 = Math.max(0, q1 + b - s);
+            const predicted = delta < 0 || q1 === 0 || q2 === 0;
+            expect(queueEverReachesZero(a, b, s, q0, 100)).toBe(predicted);
+          }
+        }
+      }
+    }
+  });
+
   it("matches the random-chord midpoint expectation through n=14", () => {
     for (let n = 3; n <= 14; n += 1) {
       let sum = 0;
@@ -616,4 +632,21 @@ function adjacentConsecutiveCount(order: readonly number[], circular: boolean): 
     if (left !== undefined && right !== undefined && Math.abs(left - right) === 1) count += 1;
   }
   return count;
+}
+
+
+function queueEverReachesZero(
+  a: number,
+  b: number,
+  s: number,
+  q0: number,
+  steps: number
+): boolean {
+  let queue = q0;
+  for (let minute = 1; minute <= steps; minute += 1) {
+    const arrivals = minute % 2 === 1 ? a : b;
+    queue = Math.max(0, queue + arrivals - s);
+    if (queue === 0) return true;
+  }
+  return false;
 }
