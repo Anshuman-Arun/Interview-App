@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { lstatSync, readFileSync } from "node:fs";
 import { lstat, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -16,6 +17,8 @@ import { DesktopBackendController } from "./backend-controller.js";
 import { DesktopLocalRuntimeComposition } from "./runtime/index.js";
 import { PACKAGED_DESKTOP_PRELOAD_SHA256 } from "./runtime/packaged-resource-integrity.js";
 import {
+  DESKTOP_APPEARANCE_READ_CHANNEL,
+  DESKTOP_APPEARANCE_WRITE_CHANNEL,
   DESKTOP_BOOTSTRAP_CHANNEL,
   DESKTOP_INSTALL_PYTHON_RUNTIME_CHANNEL,
   DESKTOP_INSTALL_VISION_MODEL_CHANNEL,
@@ -55,6 +58,7 @@ import {
 
 const OPTIONAL_LOCAL_RUNTIME_STARTUP_BUDGET_MS = 60_000;
 const PACKAGED_SMOKE_PROOF_MAX_BYTES = 64 * 1024;
+const MAX_APPEARANCE_SETTINGS_BYTES = 4 * 1024;
 const PACKAGED_SMOKE_INPUT = "Packaged Windows desktop smoke input.";
 
 let localRuntime: DesktopLocalRuntimeComposition | undefined;
@@ -74,6 +78,7 @@ let frontendServer: DesktopFrontendServer | undefined;
 let mainWindow: BrowserWindow | undefined;
 let bootstrap: DesktopRendererBootstrap | undefined;
 let frontendUrl: string | undefined;
+let appearanceSettingsPath: string | undefined;
 let clientToken: string | undefined;
 let removeTokenInjector: (() => void) | undefined;
 let removePermissionCapability: (() => void) | undefined;
@@ -168,6 +173,7 @@ async function startDesktop(): Promise<void> {
     isPackaged: app.isPackaged
   });
   await mkdir(paths.appDataRoot, { recursive: true });
+  appearanceSettingsPath = path.join(paths.appDataRoot, "appearance.json");
   if (app.isPackaged) {
     await assertPackagedPreloadIntegrity(paths.preloadPath);
   }
@@ -251,6 +257,7 @@ async function startDesktop(): Promise<void> {
 
   installBootstrapHandler();
   installZoomHandler();
+  installAppearanceHandlers();
   installLocalRuntimeHandlers();
   await createMainWindow(paths.preloadPath);
 
@@ -261,6 +268,116 @@ async function startDesktop(): Promise<void> {
     shutdownComplete = true;
     app.quit();
   }
+}
+
+function installAppearanceHandlers(): void {
+  ipcMain.removeAllListeners(DESKTOP_APPEARANCE_READ_CHANNEL);
+  ipcMain.removeHandler(DESKTOP_APPEARANCE_WRITE_CHANNEL);
+
+  ipcMain.on(
+    DESKTOP_APPEARANCE_READ_CHANNEL,
+    (event: IpcMainEvent) => {
+      if (!isAuthorizedDesktopEvent(event)) {
+        event.returnValue = null;
+        return;
+      }
+      const settingsPath = appearanceSettingsPath;
+      if (settingsPath === undefined) {
+        event.returnValue = null;
+        return;
+      }
+      try {
+        const metadata = lstatSync(settingsPath);
+        if (
+          !metadata.isFile()
+          || metadata.isSymbolicLink()
+          || metadata.size <= 0
+          || metadata.size > MAX_APPEARANCE_SETTINGS_BYTES
+        ) {
+          event.returnValue = null;
+          return;
+        }
+        const raw = readFileSync(settingsPath, "utf8");
+        event.returnValue = isValidAppearanceSettingsPayload(raw) ? raw : null;
+      } catch {
+        event.returnValue = null;
+      }
+    }
+  );
+
+  ipcMain.handle(
+    DESKTOP_APPEARANCE_WRITE_CHANNEL,
+    async (event: IpcMainInvokeEvent, raw: unknown): Promise<true> => {
+      if (!isAuthorizedDesktopInvoke(event)) {
+        throw new Error("Desktop appearance request was rejected");
+      }
+      if (!isValidAppearanceSettingsPayload(raw)) {
+        throw new Error("Desktop appearance payload was rejected");
+      }
+      const settingsPath = appearanceSettingsPath;
+      if (settingsPath === undefined) {
+        throw new Error("Desktop appearance storage is unavailable");
+      }
+      await writeFile(settingsPath, raw, {
+        encoding: "utf8",
+        mode: 0o600
+      });
+      return true;
+    }
+  );
+}
+
+function isValidAppearanceSettingsPayload(value: unknown): value is string {
+  if (
+    typeof value !== "string"
+    || value.length === 0
+    || Buffer.byteLength(value, "utf8") > MAX_APPEARANCE_SETTINGS_BYTES
+  ) {
+    return false;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return false;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return false;
+  }
+  const record = parsed as Record<string, unknown>;
+  const keys = Object.keys(record).sort();
+  const expected = [
+    "accent",
+    "accentIntensity",
+    "borders",
+    "corners",
+    "theme",
+    "zoomPercent"
+  ];
+  if (
+    keys.length !== expected.length
+    || !keys.every((key, index) => key === expected[index])
+  ) {
+    return false;
+  }
+  return (
+    typeof record["theme"] === "string"
+    && record["theme"].length <= 32
+    && typeof record["accent"] === "string"
+    && record["accent"].length <= 32
+    && typeof record["corners"] === "string"
+    && record["corners"].length <= 32
+    && typeof record["borders"] === "string"
+    && record["borders"].length <= 32
+    && typeof record["accentIntensity"] === "number"
+    && Number.isFinite(record["accentIntensity"])
+    && record["accentIntensity"] >= 0
+    && record["accentIntensity"] <= 100
+    && typeof record["zoomPercent"] === "number"
+    && Number.isFinite(record["zoomPercent"])
+    && record["zoomPercent"] >= 25
+    && record["zoomPercent"] <= 500
+  );
 }
 
 function installLocalRuntimeHandlers(): void {
@@ -396,7 +513,9 @@ function setSetupState(
   visionSetupRestartRequired = restartRequired;
 }
 
-function isAuthorizedDesktopInvoke(event: IpcMainInvokeEvent): boolean {
+function isAuthorizedDesktopEvent(
+  event: IpcMainEvent | IpcMainInvokeEvent
+): boolean {
   const currentWindow = mainWindow;
   const currentFrontendUrl = frontendUrl;
   return currentWindow !== undefined
@@ -410,6 +529,10 @@ function isAuthorizedDesktopInvoke(event: IpcMainInvokeEvent): boolean {
       senderFrameUrl: event.senderFrame?.url,
       trustedFrontendUrl: currentFrontendUrl
     });
+}
+
+function isAuthorizedDesktopInvoke(event: IpcMainInvokeEvent): boolean {
+  return isAuthorizedDesktopEvent(event);
 }
 
 async function installLocalModelAssets(
@@ -1057,6 +1180,8 @@ function shutdownDesktop(): Promise<void> {
   bootstrap = undefined;
   ipcMain.removeAllListeners(DESKTOP_BOOTSTRAP_CHANNEL);
   ipcMain.removeAllListeners(DESKTOP_ZOOM_CHANNEL);
+  ipcMain.removeAllListeners(DESKTOP_APPEARANCE_READ_CHANNEL);
+  ipcMain.removeHandler(DESKTOP_APPEARANCE_WRITE_CHANNEL);
   ipcMain.removeHandler(DESKTOP_LOCAL_RUNTIME_STATUS_CHANNEL);
   ipcMain.removeHandler(DESKTOP_INSTALL_PYTHON_RUNTIME_CHANNEL);
   ipcMain.removeHandler(DESKTOP_INSTALL_VOICE_MODELS_CHANNEL);
@@ -1135,6 +1260,7 @@ function shutdownDesktop(): Promise<void> {
     }
 
     frontendUrl = undefined;
+    appearanceSettingsPath = undefined;
     if (failures.length > 0) {
       throw new AggregateError(failures, "Desktop shutdown failed");
     }
