@@ -80,6 +80,7 @@ export const App: React.FC = () => {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [sessionAuthorityChecking, setSessionAuthorityChecking] = useState(true);
+  const [sessionAuthorityUnavailable, setSessionAuthorityUnavailable] = useState(false);
   const sessionAuthorityCheckEpochRef = useRef(0);
   const historyAbortRef = useRef<AbortController | null>(null);
   const sessionEntryPendingRef = useRef(false);
@@ -401,7 +402,18 @@ export const App: React.FC = () => {
     const checkEpoch = sessionAuthorityCheckEpochRef.current + 1;
     sessionAuthorityCheckEpochRef.current = checkEpoch;
     setSessionAuthorityChecking(true);
-    void session.fetchAvailableSessions()
+    setSessionAuthorityUnavailable(false);
+    void session.verifyAvailableSessions()
+      .then(() => {
+        if (sessionAuthorityCheckEpochRef.current === checkEpoch) {
+          setSessionAuthorityUnavailable(false);
+        }
+      })
+      .catch(() => {
+        if (sessionAuthorityCheckEpochRef.current === checkEpoch) {
+          setSessionAuthorityUnavailable(true);
+        }
+      })
       .finally(() => {
         if (sessionAuthorityCheckEpochRef.current === checkEpoch) {
           setSessionAuthorityChecking(false);
@@ -412,7 +424,7 @@ export const App: React.FC = () => {
         sessionAuthorityCheckEpochRef.current += 1;
       }
     };
-  }, [session.fetchAvailableSessions]);
+  }, [session.verifyAvailableSessions]);
 
   const refreshStoredSessions = useCallback((): (() => void) => {
     const cancelAuthorityCheck = beginSessionAuthorityCheck();
@@ -453,6 +465,7 @@ export const App: React.FC = () => {
     if (session.isSessionStarted && session.sessionStatus === "ACTIVE") {
       sessionAuthorityCheckEpochRef.current += 1;
       setSessionAuthorityChecking(false);
+      setSessionAuthorityUnavailable(false);
       return;
     }
     if (route.page === "sessions") {
@@ -729,6 +742,7 @@ export const App: React.FC = () => {
         onNavigatePage={navigateProductPage}
         sessionEntryPending={sessionEntryPending}
         sessionAuthorityChecking={sessionAuthorityChecking}
+        sessionAuthorityUnavailable={sessionAuthorityUnavailable}
         onEnterInterview={handleOpenNewInterview}
         launchCatalog={session.interviewCatalog}
         launchCatalogLoading={session.interviewCatalogLoading}
