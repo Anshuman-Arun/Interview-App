@@ -953,7 +953,7 @@ describe("editorial v10 adversarial UI states", () => {
     );
     expect(frameCss).toContain("scrollbar-width: none;");
     expect(frameCss).toMatch(
-      /\.product-frame__content::\-webkit-scrollbar,[\s\S]{0,120}display:\s*none;/u
+      /\.product-frame__content::-webkit-scrollbar,[\s\S]{0,120}display:\s*none;/u
     );
     expect(editorialCss).toMatch(
       /\.live-main\[data-focus="transcript"\],[\s\S]{0,100}\.live-main\[data-focus="whiteboard"\]\s*\{[\s\S]{0,120}grid-template-columns:\s*minmax\(0,\s*1fr\)\s*!important;/u
