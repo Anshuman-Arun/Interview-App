@@ -37,14 +37,17 @@ describe("Windows desktop packaging contract", () => {
     expect(packageJson.version).toMatch(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u);
     expect(packageJson.productName).toBe("Interview App");
     expect(packageJson.main).toBe("dist/desktop-runtime/apps/desktop/src/main.js");
+    expect(packageJson.scripts?.["package:win"]).toContain("node scripts/prepare-desktop-icon.mjs");
     expect(packageJson.scripts?.["package:win"]).toContain("node scripts/clean-windows-package.mjs");
     expect(packageJson.scripts?.["package:win"]).toContain("npx --yes electron-builder@26.15.3");
+    expect(packageJson.scripts?.["dist:win"]).toContain("node scripts/prepare-desktop-icon.mjs");
     expect(packageJson.scripts?.["dist:win"]).toContain("node scripts/clean-windows-package.mjs");
     expect(packageJson.scripts?.["dist:win"]).toContain("npx --yes electron-builder@26.15.3 --win nsis --x64");
     expect(packageJson.scripts?.["package:win"]).toContain("--publish never");
     expect(packageJson.scripts?.["dist:win"]).toContain("--publish never");
     expect(config).toContain("appId: com.anshuman.interviewapp");
     expect(config).toContain("artifactName: InterviewApp-Setup-${version}.${ext}");
+    expect(config).toContain("icon: apps/desktop/assets/icon.png");
     expect(config).toContain("asar: true");
     expect(config).toContain('"!**/*.map"');
     expect(config).toContain('"!node_modules/@types/**"');
@@ -128,7 +131,8 @@ describe("Windows desktop packaging contract", () => {
     expect(main).toContain('beginLocalModelInstall("PYTHON")');
     expect(main).toContain('beginLocalModelInstall("VOICE")');
     expect(main).toContain('beginLocalModelInstall("VISION")');
-    expect(main).toContain("app.relaunch()");
+    expect(main).toContain("app.relaunch({");
+    expect(main).toContain("relaunchArgsForLocalModelActivation");
     expect(preload).not.toMatch(/require\(["'](?:node:)?(?:fs|child_process)["']\)/u);
     expect(preload).not.toContain("process.env");
     expect(preload).not.toContain("shell.");

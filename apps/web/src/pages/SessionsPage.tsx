@@ -19,7 +19,10 @@ export function SessionsPage({
   onRefresh,
   history,
   historyLoading,
-  historyError
+  historyError,
+  sessionEntryPending = false,
+  sessionAuthorityChecking = false,
+  sessionAuthorityUnavailable = false
 }: {
   readonly sessions: readonly StoredSessionSummary[];
   readonly currentSessionId: SessionId | null;
@@ -30,6 +33,9 @@ export function SessionsPage({
   readonly history: SessionHistoryReadResponse | null;
   readonly historyLoading: boolean;
   readonly historyError: string | null;
+  readonly sessionEntryPending?: boolean;
+  readonly sessionAuthorityChecking?: boolean;
+  readonly sessionAuthorityUnavailable?: boolean;
 }) {
   const [filter, setFilter] = useState<Filter>("ALL");
   const [query, setQuery] = useState("");
@@ -53,7 +59,7 @@ export function SessionsPage({
   const completedCount = sessions.filter((session) => session.status === "COMPLETED").length;
 
   return (
-    <div className="expressive-sessions">
+    <div className="expressive-sessions" aria-busy={sessionEntryPending || sessionAuthorityChecking}>
       <section className="expressive-sessions__summary">
         <div>
           <span>ROOMS</span>
@@ -71,21 +77,20 @@ export function SessionsPage({
           <small>completed</small>
         </div>
         <p>
-          A ledger, not a dashboard. Resume work, inspect finished sessions,
-          and keep exact problem/version history separate.
+          Resume active work, inspect finished interviews, and keep each session tied to the problem version it used.
         </p>
       </section>
 
       <section className="expressive-sessions__history" data-testid="longitudinal-history-panel">
         <header>
-          <span>GROUND TRUTH</span>
-          <strong>Longitudinal read</strong>
+          <span>PROGRESS</span>
+          <strong>Across sessions</strong>
           <small>
             {history === null
               ? historyLoading
                 ? "reading…"
-                : historyError ?? "no grounded aggregate yet"
-              : `${String(history.longitudinal.includedSessionCount)} bounded session projection(s)`}
+                : historyError ?? "no session summary yet"
+              : `${String(history.longitudinal.includedSessionCount)} session(s) included`}
           </small>
         </header>
 
@@ -110,7 +115,7 @@ export function SessionsPage({
               <div className="expressive-sessions__improvement">
                 {history.longitudinal.improvement.slice(0, 3).map((item) => (
                   <span key={`${item.fromSessionId}:${item.toSessionId}`}>
-                    exact-problem Δ {item.compositeScoreDelta > 0 ? "+" : ""}
+                    Score change {item.compositeScoreDelta > 0 ? "+" : ""}
                     {item.compositeScoreDelta}
                   </span>
                 ))}
@@ -119,13 +124,18 @@ export function SessionsPage({
 
             {history.longitudinal.sessionTruncation.truncated && (
               <p>
-                {history.longitudinal.sessionTruncation.remainingCount} session(s)
-                sit outside this bounded aggregate.
+                {history.longitudinal.sessionTruncation.remainingCount} older session(s) are not included in this summary.
               </p>
             )}
           </>
         ) : null}
       </section>
+
+      {sessionAuthorityUnavailable && (
+        <p className="expressive-sessions__authority-error" role="alert">
+          Stored session list could not be verified. This ledger may be stale; use Refresh to retry before relying on session authority.
+        </p>
+      )}
 
       <section className="expressive-sessions__toolbar">
         <div className="expressive-sessions__filters">
@@ -155,6 +165,7 @@ export function SessionsPage({
           type="button"
           className="expressive-sessions__refresh"
           onClick={onRefresh}
+          disabled={sessionEntryPending || sessionAuthorityChecking}
         >
           Refresh
         </button>
@@ -204,7 +215,10 @@ export function SessionsPage({
                 </time>
                 <button
                   type="button"
-                  disabled={session.status !== "ACTIVE" && !reviewable}
+                  disabled={
+                    sessionEntryPending
+                    || (session.status !== "ACTIVE" && !reviewable)
+                  }
                   onClick={
                     session.status === "ACTIVE"
                       ? () => onResume(session.sessionId)

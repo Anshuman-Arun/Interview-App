@@ -6,6 +6,7 @@ import {
 } from "../../../packages/domain/src/index.js";
 import { AppearanceDock } from "./components/AppearanceDock.js";
 import { BrandMark } from "./components/BrandMark.js";
+import { SessionDurationNotice } from "./components/SessionDurationNotice.js";
 import { ProblemCard } from "./components/ProblemCard.js";
 import { TranscriptFeed } from "./components/TranscriptFeed.js";
 import { StudentInputArea } from "./components/StudentInputArea.js";
@@ -28,7 +29,6 @@ import type { ProductPageId } from "./components/ProductFrame.js";
 import { ReviewReadPanel } from "./pages/ReviewReadPanel.js";
 import { QuantSessionWorkspace } from "./quant/QuantSessionWorkspace.js";
 import { useAppearance } from "./appearance/AppearanceProvider.js";
-import { DESKTOP_FIRST_RUN_SETUP_KEY } from "./desktop-runtime.js";
 import "./styles/app.css";
 import "./styles/transcript.css";
 
@@ -66,9 +66,22 @@ export const App: React.FC = () => {
   const [recoverySessionInput, setRecoverySessionInput] = useState("");
   const [compactPane, setCompactPane] =
     useState<"interview" | "whiteboard">("interview");
+  const [splitPercent, setSplitPercent] = useState(38);
+  const [paneFocus, setPaneFocus] =
+    useState<"split" | "transcript" | "whiteboard">("split");
+  const [endConfirmOpen, setEndConfirmOpen] = useState(false);
+  const liveWorkspaceRef = useRef<HTMLElement | null>(null);
+  const compactInterviewTabRef = useRef<HTMLButtonElement | null>(null);
+  const compactWhiteboardTabRef = useRef<HTMLButtonElement | null>(null);
+  const endControlRef = useRef<HTMLDivElement | null>(null);
+  const endButtonRef = useRef<HTMLButtonElement | null>(null);
+  const endCancelRef = useRef<HTMLButtonElement | null>(null);
   const [historyRead, setHistoryRead] = useState<SessionHistoryReadResponse | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [sessionAuthorityChecking, setSessionAuthorityChecking] = useState(true);
+  const [sessionAuthorityUnavailable, setSessionAuthorityUnavailable] = useState(false);
+  const sessionAuthorityCheckEpochRef = useRef(0);
   const historyAbortRef = useRef<AbortController | null>(null);
   const sessionEntryPendingRef = useRef(false);
   const sessionTerminalPendingRef = useRef(false);
@@ -76,6 +89,15 @@ export const App: React.FC = () => {
   const [sessionTerminalPending, setSessionTerminalPending] = useState(false);
   const [reloadQuantSessionId] = useState<SessionId | null>(() => readQuantReattachSessionId());
   const reloadQuantRecoveryAttemptedRef = useRef(false);
+
+  const setSplitFromClientX = useCallback((clientX: number): void => {
+    const workspace = liveWorkspaceRef.current;
+    if (workspace === null) return;
+    const rect = workspace.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const next = ((clientX - rect.left) / rect.width) * 100;
+    setSplitPercent(Math.min(68, Math.max(26, next)));
+  }, []);
 
   const whiteboardAdapter = useMemo(() => {
     return new TldrawWhiteboardAdapter();
@@ -86,29 +108,49 @@ export const App: React.FC = () => {
   });
   const { route, navigate } = useProductNavigation();
   const routeRef = useRef(route);
-  const firstRunRedirectedRef = useRef(false);
+  const reviewAutoUpgradeEpochRef = useRef(0);
+  const reviewAutoUpgradePendingRef = useRef<{
+    readonly epoch: number;
+    readonly sessionId: SessionId;
+    resolvedOxford: boolean | null;
+  } | null>(null);
   routeRef.current = route;
 
   useEffect(() => {
-    if (
-      firstRunRedirectedRef.current
-      || !session.isTransportManaged
-      || route.page !== "home"
-    ) {
+    const pending = reviewAutoUpgradePendingRef.current;
+    if (pending === null) return;
+    if (reviewAutoUpgradeEpochRef.current !== pending.epoch) {
+      reviewAutoUpgradePendingRef.current = null;
       return;
     }
-    firstRunRedirectedRef.current = true;
-    try {
-      if (globalThis.localStorage.getItem(DESKTOP_FIRST_RUN_SETUP_KEY) === "complete") {
-        return;
-      }
-    } catch {
-      // First-run routing is a convenience; transport authority never depends on storage.
+
+    const atIntendedReplay =
+      route.page === "review"
+      && route.sessionId === pending.sessionId
+      && route.view === "replay";
+    if (!atIntendedReplay) {
+      reviewAutoUpgradeEpochRef.current += 1;
+      reviewAutoUpgradePendingRef.current = null;
+      return;
     }
-    navigate({ page: "settings" }, { replace: true });
-  }, [navigate, route.page, session.isTransportManaged]);
+    if (pending.resolvedOxford !== true) return;
+
+    reviewAutoUpgradePendingRef.current = null;
+    navigate({
+      page: "review",
+      sessionId: pending.sessionId,
+      view: "evaluation"
+    }, { replace: true });
+  }, [navigate, route]);
 
   const openDefaultReview = useCallback((targetSessionId: SessionId): void => {
+    const autoUpgradeEpoch = reviewAutoUpgradeEpochRef.current + 1;
+    reviewAutoUpgradeEpochRef.current = autoUpgradeEpoch;
+    reviewAutoUpgradePendingRef.current = {
+      epoch: autoUpgradeEpoch,
+      sessionId: targetSessionId,
+      resolvedOxford: null
+    };
     navigate({
       page: "review",
       sessionId: targetSessionId,
@@ -117,15 +159,30 @@ export const App: React.FC = () => {
 
     void session.readSessionConfiguration(targetSessionId)
       .then((configuration) => {
+        const pending = reviewAutoUpgradePendingRef.current;
+        if (
+          reviewAutoUpgradeEpochRef.current !== autoUpgradeEpoch
+          || pending === null
+          || pending.epoch !== autoUpgradeEpoch
+          || pending.sessionId !== targetSessionId
+        ) {
+          return;
+        }
+        if (configuration.mode !== "OXFORD_MATHEMATICS") {
+          reviewAutoUpgradePendingRef.current = null;
+          return;
+        }
+
+        pending.resolvedOxford = true;
         const currentRoute = routeRef.current;
         if (
-          configuration.mode !== "OXFORD_MATHEMATICS"
-          || currentRoute.page !== "review"
+          currentRoute.page !== "review"
           || currentRoute.sessionId !== targetSessionId
           || currentRoute.view !== "replay"
         ) {
           return;
         }
+        reviewAutoUpgradePendingRef.current = null;
         navigate({
           page: "review",
           sessionId: targetSessionId,
@@ -133,6 +190,10 @@ export const App: React.FC = () => {
         }, { replace: true });
       })
       .catch(() => {
+        const pending = reviewAutoUpgradePendingRef.current;
+        if (pending?.epoch === autoUpgradeEpoch) {
+          reviewAutoUpgradePendingRef.current = null;
+        }
         // Replay is the conservative fallback for unknown or unreadable mode.
       });
   }, [navigate, session.readSessionConfiguration]);
@@ -175,6 +236,7 @@ export const App: React.FC = () => {
         return;
       }
       await session.startConfiguredSession(configuration);
+      void session.fetchAvailableSessions();
       navigate({ page: "interview" });
     } catch {
       // Error handled by the authoritative session hook.
@@ -256,6 +318,7 @@ export const App: React.FC = () => {
     setSessionEntryPending(true);
     try {
       const recoveredStatus = await session.recoverSession(targetSessionId);
+      void session.fetchAvailableSessions();
       if (recoveredStatus === null) return;
       if (recoveredStatus === "ACTIVE") {
         navigate({ page: "interview" });
@@ -303,6 +366,7 @@ export const App: React.FC = () => {
     setSessionEntryPending(true);
     try {
       const recoveredStatus = await session.recoverSession(recoverySessionId);
+      void session.fetchAvailableSessions();
       if (recoveredStatus === null) return;
       if (recoveredStatus === "ACTIVE") {
         navigate({ page: "interview" });
@@ -317,8 +381,36 @@ export const App: React.FC = () => {
     }
   };
 
-  const refreshStoredSessions = useCallback((): void => {
-    void session.fetchAvailableSessions();
+  const beginSessionAuthorityCheck = useCallback((): (() => void) => {
+    const checkEpoch = sessionAuthorityCheckEpochRef.current + 1;
+    sessionAuthorityCheckEpochRef.current = checkEpoch;
+    setSessionAuthorityChecking(true);
+    setSessionAuthorityUnavailable(false);
+    void session.verifyAvailableSessions()
+      .then(() => {
+        if (sessionAuthorityCheckEpochRef.current === checkEpoch) {
+          setSessionAuthorityUnavailable(false);
+        }
+      })
+      .catch(() => {
+        if (sessionAuthorityCheckEpochRef.current === checkEpoch) {
+          setSessionAuthorityUnavailable(true);
+        }
+      })
+      .finally(() => {
+        if (sessionAuthorityCheckEpochRef.current === checkEpoch) {
+          setSessionAuthorityChecking(false);
+        }
+      });
+    return () => {
+      if (sessionAuthorityCheckEpochRef.current === checkEpoch) {
+        sessionAuthorityCheckEpochRef.current += 1;
+      }
+    };
+  }, [session.verifyAvailableSessions]);
+
+  const refreshStoredSessions = useCallback((): (() => void) => {
+    const cancelAuthorityCheck = beginSessionAuthorityCheck();
     historyAbortRef.current?.abort();
     const controller = new AbortController();
     historyAbortRef.current = controller;
@@ -334,16 +426,19 @@ export const App: React.FC = () => {
       })
       .catch(() => {
         if (controller.signal.aborted) return;
-        setHistoryError("Bounded session history could not be loaded.");
+        setHistoryError("Session history could not be loaded.");
         setHistoryLoading(false);
       });
-  }, [session.fetchAvailableSessions, session.readSessionHistory]);
+    return cancelAuthorityCheck;
+  }, [beginSessionAuthorityCheck, session.readSessionHistory]);
 
   const navigateProductPage = useCallback((page: ProductPageId): void => {
     navigate({ page });
   }, [navigate]);
 
   useEffect(() => {
+    reviewAutoUpgradeEpochRef.current += 1;
+    reviewAutoUpgradePendingRef.current = null;
     historyAbortRef.current?.abort();
     historyAbortRef.current = null;
     setHistoryRead(null);
@@ -353,25 +448,43 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     if (session.isSessionStarted && session.sessionStatus === "ACTIVE") {
-      return;
-    }
-    if (route.page === "home" || route.page === "new") {
-      void session.fetchAvailableSessions();
+      sessionAuthorityCheckEpochRef.current += 1;
+      setSessionAuthorityChecking(false);
+      setSessionAuthorityUnavailable(false);
       return;
     }
     if (route.page === "sessions") {
-      refreshStoredSessions();
+      return refreshStoredSessions();
     }
+    return beginSessionAuthorityCheck();
   }, [
+    beginSessionAuthorityCheck,
     refreshStoredSessions,
     route.page,
-    session.fetchAvailableSessions,
     session.isSessionStarted,
     session.sessionStatus
   ]);
 
   useEffect(() => {
+    if (session.isSessionStarted && session.sessionStatus === "ACTIVE") return;
+    if (
+      route.page !== "home"
+      && route.page !== "sessions"
+      && route.page !== "review"
+    ) {
+      return;
+    }
+    void session.refreshProviderOptions().catch(() => undefined);
+  }, [
+    route.page,
+    session.isSessionStarted,
+    session.sessionStatus,
+    session.refreshProviderOptions
+  ]);
+
+  useEffect(() => {
     return () => {
+      sessionAuthorityCheckEpochRef.current += 1;
       historyAbortRef.current?.abort();
       historyAbortRef.current = null;
     };
@@ -423,6 +536,7 @@ export const App: React.FC = () => {
     setSessionEntryPending(true);
     void session.recoverSession(reloadQuantSessionId)
       .then((status) => {
+        void session.fetchAvailableSessions();
         if (status === "ACTIVE") {
           navigate({ page: "interview" }, { replace: true });
           return;
@@ -451,7 +565,8 @@ export const App: React.FC = () => {
     reloadQuantSessionId,
     route.page,
     session.isSessionStarted,
-    session.recoverSession
+    session.recoverSession,
+    session.fetchAvailableSessions
   ]);
 
   const handleWhiteboardEditorMount = useCallback((): void => {
@@ -462,11 +577,30 @@ export const App: React.FC = () => {
 
   const hasActiveInterview =
     session.isSessionStarted && session.sessionStatus === "ACTIVE";
-  const storedActiveSessions = session.availableSessions.filter(
+  const productSessions = session.availableSessions.filter(
+    (storedSession) =>
+      !(
+        storedSession.status === "ACTIVE"
+        && storedSession.sessionId === session.sessionId
+        && (
+          session.sessionStatus === "COMPLETED"
+          || session.sessionStatus === "ARCHIVED"
+        )
+      )
+  );
+  const storedActiveSessions = productSessions.filter(
     (storedSession) => storedSession.status === "ACTIVE"
   );
   const storedActiveSession =
     storedActiveSessions.length === 1 ? storedActiveSessions[0] ?? null : null;
+  const attachedActiveMissingFromStored =
+    hasActiveInterview
+    && session.sessionId !== null
+    && !storedActiveSessions.some(
+      (storedSession) => storedSession.sessionId === session.sessionId
+    );
+  const knownActiveSessionCount =
+    storedActiveSessions.length + (attachedActiveMissingFromStored ? 1 : 0);
   const resumableActiveSessionId =
     hasActiveInterview && session.sessionId !== null
       ? session.sessionId
@@ -477,6 +611,71 @@ export const App: React.FC = () => {
     session.isPaused
   );
   const interviewBackgrounded = displayRoute.page !== "interview";
+  const activeStoredSession = session.sessionId === null
+    ? null
+    : session.availableSessions.find(
+        (storedSession) => storedSession.sessionId === session.sessionId
+      ) ?? null;
+
+  useEffect(() => {
+    if (!endConfirmOpen) return;
+
+    if (!hasActiveInterview || interviewBackgrounded || sessionTerminalPending) {
+      setEndConfirmOpen(false);
+      return;
+    }
+
+    const closeFromOutside = (event: PointerEvent): void => {
+      const root = endControlRef.current;
+      if (
+        root === null
+        || !(event.target instanceof Node)
+        || root.contains(event.target)
+      ) {
+        return;
+      }
+      setEndConfirmOpen(false);
+    };
+    const closeFromEscape = (event: KeyboardEvent): void => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setEndConfirmOpen(false);
+      queueMicrotask(() => endButtonRef.current?.focus());
+    };
+
+    document.addEventListener("pointerdown", closeFromOutside);
+    document.addEventListener("keydown", closeFromEscape);
+    queueMicrotask(() => endCancelRef.current?.focus());
+
+    return () => {
+      document.removeEventListener("pointerdown", closeFromOutside);
+      document.removeEventListener("keydown", closeFromEscape);
+    };
+  }, [
+    endConfirmOpen,
+    hasActiveInterview,
+    interviewBackgrounded,
+    sessionTerminalPending
+  ]);
+
+  useEffect(() => {
+    setEndConfirmOpen(false);
+    setCompactPane("interview");
+    setPaneFocus("split");
+    setSplitPercent(38);
+  }, [session.sessionId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const compact = window.matchMedia("(max-width: 960px)");
+    const resetFocusForCompactLayout = (): void => {
+      if (compact.matches) setPaneFocus("split");
+    };
+    resetFocusForCompactLayout();
+    compact.addEventListener("change", resetFocusForCompactLayout);
+    return () => compact.removeEventListener("change", resetFocusForCompactLayout);
+  }, []);
+
   const activeModeLabel =
     session.configuration?.mode === "QUANT_TRADING"
       ? "Quant Trading"
@@ -515,8 +714,9 @@ export const App: React.FC = () => {
     : (
       <ProductPageRouter
         route={displayRoute}
-        sessions={session.availableSessions}
+        sessions={productSessions}
         activeSessionId={resumableActiveSessionId}
+        activeSessionCount={knownActiveSessionCount}
         currentSessionId={hasActiveInterview ? session.sessionId : null}
         activeProblemTitle={
           hasActiveInterview
@@ -533,6 +733,8 @@ export const App: React.FC = () => {
         }
         onNavigatePage={navigateProductPage}
         sessionEntryPending={sessionEntryPending}
+        sessionAuthorityChecking={sessionAuthorityChecking}
+        sessionAuthorityUnavailable={sessionAuthorityUnavailable}
         onEnterInterview={handleOpenNewInterview}
         launchCatalog={session.interviewCatalog}
         launchCatalogLoading={session.interviewCatalogLoading}
@@ -555,6 +757,8 @@ export const App: React.FC = () => {
             openDefaultReview(sessionId);
             return;
           }
+          reviewAutoUpgradeEpochRef.current += 1;
+          reviewAutoUpgradePendingRef.current = null;
           navigate(
             {
               page: "review",
@@ -584,7 +788,7 @@ export const App: React.FC = () => {
         onDismissNotice={session.clearError}
         renderReview={(sessionId, view) => (
           <ReviewReadPanel
-            key={sessionId}
+            key={`${session.baseUrl}:${sessionId}`}
             sessionId={sessionId}
             view={view}
             readEvaluation={session.readSessionEvaluation}
@@ -606,11 +810,17 @@ export const App: React.FC = () => {
     return (
       <>
         {productPage}
+        <SessionDurationNotice
+          durationMinutes={session.configuration.durationMinutes}
+          createdAt={activeStoredSession?.createdAt}
+          visible={hasActiveInterview && !interviewBackgrounded}
+        />
         <QuantSessionWorkspace
           configuration={session.configuration}
           quantState={session.quantState}
           quantStateLoading={session.quantStateLoading}
           quantActionPending={session.quantActionPending}
+          connected={session.isConnected}
           sessionStatus={session.sessionStatus}
           paused={session.isPaused}
           productHidden={displayRoute.page !== "interview"}
@@ -639,6 +849,11 @@ export const App: React.FC = () => {
   return (
     <>
       {productPage}
+      <SessionDurationNotice
+        durationMinutes={session.configuration?.durationMinutes}
+        createdAt={activeStoredSession?.createdAt}
+        visible={hasActiveInterview && !interviewBackgrounded}
+      />
       <div
         aria-hidden={interviewBackgrounded}
         data-backgrounded={String(interviewBackgrounded)}
@@ -662,7 +877,7 @@ export const App: React.FC = () => {
         >
           <BrandMark size={28} title="Interview" />
           <span className="app-header__identity-copy">
-            <strong>Interview</strong>
+            <strong>{hasActiveInterview ? activeModeLabel : "Interview"}</strong>
             <small>{session.problem?.title ?? "Live reasoning workspace"}</small>
           </span>
         </button>
@@ -676,6 +891,22 @@ export const App: React.FC = () => {
             <span aria-hidden="true" />
             {session.isConnected ? "Connected" : "Disconnected"}
           </span>
+
+          {hasActiveInterview && (
+            <span
+              className="app-header__board-state"
+              data-sync={session.whiteboardSync.status}
+            >
+              <span aria-hidden="true" />
+              {session.whiteboardSync.status === "SYNCED"
+                ? "Board synced"
+                : session.whiteboardSync.status === "PENDING"
+                  ? "Board saving"
+                  : session.whiteboardSync.status === "UNSYNCHRONIZED"
+                    ? "Board unavailable"
+                    : "Board preparing"}
+            </span>
+          )}
 
           {session.isStreaming && (
             <span className="app-header__streaming">Responding</span>
@@ -694,14 +925,65 @@ export const App: React.FC = () => {
               >
                 Home
               </button>
-              <button
-                type="button"
-                onClick={() => void handleCompleteSession()}
-                disabled={sessionTerminalPending || sessionEntryPending}
-                className="app-header__end"
+              <div
+                ref={endControlRef}
+                className="live-end-control"
+                data-open={String(endConfirmOpen)}
               >
-                {sessionTerminalPending ? "Ending…" : "End interview"}
-              </button>
+                <button
+                  ref={endButtonRef}
+                  type="button"
+                  onClick={() => setEndConfirmOpen((open) => !open)}
+                  disabled={sessionTerminalPending || sessionEntryPending}
+                  className="app-header__end"
+                  aria-expanded={endConfirmOpen}
+                  aria-haspopup="dialog"
+                  aria-controls={endConfirmOpen ? "live-end-confirmation" : undefined}
+                  aria-label={sessionTerminalPending ? "Ending interview" : "End interview"}
+                >
+                  {sessionTerminalPending
+                    ? "Ending…"
+                    : (
+                        <>
+                          <span className="app-header__end-short">End</span>
+                          <span className="app-header__end-long"> interview</span>
+                        </>
+                      )}
+                </button>
+                {endConfirmOpen && (
+                  <div
+                    id="live-end-confirmation"
+                    className="live-end-popover"
+                    role="dialog"
+                    aria-label="Confirm end interview"
+                  >
+                    <strong>End this interview?</strong>
+                    <p>You’ll go straight to the grounded review.</p>
+                    <div>
+                      <button
+                        ref={endCancelRef}
+                        type="button"
+                        onClick={() => {
+                          setEndConfirmOpen(false);
+                          queueMicrotask(() => endButtonRef.current?.focus());
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className="live-end-popover__confirm"
+                        onClick={() => {
+                          setEndConfirmOpen(false);
+                          void handleCompleteSession();
+                        }}
+                      >
+                        End & review
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => void handleArchiveSession()}
@@ -744,19 +1026,57 @@ export const App: React.FC = () => {
         aria-label="Compact interview workspace"
       >
         <button
+          ref={compactInterviewTabRef}
+          id="compact-tab-interview"
           type="button"
           role="tab"
           aria-selected={compactPane === "interview"}
-          onClick={() => setCompactPane("interview")}
+          aria-controls="compact-pane-interview"
+          tabIndex={compactPane === "interview" ? 0 : -1}
+          onClick={() => {
+            setPaneFocus("split");
+            setCompactPane("interview");
+          }}
+          onKeyDown={(event) => {
+            if (
+              event.key !== "ArrowLeft"
+              && event.key !== "ArrowRight"
+              && event.key !== "ArrowUp"
+              && event.key !== "ArrowDown"
+              && event.key !== "End"
+            ) return;
+            event.preventDefault();
+            setPaneFocus("split");
+            setCompactPane("whiteboard");
+            queueMicrotask(() => compactWhiteboardTabRef.current?.focus());
+          }}
         >
           Interview
         </button>
         <button
+          ref={compactWhiteboardTabRef}
+          id="compact-tab-whiteboard"
           type="button"
           role="tab"
           aria-selected={compactPane === "whiteboard"}
+          aria-controls="compact-pane-whiteboard"
+          tabIndex={compactPane === "whiteboard" ? 0 : -1}
           onClick={() => {
+            setPaneFocus("split");
             setCompactPane("whiteboard");
+          }}
+          onKeyDown={(event) => {
+            if (
+              event.key !== "ArrowLeft"
+              && event.key !== "ArrowRight"
+              && event.key !== "ArrowUp"
+              && event.key !== "ArrowDown"
+              && event.key !== "Home"
+            ) return;
+            event.preventDefault();
+            setPaneFocus("split");
+            setCompactPane("interview");
+            queueMicrotask(() => compactInterviewTabRef.current?.focus());
           }}
         >
           Whiteboard
@@ -782,43 +1102,52 @@ export const App: React.FC = () => {
 
       {/* Main Split-Pane Workspace */}
       <main
-        className="flex-1 flex overflow-hidden"
+        ref={liveWorkspaceRef}
+        className="live-main"
         data-compact-pane={compactPane}
+        data-focus={paneFocus}
+        style={
+          paneFocus === "split"
+            ? {
+                gridTemplateColumns:
+                  `minmax(0, ${String(splitPercent)}%) 7px minmax(0, 1fr)`
+              }
+            : undefined
+        }
       >
-        {/* Left Panel: Problem, Transcript, Input */}
-        <section className="left-panel w-1/2 flex flex-col border-r border-slate-200 bg-white overflow-hidden">
-          {/* Top Session Actions if not started */}
+        <section
+          id="compact-pane-interview"
+          className="left-panel reasoning-pane"
+          aria-labelledby="compact-tab-interview"
+        >
           {!session.isSessionStarted && (
-            <div className="p-4 bg-indigo-50/70 border-b border-indigo-100 flex items-center justify-between shrink-0">
+            <div className="live-session-entry">
               <div>
-                <p className="text-xs font-semibold text-indigo-950">Ready to begin your interview?</p>
-                <p className="text-[11px] text-indigo-700">Start an interview session or recover an existing one.</p>
+                <strong>Ready to begin?</strong>
+                <span>Start a configured interview or recover a local session.</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="live-session-entry__actions">
                 <button
                   type="button"
                   onClick={handleOpenNewInterview}
                   disabled={sessionEntryPending}
-                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md shadow-sm transition-colors cursor-pointer"
                   data-testid="start-session-btn"
                 >
                   {sessionEntryPending ? "Opening…" : "New interview"}
                 </button>
                 <form
-                  onSubmit={(e) => {
-                    void handleManualRecover(e);
+                  onSubmit={(event) => {
+                    void handleManualRecover(event);
                   }}
-                  className="flex items-center gap-1"
                 >
                   <input
                     type="text"
                     value={recoverySessionInput}
                     disabled={sessionEntryPending || sessionTerminalPending}
-                    onChange={(e) => setRecoverySessionInput(e.target.value)}
+                    onChange={(event) => setRecoverySessionInput(event.target.value)}
                     aria-invalid={recoverySessionInputInvalid}
                     title={recoverySessionInputInvalid ? "Enter a valid session ID" : undefined}
                     placeholder="session_..."
-                    className="w-28 px-2 py-1 text-xs border border-indigo-200 rounded bg-white font-mono"
                   />
                   <button
                     type="submit"
@@ -827,7 +1156,6 @@ export const App: React.FC = () => {
                       || sessionTerminalPending
                       || recoverySessionId === null
                     }
-                    className="px-2.5 py-1 bg-white hover:bg-slate-50 text-indigo-700 border border-indigo-200 text-xs font-medium rounded"
                   >
                     {sessionEntryPending ? "Opening…" : "Recover"}
                   </button>
@@ -836,27 +1164,38 @@ export const App: React.FC = () => {
             </div>
           )}
 
-          {/* Scrollable Problem & Transcript Section */}
-          <div className="flex-1 flex flex-col p-4 gap-4 overflow-y-auto min-h-0">
-            <ProblemCard problem={session.problem} className="shrink-0" />
-            <div className="flex-1 min-h-[220px]">
-              <TranscriptFeed
-                items={session.transcript}
-                onRetry={(itemId) => {
-                  if (
-                    sessionEntryPendingRef.current
-                    || sessionTerminalPendingRef.current
-                  ) return;
-                  void session.retrySubmission(itemId);
-                }}
-                retryDisabled={sessionEntryPending || sessionTerminalPending}
-                className="h-full"
-              />
+          <div className="problem-block">
+            <div className="live-problem-meta">
+              <span>Problem</span>
+              <b>Oxford Mathematics</b>
             </div>
+            <ProblemCard problem={session.problem} />
           </div>
 
-          {/* Bottom Reasoning Input Area */}
-          <div className="p-4 border-t border-slate-200 bg-slate-50/50 shrink-0">
+          <div className="live-transcript-region">
+            <TranscriptFeed
+              items={session.transcript}
+              onRetry={(itemId) => {
+                if (
+                  sessionEntryPendingRef.current
+                  || sessionTerminalPendingRef.current
+                ) return;
+                void session.retrySubmission(itemId).catch(() => undefined);
+              }}
+              retryDisabled={sessionEntryPending || sessionTerminalPending}
+              scrollContextKey={session.sessionId}
+              focused={paneFocus === "transcript"}
+              onToggleFocus={() => {
+                setCompactPane("interview");
+                setPaneFocus((focus) =>
+                  focus === "transcript" ? "split" : "transcript"
+                );
+              }}
+              className="h-full"
+            />
+          </div>
+
+          <div className="input-dock">
             <VoiceControls
               state={session.voice}
               controls={session.voiceControls}
@@ -869,6 +1208,7 @@ export const App: React.FC = () => {
               }
             />
             <StudentInputArea
+              compact
               onSubmit={(text) => {
                 if (
                   sessionEntryPendingRef.current
@@ -889,70 +1229,149 @@ export const App: React.FC = () => {
                 session.sessionStatus === "COMPLETED" || session.sessionStatus === "ARCHIVED"
                   ? `Session is ${session.sessionStatus.toLowerCase()}. Reasoning input is closed.`
                   : session.isSessionStarted
-                  ? "Enter your proof step (e.g. Choose $v_1 \\in V$. Since $\\deg(v_1) = 5$, by PHP...)"
-                  : "Start or recover a session above to submit reasoning."
+                    ? "Type the next step in your reasoning…"
+                    : "Start or recover a session above to submit reasoning."
               }
             />
           </div>
         </section>
 
-        {/* Right Panel: Whiteboard */}
-        <section className="right-panel w-1/2 flex flex-col bg-slate-50 overflow-hidden">
-          {session.whiteboardSync.status !== "SYNCED" && (
-            <div className="panel-tabs bg-white border-b border-slate-200 px-4 py-2 flex items-center justify-between shrink-0">
-              <strong className="text-xs text-slate-700" data-testid="tab-whiteboard">
-                Whiteboard
-              </strong>
-              <div className="text-[11px] text-slate-500 flex items-center gap-2">
-                <span
-                  className="w-2 h-2 rounded-full"
-                  data-sync={session.whiteboardSync.status}
-                />
-                <span>
-                  {session.whiteboardSync.status === "PENDING"
+        <div
+          className="split-divider"
+          role="separator"
+          aria-label="Resize transcript and whiteboard"
+          aria-orientation="vertical"
+          aria-valuemin={26}
+          aria-valuemax={68}
+          aria-valuenow={Math.round(splitPercent)}
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (
+              event.key !== "ArrowLeft"
+              && event.key !== "ArrowRight"
+              && event.key !== "Home"
+              && event.key !== "End"
+            ) return;
+            event.preventDefault();
+            setPaneFocus("split");
+            if (event.key === "Home") {
+              setSplitPercent(26);
+              return;
+            }
+            if (event.key === "End") {
+              setSplitPercent(68);
+              return;
+            }
+            setSplitPercent((current) =>
+              Math.min(68, Math.max(26, current + (event.key === "ArrowRight" ? 2 : -2)))
+            );
+          }}
+          onDoubleClick={() => {
+            setPaneFocus("split");
+            setSplitPercent(38);
+          }}
+          onPointerDown={(event) => {
+            if (event.pointerType === "mouse" && event.button !== 0) return;
+            setPaneFocus("split");
+            event.currentTarget.setPointerCapture(event.pointerId);
+            setSplitFromClientX(event.clientX);
+          }}
+          onPointerMove={(event) => {
+            if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+            setSplitFromClientX(event.clientX);
+          }}
+          onPointerUp={(event) => {
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+              event.currentTarget.releasePointerCapture(event.pointerId);
+            }
+          }}
+          onPointerCancel={(event) => {
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+              event.currentTarget.releasePointerCapture(event.pointerId);
+            }
+          }}
+        >
+          <span aria-hidden="true" />
+        </div>
+
+        <section
+          id="compact-pane-whiteboard"
+          className="right-panel board-pane"
+          aria-labelledby="compact-tab-whiteboard"
+        >
+          <div className="board-appbar">
+            <div className="board-appbar__left">
+              <strong data-testid="tab-whiteboard">Whiteboard</strong>
+              <span className="board-sync">
+                <i data-sync={session.whiteboardSync.status} aria-hidden="true" />
+                {session.whiteboardSync.status === "SYNCED"
+                  ? "Synced"
+                  : session.whiteboardSync.status === "PENDING"
                     ? "Saving…"
                     : session.whiteboardSync.status === "UNSYNCHRONIZED"
-                      ? "Board unavailable"
+                      ? "Needs reconnect"
                       : "Preparing…"}
-                </span>
-              </div>
+              </span>
             </div>
-          )}
-
-          <div className="flex-1 p-4 overflow-hidden flex flex-col">
-            <div className="whiteboard-wrapper flex-1 bg-white border border-slate-200 rounded-lg shadow-xs overflow-hidden flex flex-col">
-              <div className="whiteboard-toolbar px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs text-slate-600">
-                <span className="font-semibold">Whiteboard</span>
+            <div className="board-appbar__actions">
+              {session.whiteboardSync.status === "UNSYNCHRONIZED" && (
                 <button
                   type="button"
-                  onClick={() => void whiteboardAdapter.clearAiOverlay()}
-                  className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-[11px] font-medium"
-                >
-                  Clear AI marks
-                </button>
-              </div>
-              <div className="flex-1 relative bg-slate-100/50">
-                <WhiteboardCanvas
-                  adapter={whiteboardAdapter}
-                  colorScheme={resolvedTheme}
-                  readOnly={
-                    !session.isSessionStarted
-                    || session.sessionStatus !== "ACTIVE"
-                    || session.isPaused
-                    || sessionEntryPending
-                    || sessionTerminalPending
-                    || session.whiteboardSync.status === "UNINITIALIZED"
-                    || session.whiteboardSync.status === "UNSYNCHRONIZED"
-                  }
-                  onEditorMount={handleWhiteboardEditorMount}
-                  onNormalizedBoardChange={(change) => {
-                    void session.submitWhiteboardMutation(change).catch(() => {
-                      // The hook retains the fail-closed synchronization state.
-                    });
+                  className="board-appbar__reconnect-action"
+                  onClick={() => {
+                    void session.synchronizeWhiteboard().catch(() => undefined);
                   }}
-                  className="w-full h-full min-h-[380px]"
-                />
-              </div>
+                >
+                  Reconnect board
+                </button>
+              )}
+              <button
+                type="button"
+                className="board-appbar__layout-action"
+                aria-pressed={paneFocus === "whiteboard"}
+                onClick={() => {
+                  setCompactPane("whiteboard");
+                  setPaneFocus((focus) =>
+                    focus === "whiteboard" ? "split" : "whiteboard"
+                  );
+                }}
+              >
+                {paneFocus === "whiteboard" ? "Restore split" : "Focus whiteboard"}
+              </button>
+              <button
+                type="button"
+                className="board-appbar__clear-action"
+                disabled={session.whiteboardSync.status === "UNINITIALIZED"}
+                onClick={() => {
+                  void whiteboardAdapter.clearAiOverlay().catch(() => undefined);
+                }}
+              >
+                Clear AI marks
+              </button>
+            </div>
+          </div>
+
+          <div className="tldraw-wrap">
+            <div className="whiteboard-wrapper tldraw-frame">
+              <WhiteboardCanvas
+                adapter={whiteboardAdapter}
+                colorScheme={resolvedTheme}
+                readOnly={
+                  !session.isSessionStarted
+                  || session.sessionStatus !== "ACTIVE"
+                  || session.isPaused
+                  || sessionEntryPending
+                  || sessionTerminalPending
+                  || session.whiteboardSync.status === "UNINITIALIZED"
+                }
+                onEditorMount={handleWhiteboardEditorMount}
+                onNormalizedBoardChange={(change) => {
+                  void session.submitWhiteboardMutation(change).catch(() => {
+                    // The hook retains the fail-closed synchronization state.
+                  });
+                }}
+                className="w-full h-full min-h-[380px]"
+              />
             </div>
           </div>
         </section>

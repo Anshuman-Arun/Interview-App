@@ -35,3 +35,6 @@ yarn-error.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# Generated from the reviewed base64 icon source during Windows packaging.
+apps/desktop/assets/icon.png

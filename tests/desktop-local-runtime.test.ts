@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { dirname, join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
@@ -79,6 +79,27 @@ describe("desktop local model runtime", () => {
   });
 
 
+  it("detects prepared persistent views for the post-install activation budget", async () => {
+    const appDataRoot = temporaryRoot("desktop-prepared-runtime-view-");
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot,
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+
+    await expect(composition.hasPreparedRuntimeViews()).resolves.toBe(false);
+
+    mkdirSync(
+      join(appDataRoot, "runtime-models", `view-${"a".repeat(64)}`),
+      { recursive: true }
+    );
+    await expect(composition.hasPreparedRuntimeViews()).resolves.toBe(true);
+  });
+
+
   it("honors cancellation before stale runtime-view cleanup", async () => {
     const root = temporaryRoot("desktop-runtime-view-cleanup-cancel-");
     const controller = new AbortController();
@@ -108,10 +129,10 @@ describe("desktop local model runtime", () => {
     await liveView.dispose();
   });
 
-  it("deletes an untracked same-process-token runtime view while preserving the active one", async () => {
-    const root = temporaryRoot("desktop-runtime-view-same-token-");
+  it("deletes an untracked runtime staging view while preserving the active persistent view", async () => {
+    const root = temporaryRoot("desktop-runtime-view-untracked-");
     const manager = new ModelAssetManager({
-      rootDir: temporaryRoot("desktop-runtime-view-same-token-assets-"),
+      rootDir: temporaryRoot("desktop-runtime-view-untracked-assets-"),
       maxArtifactBytes: 1024,
       maxCacheBytes: 4096
     });
@@ -120,12 +141,14 @@ describe("desktop local model runtime", () => {
       assets: [],
       baseRoot: root
     });
-    const liveName = basename(liveView.root);
-    const match = /^run-([1-9][0-9]*)-([0-9a-f]{32})-/u.exec(liveName);
-    if (match?.[1] === undefined || match[2] === undefined) {
-      throw new Error("Expected runtime view owner identity in generated directory");
-    }
-    const orphan = join(root, `run-${match[1]}-${match[2]}-orphan`);
+
+    // Completed views are now content-addressed and persistent (view-<digest>).
+    // Staging directories retain the run-<pid>-<token>-* shape and are safe to
+    // reap whenever they are not tracked as active by this process.
+    const orphan = join(
+      root,
+      `run-${String(process.pid)}-${"1".repeat(32)}-orphan`
+    );
     mkdirSync(orphan, { recursive: true });
 
     await cleanupStaleRuntimeAssetViews(root);

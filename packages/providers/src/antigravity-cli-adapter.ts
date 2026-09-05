@@ -14,7 +14,17 @@ import {
 const REFLECT_APPLY_INTRINSIC = Reflect.apply;
 
 export const ANTIGRAVITY_CLI_PROVIDER_ID = "antigravity-cli";
-export const ANTIGRAVITY_CLI_MODEL_ID = "gemini-3.7-flash-medium";
+export const ANTIGRAVITY_CLI_MODEL_IDS = Object.freeze([
+  "gemini-3.8-flash-high",
+  "gemini-3.8-flash-medium",
+  "gemini-3.8-flash-low",
+  "gemini-3.7-flash-high",
+  "gemini-3.7-flash-medium",
+  "gemini-3.7-flash-low"
+] as const);
+export type AntigravityCliModelId = typeof ANTIGRAVITY_CLI_MODEL_IDS[number];
+export const ANTIGRAVITY_CLI_MODEL_ID: AntigravityCliModelId =
+  "gemini-3.8-flash-medium";
 export const ANTIGRAVITY_CLI_AGENT_ID = "interview-realizer";
 export const ANTIGRAVITY_CLI_ADAPTER_VERSION = "1.0.0";
 
@@ -296,20 +306,60 @@ const INTERVIEWER_PROPOSAL_JSON_SCHEMA = Object.freeze({
 export const ANTIGRAVITY_CLI_PROPOSAL_SCHEMA_ARGUMENT = JSON.stringify(
   INTERVIEWER_PROPOSAL_JSON_SCHEMA
 );
-export const ANTIGRAVITY_CLI_TURN_ARGUMENTS = Object.freeze([
-  "--input-format",
-  "stream-json",
-  "--output-format",
-  "stream-json",
-  "--json-schema",
-  ANTIGRAVITY_CLI_PROPOSAL_SCHEMA_ARGUMENT,
-  "--model",
-  ANTIGRAVITY_CLI_MODEL_ID,
-  "--agent",
-  ANTIGRAVITY_CLI_AGENT_ID,
-  "--print-timeout",
-  "2m"
-] as const);
+interface AntigravityCliModelExecutionProfile {
+  readonly logicalModelId: AntigravityCliModelId;
+  readonly cliModelId: string;
+  readonly effort: "low" | "medium" | "high";
+}
+
+export function isSupportedAntigravityCliModelId(
+  value: string
+): value is AntigravityCliModelId {
+  return (ANTIGRAVITY_CLI_MODEL_IDS as readonly string[]).includes(value);
+}
+
+function antigravityCliModelExecutionProfile(
+  modelId: string
+): AntigravityCliModelExecutionProfile {
+  if (!isSupportedAntigravityCliModelId(modelId)) {
+    throw new AntigravityCliAdapterError("INVALID_RUNTIME");
+  }
+  const effort = modelId.endsWith("-high")
+    ? "high"
+    : modelId.endsWith("-low")
+      ? "low"
+      : "medium";
+  return Object.freeze({
+    logicalModelId: modelId,
+    cliModelId: modelId,
+    effort
+  });
+}
+
+export function antigravityCliTurnArguments(
+  modelId: string = ANTIGRAVITY_CLI_MODEL_ID
+): readonly string[] {
+  const profile = antigravityCliModelExecutionProfile(modelId);
+  return Object.freeze([
+    "--input-format",
+    "stream-json",
+    "--output-format",
+    "stream-json",
+    "--json-schema",
+    ANTIGRAVITY_CLI_PROPOSAL_SCHEMA_ARGUMENT,
+    "--model",
+    profile.cliModelId,
+    "--effort",
+    profile.effort,
+    "--agent",
+    ANTIGRAVITY_CLI_AGENT_ID,
+    "--print-timeout",
+    "2m"
+  ]);
+}
+
+export const ANTIGRAVITY_CLI_TURN_ARGUMENTS =
+  antigravityCliTurnArguments(ANTIGRAVITY_CLI_MODEL_ID);
 export const ANTIGRAVITY_CLI_ZERO_TURN_PREFLIGHT_INPUT =
   '{"event":"control_request"}\n';
 const INTERVIEWER_PROPOSAL_SCHEMA_CANONICAL = serializeBoundedPlainJson(
@@ -318,6 +368,76 @@ const INTERVIEWER_PROPOSAL_SCHEMA_CANONICAL = serializeBoundedPlainJson(
 );
 
 const INIT_TOOLS_FIELD = "tools" as const;
+
+export const ANTIGRAVITY_AUDITED_CLI_TOOLS = Object.freeze([
+  "ask_custom_permission",
+  "ask_permission",
+  "ask_question",
+  "browser_click_element",
+  "browser_drag_pixel_to_pixel",
+  "browser_get_dom",
+  "browser_get_network_request",
+  "browser_input",
+  "browser_list_network_requests",
+  "browser_mouse_down",
+  "browser_mouse_up",
+  "browser_move_mouse",
+  "browser_press_key",
+  "browser_refresh_page",
+  "browser_resize_window",
+  "browser_scroll",
+  "browser_scroll_dom",
+  "browser_select_option",
+  "browser_subagent",
+  "call_mcp_tool",
+  "capture_browser_console_logs",
+  "capture_browser_screenshot",
+  "click_browser_pixel",
+  "command_status",
+  "define_subagent",
+  "delete_knowledge",
+  "execute_browser_javascript",
+  "find_by_name",
+  "finish",
+  "generate_image",
+  "grep_search",
+  "invoke_subagent",
+  "list_browser_pages",
+  "list_dir",
+  "list_permissions",
+  "list_resources",
+  "manage_inbox",
+  "manage_subagents",
+  "manage_task",
+  "multi_replace_file_content",
+  "notebook_edit",
+  "notebook_execution",
+  "open_browser_url",
+  "read_browser_page",
+  "read_resource",
+  "read_url_content",
+  "replace_file_content",
+  "run_command",
+  "schedule",
+  "search_web",
+  "sed_file",
+  "send_command_input",
+  "send_message",
+  "view_file",
+  "wait",
+  "wait_5_seconds",
+  "write_to_file"
+] as const);
+
+const AUDITED_CLI_TOOLS_SET = new Set<string>(ANTIGRAVITY_AUDITED_CLI_TOOLS);
+
+export function isAuditedAntigravityCliToolSurface(
+  tools: readonly string[]
+): boolean {
+  if (tools.length === 0) return true;
+  if (tools.length > ANTIGRAVITY_AUDITED_CLI_TOOLS.length) return false;
+  return tools.every((tool) => AUDITED_CLI_TOOLS_SET.has(tool));
+}
 
 const InitEventSchema = z.looseObject({
   event: z.literal("init"),
@@ -398,9 +518,8 @@ export function createAntigravityCliReasoningProvider(
   billingVerificationFactory?: AntigravityBillingVerificationFactory
 ): SupervisedCliReasoningProvider {
   const execute = captureExecutor(executor);
-  if (modelId !== ANTIGRAVITY_CLI_MODEL_ID) {
-    throw new AntigravityCliAdapterError("INVALID_RUNTIME");
-  }
+  const modelProfile = antigravityCliModelExecutionProfile(modelId);
+  const turnArguments = antigravityCliTurnArguments(modelId);
 
   return new SupervisedCliReasoningProvider({
     providerId: ANTIGRAVITY_CLI_PROVIDER_ID,
@@ -442,7 +561,7 @@ export function createAntigravityCliReasoningProvider(
       let rawResult: unknown;
       try {
         rawResult = await execute({
-          args: ANTIGRAVITY_CLI_TURN_ARGUMENTS,
+          args: turnArguments,
           stdin,
           timeoutMs: EXECUTION_TIMEOUT_MS,
           maxStdoutBytes: MAX_STDOUT_BYTES,
@@ -459,7 +578,7 @@ export function createAntigravityCliReasoningProvider(
       }
       return parseAntigravityStream(
         result.stdout,
-        modelId,
+        modelProfile.cliModelId,
         ANTIGRAVITY_CLI_AGENT_ID
       );
     }
@@ -592,7 +711,7 @@ export function assertAntigravityCliZeroTurnPreflightResult(
         || index !== firstNonBlankLineIndex(lines)
         || init.data.init.model !== ANTIGRAVITY_CLI_MODEL_ID
         || init.data.init.agent !== ANTIGRAVITY_CLI_AGENT_ID
-        || init.data.init.tools.length !== 0
+        || !isAuditedAntigravityCliToolSurface(init.data.init[INIT_TOOLS_FIELD])
         || init.data.init.permission_mode !== "strict"
         || !schemaMatchesProposalContract(init.data.init.json_schema)
       ) {
@@ -746,7 +865,7 @@ function parseAntigravityStream(
         || index !== firstNonBlankLineIndex(lines)
         || init.data.init.model !== expectedModelId
         || init.data.init.agent !== expectedAgentId
-        || init.data.init.tools.length !== 0
+        || !isAuditedAntigravityCliToolSurface(init.data.init[INIT_TOOLS_FIELD])
         || !schemaMatches
         || init.data.init.permission_mode !== "strict"
       ) {

@@ -127,6 +127,7 @@ export interface UseInterviewSessionResult {
   readonly isTransportManaged: boolean;
   readonly setBaseUrl: (url: string) => void;
   readonly fetchAvailableSessions: () => Promise<readonly StoredSessionSummary[]>;
+  readonly verifyAvailableSessions: () => Promise<readonly StoredSessionSummary[]>;
   readonly fetchAvailableSessionsStrict: () => Promise<readonly StoredSessionSummary[]>;
   readonly refreshInterviewCatalog: () => Promise<readonly InterviewCatalogEntry[]>;
   readonly refreshProviderOptions: () => Promise<readonly ProviderLaunchOption[]>;
@@ -398,6 +399,7 @@ export function useInterviewSession(
   });
 
   const pendingSubmissionsRef = useRef<Map<string, PendingSubmissionRecord>>(new Map());
+  const retrySubmissionsInFlightRef = useRef<Set<string>>(new Set());
   const abortControllerRef = useRef<AbortController | null>(null);
   const rendererStreamTaskRef = useRef<Promise<void> | null>(null);
   const rendererLaunchEpochRef = useRef(0);
@@ -534,6 +536,7 @@ export function useInterviewSession(
     sessionTransitionEpochRef.current += 1;
     sessionMutationAdmissionRef.current = false;
     pendingSubmissionsRef.current.clear();
+    retrySubmissionsInFlightRef.current.clear();
     resetBoardSync();
     setAvailableSessions([]);
     setInterviewCatalog([]);
@@ -863,13 +866,15 @@ export function useInterviewSession(
   ]);
 
   const synchronizeWhiteboardFor = useCallback(async (
-    targetSessionId: SessionId
+    targetSessionId: SessionId,
+    repair: { readonly allowLocalSupersetRepair?: boolean } = {}
   ): Promise<void> => {
     const adapter = options.whiteboardAdapter;
     if (adapter === undefined || adapter.getEditor() === null) return;
     const coordinator = getBoardSyncCoordinator(targetSessionId);
     const allowBootstrap =
-      boardBootstrapSessionRef.current === targetSessionId;
+      boardBootstrapSessionRef.current === targetSessionId
+      || repair.allowLocalSupersetRepair === true;
     const snapshot = await coordinator.synchronize(
       targetSessionId,
       adapter.getNormalizedStudentShapes(),
@@ -952,6 +957,10 @@ export function useInterviewSession(
     } catch {
       return [];
     }
+  }, [listAvailableSessions]);
+
+  const verifyAvailableSessions = useCallback(async (): Promise<readonly StoredSessionSummary[]> => {
+    return listAvailableSessions();
   }, [listAvailableSessions]);
 
   const fetchAvailableSessionsStrict = useCallback(async (): Promise<readonly StoredSessionSummary[]> => {
@@ -1301,6 +1310,7 @@ export function useInterviewSession(
           || resolvedConfiguration.mode === "OXFORD_MATHEMATICS";
         if (sessionId !== targetSessionId) {
           pendingSubmissionsRef.current.clear();
+          retrySubmissionsInFlightRef.current.clear();
           resetBoardSync();
           if (usesOxfordWorkspace && sessionId === null) {
             boardBootstrapSessionRef.current = targetSessionId;
@@ -1413,6 +1423,7 @@ export function useInterviewSession(
 
         if (summary.status === "COMPLETED" || summary.status === "ARCHIVED") {
           pendingSubmissionsRef.current.clear();
+          retrySubmissionsInFlightRef.current.clear();
           resetBoardSync();
           sessionMutationAdmissionRef.current = false;
           setSessionId(targetSessionId);
@@ -1444,6 +1455,7 @@ export function useInterviewSession(
         if (sessionTransitionEpochRef.current !== transitionEpoch) return null;
         if (sessionId !== targetSessionId) {
           pendingSubmissionsRef.current.clear();
+          retrySubmissionsInFlightRef.current.clear();
           resetBoardSync();
         }
         setSessionId(targetSessionId);
@@ -1565,12 +1577,21 @@ export function useInterviewSession(
         boardSyncSessionRef.current === targetSessionId
           ? boardSyncRef.current
           : null;
-      if (pendingCoordinator !== null) {
+      if (
+        pendingCoordinator !== null
+        && pendingCoordinator.snapshot().status !== "UNSYNCHRONIZED"
+      ) {
         await pendingCoordinator.awaitQuiescence();
       }
       if (sessionTransitionEpochRef.current !== transitionEpoch) return;
 
-      await synchronizeWhiteboardFor(targetSessionId);
+      // An unsynchronized coordinator has already rejected/cleared its pending
+      // mutation queue, so there is nothing left to await. Go straight to the
+      // conservative server/local reconciliation instead of permanently
+      // blocking Resume on awaitQuiescence().
+      await synchronizeWhiteboardFor(targetSessionId, {
+        allowLocalSupersetRepair: true
+      });
       if (sessionTransitionEpochRef.current !== transitionEpoch) return;
       const coordinator = boardSyncRef.current;
       if (
@@ -1619,10 +1640,47 @@ export function useInterviewSession(
       sessionId === null
       || sessionStatus !== "ACTIVE"
       || !isSessionStarted
-      || !sessionMutationAdmissionRef.current
+      || isPaused
+      || terminalTransitionInFlightRef.current
     ) return;
-    await synchronizeWhiteboardFor(sessionId);
+    const targetSessionId = sessionId;
+    try {
+      await synchronizeWhiteboardFor(targetSessionId, {
+        allowLocalSupersetRepair: true
+      });
+      const coordinator = boardSyncRef.current;
+      const snapshot = coordinator?.snapshot();
+      if (
+        boardSyncSessionRef.current !== targetSessionId
+        || coordinator === null
+        || snapshot?.status !== "SYNCED"
+      ) {
+        const reason = snapshot?.reason ?? "Whiteboard authority could not be verified";
+        setError(`Whiteboard reconnect failed: ${reason}`);
+        throw new Error(reason);
+      }
+      // Explicit reconnect is allowed to restore mutation admission for the
+      // still-attached ACTIVE session. AI presentation remains fail-closed
+      // through canBindCurrentCanvasToAuthority() until this point.
+      sessionMutationAdmissionRef.current = true;
+      setError(null);
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : "Whiteboard authority could not be verified";
+      setWhiteboardSync((current) => ({
+        status: "UNSYNCHRONIZED",
+        pendingMutationCount: 0,
+        ...(current.authoritativeRevision === undefined
+          ? {}
+          : { authoritativeRevision: current.authoritativeRevision }),
+        reason: message
+      }));
+      setError(`Whiteboard reconnect failed: ${message}`);
+      throw error;
+    }
   }, [
+    isPaused,
     isSessionStarted,
     sessionId,
     sessionStatus,
@@ -1675,6 +1733,31 @@ export function useInterviewSession(
       }
       wakeCurrentScheduler();
     } catch (error) {
+      // If the mutation acknowledgement was lost, or a first local stroke was
+      // never committed, reconcile against server authority before collapsing
+      // the canvas into readonly mode. The repair is deliberately conservative:
+      // it succeeds only when remote authority is an exact subset of the local
+      // student canvas (or already matches it). Conflicting edits still fail
+      // closed.
+      const adapter = options.whiteboardAdapter;
+      if (isCurrentCoordinator() && adapter !== undefined && adapter.getEditor() !== null) {
+        try {
+          const repaired = await coordinator.synchronize(
+            targetSessionId,
+            adapter.getNormalizedStudentShapes(),
+            { allowBootstrapIntoEmptyAuthority: true }
+          );
+          if (isCurrentCoordinator()) {
+            setWhiteboardSync(repaired);
+          }
+          if (repaired.status === "SYNCED") {
+            wakeCurrentScheduler();
+            return;
+          }
+        } catch {
+          // Preserve the original authoritative mutation failure below.
+        }
+      }
       if (isCurrentCoordinator()) {
         setWhiteboardSync(coordinator.snapshot());
       }
@@ -1683,6 +1766,7 @@ export function useInterviewSession(
   }, [
     getBoardSyncCoordinator,
     getVisionScheduler,
+    options.whiteboardAdapter,
     sessionId,
     sessionStatus,
     synchronizeWhiteboardFor
@@ -1931,6 +2015,8 @@ export function useInterviewSession(
         pendingSubmissionsRef.current.delete(itemId);
         throw new Error("Cannot retry a submission in a different session");
       }
+      if (retrySubmissionsInFlightRef.current.has(itemId)) return;
+      retrySubmissionsInFlightRef.current.add(itemId);
 
       setError(null);
       setTranscript((prev) =>
@@ -1984,6 +2070,8 @@ export function useInterviewSession(
               : item
           )
         );
+      } finally {
+        retrySubmissionsInFlightRef.current.delete(itemId);
       }
     },
     [sessionId, sessionStatus, getCommandClient]
@@ -2063,6 +2151,7 @@ export function useInterviewSession(
     isTransportManaged: desktopBootstrap !== undefined,
     setBaseUrl,
     fetchAvailableSessions,
+    verifyAvailableSessions,
     fetchAvailableSessionsStrict,
     refreshInterviewCatalog,
     refreshProviderOptions,

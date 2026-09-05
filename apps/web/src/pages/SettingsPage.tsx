@@ -43,6 +43,9 @@ interface SettingsPageProps {
   readonly providerOptions?: readonly ProviderLaunchOption[];
   readonly providerOptionsLoading?: boolean;
   readonly providerOptionsError?: string | null;
+  readonly activeSessionCount?: number;
+  readonly sessionAuthorityChecking?: boolean;
+  readonly sessionAuthorityUnavailable?: boolean;
   readonly onRefreshProviderOptions?: () => Promise<readonly ProviderLaunchOption[]>;
   readonly onStartInterview?: () => void;
 }
@@ -71,6 +74,20 @@ function capabilityLabel(
     case undefined:
       return "CHECKING";
   }
+}
+
+function capabilityNeedsActivationRestart(
+  capability: DesktopRuntimeCapabilityStatus | undefined
+): boolean {
+  if (capability?.state === "READY" || capability?.reasonCode === undefined) return false;
+  return new Set([
+    "START_CANCELLED",
+    "WORKER_START_FAILED",
+    "WORKER_FAILED",
+    "WORKER_STOPPED",
+    "WORKER_RESTARTING",
+    "VOICE_RUNTIME_INCOMPLETE"
+  ]).has(capability.reasonCode);
 }
 
 function capabilityTone(
@@ -135,6 +152,32 @@ function providerReason(reason: ProviderLaunchAvailabilityReason | undefined): s
   }
 }
 
+function reasoningProviderFailure(option: ProviderLaunchOption): string {
+  if (isAntigravity(option)) return providerReason(option.reason);
+  const label = option.providerDisplayName;
+  switch (option.reason) {
+    case "CREDENTIALS_REQUIRED":
+      return `Authenticate ${label}, then re-check.`;
+    case "DISABLED":
+      return `${label} is disabled by runtime configuration.`;
+    case "RUNTIME_CONFIGURATION_UNAVAILABLE":
+      return `${label} runtime configuration is unavailable.`;
+    case "RUNTIME_DEPENDENCY_UNAVAILABLE":
+      return `${label} runtime dependencies are unavailable.`;
+    case "POLICY_UNAVAILABLE":
+      return `${label} safety policy could not be verified.`;
+    case "POLICY_DENIED":
+      return `${label} is denied by the current safety policy.`;
+    case "CAPABILITY_UNAVAILABLE":
+      return `${label} does not expose the required reasoning capability.`;
+    case "PROVIDER_UNAVAILABLE":
+      return `${label} is not currently executable.`;
+    case "UNKNOWN":
+    default:
+      return `${label} readiness could not be verified.`;
+  }
+}
+
 function setupActionLabel(
   noun: "voice models" | "vision model",
   setup: DesktopModelSetupStatus | undefined,
@@ -147,11 +190,46 @@ function setupActionLabel(
   return `Install ${noun}`;
 }
 
+function localSetupErrorMessage(
+  error: unknown,
+  kind: "PYTHON" | "VOICE" | "VISION"
+): string {
+  const raw = error instanceof Error ? error.message : "";
+  const prefix = kind === "PYTHON"
+    ? "Python component setup"
+    : kind === "VOICE"
+      ? "Voice model installation"
+      : "Vision model installation";
+
+  if (raw.includes("LOCAL_SETUP_DOWNLOAD_TIMEOUT")) {
+    return `${prefix} timed out while downloading a model. Retry on a stable connection; partial downloads are discarded safely.`;
+  }
+  if (raw.includes("LOCAL_SETUP_NETWORK")) {
+    return `${prefix} could not reach an upstream model host. Check network filtering or VPN settings and retry.`;
+  }
+  if (raw.includes("LOCAL_SETUP_DISK")) {
+    return `${prefix} needs more free disk space for the verified model cache and runtime copy.`;
+  }
+  if (raw.includes("LOCAL_SETUP_INTEGRITY")) {
+    return `${prefix} rejected a downloaded file because its size or SHA-256 did not match. Retry the download.`;
+  }
+  if (raw.includes("LOCAL_SETUP_PYTHON")) {
+    return `${prefix} could not use the isolated CPython runtime. Reinstall Python components, then retry.`;
+  }
+  if (raw.includes("LOCAL_SETUP_CANCELLED")) {
+    return `${prefix} was cancelled before it finished.`;
+  }
+  return `${prefix} failed. Check Python, network access, and free disk space, then retry.`;
+}
+
 export function SettingsPage({
   connection,
   providerOptions = [],
   providerOptionsLoading = false,
   providerOptionsError = null,
+  activeSessionCount = 0,
+  sessionAuthorityChecking = false,
+  sessionAuthorityUnavailable = false,
   onRefreshProviderOptions,
   onStartInterview
 }: SettingsPageProps) {
@@ -227,12 +305,29 @@ export function SettingsPage({
   const antigravity = antigravityOptions.find(
     (option) => option.availability === "AVAILABLE"
   ) ?? antigravityOptions[0];
+  const availableReasoningProvider = providerOptions.find(
+    (option) =>
+      option.availability === "AVAILABLE"
+      && option.providerId !== "mock-model"
+  );
+  const reasoningProvider =
+    availableReasoningProvider
+    ?? antigravity
+    ?? providerOptions.find((option) => option.providerId !== "mock-model")
+    ?? providerOptions[0];
   const reasoningReady = !providerOptionsLoading
     && providerOptionsError === null
-    && antigravity?.availability === "AVAILABLE";
+    && availableReasoningProvider !== undefined;
   const voiceReady = runtimeStatus?.speech.state === "READY"
     && runtimeStatus.tts.state === "READY";
   const visionReady = runtimeStatus?.vision.state === "READY";
+  const voiceActivationNeedsRestart = !voiceReady
+    && (
+      capabilityNeedsActivationRestart(runtimeStatus?.speech)
+      || capabilityNeedsActivationRestart(runtimeStatus?.tts)
+    );
+  const visionActivationNeedsRestart = !visionReady
+    && capabilityNeedsActivationRestart(runtimeStatus?.vision);
   const anyInstallActive = installingPython
     || installingVoice
     || installingVision
@@ -244,10 +339,31 @@ export function SettingsPage({
     || runtimeStatus?.pythonSetup.restartRequired === true;
   const restartRequired = runtimeStatus?.pythonSetup.restartRequired === true
     || runtimeStatus?.voiceSetup.restartRequired === true
-    || runtimeStatus?.visionSetup.restartRequired === true;
+    || runtimeStatus?.visionSetup.restartRequired === true
+    || voiceActivationNeedsRestart
+    || visionActivationNeedsRestart;
   const runtimeVerificationUnavailable = desktopRuntime !== undefined
     && runtimeStatus === undefined
     && runtimeStatusError !== undefined;
+
+  useEffect(() => {
+    if (pythonReady || runtimeStatus?.pythonSetup.restartRequired === true) {
+      setPythonInstallError(undefined);
+    }
+    if (voiceReady || runtimeStatus?.voiceSetup.restartRequired === true) {
+      setVoiceInstallError(undefined);
+    }
+    if (visionReady || runtimeStatus?.visionSetup.restartRequired === true) {
+      setVisionInstallError(undefined);
+    }
+  }, [
+    pythonReady,
+    runtimeStatus?.pythonSetup.restartRequired,
+    runtimeStatus?.visionSetup.restartRequired,
+    runtimeStatus?.voiceSetup.restartRequired,
+    visionReady,
+    voiceReady
+  ]);
 
   const installPythonRuntime = useCallback(async (): Promise<void> => {
     if (desktopRuntime === undefined || setupOperationInFlightRef.current) return;
@@ -268,10 +384,8 @@ export function SettingsPage({
       if (parsed === undefined) throw new Error("Malformed Python setup response");
       setRuntimeStatus(parsed);
       setRuntimeStatusError(undefined);
-    } catch {
-      setPythonInstallError(
-        "Python component setup failed. Verify CPython 3.12/3.13 and network access, then retry."
-      );
+    } catch (error) {
+      setPythonInstallError(localSetupErrorMessage(error, "PYTHON"));
       await refreshRuntime();
     } finally {
       setupOperationInFlightRef.current = false;
@@ -308,15 +422,11 @@ export function SettingsPage({
       if (parsed === undefined) throw new Error("Malformed model setup response");
       setRuntimeStatus(parsed);
       setRuntimeStatusError(undefined);
-    } catch {
+    } catch (error) {
       if (kind === "VOICE") {
-        setVoiceInstallError(
-          "Voice model installation failed. Check Python, network access, and disk space, then retry."
-        );
+        setVoiceInstallError(localSetupErrorMessage(error, "VOICE"));
       } else {
-        setVisionInstallError(
-          "Vision model installation failed. Check Python, network access, and disk space, then retry."
-        );
+        setVisionInstallError(localSetupErrorMessage(error, "VISION"));
       }
       await refreshRuntime();
     } finally {
@@ -338,6 +448,13 @@ export function SettingsPage({
   }, [onRefreshProviderOptions, refreshRuntime]);
 
   const finishSetup = (): void => {
+    if (
+      setupOperationInFlightRef.current
+      || restarting
+      || sessionAuthorityChecking
+      || sessionAuthorityUnavailable
+      || activeSessionCount > 0
+    ) return;
     try {
       globalThis.localStorage.setItem(DESKTOP_FIRST_RUN_SETUP_KEY, "complete");
     } catch {
@@ -346,13 +463,23 @@ export function SettingsPage({
     onStartInterview?.();
   };
 
-  const summary = reasoningReady
-    ? (
-      voiceReady && visionReady
-        ? "Ready to interview. Voice and whiteboard understanding are active."
-        : `Typed interviews are ready.${voiceReady ? "" : " Voice is unavailable."}${visionReady ? "" : " Whiteboard semantic understanding is unavailable."}`
+  const summary = sessionAuthorityChecking
+    ? "Checking stored session authority before enabling a new interview."
+    : sessionAuthorityUnavailable
+      ? "Stored session authority could not be verified. Open Sessions and retry before starting another interview."
+      : activeSessionCount > 0
+      ? (
+      activeSessionCount === 1
+        ? "An active interview already exists. Resume or resolve it before starting another."
+        : `${String(activeSessionCount)} active interviews need resolution before another can start.`
     )
-    : "A live AI interview needs a ready reasoning provider. Voice and whiteboard understanding remain optional.";
+    : reasoningReady
+      ? (
+        voiceReady && visionReady
+          ? "Ready to interview. Voice and whiteboard understanding are active."
+          : `Typed interviews are ready.${voiceReady ? "" : " Voice is unavailable."}${visionReady ? "" : " Whiteboard semantic understanding is unavailable."}`
+      )
+      : "A live AI interview needs a ready reasoning provider. Voice and whiteboard understanding remain optional.";
 
   return (
     <div className="expressive-settings">
@@ -362,7 +489,7 @@ export function SettingsPage({
       >
         <div className="expressive-settings__readiness-heading">
           <div>
-            <span>LOCAL AI</span>
+            <span>INTERVIEW AI</span>
             <h2>Interview readiness</h2>
             <p>
               Configure optional local capabilities here. Typed interviews do not
@@ -382,8 +509,8 @@ export function SettingsPage({
           <div className="expressive-settings__status-row">
             <div>
               <span>Reasoning</span>
-              <strong>{antigravity?.providerDisplayName ?? "Antigravity CLI"}</strong>
-              <small>{antigravity?.modelDisplayName ?? "No server-published model"}</small>
+              <strong>{reasoningProvider?.providerDisplayName ?? "Reasoning provider"}</strong>
+              <small>{reasoningProvider?.modelDisplayName ?? "No server-published model"}</small>
             </div>
             <div>
               <b data-state={reasoningReady ? "ready" : "muted"}>
@@ -396,9 +523,9 @@ export function SettingsPage({
               {!reasoningReady && !providerOptionsLoading && (
                 <small>
                   {providerOptionsError
-                    ?? (antigravity === undefined
-                      ? "Antigravity is not registered in the current server runtime."
-                      : providerReason(antigravity.reason))}
+                    ?? (reasoningProvider === undefined
+                      ? "No reasoning provider is registered in the current server runtime."
+                      : reasoningProviderFailure(reasoningProvider))}
                 </small>
               )}
             </div>
@@ -524,9 +651,11 @@ export function SettingsPage({
                 <small>
                   {runtimeStatus?.voiceSetup.restartRequired === true
                     ? "Installed. Restart Interview App to activate the running workers."
-                    : voiceReady
-                      ? "Speech input and voice output are active."
-                      : "Silero, Moonshine, and Kokoro are optional verified local models."}
+                    : voiceActivationNeedsRestart
+                      ? "Models are installed, but the local workers did not finish activating. Restart Interview App to retry activation."
+                      : voiceReady
+                        ? "Speech input and voice output are active."
+                        : "Silero, Moonshine, and Kokoro are optional verified local models."}
                 </small>
                 {voiceInstallError !== undefined && (
                   <small className="expressive-settings__setup-error">{voiceInstallError}</small>
@@ -542,11 +671,14 @@ export function SettingsPage({
                   || !pythonUsableForModelInstall
                   || voiceReady
                   || runtimeStatus.voiceSetup.restartRequired
+                  || voiceActivationNeedsRestart
                 }
               >
                 {installingVoice
                   ? "INSTALLING…"
-                  : setupActionLabel("voice models", runtimeStatus?.voiceSetup, voiceReady)}
+                  : voiceActivationNeedsRestart
+                    ? "Installed — restart to retry"
+                    : setupActionLabel("voice models", runtimeStatus?.voiceSetup, voiceReady)}
               </button>
             </div>
 
@@ -556,9 +688,11 @@ export function SettingsPage({
                 <small>
                   {runtimeStatus?.visionSetup.restartRequired === true
                     ? "Installed. Restart Interview App to activate local vision."
-                    : visionReady
-                      ? "Whiteboard semantic recognition is active."
-                      : "Drawing remains available even when local vision is not installed."}
+                    : visionActivationNeedsRestart
+                      ? "The model is installed, but local vision did not finish activating. Restart Interview App to retry activation."
+                      : visionReady
+                        ? "Whiteboard semantic recognition is active."
+                        : "Drawing remains available even when local vision is not installed."}
                 </small>
                 {visionInstallError !== undefined && (
                   <small className="expressive-settings__setup-error">{visionInstallError}</small>
@@ -574,11 +708,14 @@ export function SettingsPage({
                   || !pythonUsableForModelInstall
                   || visionReady
                   || runtimeStatus.visionSetup.restartRequired
+                  || visionActivationNeedsRestart
                 }
               >
                 {installingVision
                   ? "INSTALLING…"
-                  : setupActionLabel("vision model", runtimeStatus?.visionSetup, visionReady)}
+                  : visionActivationNeedsRestart
+                    ? "Installed — restart to retry"
+                    : setupActionLabel("vision model", runtimeStatus?.visionSetup, visionReady)}
               </button>
             </div>
 
@@ -608,8 +745,10 @@ export function SettingsPage({
                     );
                     return;
                   }
+                  setupOperationInFlightRef.current = true;
                   setRestarting(true);
                   void restartApp().catch(() => {
+                    setupOperationInFlightRef.current = false;
                     setRestarting(false);
                     setRuntimeStatusError(
                       "Interview App could not restart automatically. Close and reopen the app."
@@ -626,7 +765,15 @@ export function SettingsPage({
                 type="button"
                 className="expressive-settings__start"
                 onClick={finishSetup}
-                disabled={!reasoningReady || restarting}
+                disabled={
+                  sessionAuthorityChecking
+                  || sessionAuthorityUnavailable
+                  || activeSessionCount > 0
+                  || !reasoningReady
+                  || restarting
+                  || runtimeChecking
+                  || anyInstallActive
+                }
               >
                 Start interview
               </button>

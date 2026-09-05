@@ -3,7 +3,7 @@ import { AppearanceDock } from "./AppearanceDock.js";
 import { BrandMark } from "./BrandMark.js";
 import "./ProductFrame.css";
 
-export type ProductPageId = "home" | "sessions" | "settings";
+export type ProductPageId = "home" | "new" | "sessions" | "settings";
 
 export function ProductFrame({
   activePage,
@@ -13,7 +13,13 @@ export function ProductFrame({
   children,
   aside,
   notice,
-  onDismissNotice
+  onDismissNotice,
+  reasoningReady = true,
+  reasoningChecking = false,
+  authorityChecking = false,
+  authorityUnavailable = false,
+  navigationLocked = false,
+  transitionLocked = false
 }: {
   readonly activePage: ProductPageId | null;
   readonly title: string;
@@ -23,12 +29,38 @@ export function ProductFrame({
   readonly aside?: ReactNode;
   readonly notice?: string | null | undefined;
   readonly onDismissNotice?: (() => void) | undefined;
+  readonly reasoningReady?: boolean;
+  readonly reasoningChecking?: boolean;
+  readonly authorityChecking?: boolean;
+  readonly authorityUnavailable?: boolean;
+  readonly navigationLocked?: boolean;
+  readonly transitionLocked?: boolean;
 }) {
   const headingRef = useRef<HTMLHeadingElement | null>(null);
+  const initialHeadingRef = useRef(true);
 
   useEffect(() => {
-    headingRef.current?.focus();
+    if (initialHeadingRef.current) {
+      initialHeadingRef.current = false;
+      globalThis.getSelection()?.removeAllRanges();
+      return;
+    }
+    headingRef.current?.focus({ preventScroll: true });
   }, [title]);
+
+  const readinessChecking = reasoningChecking || authorityChecking;
+  const readinessReady =
+    reasoningReady
+    && !reasoningChecking
+    && !authorityChecking
+    && !authorityUnavailable;
+  const readinessLabel = readinessChecking
+    ? "Checking"
+    : authorityUnavailable
+      ? "Session check needed"
+      : reasoningReady
+        ? "Ready"
+        : "Setup needed";
 
   const items: readonly { id: ProductPageId; label: string; index: string }[] = [
     { id: "home", label: "Home", index: "01" },
@@ -37,19 +69,39 @@ export function ProductFrame({
   ];
 
   return (
-    <div className="product-frame">
-      <aside className="product-frame__rail">
+    <div className="product-frame" aria-busy={transitionLocked}>
+      <aside className="product-frame__rail" data-product-rail>
         <button
           type="button"
           className="product-frame__brand"
           onClick={() => onNavigate("home")}
+          disabled={transitionLocked}
+          title={transitionLocked ? "Session transition in progress." : undefined}
           aria-label="Open Home"
         >
-          <BrandMark size={27} title="Interview" />
+          <BrandMark size={24} title="Interview" />
           <span>Interview</span>
         </button>
 
+        <button
+          type="button"
+          className="product-frame__new"
+          onClick={() => onNavigate("new")}
+          disabled={transitionLocked || navigationLocked}
+          title={
+            transitionLocked
+              ? "Session transition in progress."
+              : navigationLocked
+                ? "Resume or finish the paused interview before starting a new interview."
+                : undefined
+          }
+        >
+          <span>New interview</span>
+          <span aria-hidden="true">↗</span>
+        </button>
+
         <nav className="product-frame__nav" aria-label="Product navigation">
+          <span className="product-frame__nav-label">Navigation</span>
           {items.map((item) => (
             <button
               key={item.id}
@@ -60,29 +112,65 @@ export function ProductFrame({
                   : "product-frame__nav-item"
               }
               aria-current={activePage === item.id ? "page" : undefined}
+              disabled={
+                transitionLocked
+                || (navigationLocked && item.id !== "home")
+              }
+              title={
+                transitionLocked
+                  ? "Session transition in progress."
+                  : navigationLocked && item.id !== "home"
+                    ? "Resume or finish the paused interview before opening this page."
+                    : undefined
+              }
               onClick={() => onNavigate(item.id)}
             >
               <span className="product-frame__nav-index">{item.index}</span>
-              <span>{item.label}</span>
+              <span className="product-frame__nav-copy">{item.label}</span>
             </button>
           ))}
         </nav>
 
-        <div className="product-frame__rail-note">
-          <span>LOCAL</span>
-          <span aria-hidden="true" className="product-frame__rail-rule" />
-          <span>VOICE · BOARD · REPLAY</span>
+        <div className="product-frame__rail-note" aria-label="Interview readiness">
+          <span className="product-frame__readiness-title">
+            <i
+              data-ready={String(readinessReady)}
+              data-checking={String(readinessChecking)}
+              aria-hidden="true"
+            />
+            {readinessLabel}
+          </span>
+          <span className="product-frame__readiness-row"><span>Voice</span><b>LOCAL</b></span>
+          <span className="product-frame__readiness-row"><span>Board</span><b>LOCAL</b></span>
+          <span className="product-frame__readiness-row">
+            <span>Reasoning</span>
+            <b>{reasoningChecking ? "CHECKING" : reasoningReady ? "READY" : "SETUP"}</b>
+          </span>
+          <span className="product-frame__readiness-row">
+            <span>Sessions</span>
+            <b>{authorityChecking ? "CHECKING" : authorityUnavailable ? "RETRY" : "VERIFIED"}</b>
+          </span>
+          <span className="product-frame__rail-rule" aria-hidden="true" />
+          <span className="product-frame__readiness-foot">VOICE · BOARD · REPLAY</span>
         </div>
       </aside>
 
       <div className="product-frame__main">
         <header className="product-frame__header">
           <div>
-            <span className="product-frame__kicker">{kicker}</span>
+            {kicker.length > 0 && <span className="product-frame__kicker">{kicker}</span>}
             <h1 ref={headingRef} tabIndex={-1}>{title}</h1>
           </div>
           <div className="product-frame__header-actions">
             {aside}
+            <span
+              className="product-frame__status-chip"
+              data-ready={String(readinessReady)}
+              data-checking={String(readinessChecking)}
+            >
+              <i aria-hidden="true" />
+              {readinessChecking ? "CHECKING" : readinessReady ? "READY" : authorityUnavailable ? "CHECK SESSIONS" : "CHECK SETUP"}
+            </span>
             <AppearanceDock />
           </div>
         </header>

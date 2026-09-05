@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import type {
   QuantTradingCandidateAction,
   QuantTradingPublicState
@@ -51,6 +51,21 @@ export const QuantTradingWorkspace: React.FC<QuantTradingWorkspaceProps> = ({
   const [askPrice, setAskPrice] = useState("");
   const [askSize, setAskSize] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
+  const authoritativeDraftKey =
+    state === null
+      ? null
+      : `${state.scenario.id}@${state.scenario.version}:${String(state.currentRound)}`;
+  const previousAuthoritativeDraftKeyRef = useRef<string | null>(authoritativeDraftKey);
+
+  useEffect(() => {
+    if (previousAuthoritativeDraftKeyRef.current === authoritativeDraftKey) return;
+    previousAuthoritativeDraftKeyRef.current = authoritativeDraftKey;
+    setBidPrice("");
+    setBidSize("");
+    setAskPrice("");
+    setAskSize("");
+    setLocalError(null);
+  }, [authoritativeDraftKey]);
 
   const validation = useMemo(() => {
     if (state?.status !== "ACTIVE" || state.quoteRequest === undefined) {
@@ -117,7 +132,7 @@ export const QuantTradingWorkspace: React.FC<QuantTradingWorkspaceProps> = ({
         <section className="quant-empty">
           <strong>{loading ? "Loading market state…" : "Market state is not loaded."}</strong>
           <span>The deterministic server remains authoritative.</span>
-          <button type="button" onClick={() => void onRefresh()} disabled={loading}>Refresh state</button>
+          <button type="button" onClick={() => { void onRefresh().catch(() => undefined); }} disabled={loading}>Refresh state</button>
         </section>
       </main>
     );
@@ -324,7 +339,7 @@ export const QuantTradingWorkspace: React.FC<QuantTradingWorkspaceProps> = ({
           <div className="quant-side-section">
             <div className="quant-section-title">
               <h2>Public state</h2>
-              <button type="button" onClick={() => void onRefresh()} disabled={loading || actionPending}>Refresh</button>
+              <button type="button" onClick={() => { void onRefresh().catch(() => undefined); }} disabled={loading || actionPending}>Refresh</button>
             </div>
             <dl className="quant-detail-list">
               <div><dt>Status</dt><dd>{state.status.replace("_", " ")}</dd></div>

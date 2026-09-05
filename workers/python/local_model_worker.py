@@ -966,6 +966,69 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
+def start_parent_watchdog(
+    server_holder: dict[str, Any],
+    exit_process: Any = os._exit,
+    poll_interval: float = 0.5,
+) -> threading.Thread | None:
+    parent_pid = os.getppid()
+    if parent_pid <= 0:
+        return None
+
+    parent_handle = None
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            parent_handle = kernel32.OpenProcess(0x00100000, False, parent_pid)
+        except Exception:
+            parent_handle = None
+
+    def _watchdog() -> None:
+        try:
+            if sys.platform == "win32" and parent_handle:
+                import ctypes
+                kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+                timeout_ms = max(1, int(poll_interval * 1000))
+                while True:
+                    wait_res = kernel32.WaitForSingleObject(parent_handle, timeout_ms)
+                    if wait_res == 0 or wait_res != 258:
+                        break
+            else:
+                import time
+                while True:
+                    time.sleep(poll_interval)
+                    if os.getppid() != parent_pid:
+                        break
+                    try:
+                        os.kill(parent_pid, 0)
+                    except OSError:
+                        break
+        finally:
+            if sys.platform == "win32" and parent_handle:
+                try:
+                    import ctypes
+                    ctypes.WinDLL("kernel32", use_last_error=True).CloseHandle(parent_handle)
+                except Exception:
+                    pass
+            server = server_holder.get("server")
+            if server is None:
+                exit_process(0)
+                return
+            try:
+                server.shutdown()
+            except Exception:
+                exit_process(0)
+
+    thread = threading.Thread(
+        target=_watchdog,
+        name="desktop-worker-parent-watchdog",
+        daemon=True,
+    )
+    thread.start()
+    return thread
+
+
 def monitor_parent_stdin(
     server_holder: dict[str, Any],
     stream: Any,
@@ -976,9 +1039,6 @@ def monitor_parent_stdin(
             if line.rstrip("\r\n") == "shutdown":
                 break
     finally:
-        # Start monitoring before any heavyweight model/runtime initialization.
-        # If supervision disappears before the HTTP server exists, terminate the
-        # worker immediately instead of waiting for model loading to finish.
         server = server_holder.get("server")
         if server is None:
             exit_process(0)
@@ -994,6 +1054,13 @@ def main() -> int:
         return 0
 
     server_holder: dict[str, Any] = {}
+    start_parent_watchdog(server_holder)
+
+    # Validate and load native dependencies before starting the stdin reader.
+    # On Windows, synchronous ReadFile on stdin locks CRT stdio handles and
+    # deadlocks if concurrent native extension DLLs (NumPy, OpenBLAS) are loaded.
+    require_runtime_environment()
+
     monitor = threading.Thread(
         target=monitor_parent_stdin,
         args=(server_holder, sys.stdin),
@@ -1001,8 +1068,6 @@ def main() -> int:
         daemon=True,
     )
     monitor.start()
-
-    require_runtime_environment()
     token = require_worker_token()
     runtime: Any
     if args.component == "speech":

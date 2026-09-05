@@ -8,6 +8,7 @@ export interface StudentInputAreaProps {
   readonly isSubmitting?: boolean;
   readonly placeholder?: string;
   readonly className?: string;
+  readonly compact?: boolean;
 }
 
 const MAX_INPUT_CHARS = 20_000;
@@ -17,7 +18,8 @@ export const StudentInputArea: React.FC<StudentInputAreaProps> = ({
   disabled = false,
   isSubmitting = false,
   placeholder = "Type your mathematical reasoning (LaTeX math supported: $v \\in V$, $R(3,3)=6$)...",
-  className = ""
+  className = "",
+  compact = false
 }) => {
   const [draftText, setDraftText] = useState("");
   const [showPreview, setShowPreview] = useState(true);
@@ -64,9 +66,54 @@ export const StudentInputArea: React.FC<StudentInputAreaProps> = ({
     const textarea = textareaRef.current;
     if (textarea !== null) {
       textarea.style.height = "auto";
-      textarea.style.height = `${String(Math.min(textarea.scrollHeight, 210))}px`;
+      textarea.style.height = compact
+        ? `${String(Math.min(Math.max(textarea.scrollHeight, 56), 112))}px`
+        : `${String(Math.min(textarea.scrollHeight, 210))}px`;
     }
-  }, [draftText]);
+  }, [compact, draftText]);
+
+  if (compact) {
+    return (
+      <div
+        className={`reasoning-composer reasoning-composer--compact student-input-area ${className}`}
+        data-testid="student-input-area"
+      >
+        <textarea
+          id="student-reasoning-input"
+          ref={textareaRef}
+          value={draftText}
+          onChange={(event) => setDraftText(event.target.value)}
+          onKeyDown={handleKeyDown}
+          disabled={disabled || submissionLocked}
+          placeholder={placeholder}
+          rows={2}
+          className="reasoning-composer__textarea reasoning-composer__textarea--compact"
+          data-testid="reasoning-textarea"
+          aria-label="Type a reasoning step"
+          aria-invalid={isTooLong}
+        />
+        <button
+          type="button"
+          onClick={() => void handleSubmit()}
+          disabled={!canSubmit}
+          className="reasoning-composer__submit reasoning-composer__submit--compact"
+          data-testid="submit-reasoning-btn"
+          aria-label={submissionLocked ? "Sending reasoning" : "Submit reasoning"}
+          title="Submit reasoning (Ctrl+Enter)"
+        >
+          {submissionLocked ? "…" : "↗"}
+        </button>
+        <span
+          className="reasoning-composer__compact-count"
+          data-warning={String(charCount > MAX_INPUT_CHARS * 0.9)}
+          data-error={String(isTooLong)}
+          aria-live="polite"
+        >
+          {isTooLong ? `${charCount.toLocaleString()} / ${MAX_INPUT_CHARS.toLocaleString()}` : ""}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div

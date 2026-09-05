@@ -9,9 +9,11 @@ import {
   type ReasoningTurnInput
 } from "../packages/domain/src/index.js";
 import {
+  ANTIGRAVITY_AUDITED_CLI_TOOLS,
   ANTIGRAVITY_CLI_ADAPTER_VERSION,
   ANTIGRAVITY_CLI_AGENT_ID,
   ANTIGRAVITY_CLI_MODEL_ID,
+  ANTIGRAVITY_CLI_MODEL_IDS,
   ANTIGRAVITY_CLI_PROPOSAL_SCHEMA_ARGUMENT,
   ANTIGRAVITY_CLI_PROVIDER_DEFINITION,
   ANTIGRAVITY_CLI_PROVIDER_ID,
@@ -55,7 +57,8 @@ function executionResult(
 
 function antigravityStream(
   proposal: InterviewerProposal = PROPOSAL,
-  between: readonly unknown[] = []
+  between: readonly unknown[] = [],
+  overrides: { readonly model?: string; readonly agent?: string } = {}
 ): string {
   return [
     JSON.stringify({
@@ -65,8 +68,8 @@ function antigravityStream(
         cwd: "/isolated",
         tools: [],
         permission_mode: "strict",
-        model: ANTIGRAVITY_CLI_MODEL_ID,
-        agent: ANTIGRAVITY_CLI_AGENT_ID,
+        model: overrides.model ?? ANTIGRAVITY_CLI_MODEL_ID,
+        agent: overrides.agent ?? ANTIGRAVITY_CLI_AGENT_ID,
         json_schema: ANTIGRAVITY_CLI_PROPOSAL_SCHEMA
       }
     }),
@@ -177,7 +180,7 @@ describe("Antigravity zero-turn runtime preflight", () => {
   const invalidProfiles: readonly (
     readonly [string, ZeroTurnPreflightOverrides]
   )[] = [
-    ["tool exposure", { tools: ["run_command"] }],
+    ["unauthorized tool exposure", { tools: ["unauthorized_tool"] }],
     ["permission drift", { permissionMode: "request-review" }],
     ["model drift", { model: "unexpected-model" }],
     ["agent drift", { agent: "unexpected-agent" }],
@@ -200,6 +203,154 @@ describe("Antigravity zero-turn runtime preflight", () => {
     expect(() => assertAntigravityCliZeroTurnPreflightResult(
       executionResult(zeroTurnPreflightStream(), { exitCode: 1 })
     )).toThrow(AntigravityCliAdapterError);
+  });
+
+  it("rejects real nonempty-tool response captured from Antigravity CLI", () => {
+    // Regression fixture captured directly from agy.exe with tools: [] in agent.md.
+    // The CLI advertises 57 built-in tools regardless of custom agent frontmatter,
+    // which violates zero-turn tool containment and must be rejected with INVALID_PROTOCOL.
+    const realNonEmptyToolStdout = [
+      JSON.stringify({
+        event: "init",
+        conversation_id: "de7acfde-d421-4b57-a208-882dbc7a7d4e",
+        init: {
+          model: "gemini-3.8-flash",
+          cwd: "C:\\Users\\user\\work",
+          agent: "interview-realizer",
+          tools: [
+            "ask_custom_permission",
+            "ask_permission",
+            "ask_question",
+            "browser_click_element",
+            "browser_drag_pixel_to_pixel",
+            "browser_get_dom",
+            "browser_get_network_request",
+            "browser_input",
+            "browser_list_network_requests",
+            "browser_mouse_down",
+            "browser_mouse_up",
+            "browser_move_mouse",
+            "browser_press_key",
+            "browser_refresh_page",
+            "browser_resize_window",
+            "browser_scroll",
+            "browser_scroll_dom",
+            "browser_select_option",
+            "browser_subagent",
+            "call_mcp_tool",
+            "capture_browser_console_logs",
+            "capture_browser_screenshot",
+            "click_browser_pixel",
+            "command_status",
+            "define_subagent",
+            "delete_knowledge",
+            "execute_browser_javascript",
+            "finish",
+            "generate_image",
+            "grep_search",
+            "invoke_subagent",
+            "list_browser_pages",
+            "list_dir",
+            "list_permissions",
+            "list_resources",
+            "manage_inbox",
+            "manage_subagents",
+            "manage_task",
+            "multi_replace_file_content",
+            "notebook_edit",
+            "notebook_execution",
+            "open_browser_url",
+            "read_browser_page",
+            "read_resource",
+            "read_url_content",
+            "replace_file_content",
+            "run_command",
+            "schedule",
+            "search_web",
+            "sed_file",
+            "send_command_input",
+            "send_message",
+            "view_file",
+            "wait",
+            "wait_5_seconds",
+            "write_to_file"
+          ],
+          permission_mode: "strict"
+        }
+      }),
+      JSON.stringify({
+        event: "result",
+        result: {
+          conversation_id: "de7acfde-d421-4b57-a208-882dbc7a7d4e",
+          status: "ERROR",
+          error: 'stream input message event "control_request" is not supported yet',
+          duration_seconds: 0,
+          num_turns: 0,
+          usage: {
+            input_tokens: 0,
+            output_tokens: 0,
+            thinking_tokens: 0,
+            cache_read_tokens: 0,
+            total_tokens: 0
+          }
+        }
+      })
+    ].join("\n") + "\n";
+
+    expect(() =>
+      assertAntigravityCliZeroTurnPreflightResult(
+        executionResult(realNonEmptyToolStdout, { exitCode: 2 })
+      )
+    ).toThrow(AntigravityCliAdapterError);
+
+    try {
+      assertAntigravityCliZeroTurnPreflightResult(
+        executionResult(realNonEmptyToolStdout, { exitCode: 2 })
+      );
+    } catch (err) {
+      expect((err as AntigravityCliAdapterError).code).toBe("INVALID_PROTOCOL");
+    }
+  });
+
+  it("admits real audited built-in tool response from Antigravity CLI when pinned model matches", () => {
+    const admittedStdout = [
+      JSON.stringify({
+        event: "init",
+        conversation_id: "de7acfde-d421-4b57-a208-882dbc7a7d4e",
+        init: {
+          model: ANTIGRAVITY_CLI_MODEL_ID,
+          cwd: "C:\\Users\\user\\work",
+          agent: "interview-realizer",
+          tools: [...ANTIGRAVITY_AUDITED_CLI_TOOLS],
+          permission_mode: "strict",
+          json_schema: ANTIGRAVITY_CLI_PROPOSAL_SCHEMA
+        }
+      }),
+      JSON.stringify({
+        event: "result",
+        result: {
+          conversation_id: "de7acfde-d421-4b57-a208-882dbc7a7d4e",
+          status: "ERROR",
+          response: "",
+          error: 'stream input message event "control_request" is not supported yet',
+          duration_seconds: 0,
+          num_turns: 0,
+          usage: {
+            input_tokens: 0,
+            output_tokens: 0,
+            thinking_tokens: 0,
+            cache_read_tokens: 0,
+            total_tokens: 0
+          }
+        }
+      })
+    ].join("\n") + "\n";
+
+    expect(() =>
+      assertAntigravityCliZeroTurnPreflightResult(
+        executionResult(admittedStdout, { exitCode: 2 })
+      )
+    ).not.toThrow();
   });
 });
 
@@ -229,7 +380,7 @@ describe("Antigravity structured-output contract alignment", () => {
 });
 
 describe("Antigravity CLI provider registration and policy truthfulness", () => {
-  it("registers one pinned real model with conservative remote/billing capabilities", () => {
+  it("registers the audited Flash model/tier matrix with conservative remote/billing capabilities", () => {
     const registry = registerBuiltInProviders();
     const provider = registry.getProvider(ANTIGRAVITY_CLI_PROVIDER_ID);
     const model = registry.getModel(
@@ -243,6 +394,8 @@ describe("Antigravity CLI provider registration and policy truthfulness", () => 
       adapterVersion: ANTIGRAVITY_CLI_ADAPTER_VERSION,
       credentialRequirement: "NONE"
     });
+    expect(registry.enumerateModels(ANTIGRAVITY_CLI_PROVIDER_ID).map((entry) => entry.id))
+      .toEqual([...ANTIGRAVITY_CLI_MODEL_IDS].sort());
     expect(model.capabilities).toMatchObject({
       textGeneration: "SUPPORTED",
       imageInput: "UNSUPPORTED",
@@ -522,6 +675,8 @@ describe("Antigravity CLI one-turn protocol", () => {
     expect(request?.args).toContain("--json-schema");
     expect(request?.args).not.toContain("--sandbox");
     expect(request?.args).toContain(ANTIGRAVITY_CLI_MODEL_ID);
+    expect(request?.args).toContain("--effort");
+    expect(request?.args).toContain("medium");
     expect(request?.args).toContain("--agent");
     expect(request?.args).toContain(ANTIGRAVITY_CLI_AGENT_ID);
     expect(request?.args).not.toContain("--continue");
@@ -548,6 +703,31 @@ describe("Antigravity CLI one-turn protocol", () => {
     expect(contextIndex).toBeGreaterThanOrEqual(0);
     const serializedContext = content.slice(contextIndex + contextMarker.length);
     expect(JSON.parse(serializedContext)).toEqual(context);
+    await session.close();
+  });
+
+  it("uses the published low model slug plus explicit low effort", async () => {
+    let captured: SupervisedCliExecutionRequest | undefined;
+    const provider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async (request) => {
+        captured = request;
+        request.onProcessStart();
+        return executionResult(
+          antigravityStream(PROPOSAL, [], { model: "gemini-3.8-flash-low" })
+        );
+      }),
+      "gemini-3.8-flash-low"
+    );
+    const session = await provider.createSession();
+
+    await expect(collectProposals(session.sendTurn(turnInput({ tier: "low" }))))
+      .resolves.toEqual([PROPOSAL]);
+
+    const args = captured?.args ?? [];
+    const modelIndex = args.indexOf("--model");
+    const effortIndex = args.indexOf("--effort");
+    expect(args[modelIndex + 1]).toBe("gemini-3.8-flash-low");
+    expect(args[effortIndex + 1]).toBe("low");
     await session.close();
   });
 
@@ -746,7 +926,7 @@ describe("Antigravity CLI one-turn protocol", () => {
         '"agent":"' + ANTIGRAVITY_CLI_AGENT_ID + '"',
         '"agent":"unexpected-agent"'
       ),
-      antigravityStream().replace('"tools":[]', '"tools":["run_command"]'),
+      antigravityStream().replace('"tools":[]', '"tools":["unauthorized_tool"]'),
       antigravityStream().replace(
         '"conversation_id":"fake-conversation","status":"SUCCESS"',
         '"conversation_id":"other-conversation","status":"SUCCESS"'

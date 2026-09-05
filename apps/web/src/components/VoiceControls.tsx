@@ -35,7 +35,7 @@ function DevicePicker({
   readonly selectedId: string | undefined;
   readonly disabled: boolean;
   readonly fallbackLabel: string;
-  readonly onSelect: (deviceId: string | undefined) => void;
+  readonly onSelect: (deviceId: string | undefined) => void | Promise<void>;
 }) {
   const choices = devices.filter((device) => !device.isDefault);
   const options = [
@@ -50,6 +50,14 @@ function DevicePicker({
     options.findIndex((option) => option.deviceId === selectedId)
   );
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  const selectOption = (deviceId: string | undefined): void => {
+    try {
+      void Promise.resolve(onSelect(deviceId)).catch(() => undefined);
+    } catch {
+      // Device selection failures are surfaced by authoritative voice state.
+    }
+  };
 
   const moveSelection = (
     event: ReactKeyboardEvent<HTMLButtonElement>,
@@ -80,7 +88,7 @@ function DevicePicker({
     event.preventDefault();
     const next = options[nextIndex];
     if (next === undefined) return;
-    onSelect(next.deviceId);
+    selectOption(next.deviceId);
     optionRefs.current[nextIndex]?.focus();
   };
 
@@ -107,7 +115,7 @@ function DevicePicker({
             aria-checked={selectedId === option.deviceId}
             tabIndex={selectedIndex === index ? 0 : -1}
             disabled={disabled}
-            onClick={() => onSelect(option.deviceId)}
+            onClick={() => selectOption(option.deviceId)}
             onKeyDown={(event) => moveSelection(event, index)}
           >
             <span className="voice-device-picker__choice-mark" aria-hidden="true" />
@@ -177,7 +185,8 @@ export function VoiceControls({
         onClick={() => {
           void (state.microphoneEnabled
             ? controls.disableMicrophone()
-            : controls.enableMicrophone());
+            : controls.enableMicrophone()
+          ).catch(() => undefined);
         }}
         className="voice-strip__mic"
       >
@@ -203,7 +212,7 @@ export function VoiceControls({
       <details ref={detailsRef} className="voice-strip__devices">
         <summary aria-label="Choose audio devices">
           Audio
-          <span aria-hidden="true">⌄</span>
+          <span className="voice-strip__chevron" aria-hidden="true" />
         </summary>
         <div className="voice-strip__popover">
           <div className="voice-strip__popover-header">
@@ -218,7 +227,7 @@ export function VoiceControls({
             disabled={disabled || state.inputDevices.length === 0}
             fallbackLabel="Microphone"
             onSelect={(deviceId) => {
-              void controls.selectInputDevice(deviceId);
+              void controls.selectInputDevice(deviceId).catch(() => undefined);
             }}
           />
 

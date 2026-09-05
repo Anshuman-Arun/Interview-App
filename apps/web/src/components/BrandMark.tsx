@@ -7,18 +7,27 @@ export function BrandMark({
 }) {
   return (
     <svg
+      className="brand-mark"
       width={size}
       height={size}
       viewBox="0 0 32 32"
       role={title === undefined ? "presentation" : "img"}
       aria-label={title}
     >
-      <rect x="2.5" y="2.5" width="27" height="27" rx="7" fill="var(--text-primary)" />
       <path
-        d="M9 21.8V10.2h3v11.6H9Zm5.6 0 4.3-11.6h3.2l-4.4 11.6h-3.1Z"
-        fill="var(--surface-panel)"
+        d="M14 6H6v8 M18 26h8v-8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.05"
+        strokeLinecap="square"
+        strokeLinejoin="miter"
       />
-      <circle cx="23.6" cy="21.5" r="1.65" fill="var(--accent)" />
+      <circle
+        cx="16"
+        cy="16"
+        r="2.15"
+        fill="var(--brand-dot, var(--accent))"
+      />
     </svg>
   );
 }

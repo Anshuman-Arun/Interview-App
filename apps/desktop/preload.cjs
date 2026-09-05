@@ -5,6 +5,8 @@ const { contextBridge, ipcRenderer } = require("electron");
 const CHANNEL = "interview-desktop:get-bootstrap";
 const ZOOM_CHANNEL = "interview-desktop:set-zoom";
 const ZOOM_CHANGED_CHANNEL = "interview-desktop:zoom-changed";
+const APPEARANCE_READ_CHANNEL = "interview-desktop:get-appearance";
+const APPEARANCE_WRITE_CHANNEL = "interview-desktop:set-appearance";
 const LOCAL_RUNTIME_STATUS_CHANNEL = "interview-desktop:get-local-runtime-status";
 const INSTALL_PYTHON_RUNTIME_CHANNEL = "interview-desktop:install-python-runtime";
 const INSTALL_VOICE_MODELS_CHANNEL = "interview-desktop:install-voice-models";
@@ -13,6 +15,7 @@ const RESTART_APP_CHANNEL = "interview-desktop:restart-app";
 const AUTH_HEADER_VALUE = "desktop-managed-v1";
 const MIN_ZOOM_FACTOR = 0.25;
 const MAX_ZOOM_FACTOR = 5;
+const MAX_APPEARANCE_SETTINGS_BYTES = 4 * 1024;
 
 function isZoomFactor(value) {
   return typeof value === "number"
@@ -208,6 +211,17 @@ function validateLocalRuntimeStatus(value) {
 }
 
 const bootstrap = validateBootstrap(ipcRenderer.sendSync(CHANNEL));
+let cachedAppearanceSettings = ipcRenderer.sendSync(APPEARANCE_READ_CHANNEL);
+if (
+  cachedAppearanceSettings !== null
+  && (
+    typeof cachedAppearanceSettings !== "string"
+    || cachedAppearanceSettings.length > MAX_APPEARANCE_SETTINGS_BYTES
+  )
+) {
+  cachedAppearanceSettings = null;
+}
+
 contextBridge.exposeInMainWorld("interviewDesktop", Object.freeze({
   getBootstrap: () => ({
     ...bootstrap,
@@ -220,6 +234,20 @@ contextBridge.exposeInMainWorld("interviewDesktop", Object.freeze({
     if (ipcRenderer.sendSync(ZOOM_CHANNEL, factor) !== true) {
       throw new Error("Desktop zoom request was rejected");
     }
+  },
+  getAppearanceSettings: () => cachedAppearanceSettings,
+  saveAppearanceSettings: async (raw) => {
+    if (
+      typeof raw !== "string"
+      || raw.length === 0
+      || raw.length > MAX_APPEARANCE_SETTINGS_BYTES
+    ) {
+      throw new Error("Desktop appearance payload is unsupported");
+    }
+    if (await ipcRenderer.invoke(APPEARANCE_WRITE_CHANNEL, raw) !== true) {
+      throw new Error("Desktop appearance request was rejected");
+    }
+    cachedAppearanceSettings = raw;
   },
   getLocalRuntimeStatus: async () =>
     validateLocalRuntimeStatus(await ipcRenderer.invoke(LOCAL_RUNTIME_STATUS_CHANNEL)),

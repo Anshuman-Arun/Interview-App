@@ -323,7 +323,7 @@ export const QuantResearchWorkspace: React.FC<QuantResearchWorkspaceProps> = ({
         <section className="quant-empty">
           <strong>{loading ? "Loading research state…" : "Research state is not loaded."}</strong>
           <span>The deterministic server remains authoritative.</span>
-          <button type="button" onClick={() => void onRefresh()} disabled={loading}>Refresh state</button>
+          <button type="button" onClick={() => { void onRefresh().catch(() => undefined); }} disabled={loading}>Refresh state</button>
         </section>
       </main>
     );
@@ -401,7 +401,7 @@ export const QuantResearchWorkspace: React.FC<QuantResearchWorkspaceProps> = ({
           <div className="quant-side-section">
             <div className="quant-section-title">
               <h2>Progress</h2>
-              <button type="button" onClick={() => void onRefresh()} disabled={loading || actionPending}>Refresh</button>
+              <button type="button" onClick={() => { void onRefresh().catch(() => undefined); }} disabled={loading || actionPending}>Refresh</button>
             </div>
             <dl className="quant-detail-list">
               <div><dt>Status</dt><dd>{state.status.replace("_", " ")}</dd></div>

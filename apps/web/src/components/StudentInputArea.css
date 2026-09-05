@@ -160,3 +160,80 @@
     display: none;
   }
 }
+
+/* Editorial v10 reasoning composer */
+.reasoning-composer{border-color:var(--border-default);border-radius:2px;background:var(--surface-panel)}.reasoning-composer__head{min-height:28px;padding:5px 8px}.reasoning-composer__head label{font:600 7px/1 var(--font-mono);letter-spacing:.04em;text-transform:uppercase}.reasoning-composer__head label small{font:400 7px/1 var(--font-ui);letter-spacing:0;text-transform:none}.reasoning-composer__textarea{min-height:58px;max-height:150px;padding:9px 10px;font:400 10.5px/1.5 var(--font-ui)}.reasoning-composer__preview{border-radius:2px}.reasoning-composer__foot{min-height:34px;padding:5px 6px 5px 9px;background:color-mix(in srgb,var(--surface-app) 55%,var(--surface-panel))}.reasoning-composer__meta{font:400 7px/1 var(--font-mono)}.reasoning-composer__submit{min-width:30px;min-height:27px;padding:0 8px;border-color:var(--text-primary);border-radius:2px;background:var(--text-primary);color:var(--surface-panel);font:600 8px/1 var(--font-ui)}.reasoning-composer__submit:hover:not(:disabled){border-color:var(--accent);background:var(--accent)}
+
+
+/* Live Oxford composer: mirror the approved v10 two-part compose control. */
+.reasoning-composer--compact {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  min-width: 0;
+  gap: 6px;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.reasoning-composer--compact .reasoning-composer__textarea--compact {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  height: 56px;
+  min-height: 56px;
+  box-sizing: border-box;
+  max-height: 112px;
+  resize: none;
+  padding: 9px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: 2px;
+  outline: 0;
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  font: 400 10px/1.4 var(--font-ui);
+}
+.reasoning-composer--compact .reasoning-composer__textarea--compact:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.reasoning-composer--compact .reasoning-composer__textarea--compact:disabled {
+  background: color-mix(in srgb, var(--surface-panel) 68%, var(--surface-app));
+}
+.reasoning-composer--compact .reasoning-composer__submit--compact {
+  width: 34px;
+  min-width: 34px;
+  min-height: 56px;
+  align-self: stretch;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: var(--text-primary);
+  color: var(--surface-panel);
+  font: 400 17px/1 var(--font-display);
+}
+.reasoning-composer--compact .reasoning-composer__submit--compact:hover:not(:disabled) {
+  border: 0;
+  background: var(--accent);
+}
+.reasoning-composer--compact .reasoning-composer__submit--compact:disabled {
+  border: 0;
+  background: var(--surface-active);
+  color: var(--text-muted);
+}
+.reasoning-composer__compact-count {
+  position: absolute;
+  right: 42px;
+  bottom: 5px;
+  color: var(--text-muted);
+  font: 500 6px/1 var(--font-mono);
+  pointer-events: none;
+}
+.reasoning-composer__compact-count[data-warning="true"] {
+  color: var(--warning);
+}
+.reasoning-composer__compact-count[data-error="true"] {
+  color: var(--danger);
+}

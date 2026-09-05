@@ -1,9 +1,11 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { lstatSync, readFileSync } from "node:fs";
 import { lstat, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { createAndStartServer } from "../../server/src/server.js";
 import { SessionIdSchema, newSessionId, type SessionId } from "../../../packages/domain/src/index.js";
+import { ModelAssetError } from "../../../packages/model-assets/src/index.js";
 import {
   app,
   BrowserWindow,
@@ -16,6 +18,8 @@ import { DesktopBackendController } from "./backend-controller.js";
 import { DesktopLocalRuntimeComposition } from "./runtime/index.js";
 import { PACKAGED_DESKTOP_PRELOAD_SHA256 } from "./runtime/packaged-resource-integrity.js";
 import {
+  DESKTOP_APPEARANCE_READ_CHANNEL,
+  DESKTOP_APPEARANCE_WRITE_CHANNEL,
   DESKTOP_BOOTSTRAP_CHANNEL,
   DESKTOP_INSTALL_PYTHON_RUNTIME_CHANNEL,
   DESKTOP_INSTALL_VISION_MODEL_CHANNEL,
@@ -52,9 +56,94 @@ import {
   DESKTOP_MIN_WIDTH,
   createSecureWebPreferences
 } from "./window-config.js";
+import {
+  StartupTracker,
+  STARTUP_STAGE_STARTUP_WINDOW_VISIBLE,
+  STARTUP_STAGE_RUNTIME_START,
+  STARTUP_STAGE_RUNTIME_READY,
+  STARTUP_STAGE_BACKEND_START,
+  STARTUP_STAGE_BACKEND_READY,
+  STARTUP_STAGE_MAIN_WINDOW_READY,
+  type StartupTimingReport
+} from "./startup-tracker.js";
+import {
+  isLocalModelActivationLaunch,
+  relaunchArgsForLocalModelActivation,
+  runtimeCapabilityNeedsActivationRetry,
+  shouldUsePreparedRuntimeStartupBudget
+} from "./startup-policy.js";
 
-const OPTIONAL_LOCAL_RUNTIME_STARTUP_BUDGET_MS = 60_000;
+import {
+  STARTUP_WINDOW_DATA_URL,
+  getStartupWindowOptions,
+  isHeadlessCliLaunch
+} from "./startup-window.js";
+
+let startupWindow: BrowserWindow | undefined;
+const startupTracker = new StartupTracker();
+const isShuttingDown = (): boolean => shuttingDown;
+
+export async function createStartupWindow(): Promise<void> {
+  if (startupWindow !== undefined || isShuttingDown()) return;
+
+  const window = new BrowserWindow(getStartupWindowOptions());
+
+  startupWindow = window;
+
+  window.on("closed", () => {
+    if (startupWindow === window) {
+      startupWindow = undefined;
+    }
+    // If the startup window is closed before the main window is created,
+    // the user intentionally aborted startup. Cancel and cleanly shut down.
+    if (mainWindow === undefined && !isShuttingDown()) {
+      startupAbort.abort();
+      void shutdownDesktop().finally(() => {
+        shutdownComplete = true;
+        app.quit();
+      });
+    }
+  });
+
+  window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  window.webContents.on("will-navigate", (event) => event.preventDefault());
+
+  await window.loadURL(STARTUP_WINDOW_DATA_URL);
+  if (!window.isDestroyed() && !isShuttingDown()) {
+    window.show();
+    window.focus();
+  }
+}
+
+export function updateStartupStatus(status: string): void {
+  startupTracker.recordStage(status);
+  if (startupWindow === undefined || startupWindow.isDestroyed()) return;
+  const safeText = JSON.stringify(status);
+  void startupWindow.webContents.executeJavaScript(
+    `window.updateStatus && window.updateStatus(${safeText});`
+  ).catch(() => undefined);
+}
+
+export function closeStartupWindow(): void {
+  if (startupWindow !== undefined && !startupWindow.isDestroyed()) {
+    const sw = startupWindow;
+    startupWindow = undefined;
+    sw.close();
+  }
+}
+
+export function getStartupTimingReport(): StartupTimingReport {
+  return startupTracker.getReport();
+}
+
+const OPTIONAL_LOCAL_RUNTIME_COLD_STARTUP_BUDGET_MS = 15_000;
+// Explicitly installed workers are sequential and each has its own bounded
+// startup handshake. The prepared-runtime budget must not be shorter than the
+// combined activation path or a successful install is misclassified as missing
+// after restart.
+const OPTIONAL_LOCAL_RUNTIME_PREPARED_STARTUP_BUDGET_MS = 7 * 60_000;
 const PACKAGED_SMOKE_PROOF_MAX_BYTES = 64 * 1024;
+const MAX_APPEARANCE_SETTINGS_BYTES = 4 * 1024;
 const PACKAGED_SMOKE_INPUT = "Packaged Windows desktop smoke input.";
 
 let localRuntime: DesktopLocalRuntimeComposition | undefined;
@@ -74,6 +163,7 @@ let frontendServer: DesktopFrontendServer | undefined;
 let mainWindow: BrowserWindow | undefined;
 let bootstrap: DesktopRendererBootstrap | undefined;
 let frontendUrl: string | undefined;
+let appearanceSettingsPath: string | undefined;
 let clientToken: string | undefined;
 let removeTokenInjector: (() => void) | undefined;
 let removePermissionCapability: (() => void) | undefined;
@@ -93,6 +183,7 @@ let activeModelInstallKind: "PYTHON" | "VOICE" | "VISION" | undefined;
 const packagedSingleInstanceSmokeHost = process.argv.includes(
   "--packaged-single-instance-smoke-host"
 );
+const localModelActivationLaunch = isLocalModelActivationLaunch(process.argv);
 
 if (!app.requestSingleInstanceLock()) {
   if (
@@ -111,6 +202,10 @@ if (!app.requestSingleInstanceLock()) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.show();
       mainWindow.focus();
+    } else if (startupWindow !== undefined && !startupWindow.isDestroyed()) {
+      if (startupWindow.isMinimized()) startupWindow.restore();
+      startupWindow.show();
+      startupWindow.focus();
     }
     if (packagedSingleInstanceSmokeHost && app.isPackaged) {
       void shutdownDesktop()
@@ -156,6 +251,14 @@ if (!app.requestSingleInstanceLock()) {
 
 async function startDesktop(): Promise<void> {
   app.setName("Interview App");
+  // The desktop product deliberately exposes the signed-in Antigravity account
+  // route when the user selects it. The supervised CLI profile separately pins
+  // useG1Credits=false and strips API-key/custom-endpoint configuration, so this
+  // opt-in does not enable AI-credit fallback or inherited Gemini API billing.
+  // An explicit host value still wins for development/security testing.
+  if (process.env["INTERVIEW_ALLOW_METERED_REMOTE_REASONING"] === undefined) {
+    process.env["INTERVIEW_ALLOW_METERED_REMOTE_REASONING"] = "1";
+  }
   await configurePackagedSmokeUserData();
   if (process.platform === "win32") {
     app.setAppUserModelId("com.anshuman.interviewapp");
@@ -168,6 +271,7 @@ async function startDesktop(): Promise<void> {
     isPackaged: app.isPackaged
   });
   await mkdir(paths.appDataRoot, { recursive: true });
+  appearanceSettingsPath = path.join(paths.appDataRoot, "appearance.json");
   if (app.isPackaged) {
     await assertPackagedPreloadIntegrity(paths.preloadPath);
   }
@@ -205,12 +309,35 @@ async function startDesktop(): Promise<void> {
     app.quit();
     return;
   }
+
+  if (!isHeadlessCliLaunch(process.argv)) {
+    await createStartupWindow();
+    startupTracker.recordStage(STARTUP_STAGE_STARTUP_WINDOW_VISIBLE);
+  }
+
+  // No-model launches stay fast. After an explicit model install has
+  // materialized verified persistent views, allow enough time on the next
+  // launch for Windows to verify and initialize the real workers instead of
+  // cancelling at 15s and making a successful install look like it vanished.
+  const hasPreparedRuntimeViews = await runtime.hasPreparedRuntimeViews();
+  const optionalRuntimeStartupBudgetMs = shouldUsePreparedRuntimeStartupBudget({
+    activationRequested: localModelActivationLaunch,
+    hasPreparedRuntimeViews
+  })
+    ? OPTIONAL_LOCAL_RUNTIME_PREPARED_STARTUP_BUDGET_MS
+    : OPTIONAL_LOCAL_RUNTIME_COLD_STARTUP_BUDGET_MS;
   const optionalRuntimeSignal = AbortSignal.any([
     startupAbort.signal,
-    AbortSignal.timeout(OPTIONAL_LOCAL_RUNTIME_STARTUP_BUDGET_MS)
+    AbortSignal.timeout(optionalRuntimeStartupBudgetMs)
   ]);
+  updateStartupStatus("Preparing local interview runtimes...");
+  startupTracker.recordStage(STARTUP_STAGE_RUNTIME_START);
   await runtime.start({ signal: optionalRuntimeSignal });
-  if (shuttingDown || startupAbort.signal.aborted) return;
+  startupTracker.recordStage(STARTUP_STAGE_RUNTIME_READY);
+  if (shuttingDown || startupAbort.signal.aborted) {
+    closeStartupWindow();
+    return;
+  }
 
   if (mode === "production") {
     frontendServer = new DesktopFrontendServer(paths.frontendRoot);
@@ -221,6 +348,8 @@ async function startDesktop(): Promise<void> {
     );
   }
 
+  updateStartupStatus("Starting application server...");
+  startupTracker.recordStage(STARTUP_STAGE_BACKEND_START);
   clientToken = randomBytes(32).toString("hex");
   const backendConfig = {
     host: "127.0.0.1",
@@ -232,6 +361,7 @@ async function startDesktop(): Promise<void> {
     databasePath: paths.databasePath
   } as const;
   const server = await backend.start(backendConfig);
+  startupTracker.recordStage(STARTUP_STAGE_BACKEND_READY);
 
   if (frontendServer !== undefined) {
     frontendServer.configureBackendOrigins(
@@ -251,7 +381,9 @@ async function startDesktop(): Promise<void> {
 
   installBootstrapHandler();
   installZoomHandler();
+  installAppearanceHandlers();
   installLocalRuntimeHandlers();
+  updateStartupStatus("Opening Interview App...");
   await createMainWindow(paths.preloadPath);
 
   if (process.argv.includes("--packaged-smoke-test")) {
@@ -261,6 +393,116 @@ async function startDesktop(): Promise<void> {
     shutdownComplete = true;
     app.quit();
   }
+}
+
+function installAppearanceHandlers(): void {
+  ipcMain.removeAllListeners(DESKTOP_APPEARANCE_READ_CHANNEL);
+  ipcMain.removeHandler(DESKTOP_APPEARANCE_WRITE_CHANNEL);
+
+  ipcMain.on(
+    DESKTOP_APPEARANCE_READ_CHANNEL,
+    (event: IpcMainEvent) => {
+      if (!isAuthorizedDesktopEvent(event)) {
+        event.returnValue = null;
+        return;
+      }
+      const settingsPath = appearanceSettingsPath;
+      if (settingsPath === undefined) {
+        event.returnValue = null;
+        return;
+      }
+      try {
+        const metadata = lstatSync(settingsPath);
+        if (
+          !metadata.isFile()
+          || metadata.isSymbolicLink()
+          || metadata.size <= 0
+          || metadata.size > MAX_APPEARANCE_SETTINGS_BYTES
+        ) {
+          event.returnValue = null;
+          return;
+        }
+        const raw = readFileSync(settingsPath, "utf8");
+        event.returnValue = isValidAppearanceSettingsPayload(raw) ? raw : null;
+      } catch {
+        event.returnValue = null;
+      }
+    }
+  );
+
+  ipcMain.handle(
+    DESKTOP_APPEARANCE_WRITE_CHANNEL,
+    async (event: IpcMainInvokeEvent, raw: unknown): Promise<true> => {
+      if (!isAuthorizedDesktopInvoke(event)) {
+        throw new Error("Desktop appearance request was rejected");
+      }
+      if (!isValidAppearanceSettingsPayload(raw)) {
+        throw new Error("Desktop appearance payload was rejected");
+      }
+      const settingsPath = appearanceSettingsPath;
+      if (settingsPath === undefined) {
+        throw new Error("Desktop appearance storage is unavailable");
+      }
+      await writeFile(settingsPath, raw, {
+        encoding: "utf8",
+        mode: 0o600
+      });
+      return true;
+    }
+  );
+}
+
+function isValidAppearanceSettingsPayload(value: unknown): value is string {
+  if (
+    typeof value !== "string"
+    || value.length === 0
+    || Buffer.byteLength(value, "utf8") > MAX_APPEARANCE_SETTINGS_BYTES
+  ) {
+    return false;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return false;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return false;
+  }
+  const record = parsed as Record<string, unknown>;
+  const keys = Object.keys(record).sort();
+  const expected = [
+    "accent",
+    "accentIntensity",
+    "borders",
+    "corners",
+    "theme",
+    "zoomPercent"
+  ];
+  if (
+    keys.length !== expected.length
+    || !keys.every((key, index) => key === expected[index])
+  ) {
+    return false;
+  }
+  return (
+    typeof record["theme"] === "string"
+    && record["theme"].length <= 32
+    && typeof record["accent"] === "string"
+    && record["accent"].length <= 32
+    && typeof record["corners"] === "string"
+    && record["corners"].length <= 32
+    && typeof record["borders"] === "string"
+    && record["borders"].length <= 32
+    && typeof record["accentIntensity"] === "number"
+    && Number.isFinite(record["accentIntensity"])
+    && record["accentIntensity"] >= 0
+    && record["accentIntensity"] <= 100
+    && typeof record["zoomPercent"] === "number"
+    && Number.isFinite(record["zoomPercent"])
+    && record["zoomPercent"] >= 25
+    && record["zoomPercent"] <= 500
+  );
 }
 
 function installLocalRuntimeHandlers(): void {
@@ -334,9 +576,18 @@ function installLocalRuntimeHandlers(): void {
       if (activeModelInstall !== undefined || shuttingDown) {
         throw new Error("Desktop restart is unavailable while model setup is active");
       }
+      const activateLocalModels =
+        voiceSetupRestartRequired
+        || visionSetupRestartRequired
+        || localRuntimeActivationRetryRequired();
       setImmediate(() => {
         if (shuttingDown) return;
-        app.relaunch();
+        app.relaunch({
+          args: relaunchArgsForLocalModelActivation(
+            process.argv,
+            activateLocalModels
+          )
+        });
         app.quit();
       });
       return true;
@@ -396,7 +647,9 @@ function setSetupState(
   visionSetupRestartRequired = restartRequired;
 }
 
-function isAuthorizedDesktopInvoke(event: IpcMainInvokeEvent): boolean {
+function isAuthorizedDesktopEvent(
+  event: IpcMainEvent | IpcMainInvokeEvent
+): boolean {
   const currentWindow = mainWindow;
   const currentFrontendUrl = frontendUrl;
   return currentWindow !== undefined
@@ -412,6 +665,10 @@ function isAuthorizedDesktopInvoke(event: IpcMainInvokeEvent): boolean {
     });
 }
 
+function isAuthorizedDesktopInvoke(event: IpcMainInvokeEvent): boolean {
+  return isAuthorizedDesktopEvent(event);
+}
+
 async function installLocalModelAssets(
   kind: "PYTHON" | "VOICE" | "VISION",
   runtime: DesktopLocalRuntimeComposition
@@ -424,18 +681,62 @@ async function installLocalModelAssets(
     } else {
       await runtime.installVisionAssets(startupAbort.signal);
     }
-    setSetupState(kind, "INSTALLED", true);
+    // Python dependencies are usable in this process immediately, so they do
+    // not enter the restart-required INSTALLED setup state. Voice/vision need a
+    // desktop restart because the backend captures those runtimes at startup.
+    setSetupState(
+      kind,
+      kind === "PYTHON" ? "IDLE" : "INSTALLED",
+      kind !== "PYTHON"
+    );
     return localRuntimeStatusForRenderer();
-  } catch {
+  } catch (error) {
     if (startupAbort.signal.aborted) {
       setSetupState(kind, "IDLE", false);
-      throw new Error("Local model setup was cancelled");
+      throw new Error("LOCAL_SETUP_CANCELLED", { cause: error });
     }
     setSetupState(kind, "FAILED", false);
-    throw new Error(
-      "Local model setup failed. Check Python, network access, available disk space, and retry."
-    );
+    throw new Error(localSetupFailureCode(error), { cause: error });
   }
+}
+
+function localSetupFailureCode(error: unknown): string {
+  if (error instanceof ModelAssetError) {
+    switch (error.code) {
+      case "DOWNLOAD_TIMEOUT":
+        return "LOCAL_SETUP_DOWNLOAD_TIMEOUT";
+      case "NETWORK_ERROR":
+      case "HTTP_STATUS":
+      case "REDIRECT_LIMIT":
+      case "UNSAFE_REDIRECT":
+        return "LOCAL_SETUP_NETWORK";
+      case "INSUFFICIENT_DISK_SPACE":
+      case "CACHE_LIMIT_EXCEEDED":
+        return "LOCAL_SETUP_DISK";
+      case "SIZE_MISMATCH":
+      case "DIGEST_MISMATCH":
+      case "CORRUPT_INSTALLATION":
+        return "LOCAL_SETUP_INTEGRITY";
+      case "CANCELLED":
+        return "LOCAL_SETUP_CANCELLED";
+      default:
+        return "LOCAL_SETUP_MODEL_ASSET";
+    }
+  }
+  if (error instanceof Error) {
+    if (/disk space/iu.test(error.message)) return "LOCAL_SETUP_DISK";
+    if (/python|cpython|runtime dependenc/iu.test(error.message)) {
+      return "LOCAL_SETUP_PYTHON";
+    }
+  }
+  return "LOCAL_SETUP_FAILED";
+}
+
+function localRuntimeActivationRetryRequired(): boolean {
+  const snapshot = localRuntime?.getCapabilityStatus();
+  return runtimeCapabilityNeedsActivationRetry(snapshot?.speech)
+    || runtimeCapabilityNeedsActivationRetry(snapshot?.tts)
+    || runtimeCapabilityNeedsActivationRetry(snapshot?.vision);
 }
 
 function localRuntimeStatusForRenderer(): DesktopRendererLocalRuntimeStatus {
@@ -699,8 +1000,16 @@ async function runPackagedSmoke(
     throw new Error("Packaged renderer did not mount the product shell");
   }
 
+  const startupHomeVisible: unknown = await window.webContents.executeJavaScript(
+    `document.body.textContent?.includes("Think aloud.") === true`
+  );
+  if (startupHomeVisible !== true) {
+    throw new Error("Packaged desktop did not start on Home");
+  }
+
   const firstRunReadiness: unknown = await window.webContents.executeJavaScript(
     `new Promise((resolve) => {
+      window.location.hash = "#/settings";
       const deadline = Date.now() + 5000;
       const check = async () => {
         const readiness = document.querySelector('[data-testid="local-ai-readiness"]');
@@ -1018,10 +1327,15 @@ async function createMainWindow(preloadPath?: string): Promise<void> {
   if (!window.isDestroyed()) {
     window.show();
     window.focus();
+    startupTracker.recordStage(STARTUP_STAGE_MAIN_WINDOW_READY);
+    startupTracker.complete(true);
+    closeStartupWindow();
   }
 }
 
 async function failStartup(message: string): Promise<void> {
+  closeStartupWindow();
+  startupTracker.complete(false, message);
   process.exitCode = 1;
   if (process.argv.includes("--install-local-models")) {
     console.error("Local model setup failed.");
@@ -1052,11 +1366,14 @@ async function failStartup(message: string): Promise<void> {
 
 function shutdownDesktop(): Promise<void> {
   if (shutdownPromise !== undefined) return shutdownPromise;
+  closeStartupWindow();
   shuttingDown = true;
   startupAbort.abort();
   bootstrap = undefined;
   ipcMain.removeAllListeners(DESKTOP_BOOTSTRAP_CHANNEL);
   ipcMain.removeAllListeners(DESKTOP_ZOOM_CHANNEL);
+  ipcMain.removeAllListeners(DESKTOP_APPEARANCE_READ_CHANNEL);
+  ipcMain.removeHandler(DESKTOP_APPEARANCE_WRITE_CHANNEL);
   ipcMain.removeHandler(DESKTOP_LOCAL_RUNTIME_STATUS_CHANNEL);
   ipcMain.removeHandler(DESKTOP_INSTALL_PYTHON_RUNTIME_CHANNEL);
   ipcMain.removeHandler(DESKTOP_INSTALL_VOICE_MODELS_CHANNEL);
@@ -1135,6 +1452,7 @@ function shutdownDesktop(): Promise<void> {
     }
 
     frontendUrl = undefined;
+    appearanceSettingsPath = undefined;
     if (failures.length > 0) {
       throw new AggregateError(failures, "Desktop shutdown failed");
     }
