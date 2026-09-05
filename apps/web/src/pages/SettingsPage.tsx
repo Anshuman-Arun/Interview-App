@@ -306,10 +306,15 @@ export function SettingsPage({
     (option) => option.availability === "AVAILABLE"
   ) ?? antigravityOptions[0];
   const availableReasoningProvider = providerOptions.find(
-    (option) => option.availability === "AVAILABLE"
+    (option) =>
+      option.availability === "AVAILABLE"
+      && option.providerId !== "mock-model"
   );
   const reasoningProvider =
-    availableReasoningProvider ?? antigravity ?? providerOptions[0];
+    availableReasoningProvider
+    ?? antigravity
+    ?? providerOptions.find((option) => option.providerId !== "mock-model")
+    ?? providerOptions[0];
   const reasoningReady = !providerOptionsLoading
     && providerOptionsError === null
     && availableReasoningProvider !== undefined;
