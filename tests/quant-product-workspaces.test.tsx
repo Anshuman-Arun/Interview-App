@@ -525,6 +525,83 @@ describe("Quant product hook authority", () => {
 });
 
 describe("Quant workspace lifecycle refresh", () => {
+  it("keeps structured actions disabled until activation refresh settles", async () => {
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: () => ({
+        matches: false,
+        media: "",
+        onchange: null,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+        dispatchEvent: () => false
+      })
+    });
+
+    const configuration = InterviewSessionConfigurationSchema.parse({
+      configurationVersion: 1,
+      mode: "QUANT_TRADING",
+      scenario: { id: "BASIC_MARKET_MAKING", version: "1.0.0" },
+      interventionPolicy: "BALANCED"
+    });
+    if (configuration.mode !== "QUANT_TRADING") {
+      throw new Error("Expected Trading configuration");
+    }
+
+    let resolveRefresh!: (value: null) => void;
+    const refreshPending = new Promise<null>((resolve) => {
+      resolveRefresh = resolve;
+    });
+    const refresh = vi.fn(() => refreshPending);
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <AppearanceProvider>
+          <QuantSessionWorkspace
+            configuration={configuration}
+            quantState={{ mode: "QUANT_TRADING", state: activeTradingState(1) }}
+            quantStateLoading={false}
+            quantActionPending={false}
+            sessionStatus="ACTIVE"
+            paused={false}
+            productHidden={false}
+            notice={null}
+            onDismissNotice={() => undefined}
+            onHome={() => undefined}
+            onReview={() => undefined}
+            onRefresh={refresh}
+            onSubmitTrading={async () => activeTradingState(2)}
+            onSubmitResearch={async () => {
+              throw new Error("Research submit is unavailable in Trading");
+            }}
+          />
+        </AppearanceProvider>
+      );
+      await Promise.resolve();
+    });
+
+    const pass = container.querySelector<HTMLButtonElement>(
+      '[data-testid="quant-pass"]'
+    );
+    if (pass === null) throw new Error("Quant pass action did not mount");
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(pass.disabled).toBe(true);
+
+    await act(async () => {
+      resolveRefresh(null);
+      await refreshPending;
+      await Promise.resolve();
+    });
+
+    expect(pass.disabled).toBe(false);
+
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
   it("performs exactly one deferred refresh after a pending action spans pause/resume", async () => {
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
