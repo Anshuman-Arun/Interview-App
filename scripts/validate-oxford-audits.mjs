@@ -255,7 +255,7 @@ function main() {
     ? requested.map((target) => path.resolve(process.cwd(), target))
     : [
         path.join(root, "docs", "oxford-audits", "current-bank-baseline.json"),
-        path.join(root, "docs", "oxford-audits", "same-wave-high-risk-batch.json")
+        path.join(root, "docs", "oxford-audits", "same-wave-full-certification.json")
       ];
 
   for (const target of targets) {
