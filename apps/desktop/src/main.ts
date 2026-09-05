@@ -56,6 +56,12 @@ import {
   DESKTOP_MIN_WIDTH,
   createSecureWebPreferences
 } from "./window-config.js";
+import {
+  isLocalModelActivationLaunch,
+  relaunchArgsForLocalModelActivation,
+  runtimeCapabilityNeedsActivationRetry,
+  shouldUsePreparedRuntimeStartupBudget
+} from "./startup-policy.js";
 
 const OPTIONAL_LOCAL_RUNTIME_COLD_STARTUP_BUDGET_MS = 15_000;
 // Explicitly installed workers are sequential and each has its own bounded
@@ -104,6 +110,7 @@ let activeModelInstallKind: "PYTHON" | "VOICE" | "VISION" | undefined;
 const packagedSingleInstanceSmokeHost = process.argv.includes(
   "--packaged-single-instance-smoke-host"
 );
+const localModelActivationLaunch = isLocalModelActivationLaunch(process.argv);
 
 if (!app.requestSingleInstanceLock()) {
   if (
@@ -221,7 +228,11 @@ async function startDesktop(): Promise<void> {
   // materialized verified persistent views, allow enough time on the next
   // launch for Windows to verify and initialize the real workers instead of
   // cancelling at 15s and making a successful install look like it vanished.
-  const optionalRuntimeStartupBudgetMs = await runtime.hasPreparedRuntimeViews()
+  const hasPreparedRuntimeViews = await runtime.hasPreparedRuntimeViews();
+  const optionalRuntimeStartupBudgetMs = shouldUsePreparedRuntimeStartupBudget({
+    activationRequested: localModelActivationLaunch,
+    hasPreparedRuntimeViews
+  })
     ? OPTIONAL_LOCAL_RUNTIME_PREPARED_STARTUP_BUDGET_MS
     : OPTIONAL_LOCAL_RUNTIME_COLD_STARTUP_BUDGET_MS;
   const optionalRuntimeSignal = AbortSignal.any([
@@ -464,9 +475,18 @@ function installLocalRuntimeHandlers(): void {
       if (activeModelInstall !== undefined || shuttingDown) {
         throw new Error("Desktop restart is unavailable while model setup is active");
       }
+      const activateLocalModels =
+        voiceSetupRestartRequired
+        || visionSetupRestartRequired
+        || localRuntimeActivationRetryRequired();
       setImmediate(() => {
         if (shuttingDown) return;
-        app.relaunch();
+        app.relaunch({
+          args: relaunchArgsForLocalModelActivation(
+            process.argv,
+            activateLocalModels
+          )
+        });
         app.quit();
       });
       return true;
@@ -609,6 +629,13 @@ function localSetupFailureCode(error: unknown): string {
     }
   }
   return "LOCAL_SETUP_FAILED";
+}
+
+function localRuntimeActivationRetryRequired(): boolean {
+  const snapshot = localRuntime?.getCapabilityStatus();
+  return runtimeCapabilityNeedsActivationRetry(snapshot?.speech)
+    || runtimeCapabilityNeedsActivationRetry(snapshot?.tts)
+    || runtimeCapabilityNeedsActivationRetry(snapshot?.vision);
 }
 
 function localRuntimeStatusForRenderer(): DesktopRendererLocalRuntimeStatus {
