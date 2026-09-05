@@ -4,7 +4,7 @@ Agent: E — Euler
 
 ## Status
 
-This batch contributes **19 candidate Oxford Mathematics interview families** through the existing curated authoring path. Every candidate is deliberately quarantined as `expert-review`; none is added to the live Oxford catalog and none is recommendation-ready.
+This batch contributes **17 surviving candidate Oxford Mathematics interview families** through the existing curated authoring path. Every candidate is deliberately quarantined as `expert-review`; none is added to the live Oxford catalog and none is recommendation-ready.
 
 The frozen Oxford adaptive taxonomy/schema from PR #126 is used unchanged. No domain, content-concept, prerequisite, stage-role, difficulty-band, reasoning-skill, provenance, or review-status tags are added by this work.
 
@@ -19,16 +19,27 @@ All independent gates remain pending:
 
 The authored timing estimates are low-confidence planning metadata only. They are never candidate-visible.
 
+## Completion-pass changes
+
+- Hilbert hard rejects `rectangle-area-table` and `difference-closed-sets` were removed, leaving **17 survivors**.
+- `quadrilateral-balance` provenance is now `structural-adaptation / classic-mathematics`.
+- Core roles are explicit by stage ID rather than inferred from difficulty.
+- Family and stage timing is individually authored for every survivor; no generic cross-portfolio timing table remains.
+- `circle-sweep` is now `introductory / strong / stretch`, with `circle-equation` as `technique-check` and `parameter-test` as `core`.
+- `self-averaging-sets` now uses `set-theory / set-maps / set-notation` and places the finite-orbit contraction argument at the strong core.
+- `periodic-queue-model` now fixes nonnegative integer `a,b,q_0`, positive integer `s`, odd starting phase, and arrivals-before-service.
+- Candidate-visible range/independence/nondegeneracy assumptions were tightened across other surviving visual, probability, definition-led, and modelling families.
+
 ## Portfolio coverage
 
-The 19 families include:
+The 17 surviving families include:
 
-- **8 visualization-heavy families**;
-- **5 genuine modelling families**;
-- **6 unfamiliar-definition / mini-theory families**;
+- **7 visualization-heavy families**;
+- **4 modelling-tagged families**;
+- **5 unfamiliar-definition / mini-theory families**;
 - **5 probability-domain families**;
-- **18 representation-switching families**;
-- **18 transfer families**.
+- **17 representation-switching families**;
+- **16 transfer-tagged families**.
 
 The batch is intentionally biased toward gaps identified in the Wave 1 portfolio: Euclidean/coordinate visualization, whiteboard-native structure, modelling, unfamiliar definitions, converse/boundary work, and elementary probability.
 
@@ -37,14 +48,12 @@ The batch is intentionally biased toward gaps identified in the Wave 1 portfolio
 The strongest whiteboard-native families are:
 
 1. `oxford-euler-quadrilateral-balance`;
-2. `oxford-euler-rectangle-area-table`;
 3. `oxford-euler-random-chord-midpoint`;
 4. `oxford-euler-circle-sweep`;
 5. `oxford-euler-triangle-midpoint-cycle`;
 6. `oxford-euler-box-diagonal-bisector`;
 7. `oxford-euler-locally-balanced-labels`;
 8. `oxford-euler-diagonal-blend-transform`;
-9. `oxford-euler-difference-closed-sets`;
 10. `oxford-euler-corner-balanced-tables`;
 11. `oxford-euler-kiosk-grid-model`;
 12. `oxford-euler-random-subset-blocks`;
@@ -57,14 +66,12 @@ These are designed so an interviewer can learn from what the candidate chooses t
 | Family | Mathematical fingerprint | Diagram topology / whiteboard structure |
 | --- | --- | --- |
 | `quadrilateral-balance` | alternating sum of four squared distances -> quadratic cancellation -> affine line / empty / whole-plane classification | convex 4-cycle plus a free point P; diagonal-midpoint structure becomes decisive only in the exceptional case |
-| `rectangle-area-table` | four local areas -> product factorization -> opposite-product invariant -> constructive converse -> grid factorization | rectangle cut by one horizontal and one vertical through P, producing a 2x2 area table |
 | `random-chord-midpoint` | chord midpoint vector -> dot-product reduction -> zero-sum regular-polygon symmetry -> expectation -> with-replacement transfer | regular n-cycle, a chord, its midpoint, and radius from center |
 | `circle-sweep` | diameter-circle equation -> linear parameter elimination -> between-endpoints criterion -> sign-product region -> parameter transfer | positive coordinate axes, moving endpoints A/B, one-parameter family of diameter circles, two endpoint boundary circles |
 | `triangle-midpoint-cycle` | three midpoint maps -> one affine cycle map -> weighted fixed point -> exact contraction -> order transfer | triangle ABC plus moving P and three successive midpoint moves |
 | `box-diagonal-bisector` | equidistance plane -> scaled cube -> edge-validity inequalities -> 4/6-vertex topology transition | rectangular box, opposite body-diagonal vertices, central oblique plane, edge-intersection polygon |
 | `locally-balanced-labels` | local average definition -> equal first differences on paths -> arithmetic progression -> cycle maximum principle -> graph transfer | path/cycle graph with numeric labels; local triples are the primitive visual unit |
 | `diagonal-blend-transform` | custom coordinate transform -> second iterate is scalar -> uniform metric scaling -> invariant-direction equation -> parameter family | coordinate axes, sample points/simple shapes, image vectors and candidate invariant lines |
-| `difference-closed-sets` | unfamiliar closure rule -> least positive gap -> subtraction descent -> filled arithmetic grid -> signed-operation transfer | number line with ordered finite points and a repeatedly reused minimum gap |
 | `self-averaging-sets` | unfamiliar averaging rule -> affine self-map on finite set -> contraction around mean -> orbit contradiction -> definition variant | diagram not essential; optional number line showing mean and contracted images |
 | `corner-balanced-tables` | adjacent 2x2 diagonal-sum rule -> propagated differences -> row+column decomposition -> converse -> degrees of freedom | m-by-n cell table; adjacent 2x2 blocks and first-row/first-column boundary data |
 | `tank-gauge-model` | height observations -> explicit piecewise-prismatic assumption -> equal-volume constraints -> identifiable ratios -> non-identifiability/model revision | side profile with seams at heights 2 and 3 and gauge marks at 0,2,3,4 |
@@ -95,7 +102,6 @@ External nearest-neighbor searches were also run for likely classic mechanisms. 
 - central plane sections of rectangular boxes;
 - local-average path/cycle labels;
 - custom coordinate transform whose square is scalar;
-- finite sets closed under absolute differences;
 - finite sets closed under averages of the other elements;
 - adjacent 2x2 equal diagonal sums;
 - tank-height inverse models;
@@ -140,7 +146,6 @@ A similarity cluster is not an originality failure; it is a conservative curricu
 Highest-priority external retrieval:
 
 - **quadrilateral balance** — contains the classical rectangle squared-distance identity as an exceptional subcase; the full quadrilateral classification needs independent novelty scrutiny;
-- **rectangle area table** — 2x2 rank-one/cross-product structure is standard-adjacent;
 - **locally balanced labels / corner-balanced tables** — local harmonic/additive-separability mechanisms have many classical neighbors;
 - **diagonal blend transform** — changing coefficients in a linear map is not itself originality; compare the full progression and invariant-line mechanism;
 - **random adjacent consecutives** and **stop on change** — elementary probability kernels are likely to have many textbook near-neighbors;
@@ -158,18 +163,17 @@ Priority checks:
 - **random chord midpoint**: ordered-vs-unordered conditioning and with-replacement treatment;
 - **random subset blocks**: circular all-selected correction and n=1/n=2 conventions;
 - **random halving interval**: dyadic endpoint conventions and biased-bit expectation;
-- **difference-closed sets**: use of finiteness in minimum/maximum arguments and the signed-difference extension.
 
 All other families still require full independent correctness review; this list is only triage.
 
 ## Calibration notes for Agent G
 
-All difficulty/timing values are deliberately **low confidence** and all calibration statuses are `unreviewed`.
+Every survivor now has a distinct family timing estimate and five stage-ID-specific timing estimates. All remain deliberately **low confidence**, and all calibration statuses remain `unreviewed`.
 
 Particular calibration traps:
 
 - visually simple openings can have a high proof ceiling (`circle-sweep`, `box-diagonal-bisector`);
-- unfamiliar definitions have low prerequisite burden but can become abstract quickly (`self-averaging-sets`, `difference-closed-sets`);
+- unfamiliar definitions have low prerequisite burden but can become abstract quickly (`self-averaging-sets`, `locally-balanced-labels`);
 - modelling stages may consume time in assumption negotiation rather than algebra (`tank-gauge-model`, `periodic-queue-model`, `kiosk-grid-model`);
 - elementary probability openings can be fast while the transfer/boundary discussion is the real discriminator.
 
@@ -193,4 +197,4 @@ Adaptive metadata, stage difficulty/timing, skill evidence, provenance, review s
 
 **Agent I:** independently verify all mathematics, degeneracies, endpoint/sample-space conventions, parameter ranges, converses, and extensions. Do not promote `mathematicalCorrectness` based on Agent E's verification notes alone.
 
-Until all required gates pass, these 19 families must remain in the expert-review quarantine and outside recommendation eligibility.
+Until all required gates pass, these 17 surviving families must remain in the expert-review quarantine and outside recommendation eligibility.
