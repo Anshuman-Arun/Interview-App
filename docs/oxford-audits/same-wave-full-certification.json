@@ -18,7 +18,7 @@
       {
         "agent": "D — Dirichlet",
         "number": 133,
-        "head": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
+        "head": "44b13bab28e315d3c76a177904bec47c884ef470",
         "surviving": 11,
         "prunedSinceInitial": 11
       },
@@ -174,7 +174,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -333,7 +333,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -495,7 +495,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -657,7 +657,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -817,7 +817,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -972,7 +972,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -1134,7 +1134,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -1292,7 +1292,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -1449,7 +1449,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -1605,7 +1605,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -1761,7 +1761,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -1919,7 +1919,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -2080,7 +2080,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -2237,7 +2237,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -2399,7 +2399,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -2555,7 +2555,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -2712,7 +2712,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -2810,12 +2810,12 @@
     },
     {
       "familyId": "oxford-d-gcd-descent-network",
-      "sourceRef": "PR #133 final survivor @ 1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
+      "sourceRef": "PR #133 final survivor @ 44b13bab28e315d3c76a177904bec47c884ef470",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "D — Dirichlet",
         "number": 133,
-        "head": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c"
+        "head": "44b13bab28e315d3c76a177904bec47c884ef470"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -2869,7 +2869,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -2962,12 +2962,12 @@
     },
     {
       "familyId": "oxford-d-thirds-closed-integers",
-      "sourceRef": "PR #133 final survivor @ 1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
+      "sourceRef": "PR #133 final survivor @ 44b13bab28e315d3c76a177904bec47c884ef470",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "D — Dirichlet",
         "number": 133,
-        "head": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c"
+        "head": "44b13bab28e315d3c76a177904bec47c884ef470"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -3021,7 +3021,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -3120,12 +3120,12 @@
     },
     {
       "familyId": "oxford-d-balancing-transfers",
-      "sourceRef": "PR #133 final survivor @ 1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
+      "sourceRef": "PR #133 final survivor @ 44b13bab28e315d3c76a177904bec47c884ef470",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "D — Dirichlet",
         "number": 133,
-        "head": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c"
+        "head": "44b13bab28e315d3c76a177904bec47c884ef470"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -3179,7 +3179,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -3272,12 +3272,12 @@
     },
     {
       "familyId": "oxford-d-cube-twist-equivalence",
-      "sourceRef": "PR #133 final survivor @ 1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
+      "sourceRef": "PR #133 final survivor @ 44b13bab28e315d3c76a177904bec47c884ef470",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "D — Dirichlet",
         "number": 133,
-        "head": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c"
+        "head": "44b13bab28e315d3c76a177904bec47c884ef470"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -3331,7 +3331,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -3424,12 +3424,12 @@
     },
     {
       "familyId": "oxford-d-sliding-window-parity",
-      "sourceRef": "PR #133 final survivor @ 1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
+      "sourceRef": "PR #133 final survivor @ 44b13bab28e315d3c76a177904bec47c884ef470",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "D — Dirichlet",
         "number": 133,
-        "head": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c"
+        "head": "44b13bab28e315d3c76a177904bec47c884ef470"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -3483,7 +3483,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -3581,12 +3581,12 @@
     },
     {
       "familyId": "oxford-d-weighted-cycle-readings",
-      "sourceRef": "PR #133 final survivor @ 1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
+      "sourceRef": "PR #133 final survivor @ 44b13bab28e315d3c76a177904bec47c884ef470",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "D — Dirichlet",
         "number": 133,
-        "head": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c"
+        "head": "44b13bab28e315d3c76a177904bec47c884ef470"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -3640,7 +3640,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -3733,12 +3733,12 @@
     },
     {
       "familyId": "oxford-d-midpoint-closed-residues",
-      "sourceRef": "PR #133 final survivor @ 1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
+      "sourceRef": "PR #133 final survivor @ 44b13bab28e315d3c76a177904bec47c884ef470",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "D — Dirichlet",
         "number": 133,
-        "head": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c"
+        "head": "44b13bab28e315d3c76a177904bec47c884ef470"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -3792,7 +3792,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -3890,12 +3890,12 @@
     },
     {
       "familyId": "oxford-d-odd-symmetric-difference",
-      "sourceRef": "PR #133 final survivor @ 1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
+      "sourceRef": "PR #133 final survivor @ 44b13bab28e315d3c76a177904bec47c884ef470",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "D — Dirichlet",
         "number": 133,
-        "head": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c"
+        "head": "44b13bab28e315d3c76a177904bec47c884ef470"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -3949,7 +3949,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -4042,12 +4042,12 @@
     },
     {
       "familyId": "oxford-d-three-reversal-permutations",
-      "sourceRef": "PR #133 final survivor @ 1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
+      "sourceRef": "PR #133 final survivor @ 44b13bab28e315d3c76a177904bec47c884ef470",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "D — Dirichlet",
         "number": 133,
-        "head": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c"
+        "head": "44b13bab28e315d3c76a177904bec47c884ef470"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -4101,7 +4101,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -4194,12 +4194,12 @@
     },
     {
       "familyId": "oxford-d-divisor-step-geometry",
-      "sourceRef": "PR #133 final survivor @ 1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
+      "sourceRef": "PR #133 final survivor @ 44b13bab28e315d3c76a177904bec47c884ef470",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "D — Dirichlet",
         "number": 133,
-        "head": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c"
+        "head": "44b13bab28e315d3c76a177904bec47c884ef470"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -4253,7 +4253,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -4346,12 +4346,12 @@
     },
     {
       "familyId": "oxford-d-triple-flip-circle",
-      "sourceRef": "PR #133 final survivor @ 1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
+      "sourceRef": "PR #133 final survivor @ 44b13bab28e315d3c76a177904bec47c884ef470",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "D — Dirichlet",
         "number": 133,
-        "head": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c"
+        "head": "44b13bab28e315d3c76a177904bec47c884ef470"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -4405,7 +4405,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -4568,7 +4568,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -4727,7 +4727,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -4890,7 +4890,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -5050,7 +5050,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -5209,7 +5209,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -5373,7 +5373,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -5533,7 +5533,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -5693,7 +5693,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -5857,7 +5857,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -6017,7 +6017,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -6175,7 +6175,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -6333,7 +6333,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -6491,7 +6491,7 @@
         },
         "D": {
           "completed": true,
-          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=1d9222ed89895f643b4f25429b0a5dbe1dac0a4c, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=44b13bab28e315d3c76a177904bec47c884ef470, E=8846c612825d2b8ae53a81f6f8861fd851f452c6 found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
