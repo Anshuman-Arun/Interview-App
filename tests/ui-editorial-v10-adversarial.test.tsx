@@ -511,6 +511,7 @@ describe("editorial v10 adversarial UI states", () => {
     expect(app).toContain('className="board-appbar__clear-action"');
     expect(app).toContain('aria-haspopup="dialog"');
     expect(app).toContain('event.pointerType === "mouse" && event.button !== 0');
+    expect(app).toContain("retrySubmission(itemId).catch(() => undefined)");
     expect(app).toMatch(
       /route\.page === "home"[\s\S]{0,120}route\.page === "new"[\s\S]{0,120}route\.page === "settings"[\s\S]{0,180}fetchAvailableSessions/u
     );
