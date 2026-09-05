@@ -553,10 +553,10 @@ async function installLocalModelAssets(
   } catch (error) {
     if (startupAbort.signal.aborted) {
       setSetupState(kind, "IDLE", false);
-      throw new Error("LOCAL_SETUP_CANCELLED");
+      throw new Error("LOCAL_SETUP_CANCELLED", { cause: error });
     }
     setSetupState(kind, "FAILED", false);
-    throw new Error(localSetupFailureCode(error));
+    throw new Error(localSetupFailureCode(error), { cause: error });
   }
 }
 
