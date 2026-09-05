@@ -10,7 +10,7 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
     id: "oxford-cantor-absolute-quadratic-crossings",
     title: "How Many Times Does a Folded Quadratic Meet a Line?",
     category: "algebra and graph sketching",
-    topics: ["absolute-value graphs", "quadratics", "root counts", "parameter levels"],
+    topics: ["absolute value","quadratics","graphs","equations"],
     prompt:
       "Sketch y=|(x-1)(x+2)| carefully. For a real number c, classify the number of real solutions of |(x-1)(x+2)|=c. Explain every transition value rather than relying only on the picture.",
     givenInformation: [],
@@ -140,7 +140,7 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
     id: "oxford-cantor-radical-asymptote",
     title: "A Radical Curve with Unequal Ends",
     category: "functions and elementary analysis",
-    topics: ["radical graphs", "asymptotics", "monotonicity", "parameter regimes"],
+    topics: ["functions","radicals","graphs","calculus"],
     prompt:
       "Let -2<a<2 and define R_a(x)=sqrt(x²+a x+1)-x. Sketch R_a as accurately as you can without graphing software: determine its domain, monotonicity, end behavior, and range. Then investigate what changes when a reaches or passes ±2.",
     givenInformation: [],
@@ -272,7 +272,7 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
     id: "oxford-cantor-shifted-cubic-intersections",
     title: "Intersecting a Cubic with Its Own Translate",
     category: "functions and algebra",
-    topics: ["translated graphs", "cubic differences", "intersection counts", "critical spacing"],
+    topics: ["functions","cubics","graphs","parameters"],
     prompt:
       "Let f(x)=x³-x. For h>0, compare the graphs y=f(x) and y=f(x-h). Determine exactly how many intersection points they have as h varies, identify the transition value, and explain what the small-h intersections approach.",
     givenInformation: [],
@@ -405,7 +405,7 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
     id: "oxford-cantor-moving-integral-window",
     title: "Area in a Window that Moves and Stretches",
     category: "calculus and functions",
-    topics: ["variable-limit integrals", "symmetry", "optimization", "asymptotics"],
+    topics: ["calculus","integrals","graphs","parameters"],
     prompt:
       "Define W(x)=∫_x^{2x} 1/(1+t²) dt for real x. Sketch W without evaluating an antiderivative: determine its symmetry, sign, turning points, and end behavior. Then replace 2 by a parameter k>1.",
     givenInformation: [
@@ -539,7 +539,7 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
     id: "oxford-cantor-reciprocal-implicit-curve",
     title: "A Circle Hidden in an Implicit Curve",
     category: "graph sketching and coordinate geometry",
-    topics: ["implicit curves", "reciprocal substitution", "asymptotes", "optimization"],
+    topics: ["implicit curves","graphs","coordinate geometry","algebra"],
     prompt:
       "Sketch the real curve x²y²=x²+y² as completely as possible. Account for every component, then determine the points on the nonzero branches closest to the origin. Your sketch should include the curve's symmetries and asymptotes. Find a representation that makes the geometry simpler.",
     givenInformation: [],
