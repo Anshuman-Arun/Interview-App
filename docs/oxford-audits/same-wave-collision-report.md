@@ -2,61 +2,110 @@
 
 **Reviewer: Agent H — Hilbert**  
 **Baseline main:** `454a2fe993c8fd70676d04e5d262a1780161f0d6`  
-**Snapshot date:** 2026-09-04 (America/Los_Angeles)
+**Latest audit date:** 2026-09-05 (America/Los_Angeles)
 
-## Author PR availability
+## Author PRs audited
 
-At the initial and pre-record snapshot checks, no open or recent pull request with an Agent C, Agent D, or Agent E marker was available. Pool D was therefore completed as an empty same-wave set for the baseline. This is not evidence that future C/D/E proposals are collision-free; every proposal must be cross-compared when it becomes available.
+Hilbert started before author PRs were available, then re-swept before final handoff and audited a risk-prioritized batch once all three appeared:
 
-No same-wave `similarityClusterId` is proposed in this snapshot.
+- **Agent C — Cantor, PR #132:** 4 of 20 families audited.
+- **Agent D — Dirichlet, PR #133:** 4 of 22 families audited.
+- **Agent E — Euler, PR #134:** 4 of 19 families audited.
+
+The structured records are in `same-wave-high-risk-batch.json`. The batch deliberately prioritizes author-flagged originality risks, known/classic-adjacent kernels, and cross-agent collision candidates rather than easy random samples.
+
+### Same-wave decision counts
+
+Originality across 12 audited proposals:
+
+- `PASS`: 0
+- `PASS_WITH_NOTES`: 4
+- `REVISE`: 2
+- `REJECT_TOO_CLOSE`: 6
+
+Fidelity across the same 12:
+
+- `PASS`: 9
+- `PASS_WITH_NOTES`: 3
+- `REVISE`: 0
+- `REJECT_NOT_OXFORD_LIKE`: 0
+
+This split is intentional: several proposals are excellent Oxford interview structures but still fail originality because the mathematical kernel is classical.
+
+## Major same-wave findings
+
+### Agent C — Cantor (#132)
+
+- `oxford-cantor-moving-v-envelope`: **REVISE originality / PASS fidelity**. The lower envelope is a scaled Huber/Moreau envelope of absolute value. The moving-V representation is useful, but `independent-original` provenance overstates novelty.
+- `oxford-cantor-tangent-intersection-locus`: **REJECT_TOO_CLOSE / PASS**. Same classical parabola tangent-parameter locus kernel and elimination route.
+- `oxford-cantor-exponential-rotating-line`: **PASS_WITH_NOTES / PASS_WITH_NOTES**. Exact classic `e^x=ax` threshold problem, but Cantor already truthfully labels it `classic-problem`.
+- `oxford-cantor-line-envelope`: **REJECT_TOO_CLOSE / PASS**. Affine/scaled form of the standard tangent-line envelope of a parabola.
+
+Cantor's existing `parameter-envelope` cluster is appropriate for moving-V and line-envelope repetition control, though the latter is rejected as a new original.
+
+### Agent D — Dirichlet (#133)
+
+- `oxford-d-gcd-descent-network`: **PASS_WITH_NOTES / PASS**. Subtractive Euclid is classical, but the graph-wide terminal-gcd process appears structurally distinct in the searched material.
+- `oxford-d-switching-cuts`: **REJECT_TOO_CLOSE / PASS**. The switching story is a wrapper around the classical theorem that cut space is the cycle-space orthogonal complement over GF(2).
+- `oxford-d-thirds-closed-integers`: **PASS_WITH_NOTES / PASS**. General affine-closure literature exists, but no exact finite conditional-trisection classification was found.
+- `oxford-d-laminar-family`: **REJECT_TOO_CLOSE / PASS_WITH_NOTES**. Exact standard `2n-1` laminar-family theorem.
+
+Dirichlet's existing `closure-classification-residue-affine` cluster should remain.
+
+### Agent E — Euler (#134)
+
+- `oxford-euler-quadrilateral-balance`: **REVISE / PASS**. The arbitrary-quadrilateral classification is a meaningful extension, but the classic rectangle/British-flag squared-distance identity is structurally central; `independent-original` is too strong.
+- `oxford-euler-rectangle-area-table`: **REJECT_TOO_CLOSE / PASS_WITH_NOTES**. Same 2×2 rectangle-area product puzzle and discovery mechanism; converse/grid extensions do not sanitize the core.
+- `oxford-euler-diagonal-blend-transform`: **PASS_WITH_NOTES / PASS**. Standard linear-transformation ideas, but no exact same rule/progression was found.
+- `oxford-euler-difference-closed-sets`: **REJECT_TOO_CLOSE / PASS**. Same finite absolute-difference closure classification and repeated-subtraction mechanism as a known result.
+
+Euler's `euler-distance-loci` and `euler-affine-dynamics` clusters are useful and should remain.
+
+## Cross-agent collision finding
+
+A broader repetition family exists around **finite closure rules that force arithmetic structure**:
+
+- Dirichlet `oxford-d-thirds-closed-integers`
+- Dirichlet `oxford-d-midpoint-closed-residues` (author-declared related family)
+- Euler `oxford-euler-difference-closed-sets`
+
+The Euler family is currently rejected for an external collision. If Euler replaces it with a genuinely different surviving closure family, Hilbert recommends a shared broader cluster such as `finite-closure-arithmetic-structure` so it is not scheduled adjacent to the Dirichlet closure-classification families.
+
+This is a repetition-control recommendation, **not** a new taxonomy tag.
 
 ## Current-bank repetition findings
 
-These are review observations, not new taxonomy tags or production metadata.
+- `oxford-six-people` and `oxford-even-odd-degrees` both use a people/party-to-graph representation. Their targets and decisive mechanisms differ, so this is sequencing risk rather than an originality collision.
+- `oxford-divisibility-chain` and `oxford-prefix-sums-mod-n` both use pigeonhole reasoning in elementary number theory. Odd-part chains and prefix residues remain materially distinct.
+- `oxford-nested-radical-sequence` and `oxford-continuous-fixed-point` both involve fixed-point language, but one is an iteration-convergence proof and the other an IVT existence proof.
 
-- `oxford-six-people` and `oxford-even-odd-degrees` both use a people/party-to-graph representation. Their targets and decisive mechanisms are different, so this is a sequencing/repetition concern rather than an originality collision.
-- `oxford-divisibility-chain` and `oxford-prefix-sums-mod-n` both use pigeonhole reasoning in elementary number theory. Their canonical representations (odd-part chains versus prefix residues) and solution dependency graphs differ materially.
-- `oxford-nested-radical-sequence` and `oxford-continuous-fixed-point` both involve fixed-point language, but one proves convergence of an iteration while the other uses an IVT sign-change existence argument.
-- The current bank contains multiple famous classics. This makes truthful provenance and between-interview repetition control especially important; broad technique overlap alone is not a reason to invent a similarity cluster.
+## Current-bank classic findings
 
-## Classic findings that block an "original" label
+The 14-fixture baseline continues to classify all current fixtures as requiring provenance/originality revision before approval because they are still `provisional-legacy`. Named classics include Ramsey's six-person problem, Hilbert Hotel, the parity hats puzzle, mutilated chessboard, Euclid's proof, handshaking, centroid concurrency, and Catalan paths.
 
-The baseline retained exact or near-exact external/classic neighbours for all 14 audited fixtures. Particularly unmistakable named classics include:
+Truthful classic provenance remains acceptable. A classic does not become original merely because its wording or staging is new.
 
-- Ramsey's six-person friends/strangers result;
-- Hilbert's Hotel;
-- the canonical line-of-hats parity puzzle;
-- the mutilated chessboard domino invariant;
-- Euclid's infinitude-of-primes proof;
-- the handshaking-lemma odd-degree corollary;
-- the centroid/median theorem;
-- the Catalan diagonal lattice-path family.
+## Handoff to recommendation readiness
 
-Other bank entries are likewise standard textbook theorem/exercise families. The audit therefore records originality `REVISE` for all current provisional-legacy entries rather than falsely approving them as independent originals.
+Same-wave families whose **Hilbert gates can progress to G/I completion** from this audited batch:
 
-## Fidelity handoff
+- `oxford-cantor-exponential-rotating-line` — truthfully classic, H pass with notes.
+- `oxford-d-gcd-descent-network` — H pass with notes / fidelity pass.
+- `oxford-d-thirds-closed-integers` — H pass with notes / fidelity pass.
+- `oxford-euler-diagonal-blend-transform` — H pass with notes / fidelity pass.
 
-The following seven fixtures are **fidelity-suitable with notes**, but none is recommendation-ready yet because their adaptive provenance/review state remains provisional:
+The following require Hilbert-owned provenance revision and re-review before readiness:
 
-- `oxford-six-people`
-- `oxford-hilbert-hotel`
-- `oxford-domino-chessboard`
-- `oxford-nested-radical-sequence`
-- `oxford-divisibility-chain`
-- `oxford-continuous-fixed-point`
-- `oxford-prefix-sums-mod-n`
+- `oxford-cantor-moving-v-envelope`
+- `oxford-euler-quadrilateral-balance`
 
-If the project intentionally retains them as classics, the next content step is truthful authored metadata plus independent Hilbert provenance/originality approval; after that, Agent G difficulty/timing calibration and Agent I mathematical-correctness approval can complete the remaining recommendation-readiness gates.
+The following are originality hard rejects as authored, even though their Oxford fidelity is good:
 
-Six fixtures need fidelity revision before that path: `oxford-divisors-square-parity`, `oxford-euclid-primes`, `oxford-monotone-cauchy`, `oxford-even-odd-degrees`, `oxford-triangle-medians`, and expert-review `oxford-catalan-paths`.
+- `oxford-cantor-tangent-intersection-locus`
+- `oxford-cantor-line-envelope`
+- `oxford-d-switching-cuts`
+- `oxford-d-laminar-family`
+- `oxford-euler-rectangle-area-table`
+- `oxford-euler-difference-closed-sets`
 
-`oxford-prisoner-hats` is `REJECT_NOT_OXFORD_LIKE` in its current form: it is a famous parity trick with strong prior-exposure sensitivity and too little conversational ceiling for the canonical adaptive Oxford bank. It can remain a manual/training classic.
-
-## Review fields
-
-This PR adds independent audit records only; it does not self-author and then self-approve production problem metadata.
-
-- **Updated in audit records:** Hilbert originality decision, Hilbert fidelity decision, five-pool retrieval completion, nearest-match rationale, classic check, and handoff disposition.
-- **Still pending in production metadata:** authored provenance migration, taxonomy approval where applicable, mathematical correctness (Agent I), difficulty/timing calibration (Agent G), and the final `isOxfordRecommendationReady` result.
-
-Any C/D/E family that appears before this PR is finalized must be added to this report and to structured audit records before Hilbert's handoff is considered complete.
+Agent G still owns taxonomy/difficulty/timing calibration and Agent I still owns correctness. Hilbert's decisions do not substitute for either gate.
