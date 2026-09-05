@@ -560,6 +560,15 @@ describe("editorial v10 adversarial UI states", () => {
     expect(editorialCss).toMatch(
       /\.new-interview__duration input:focus-visible[\s\S]{0,160}outline:\s*2px solid var\(--accent\)/u
     );
+    expect(editorialCss).toMatch(
+      /\.problem-block\s*\{[^}]*max-height:\s*min\(34vh, 300px\);[^}]*overflow-y:\s*auto;/u
+    );
+    expect(editorialCss).toContain(
+      ".input-dock .voice-strip__popover"
+    );
+    expect(editorialCss).toContain(
+      "width: min(340px, 24vw);"
+    );
     expect(transcriptCss).toContain(
       "@media(max-width:960px){.transcript-feed__focus{display:none}}"
     );
