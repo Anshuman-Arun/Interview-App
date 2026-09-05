@@ -1236,3 +1236,14 @@ summary:focus-visible {
     padding-left: 18px;
   }
 }
+
+
+/* Installed feedback: the compact composer shares the mic control's left edge. */
+.reasoning-pane .input-dock .student-input-area {
+  width: 100%;
+  margin: 0;
+}
+.interview-app-container .appearance-dock__trigger {
+  align-items: center;
+  justify-content: center;
+}
