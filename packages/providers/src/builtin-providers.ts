@@ -4,6 +4,7 @@ import { InterviewerProposalSchema } from "../../domain/src/index.js";
 import {
   ANTIGRAVITY_CLI_ADAPTER_VERSION,
   ANTIGRAVITY_CLI_MODEL_ID,
+  ANTIGRAVITY_CLI_MODEL_IDS,
   ANTIGRAVITY_CLI_PROVIDER_ID,
   createAntigravityCliReasoningProvider,
   type AntigravityBillingVerificationFactory
@@ -454,7 +455,7 @@ const antigravityFactory: ProviderAdapterFactoryDefinition = {
     const runtime = snapshotAntigravityFactoryRuntime(input.runtime);
     return createAntigravityCliReasoningProvider(
       runtime.executor,
-      input.resolved.model.adapterModelId ?? input.resolved.model.id,
+      input.resolved.model.id,
       runtime.billingVerificationFactory
     );
   }
@@ -524,20 +525,28 @@ const geminiFactory: ProviderAdapterFactoryDefinition = {
   }
 };
 
+function antigravityModelDisplayName(modelId: string): string {
+  const match = /^gemini-(3\.[78])-flash-(high|medium|low)$/u.exec(modelId);
+  if (match === null) return modelId;
+  const version = match[1];
+  const effort = match[2];
+  return `Gemini ${version} Flash (${effort[0]?.toUpperCase() ?? ""}${effort.slice(1)})`;
+}
+
 const ANTIGRAVITY_CLI_PROVIDER_INPUT: ProviderDefinitionInput = {
   id: ANTIGRAVITY_CLI_PROVIDER_ID,
   displayName: "Antigravity CLI",
-  kind: "OTHER",
-  definitionVersion: "1",
-  capabilityVersion: "1",
+  kind: "LOCAL_PROCESS",
+  definitionVersion: "2",
+  capabilityVersion: "2",
   adapterVersion: ANTIGRAVITY_CLI_ADAPTER_VERSION,
   credentialRequirement: "NONE",
   credentialPurposes: [],
-  models: [{
-    id: ANTIGRAVITY_CLI_MODEL_ID,
-    displayName: "Gemini 3.7 Flash (Medium) via Antigravity CLI",
-    adapterModelId: ANTIGRAVITY_CLI_MODEL_ID,
-    metadataVersion: "1",
+  models: ANTIGRAVITY_CLI_MODEL_IDS.map((modelId) => ({
+    id: modelId,
+    displayName: antigravityModelDisplayName(modelId),
+    adapterModelId: modelId,
+    metadataVersion: "2",
     capabilities: {
       textGeneration: "SUPPORTED",
       imageInput: "UNSUPPORTED",
@@ -556,10 +565,10 @@ const ANTIGRAVITY_CLI_PROVIDER_INPUT: ProviderDefinitionInput = {
       dataUse: "REMOTE_MAY_BE_USED_FOR_IMPROVEMENT",
       structuredOutput: "FINAL_ONLY",
       cancellation: "INTERRUPT_LOCAL_PROCESS",
-      contextWindowTokens: "UNKNOWN",
-      outputLimitTokens: "UNKNOWN"
+      contextWindowTokens: 1_048_576,
+      outputLimitTokens: 65_536
     }
-  }],
+  })),
   adapterFactory: antigravityFactory
 };
 
