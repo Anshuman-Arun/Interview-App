@@ -7,6 +7,7 @@ import {
   type OxfordDifficultyBand,
   type OxfordMathDomain,
   type OxfordPrerequisiteConcept,
+  type OxfordProvenanceMetadata,
   type OxfordReasoningSkill,
   type OxfordSkillEvidence,
   type OxfordSkillEvidenceWeight,
@@ -62,6 +63,7 @@ export interface CantorFamilyAuthoring {
   readonly novelty: "low" | "moderate" | "high";
   readonly abstraction: "low" | "moderate" | "high";
   readonly similarityClusterId?: string;
+  readonly provenance?: OxfordProvenanceMetadata;
   readonly originalityRisk: CantorRisk;
   readonly correctnessRisk: CantorRisk;
   readonly calibrationRisk: CantorRisk;
@@ -242,7 +244,7 @@ export function buildCantorEntry(family: CantorFamilyAuthoring): CuratedProblemE
           introducesNewDefinition: false
         }
       ],
-      provenance: {
+      provenance: family.provenance ?? {
         originType: "original",
         sourceCategory: "independent-original"
       },
