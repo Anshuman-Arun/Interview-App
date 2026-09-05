@@ -516,7 +516,7 @@ describe("editorial v10 adversarial UI states", () => {
       /storedSession\.status === "ACTIVE"[\s\S]{0,180}storedSession\.sessionId === session\.sessionId[\s\S]{0,180}session\.sessionStatus === "COMPLETED"[\s\S]{0,100}session\.sessionStatus === "ARCHIVED"/u
     );
     expect(app).toMatch(
-      /setCompactPane\("interview"\);[\s\S]{0,100}setPaneFocus\("split"\);[\s\S]{0,100}\}, \[session\.sessionId\]\);/u
+      /setCompactPane\("interview"\);[\s\S]{0,100}setPaneFocus\("split"\);[\s\S]{0,100}setSplitPercent\(38\);[\s\S]{0,100}\}, \[session\.sessionId\]\);/u
     );
     expect(app).toMatch(
       /app-header__board-state"[\s\S]{0,100}data-sync=\{session\.whiteboardSync\.status\}/u
