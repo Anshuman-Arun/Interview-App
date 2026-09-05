@@ -138,7 +138,7 @@ const EULER_AUTHORING_PROFILES: Readonly<Record<string, EulerFamilyAuthoringProf
     })
   }),
   "oxford-euler-circle-sweep": Object.freeze({
-    familyTiming: timing([1, 3], [18, 30], [14, 25], 27, [5, 9]),
+    familyTiming: timing([1, 3], [16, 26], [12, 22], 25, [5, 9]),
     stages: Object.freeze({
       "opening": Object.freeze({ role: "warm-up", timing: timing([0.5, 1.5], [2, 4], [1.5, 3], 4) }),
       "circle-equation": Object.freeze({ role: "technique-check", timing: timing([0.5, 1.5], [3, 5], [2, 4], 5) }),
@@ -158,23 +158,13 @@ const EULER_AUTHORING_PROFILES: Readonly<Record<string, EulerFamilyAuthoringProf
     })
   }),
   "oxford-euler-box-diagonal-bisector": Object.freeze({
-    familyTiming: timing([1, 3], [20, 32], [16, 27], 29, [6, 10]),
+    familyTiming: timing([1, 3], [17, 28], [13, 23], 25, [5, 9]),
     stages: Object.freeze({
       "opening": Object.freeze({ role: "warm-up", timing: timing([0.5, 1.5], [2, 4], [1.5, 3], 4) }),
       "plane": Object.freeze({ role: "technique-check", timing: timing([1, 2], [4, 6], [3, 5], 6) }),
       "edge-test": Object.freeze({ role: "core", timing: timing([1.5, 3.5], [6, 10], [5, 8], 10) }),
       "classification": Object.freeze({ role: "deep-dive", timing: timing([1.5, 3], [6, 9], [4.5, 8], 9) }),
       "transfer": Object.freeze({ role: "transfer", timing: timing([1, 2.5], [4, 8], [3, 6], 8, [5, 8]) }),
-    })
-  }),
-  "oxford-euler-locally-balanced-labels": Object.freeze({
-    familyTiming: timing([0.5, 2], [14, 24], [10, 19], 21, [5, 8]),
-    stages: Object.freeze({
-      "opening": Object.freeze({ role: "warm-up", timing: timing([0.5, 1], [2, 3], [1, 2], 3) }),
-      "structure": Object.freeze({ role: "technique-check", timing: timing([0.5, 1.5], [3, 5], [2, 4], 5) }),
-      "path-proof": Object.freeze({ role: "core", timing: timing([1, 2.5], [4, 7], [3, 6], 7) }),
-      "cycle-proof": Object.freeze({ role: "deep-dive", timing: timing([1, 2.5], [4, 7], [3, 6], 7) }),
-      "transfer": Object.freeze({ role: "transfer", timing: timing([1, 2], [4, 7], [3, 6], 7, [4, 6]) }),
     })
   }),
   "oxford-euler-diagonal-blend-transform": Object.freeze({
@@ -218,7 +208,7 @@ const EULER_AUTHORING_PROFILES: Readonly<Record<string, EulerFamilyAuthoringProf
     })
   }),
   "oxford-euler-periodic-queue-model": Object.freeze({
-    familyTiming: timing([1, 3], [18, 30], [14, 25], 27, [6, 10]),
+    familyTiming: timing([1, 3], [15, 24], [11, 20], 23, [5, 8]),
     stages: Object.freeze({
       "opening": Object.freeze({ role: "warm-up", timing: timing([0.5, 1.5], [3, 5], [2, 4], 5) }),
       "structure": Object.freeze({ role: "technique-check", timing: timing([1, 2], [4, 6], [3, 5], 6) }),
@@ -228,7 +218,7 @@ const EULER_AUTHORING_PROFILES: Readonly<Record<string, EulerFamilyAuthoringProf
     })
   }),
   "oxford-euler-kiosk-grid-model": Object.freeze({
-    familyTiming: timing([1, 3], [18, 29], [14, 24], 26, [6, 10]),
+    familyTiming: timing([1, 3], [15, 24], [11, 20], 23, [5, 8]),
     stages: Object.freeze({
       "quantities": Object.freeze({ role: "warm-up", timing: timing([0.5, 1.5], [3, 5], [2, 4], 5) }),
       "walking": Object.freeze({ role: "technique-check", timing: timing([1, 2.5], [4, 7], [3, 6], 7) }),
@@ -245,36 +235,6 @@ const EULER_AUTHORING_PROFILES: Readonly<Record<string, EulerFamilyAuthoringProf
       "prediction": Object.freeze({ role: "deep-dive", timing: timing([0.5, 1.5], [3, 5], [2, 4], 5) }),
       "sanity": Object.freeze({ role: "deep-dive", timing: timing([0.5, 1.5], [3, 5], [2, 4], 5) }),
       "transfer": Object.freeze({ role: "transfer", timing: timing([0.5, 1.5], [3, 6], [2, 5], 6, [3, 5]) }),
-    })
-  }),
-  "oxford-euler-random-adjacent-consecutives": Object.freeze({
-    familyTiming: timing([0.5, 2], [13, 22], [10, 18], 20, [4, 7]),
-    stages: Object.freeze({
-      "opening": Object.freeze({ role: "warm-up", timing: timing([0.5, 1], [2, 3], [1, 2], 3) }),
-      "structure": Object.freeze({ role: "technique-check", timing: timing([0.5, 1.5], [3, 5], [2, 4], 5) }),
-      "expectation": Object.freeze({ role: "core", timing: timing([0.75, 2], [4, 6], [3, 5], 6) }),
-      "circle": Object.freeze({ role: "deep-dive", timing: timing([1, 2], [4, 7], [3, 6], 7) }),
-      "transfer": Object.freeze({ role: "transfer", timing: timing([0.75, 1.5], [3, 6], [2, 5], 6, [3, 5]) }),
-    })
-  }),
-  "oxford-euler-stop-on-change": Object.freeze({
-    familyTiming: timing([0.5, 2], [14, 23], [10, 19], 21, [4, 7]),
-    stages: Object.freeze({
-      "opening": Object.freeze({ role: "warm-up", timing: timing([0.5, 1], [2, 3], [1, 2], 3) }),
-      "distribution": Object.freeze({ role: "technique-check", timing: timing([0.75, 1.5], [3, 5], [2, 4], 5) }),
-      "expectation": Object.freeze({ role: "core", timing: timing([1, 2], [4, 7], [3, 6], 7) }),
-      "bias": Object.freeze({ role: "deep-dive", timing: timing([1, 2.5], [5, 8], [4, 7], 8) }),
-      "transfer": Object.freeze({ role: "transfer", timing: timing([0.75, 1.5], [3, 6], [2, 5], 6, [3, 5]) }),
-    })
-  }),
-  "oxford-euler-random-subset-blocks": Object.freeze({
-    familyTiming: timing([0.5, 2], [14, 24], [11, 20], 21, [4, 7]),
-    stages: Object.freeze({
-      "opening": Object.freeze({ role: "warm-up", timing: timing([0.5, 1], [2, 3], [1, 2], 3) }),
-      "line-indicators": Object.freeze({ role: "technique-check", timing: timing([0.75, 1.5], [3, 5], [2, 4], 5) }),
-      "line-mean": Object.freeze({ role: "core", timing: timing([0.75, 2], [4, 6], [3, 5], 6) }),
-      "circle": Object.freeze({ role: "deep-dive", timing: timing([1, 2.5], [5, 8], [4, 7], 8) }),
-      "transfer": Object.freeze({ role: "transfer", timing: timing([0.75, 1.5], [3, 6], [2, 5], 6, [3, 5]) }),
     })
   }),
   "oxford-euler-random-halving-interval": Object.freeze({
@@ -306,11 +266,9 @@ const EULER_SIMILARITY_CLUSTERS: Readonly<Record<string, string>> = Object.freez
   "oxford-euler-circle-sweep": "euler-distance-loci",
   "oxford-euler-triangle-midpoint-cycle": "euler-affine-dynamics",
   "oxford-euler-diagonal-blend-transform": "euler-affine-dynamics",
-  "oxford-euler-locally-balanced-labels": "euler-local-balance",
   "oxford-euler-corner-balanced-tables": "euler-local-balance",
   "oxford-euler-periodic-queue-model": "euler-discrete-dynamics-model",
   "oxford-euler-cooling-data-model": "euler-discrete-dynamics-model",
-  "oxford-euler-random-adjacent-consecutives": "euler-local-indicator-expectation",
   "oxford-euler-random-subset-blocks": "euler-local-indicator-expectation"
 });
 
@@ -321,6 +279,26 @@ const EULER_PROVENANCE_OVERRIDES: Readonly<
     originType: "structural-adaptation",
     sourceCategory: "classic-mathematics",
     referenceFamilyId: "british-flag-theorem"
+  }),
+  "oxford-euler-corner-balanced-tables": Object.freeze({
+    originType: "structural-adaptation",
+    sourceCategory: "classic-mathematics",
+    referenceFamilyId: "additive-matrix-row-column-decomposition"
+  }),
+  "oxford-euler-periodic-queue-model": Object.freeze({
+    originType: "structural-adaptation",
+    sourceCategory: "classic-mathematics",
+    referenceFamilyId: "lindley-reflected-queue"
+  }),
+  "oxford-euler-cooling-data-model": Object.freeze({
+    originType: "structural-adaptation",
+    sourceCategory: "classic-mathematics",
+    referenceFamilyId: "newton-cooling-gap-decay"
+  }),
+  "oxford-euler-random-halving-interval": Object.freeze({
+    originType: "structural-adaptation",
+    sourceCategory: "classic-mathematics",
+    referenceFamilyId: "dyadic-binary-coin-encoding"
   })
 });
 
