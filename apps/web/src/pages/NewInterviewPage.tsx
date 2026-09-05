@@ -464,7 +464,11 @@ export function NewInterviewPage({
                     options={targets.map((entry) => ({
                       value: targetKey(entry),
                       label: entry.title,
-                      meta: entry.mode === "OXFORD_MATHEMATICS"\n                        ? `${entry.category} · ${entry.difficulty}`\n                        : entry.mode === "QUANT_TRADING"\n                          ? "Quant trading scenario"\n                          : "Quant research scenario"
+                      meta: entry.mode === "OXFORD_MATHEMATICS"
+                        ? `${entry.category} · ${entry.difficulty}`
+                        : entry.mode === "QUANT_TRADING"
+                          ? "Quant trading scenario"
+                          : "Quant research scenario"
                     }))}
                     placeholder="No target available"
                     disabled={startPending || catalogLoading || targets.length === 0}
