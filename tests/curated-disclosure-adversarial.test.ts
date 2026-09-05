@@ -14,9 +14,12 @@ const curatedDisclosureFixtures = [
   ...oxfordCuratedReviewEntries.map((entry) => entry.problem),
   ...quantCuratedReviewEntries.map((entry) => entry.problem)
 ];
-const curatedDisclosureFixtureIds = [
-  ...new Set(curatedDisclosureFixtures.map((problem) => problem.id))
-];
+const curatedDisclosureFixtureIdSet = new Set(
+  curatedDisclosureFixtures.map((problem) => problem.id)
+);
+const curatedDisclosureFixtureIds = Object.keys(CURATED_DISCLOSURE_LEVELS).filter(
+  (problemId) => curatedDisclosureFixtureIdSet.has(problemId)
+);
 
 function disclosure(problemId: string, stage: number) {
   const problem = curatedDisclosureFixtures.find((candidate) => candidate.id === problemId);
