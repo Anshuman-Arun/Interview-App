@@ -172,6 +172,7 @@ export function ProductPageRouter({
           historyError={historyError}
           sessionEntryPending={sessionEntryPending}
           sessionAuthorityChecking={sessionAuthorityChecking}
+          sessionAuthorityUnavailable={sessionAuthorityUnavailable}
         />
       );
       break;
