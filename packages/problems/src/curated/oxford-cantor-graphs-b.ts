@@ -122,11 +122,11 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
       ["transfer", "primary"]
     ),
     difficulty: { entry: "warm-up", core: "introductory-plus", ceiling: "standard" },
-    timing: cantorTiming([1, 4], [15, 24], [12, 21], [4, 7], 23),
+    timing: cantorTiming([1, 3], [12, 20], [10, 17], [3, 6], 20),
     stageTiming: [
-      cantorTiming([1, 2], [4, 7], [3, 6], undefined, 7),
-      cantorTiming([1, 4], [7, 12], [6, 10], undefined, 12),
-      cantorTiming([2, 4], [5, 9], [4, 7], [3, 5], 9)
+      cantorTiming([1, 2], [3, 6], [3, 5], undefined, 6),
+      cantorTiming([1, 3], [6, 11], [5, 9], undefined, 11),
+      cantorTiming([1, 3], [4, 7], [3, 6], [2, 5], 7)
     ],
     openingRole: "warm-up",
     finalRole: "transfer",
@@ -168,14 +168,14 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
         concepts: ["asymptotic-behavior", "qualitative-function-behavior"]
       },
       {
-        id: "strict-decrease",
-        description: "Prove R_a is strictly decreasing for |a|<2 by controlling the derivative sign.",
-        skills: cantorSkills(["technique", "primary"], ["proof-construction", "primary"]),
-        concepts: ["derivative-structure", "qualitative-function-behavior"]
+        id: "strict-decrease-and-range",
+        description: "Prove R_a is strictly decreasing for |a|<2, combine this with the end behavior, and deduce the exact range (a/2,∞).",
+        skills: cantorSkills(["technique", "primary"], ["proof-construction", "primary"], ["precision-checking", "supporting"]),
+        concepts: ["derivative-structure", "qualitative-function-behavior", "asymptotic-behavior"]
       },
       {
-        id: "range-and-boundaries",
-        description: "Deduce range (a/2,∞) and classify the structural changes at |a|=2 and |a|>2.",
+        id: "boundary-domain-transfer",
+        description: "Transfer the analysis to a=±2 and |a|>2, where the radicand develops zeros and the domain topology changes.",
         skills: cantorSkills(["case-analysis", "primary"], ["generalization", "primary"], ["graph-sketching", "supporting"]),
         concepts: ["parameter-dependent-curves", "roots-intersections", "qualitative-function-behavior"]
       }
@@ -218,8 +218,8 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
         formulations: ["the two ends are not symmetric", "factor -x rather than x on the left"]
       },
       {
-        text: "R_a'(x)=(2x+a)/(2sqrt(x²+a x+1))-1. If 2x+a>0, compare its square with 4(x²+a x+1).",
-        formulations: ["split the derivative sign according to the numerator", "the key comparison reduces to a²<4"]
+        text: "Control the derivative sign by splitting on 2x+a; once strict decrease is proved, combine it with the two end behaviors to read off the range.",
+        formulations: ["the key squared comparison reduces to a²<4", "monotonicity plus the unattained right limit gives the exact range"]
       },
       {
         text: "At |a|=2 the radicand becomes a perfect square; beyond that it has two real zeros and the domain separates.",
@@ -254,11 +254,11 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
       ["guided-adaptation", "supporting"]
     ),
     difficulty: { entry: "introductory-plus", core: "strong", ceiling: "stretch" },
-    timing: cantorTiming([3, 7], [23, 35], [18, 31], [6, 11], 31),
+    timing: cantorTiming([3, 6], [18, 27], [14, 23], [5, 9], 25),
     stageTiming: [
-      cantorTiming([2, 4], [6, 10], [5, 9], undefined, 10),
-      cantorTiming([3, 6], [12, 20], [9, 17], undefined, 20),
-      cantorTiming([3, 5], [8, 14], [6, 12], [4, 8], 14)
+      cantorTiming([1, 3], [4, 7], [3, 6], undefined, 7),
+      cantorTiming([2, 5], [9, 16], [7, 13], undefined, 16),
+      cantorTiming([2, 4], [5, 10], [4, 8], [3, 7], 10)
     ],
     openingRole: "technique-check",
     finalRole: "stretch",
@@ -300,16 +300,16 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
         concepts: ["roots-intersections", "parameter-dependent-curves"]
       },
       {
-        id: "transition-geometry",
-        description: "Interpret the h=2 double solution as the moment the translated curves become tangent at their sole intersection.",
-        skills: cantorSkills(["representation-switching", "primary"], ["visualization", "supporting"]),
-        concepts: ["turning-points-extrema", "roots-intersections"]
+        id: "transition-and-small-shift",
+        description: "Interpret h=2 as tangency and show that, as h→0+, the two intersection x-coordinates approach the stationary points ±1/sqrt(3).",
+        skills: cantorSkills(["representation-switching", "primary"], ["visualization", "supporting"], ["precision-checking", "supporting"]),
+        concepts: ["turning-points-extrema", "roots-intersections", "limiting-arguments", "derivative-structure"]
       },
       {
-        id: "small-shift-limit",
-        description: "Show the two intersection x-coordinates approach ±1/sqrt(3) as h→0+ and relate these to f'(x)=0.",
-        skills: cantorSkills(["precision-checking", "supporting"], ["generalization", "primary"]),
-        concepts: ["limiting-arguments", "derivative-structure", "turning-points-extrema"]
+        id: "scaled-cubic-transfer",
+        description: "Transfer the intersection analysis to f_c(x)=x³-cx and connect the small-shift equation to a difference quotient.",
+        skills: cantorSkills(["generalization", "primary"], ["transfer", "primary"]),
+        concepts: ["parameter-dependent-algebra", "limiting-arguments", "derivative-structure"]
       }
     ],
     commonErrors: [
@@ -350,12 +350,12 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
         formulations: ["intersection count is controlled by one discriminant", "the transition occurs at h=2"]
       },
       {
-        text: "At h=2 the quadratic has a double root; compare the slopes of the two cubic graphs there.",
-        formulations: ["double intersection means tangency here", "verify equal derivatives at the merger point"]
+        text: "At h=2 the double root gives tangency; for h→0+, either use the exact roots or divide the difference by h to see the stationary-point limit.",
+        formulations: ["connect the merger and small-shift regimes to derivative geometry", "a finite difference becomes a derivative as the translate shrinks"]
       },
       {
-        text: "For the small-shift limit, divide the difference by h before letting h shrink.",
-        formulations: ["a finite difference becomes a derivative", "solve the quadratic roots or use difference-quotient intuition"]
+        text: "For f_c(x)=x³-cx the same cancellation leaves 3x²-3hx+h²-c; reuse the discriminant and difference-quotient ideas.",
+        formulations: ["the threshold rescales with sqrt(c)", "transfer the same kernel instead of recomputing from scratch"]
       }
     ],
     canonicalSolution:
@@ -386,15 +386,15 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
       ["generalization", "primary"],
       ["precision-checking", "supporting"]
     ),
-    difficulty: { entry: "introductory-plus", core: "strong", ceiling: "stretch" },
-    timing: cantorTiming([3, 6], [21, 33], [17, 29], [5, 10], 30),
+    difficulty: { entry: "introductory-plus", core: "strong", ceiling: "strong" },
+    timing: cantorTiming([2, 5], [15, 24], [12, 20], [4, 8], 23),
     stageTiming: [
-      cantorTiming([2, 4], [6, 9], [5, 8], undefined, 9),
-      cantorTiming([2, 5], [10, 17], [8, 15], undefined, 17),
-      cantorTiming([2, 5], [7, 13], [5, 11], [4, 8], 13)
+      cantorTiming([1, 3], [4, 7], [3, 6], undefined, 7),
+      cantorTiming([2, 4], [8, 14], [6, 12], undefined, 14),
+      cantorTiming([1, 3], [4, 9], [3, 7], [3, 6], 9)
     ],
     openingRole: "warm-up",
-    finalRole: "stretch",
+    finalRole: "transfer",
     novelty: "high",
     abstraction: "moderate",
     originalityRisk: "medium",
@@ -521,11 +521,11 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
       ["graph-sketching", "supporting"]
     ),
     difficulty: { entry: "introductory-plus", core: "standard", ceiling: "strong" },
-    timing: cantorTiming([2, 6], [20, 31], [15, 27], [5, 9], 29),
+    timing: cantorTiming([2, 5], [15, 23], [12, 20], [4, 8], 23),
     stageTiming: [
-      cantorTiming([1, 4], [6, 9], [5, 8], undefined, 9),
-      cantorTiming([2, 5], [9, 16], [7, 14], undefined, 16),
-      cantorTiming([2, 4], [7, 12], [5, 10], [4, 7], 12)
+      cantorTiming([1, 3], [4, 7], [3, 6], undefined, 7),
+      cantorTiming([2, 4], [8, 14], [6, 12], undefined, 14),
+      cantorTiming([1, 3], [4, 9], [3, 7], [3, 6], 9)
     ],
     openingRole: "warm-up",
     finalRole: "transfer",
@@ -567,16 +567,16 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
         concepts: ["roots-intersections", "qualitative-function-behavior"]
       },
       {
-        id: "asymptotes-and-branches",
-        description: "Prove the four branches approach x=±1 and y=±1 appropriately and produce a justified sketch.",
-        skills: cantorSkills(["graph-sketching", "primary"], ["proof-construction", "primary"]),
-        concepts: ["asymptotic-behavior", "qualitative-function-behavior"]
+        id: "asymptotes-and-closest",
+        description: "Complete the four-branch asymptotic sketch, then minimize x²+y² on the nonzero branches and distinguish those closest branch points from the globally closest isolated origin.",
+        skills: cantorSkills(["graph-sketching", "primary"], ["proof-construction", "primary"], ["strategic-simplification", "supporting"], ["precision-checking", "primary"]),
+        concepts: ["asymptotic-behavior", "qualitative-function-behavior", "inequalities-bounds", "analytic-curve-geometry"]
       },
       {
-        id: "closest-points",
-        description: "Minimize x²+y² on the nonzero branches subject to 1/x²+1/y²=1 and find their four closest points (±sqrt(2),±sqrt(2)).",
-        skills: cantorSkills(["strategic-simplification", "supporting"], ["proof-construction", "primary"], ["generalization", "supporting"]),
-        concepts: ["inequalities-bounds", "analytic-curve-geometry"]
+        id: "scaled-reciprocal-transfer",
+        description: "Transfer the reciprocal-coordinate analysis to x²y²=c(x²+y²), c>0, and relate the scaled branches to a reciprocal-circle parametrization.",
+        skills: cantorSkills(["generalization", "primary"], ["transfer", "primary"], ["representation-switching", "supporting"]),
+        concepts: ["analytic-curve-geometry", "parameter-dependent-curves", "asymptotic-behavior"]
       }
     ],
     commonErrors: [
@@ -617,12 +617,12 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
         formulations: ["the branches live only outside |x|=1", "domain information gives vertical asymptotes"]
       },
       {
-        text: "As |x|→∞, y²→1; as |x|→1+ the magnitude of y diverges.",
-        formulations: ["find horizontal and vertical asymptotes from the solved form", "use symmetry for all four branches"]
+        text: "Use the solved form for the asymptotes, then let A=x² and B=y² to minimize distance on the nonzero branches; keep the isolated origin separate.",
+        formulations: ["finish the global sketch before optimizing branch distance", "A+B≥4 identifies closest nonzero branch points, not the global closest point"]
       },
       {
-        text: "Let A=x² and B=y². From 1/A+1/B=1, show A+B≥4.",
-        formulations: ["reduce closest-distance to a positive-variable inequality", "equality occurs when A=B=2"]
+        text: "For x²y²=c(x²+y²), divide only after preserving the origin; the reciprocal equation rescales by c.",
+        formulations: ["the asymptotes and closest nonzero branch points scale with sqrt(c)", "the reciprocal circle can then be parametrized without deleting the isolated component"]
       }
     ],
     canonicalSolution:
@@ -652,11 +652,11 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
       ["error-recovery", "supporting"]
     ),
     difficulty: { entry: "introductory-plus", core: "strong", ceiling: "stretch" },
-    timing: cantorTiming([3, 7], [22, 34], [17, 30], [5, 10], 30),
+    timing: cantorTiming([3, 6], [18, 27], [14, 23], [5, 9], 25),
     stageTiming: [
-      cantorTiming([2, 4], [6, 10], [5, 9], undefined, 10),
-      cantorTiming([3, 6], [11, 19], [8, 16], undefined, 19),
-      cantorTiming([2, 5], [7, 13], [5, 11], [4, 8], 13)
+      cantorTiming([1, 3], [4, 7], [3, 6], undefined, 7),
+      cantorTiming([2, 5], [9, 16], [7, 13], undefined, 16),
+      cantorTiming([2, 4], [5, 10], [4, 8], [3, 7], 10)
     ],
     openingRole: "warm-up",
     finalRole: "stretch",
