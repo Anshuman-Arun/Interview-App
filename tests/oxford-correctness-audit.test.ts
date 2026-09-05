@@ -15,7 +15,7 @@ describe("Oxford mathematical correctness audit gate", () => {
     const parsed = JSON.parse(raw) as unknown;
     expect(() => assertOxfordCorrectnessReviewBatch(parsed)).not.toThrow();
     if (!Array.isArray(parsed)) throw new Error("Expected review record array");
-    expect(parsed).toHaveLength(20);
+    expect(parsed).toHaveLength(33);
   });
 
   it("fails closed when approval carries an unresolved mathematical error", () => {
@@ -316,4 +316,160 @@ function parityHatGuesses(hats: readonly number[]): number[] {
     guesses[prisoner] = (announcedParity - known + 2) % 2;
   }
   return guesses;
+}
+
+
+describe("Wave 2 author-family computational spot checks", () => {
+  it("verifies the triple-flip circle kernel and image through n=10", () => {
+    for (let n = 3; n <= 10; n += 1) {
+      const outcomeCounts = new Map<string, number>();
+      const moveCount = 1 << n;
+      for (let mask = 0; mask < moveCount; mask += 1) {
+        const outcome = tripleFlipOutcome(n, mask);
+        const key = outcome.join("");
+        outcomeCounts.set(key, (outcomeCounts.get(key) ?? 0) + 1);
+      }
+
+      const zeroKey = "0".repeat(n);
+      expect(outcomeCounts.get(zeroKey)).toBe(n % 3 === 0 ? 4 : 1);
+
+      if (n % 3 !== 0) {
+        expect(outcomeCounts.size).toBe(1 << n);
+        expect([...outcomeCounts.values()].every((count) => count === 1)).toBe(true);
+        continue;
+      }
+
+      expect(outcomeCounts.size).toBe(1 << (n - 2));
+      for (const [key, count] of outcomeCounts) {
+        expect(count).toBe(4);
+        const bits = [...key].map((bit) => Number(bit));
+        const parities = [0, 1, 2].map((residue) =>
+          bits.reduce((sum, bit, index) => index % 3 === residue ? sum ^ bit : sum, 0)
+        );
+        expect(parities[0]).toBe(parities[1]);
+        expect(parities[1]).toBe(parities[2]);
+      }
+    }
+  });
+
+  it("matches the diagonal-bisector box section vertex transition", () => {
+    expect(boxSectionVertices(1, 2, 4).size).toBe(4);
+    expect(boxSectionVertices(1, 2, 3).size).toBe(4);
+    expect(boxSectionVertices(1, 2, 2.9).size).toBe(6);
+    expect(boxSectionVertices(1, 1, 1).size).toBe(6);
+  });
+
+  it("matches the circle-sweep sign condition on a finite grid", () => {
+    for (let xi = -10; xi <= 25; xi += 1) {
+      for (let yi = -10; yi <= 20; yi += 1) {
+        const x = xi / 10;
+        const y = yi / 10;
+        const rSquared = x * x + y * y;
+        const product = (rSquared - y) * (rSquared - 2 * x);
+        expect(circleSweepHasParameter(x, y)).toBe(product <= 1e-8);
+      }
+    }
+  });
+
+  it("matches random-subset block expectations by exhaustive enumeration", () => {
+    for (let n = 2; n <= 7; n += 1) {
+      const subsetCount = 1 << n;
+      let lineTotal = 0;
+      let circleTotal = 0;
+
+      for (let mask = 0; mask < subsetCount; mask += 1) {
+        const bits = Array.from({ length: n }, (_, index) => (mask >> index) & 1);
+        lineTotal += lineBlockCount(bits);
+        circleTotal += circleBlockCount(bits);
+      }
+
+      expect(lineTotal / subsetCount).toBeCloseTo((n + 1) / 4, 12);
+      expect(circleTotal / subsetCount).toBeCloseTo(n / 4 + 2 ** (-n), 12);
+    }
+  });
+
+  it("matches the random-chord midpoint expectation through n=14", () => {
+    for (let n = 3; n <= 14; n += 1) {
+      let sum = 0;
+      let pairs = 0;
+      for (let i = 0; i < n; i += 1) {
+        const angleI = 2 * Math.PI * i / n;
+        for (let j = i + 1; j < n; j += 1) {
+          const angleJ = 2 * Math.PI * j / n;
+          const midpointX = (Math.cos(angleI) + Math.cos(angleJ)) / 2;
+          const midpointY = (Math.sin(angleI) + Math.sin(angleJ)) / 2;
+          sum += midpointX * midpointX + midpointY * midpointY;
+          pairs += 1;
+        }
+      }
+      expect(sum / pairs).toBeCloseTo((n - 2) / (2 * (n - 1)), 12);
+    }
+  });
+});
+
+function tripleFlipOutcome(n: number, mask: number): number[] {
+  return Array.from({ length: n }, (_, index) => {
+    const current = (mask >> index) & 1;
+    const previous = (mask >> ((index - 1 + n) % n)) & 1;
+    const previousPrevious = (mask >> ((index - 2 + n) % n)) & 1;
+    return current ^ previous ^ previousPrevious;
+  });
+}
+
+function boxSectionVertices(alpha: number, beta: number, gamma: number): Set<string> {
+  const coefficients = [alpha, beta, gamma];
+  const vertices = new Set<string>();
+
+  for (let free = 0; free < 3; free += 1) {
+    const fixed = [0, 1, 2].filter((index) => index !== free);
+    const first = fixed[0];
+    const second = fixed[1];
+    if (first === undefined || second === undefined) continue;
+
+    for (const firstSign of [-1, 1]) {
+      for (const secondSign of [-1, 1]) {
+        const point = [0, 0, 0];
+        point[first] = firstSign;
+        point[second] = secondSign;
+        const solved = -(
+          (coefficients[first] ?? 0) * firstSign
+          + (coefficients[second] ?? 0) * secondSign
+        ) / (coefficients[free] ?? 1);
+        if (solved < -1 - 1e-12 || solved > 1 + 1e-12) continue;
+        point[free] = solved;
+        vertices.add(point.map((value) => value.toFixed(10)).join(","));
+      }
+    }
+  }
+
+  return vertices;
+}
+
+function circleSweepHasParameter(x: number, y: number): boolean {
+  const rSquared = x * x + y * y;
+  const slope = x - y / 2;
+  if (Math.abs(slope) < 1e-12) return Math.abs(rSquared - y) < 1e-10;
+  const parameter = (rSquared - y) / slope;
+  return parameter >= -1e-10 && parameter <= 2 + 1e-10;
+}
+
+function lineBlockCount(bits: readonly number[]): number {
+  let blocks = 0;
+  let previous = 0;
+  for (const bit of bits) {
+    if (bit === 1 && previous === 0) blocks += 1;
+    previous = bit;
+  }
+  return blocks;
+}
+
+function circleBlockCount(bits: readonly number[]): number {
+  if (bits.every((bit) => bit === 1)) return 1;
+  let blocks = 0;
+  for (let index = 0; index < bits.length; index += 1) {
+    const bit = bits[index] ?? 0;
+    const previous = bits[(index - 1 + bits.length) % bits.length] ?? 0;
+    if (bit === 1 && previous === 0) blocks += 1;
+  }
+  return blocks;
 }
