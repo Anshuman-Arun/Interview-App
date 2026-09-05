@@ -384,7 +384,8 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
       ["representation-switching", "primary"],
       ["visualization", "supporting"],
       ["generalization", "primary"],
-      ["precision-checking", "supporting"]
+      ["precision-checking", "supporting"],
+      ["transfer", "primary"]
     ),
     difficulty: { entry: "introductory-plus", core: "strong", ceiling: "strong" },
     timing: cantorTiming([2, 5], [15, 24], [12, 20], [4, 8], 23),
@@ -649,7 +650,8 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
       ["case-analysis", "supporting"],
       ["graph-sketching", "primary"],
       ["generalization", "supporting"],
-      ["error-recovery", "supporting"]
+      ["error-recovery", "supporting"],
+      ["transfer", "primary"]
     ),
     difficulty: { entry: "introductory-plus", core: "strong", ceiling: "stretch" },
     timing: cantorTiming([3, 6], [18, 27], [14, 23], [5, 9], 25),
