@@ -276,7 +276,18 @@
   flex: 1 1 auto;
   overflow-y: auto;
   padding: 0 32px 44px;
-  scrollbar-gutter: stable;
+  scrollbar-gutter: auto;
+  scrollbar-width: none;
+}
+
+.product-frame__content,
+.product-frame__content * {
+  scrollbar-width: none;
+}
+
+.product-frame__content::-webkit-scrollbar,
+.product-frame__content *::-webkit-scrollbar {
+  display: none;
 }
 
 .product-frame__notice {
