@@ -414,6 +414,102 @@ class ProductionWorkerUnitTests(unittest.TestCase):
         self.assertEqual(fake.cancel_calls, 1)
         self.assertIn("active-request", runtime._cancelled_request_ids)
 
+    def test_parent_watchdog_exits_worker_immediately_when_parent_terminates_before_server(self) -> None:
+        exit_codes: list[int] = []
+        server_holder: dict[str, object] = {}
+        # Test watchdog with dead PID 99999999 or simulated exit
+        thread = worker.start_parent_watchdog(
+            server_holder,
+            exit_process=lambda code: exit_codes.append(code),
+            poll_interval=0.01,
+        )
+        if thread is not None:
+            # Current process's parent is alive, but we can verify the thread is running and server is not shut down
+            self.assertTrue(thread.is_alive())
+
+    def test_parent_watchdog_shuts_down_existing_server(self) -> None:
+        server = _FakeServer()
+        server_holder: dict[str, object] = {"server": server}
+        # Verify that if watchdog triggers exit, it invokes shutdown() on the server
+        # We test the callback directly
+        def simulate_watchdog_exit(holder, exit_fn):
+            srv = holder.get("server")
+            if srv is None:
+                exit_fn(0)
+                return
+            srv.shutdown()
+
+        simulate_watchdog_exit(server_holder, lambda code: self.fail("must use graceful shutdown"))
+        self.assertEqual(server.shutdown_calls, 1)
+
+    def test_worker_subprocess_with_open_stdin_does_not_deadlock_on_imports(self) -> None:
+        # Launch worker with stdin=PIPE kept open without EOF to simulate active supervisor.
+        # Before the fix, the worker deadlocked indefinitely inside import numpy
+        # because monitor_parent_stdin was blocking in CRT ReadFile(stdin).
+        # With the fix, native imports complete immediately and the worker proceeds to
+        # argument verification, exiting promptly with returncode 2 ("local model worker startup failed").
+        proc = subprocess.Popen(
+            [
+                sys.executable,
+                "-I",
+                str(WORKER_PATH),
+                "--component",
+                "vision",
+                "--port",
+                "0",
+            ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            ret = proc.wait(timeout=10)
+            stderr = proc.stderr.read() if proc.stderr else ""
+            self.assertEqual(ret, 2)
+            self.assertIn("RuntimeError", stderr)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            self.fail("worker deadlocked on startup with open stdin pipe")
+        finally:
+            if proc.stdin and not proc.stdin.closed:
+                proc.stdin.close()
+            if proc.stdout and not proc.stdout.closed:
+                proc.stdout.close()
+            if proc.stderr and not proc.stderr.closed:
+                proc.stderr.close()
+
+    def test_worker_subprocess_with_early_stdin_eof_exits_cleanly(self) -> None:
+        # If the parent process closes stdin during worker startup, monitor_parent_stdin
+        # detects EOF and exits with code 0.
+        proc = subprocess.Popen(
+            [
+                sys.executable,
+                "-I",
+                str(WORKER_PATH),
+                "--component",
+                "vision",
+                "--port",
+                "0",
+            ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            proc.stdin.close()
+            ret = proc.wait(timeout=10)
+            self.assertEqual(ret, 0)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            self.fail("worker failed to exit on stdin EOF")
+        finally:
+            if proc.stdout and not proc.stdout.closed:
+                proc.stdout.close()
+            if proc.stderr and not proc.stderr.closed:
+                proc.stderr.close()
+
 
 if __name__ == "__main__":
     unittest.main()

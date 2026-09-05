@@ -54,14 +54,87 @@ import {
 import {
   DESKTOP_MIN_HEIGHT,
   DESKTOP_MIN_WIDTH,
-  createSecureWebPreferences
+  createSecureWebPreferences,
+  createSecureStartupWebPreferences
 } from "./window-config.js";
+import {
+  StartupTracker,
+  STARTUP_STAGE_STARTUP_WINDOW_VISIBLE,
+  STARTUP_STAGE_RUNTIME_START,
+  STARTUP_STAGE_RUNTIME_READY,
+  STARTUP_STAGE_BACKEND_START,
+  STARTUP_STAGE_BACKEND_READY,
+  STARTUP_STAGE_MAIN_WINDOW_READY,
+  type StartupTimingReport
+} from "./startup-tracker.js";
 import {
   isLocalModelActivationLaunch,
   relaunchArgsForLocalModelActivation,
   runtimeCapabilityNeedsActivationRetry,
   shouldUsePreparedRuntimeStartupBudget
 } from "./startup-policy.js";
+
+import {
+  STARTUP_WINDOW_DATA_URL,
+  getStartupWindowOptions,
+  isHeadlessCliLaunch
+} from "./startup-window.js";
+
+let startupWindow: BrowserWindow | undefined;
+const startupTracker = new StartupTracker();
+
+export async function createStartupWindow(): Promise<void> {
+  if (startupWindow !== undefined || shuttingDown) return;
+
+  const window = new BrowserWindow(getStartupWindowOptions());
+
+  startupWindow = window;
+
+  window.on("closed", () => {
+    if (startupWindow === window) {
+      startupWindow = undefined;
+    }
+    // If the startup window is closed before the main window is created,
+    // the user intentionally aborted startup. Cancel and cleanly shut down.
+    if (mainWindow === undefined && !shuttingDown) {
+      startupAbort.abort();
+      void shutdownDesktop().finally(() => {
+        shutdownComplete = true;
+        app.quit();
+      });
+    }
+  });
+
+  window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  window.webContents.on("will-navigate", (event) => event.preventDefault());
+
+  await window.loadURL(STARTUP_WINDOW_DATA_URL);
+  if (!window.isDestroyed() && !shuttingDown) {
+    window.show();
+    window.focus();
+  }
+}
+
+export function updateStartupStatus(status: string): void {
+  startupTracker.recordStage(status);
+  if (startupWindow === undefined || startupWindow.isDestroyed()) return;
+  const safeText = JSON.stringify(status);
+  void startupWindow.webContents.executeJavaScript(
+    `window.updateStatus && window.updateStatus(${safeText});`
+  ).catch(() => undefined);
+}
+
+export function closeStartupWindow(): void {
+  if (startupWindow !== undefined && !startupWindow.isDestroyed()) {
+    const sw = startupWindow;
+    startupWindow = undefined;
+    sw.close();
+  }
+}
+
+export function getStartupTimingReport(): StartupTimingReport {
+  return startupTracker.getReport();
+}
 
 const OPTIONAL_LOCAL_RUNTIME_COLD_STARTUP_BUDGET_MS = 15_000;
 // Explicitly installed workers are sequential and each has its own bounded
@@ -129,6 +202,10 @@ if (!app.requestSingleInstanceLock()) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.show();
       mainWindow.focus();
+    } else if (startupWindow !== undefined && !startupWindow.isDestroyed()) {
+      if (startupWindow.isMinimized()) startupWindow.restore();
+      startupWindow.show();
+      startupWindow.focus();
     }
     if (packagedSingleInstanceSmokeHost && app.isPackaged) {
       void shutdownDesktop()
@@ -232,6 +309,12 @@ async function startDesktop(): Promise<void> {
     app.quit();
     return;
   }
+
+  if (!isHeadlessCliLaunch(process.argv)) {
+    await createStartupWindow();
+    startupTracker.recordStage(STARTUP_STAGE_STARTUP_WINDOW_VISIBLE);
+  }
+
   // No-model launches stay fast. After an explicit model install has
   // materialized verified persistent views, allow enough time on the next
   // launch for Windows to verify and initialize the real workers instead of
@@ -247,8 +330,14 @@ async function startDesktop(): Promise<void> {
     startupAbort.signal,
     AbortSignal.timeout(optionalRuntimeStartupBudgetMs)
   ]);
+  updateStartupStatus("Preparing local interview runtimes...");
+  startupTracker.recordStage(STARTUP_STAGE_RUNTIME_START);
   await runtime.start({ signal: optionalRuntimeSignal });
-  if (shuttingDown || startupAbort.signal.aborted) return;
+  startupTracker.recordStage(STARTUP_STAGE_RUNTIME_READY);
+  if (shuttingDown || startupAbort.signal.aborted) {
+    closeStartupWindow();
+    return;
+  }
 
   if (mode === "production") {
     frontendServer = new DesktopFrontendServer(paths.frontendRoot);
@@ -259,6 +348,8 @@ async function startDesktop(): Promise<void> {
     );
   }
 
+  updateStartupStatus("Starting application server...");
+  startupTracker.recordStage(STARTUP_STAGE_BACKEND_START);
   clientToken = randomBytes(32).toString("hex");
   const backendConfig = {
     host: "127.0.0.1",
@@ -270,6 +361,7 @@ async function startDesktop(): Promise<void> {
     databasePath: paths.databasePath
   } as const;
   const server = await backend.start(backendConfig);
+  startupTracker.recordStage(STARTUP_STAGE_BACKEND_READY);
 
   if (frontendServer !== undefined) {
     frontendServer.configureBackendOrigins(
@@ -291,6 +383,7 @@ async function startDesktop(): Promise<void> {
   installZoomHandler();
   installAppearanceHandlers();
   installLocalRuntimeHandlers();
+  updateStartupStatus("Opening Interview App...");
   await createMainWindow(paths.preloadPath);
 
   if (process.argv.includes("--packaged-smoke-test")) {
@@ -1234,10 +1327,15 @@ async function createMainWindow(preloadPath?: string): Promise<void> {
   if (!window.isDestroyed()) {
     window.show();
     window.focus();
+    startupTracker.recordStage(STARTUP_STAGE_MAIN_WINDOW_READY);
+    startupTracker.complete(true);
+    closeStartupWindow();
   }
 }
 
 async function failStartup(message: string): Promise<void> {
+  closeStartupWindow();
+  startupTracker.complete(false, message);
   process.exitCode = 1;
   if (process.argv.includes("--install-local-models")) {
     console.error("Local model setup failed.");
@@ -1268,6 +1366,7 @@ async function failStartup(message: string): Promise<void> {
 
 function shutdownDesktop(): Promise<void> {
   if (shutdownPromise !== undefined) return shutdownPromise;
+  closeStartupWindow();
   shuttingDown = true;
   startupAbort.abort();
   bootstrap = undefined;

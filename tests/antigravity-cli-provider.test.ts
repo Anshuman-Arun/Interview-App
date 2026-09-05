@@ -56,7 +56,8 @@ function executionResult(
 
 function antigravityStream(
   proposal: InterviewerProposal = PROPOSAL,
-  between: readonly unknown[] = []
+  between: readonly unknown[] = [],
+  overrides: { readonly model?: string; readonly agent?: string } = {}
 ): string {
   return [
     JSON.stringify({
@@ -66,8 +67,8 @@ function antigravityStream(
         cwd: "/isolated",
         tools: [],
         permission_mode: "strict",
-        model: ANTIGRAVITY_CLI_MODEL_ID,
-        agent: ANTIGRAVITY_CLI_AGENT_ID,
+        model: overrides.model ?? ANTIGRAVITY_CLI_MODEL_ID,
+        agent: overrides.agent ?? ANTIGRAVITY_CLI_AGENT_ID,
         json_schema: ANTIGRAVITY_CLI_PROPOSAL_SCHEMA
       }
     }),
@@ -201,6 +202,113 @@ describe("Antigravity zero-turn runtime preflight", () => {
     expect(() => assertAntigravityCliZeroTurnPreflightResult(
       executionResult(zeroTurnPreflightStream(), { exitCode: 1 })
     )).toThrow(AntigravityCliAdapterError);
+  });
+
+  it("rejects real nonempty-tool response captured from Antigravity CLI", () => {
+    // Regression fixture captured directly from agy.exe with tools: [] in agent.md.
+    // The CLI advertises 57 built-in tools regardless of custom agent frontmatter,
+    // which violates zero-turn tool containment and must be rejected with INVALID_PROTOCOL.
+    const realNonEmptyToolStdout = [
+      JSON.stringify({
+        event: "init",
+        conversation_id: "de7acfde-d421-4b57-a208-882dbc7a7d4e",
+        init: {
+          model: "gemini-3.8-flash",
+          cwd: "C:\\Users\\user\\work",
+          agent: "interview-realizer",
+          tools: [
+            "ask_custom_permission",
+            "ask_permission",
+            "ask_question",
+            "browser_click_element",
+            "browser_drag_pixel_to_pixel",
+            "browser_get_dom",
+            "browser_get_network_request",
+            "browser_input",
+            "browser_list_network_requests",
+            "browser_mouse_down",
+            "browser_mouse_up",
+            "browser_move_mouse",
+            "browser_press_key",
+            "browser_refresh_page",
+            "browser_resize_window",
+            "browser_scroll",
+            "browser_scroll_dom",
+            "browser_select_option",
+            "browser_subagent",
+            "call_mcp_tool",
+            "capture_browser_console_logs",
+            "capture_browser_screenshot",
+            "click_browser_pixel",
+            "command_status",
+            "define_subagent",
+            "delete_knowledge",
+            "execute_browser_javascript",
+            "finish",
+            "generate_image",
+            "grep_search",
+            "invoke_subagent",
+            "list_browser_pages",
+            "list_dir",
+            "list_permissions",
+            "list_resources",
+            "manage_inbox",
+            "manage_subagents",
+            "manage_task",
+            "multi_replace_file_content",
+            "notebook_edit",
+            "notebook_execution",
+            "open_browser_url",
+            "read_browser_page",
+            "read_resource",
+            "read_url_content",
+            "replace_file_content",
+            "run_command",
+            "schedule",
+            "search_web",
+            "sed_file",
+            "send_command_input",
+            "send_message",
+            "view_file",
+            "wait",
+            "wait_5_seconds",
+            "write_to_file"
+          ],
+          permission_mode: "strict"
+        }
+      }),
+      JSON.stringify({
+        event: "result",
+        result: {
+          conversation_id: "de7acfde-d421-4b57-a208-882dbc7a7d4e",
+          status: "ERROR",
+          error: 'stream input message event "control_request" is not supported yet',
+          duration_seconds: 0,
+          num_turns: 0,
+          usage: {
+            input_tokens: 0,
+            output_tokens: 0,
+            thinking_tokens: 0,
+            cache_read_tokens: 0,
+            total_tokens: 0
+          }
+        }
+      })
+    ].join("\n") + "\n";
+
+    expect(() =>
+      assertAntigravityCliZeroTurnPreflightResult(
+        executionResult(realNonEmptyToolStdout, { exitCode: 2 })
+      )
+    ).toThrow(AntigravityCliAdapterError);
+
+    try {
+      assertAntigravityCliZeroTurnPreflightResult(
+        executionResult(realNonEmptyToolStdout, { exitCode: 2 })
+      );
+    } catch (err) {
+      expect((err as AntigravityCliAdapterError).code).toBe("INVALID_PROTOCOL");
+    }
   });
 });
 
@@ -562,7 +670,9 @@ describe("Antigravity CLI one-turn protocol", () => {
       fakeExecutor(async (request) => {
         captured = request;
         request.onProcessStart();
-        return executionResult(antigravityStream());
+        return executionResult(
+          antigravityStream(PROPOSAL, [], { model: "gemini-3.8-flash-low" })
+        );
       }),
       "gemini-3.8-flash-low"
     );
