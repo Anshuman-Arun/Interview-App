@@ -1,3 +1,4 @@
+import { oxfordCantorReviewEntries } from "./oxford-cantor.js";
 import { oxfordDominoChessboardEntry } from "./curated/oxford-domino-chessboard.js";
 import { oxfordDivisorsSquareParityEntry } from "./curated/oxford-divisors-square-parity.js";
 import { oxfordEuclidPrimesEntry } from "./curated/oxford-euclid-primes.js";
@@ -11,7 +12,8 @@ import { oxfordPrefixSumsModNEntry } from "./curated/oxford-prefix-sums-mod-n.js
 import { oxfordTriangleMediansEntry } from "./curated/oxford-triangle-medians.js";
 
 export const oxfordCuratedReviewEntries = Object.freeze([
-  oxfordCatalanPathsEntry
+  oxfordCatalanPathsEntry,
+  ...oxfordCantorReviewEntries
 ] as const);
 
 export const oxfordCuratedEntries = Object.freeze([
