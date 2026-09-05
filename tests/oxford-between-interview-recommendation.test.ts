@@ -297,7 +297,7 @@ describe("Oxford between-interview adaptation", () => {
   it("filters high-confidence difficulty mismatch and impossible session duration", () => {
     const meta = readyMetadata("ability-source", {});
     const history = Array.from({ length: 10 }, (_, index) =>
-      source(`ability-${index}`, meta, {
+      source(`ability-${String(index)}`, meta, {
         practicedAt: `2026-08-${String(index + 1).padStart(2, "0")}T12:00:00.000Z`
       })
     );
@@ -345,7 +345,7 @@ describe("Oxford between-interview adaptation", () => {
   it("values information gain without always hammering the weakest known topic", () => {
     const knownMeta = readyMetadata("known-source", {});
     const history = Array.from({ length: 8 }, (_, index) =>
-      source(`known-${index}`, knownMeta, {
+      source(`known-${String(index)}`, knownMeta, {
         practicedAt: `2026-07-${String(index + 1).padStart(2, "0")}T12:00:00.000Z`
       })
     );
