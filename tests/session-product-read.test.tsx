@@ -271,7 +271,7 @@ describe("grounded evaluation/replay product surface", () => {
       React.createElement(ReplayPanel, { response })
     );
 
-    expect(markup).toContain("Possibly exposed content is intentionally withheld");
+    expect(markup).toContain("Content with uncertain delivery status is omitted from replay.");
     expect(markup).toContain("&lt;img src=x onerror=alert(1)&gt;");
     expect(markup).not.toContain("<img src=x onerror=alert(1)>");
     expect(markup).not.toContain("secret possibly exposed answer");

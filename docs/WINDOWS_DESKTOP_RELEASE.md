@@ -108,34 +108,41 @@ logs are not packaging inputs.
 
 ## Python strategy
 
-Personal-use v1 intentionally does **not** redistribute CPython. Voice uses a
-compatible system CPython 3.12 or 3.13 installation plus the exact versions in
-`requirements-local-model-runtime.txt`. Typed interviews do not require
-Python and stay available when the local runtime is missing or invalid.
+Personal-use v1 intentionally does **not** redistribute CPython. Local speech
+and semantic vision use a supported 64-bit system CPython 3.12 or 3.13 only as
+the bootstrap interpreter for an Interview App-owned virtual environment under
+per-user app data. Settings installs the exact pinned dependency graph into that
+isolated environment; it does not mutate the user's base Python installation.
+Typed interviews do not require Python and stay available when local speech or
+vision are missing or invalid.
 
-The desktop Settings page reports the voice capability and validates the
-interpreter through the production worker's authoritative runtime check before
-model setup is enabled. Missing Python, unsupported bitness/version, or drift
-from the pinned package graph blocks model download rather than falling back to
-a fixture worker or wasting a large asset download.
+The desktop Settings page reports Python, voice, and vision readiness and
+revalidates the supported interpreter before privileged setup actions are
+admitted. Missing Python, unsupported bitness/version, an unverifiable runtime,
+or drift from the pinned package graph blocks local model setup rather than
+falling back to a fixture worker.
 
-For voice on a clean machine, install CPython 3.12 or 3.13 and install the
-pinned requirements with that interpreter. On Windows the desktop checks the
-standard per-user/system Python 3.13 and 3.12 locations before falling back to
-`PATH`, and ignores the Microsoft Store execution alias. A custom interpreter
-may be selected with `INTERVIEW_LOCAL_PYTHON`; the runtime canonicalizes it
-before worker registration.
+For a clean machine, install the standard 64-bit CPython 3.12 or 3.13
+interpreter, open Settings, choose **Re-check**, then use **Install Python
+components** to create the isolated Interview App environment. Install voice
+models and/or the vision model from their separate Settings actions, then
+restart when prompted. On Windows the desktop checks the standard per-user and
+system Python locations before falling back to `PATH`, and ignores the
+Microsoft Store execution alias. A custom interpreter may be selected with
+`INTERVIEW_LOCAL_PYTHON`; the runtime canonicalizes it before worker
+registration.
 
 ## Model setup
 
-Settings exposes **Install / verify voice models**. It invokes the existing
+Settings exposes separate privileged setup actions for **Python components**,
+**voice models**, and the **vision model**. Model downloads use the existing
 `ModelAssetManager`; fixed source URLs, expected byte sizes and SHA-256
 digests remain authoritative. Interrupted downloads stay in staging and are
 cleaned/retried by the existing manager.
 
-After a successful model install, restart Interview App. runtime is
-one-shot per application lifecycle, so the packaging layer does not hot-restart
-it after changing the verified asset set.
+After setup reports a restart requirement, restart Interview App. The local
+runtime is composed per application lifecycle, so the packaging layer does not
+hot-restart active workers after changing the verified dependency/model set.
 
 The repository command `pnpm setup:desktop-models` remains available for
 development, but a terminal is not required to download model weights in the
@@ -225,9 +232,10 @@ clean Windows x64 machine:
   icons, fonts and canvas interactions; confirm packaged assets resolve without
   network access.
 - Confirm missing Python and an unsupported Python version leave typed mode
-  usable and clearly report voice unavailable.
-- Install CPython 3.12 or 3.13 plus pinned requirements, use Settings to install
-  verified models, then restart.
+  usable and clearly report local speech/vision unavailable.
+- Install supported 64-bit CPython 3.12 or 3.13, use Settings to re-check,
+  install the isolated Python components, then install verified voice/vision
+  models as desired and restart when prompted.
 - Interrupt model setup, relaunch, retry and confirm no partial asset is admitted.
 - Exercise microphone/STT/TTS with real model weights.
 - Quit during worker startup, inference and model download; confirm no owned
@@ -250,7 +258,7 @@ clean Windows x64 machine:
 
 ## Remaining limitations
 
-- The base installer does not bundle CPython or Python wheels.
+- The base installer does not bundle CPython; the pinned Python dependency graph is installed into an app-owned environment from Settings after installation.
 - Model weights are intentionally downloaded after installation.
 - CI does not exercise real Moonshine/Kokoro inference weights.
 - The installer remains unsigned until a real certificate is securely supplied.
