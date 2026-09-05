@@ -278,6 +278,10 @@ export function assertOxfordCalibrationClaimSupport(
     throw new Error("Authored Oxford metadata must carry difficulty and timing before calibration");
   }
 
+  if (metadata.review.taxonomyClassification === "approved") {
+    assertTaxonomyMatchesMetadata(metadata, review);
+  }
+
   assertCalibrationStatusCovered(
     metadata.review.difficultyCalibration,
     review.difficulty.recommendedStatus,
@@ -703,6 +707,65 @@ function assertCalibrationStatusCovered(
       `Oxford ${label} metadata calibration "${metadataStatus}" exceeds independent review "${reviewedStatus}"`
     );
   }
+}
+
+
+function assertTaxonomyMatchesMetadata(
+  metadata: OxfordAdaptiveMetadata,
+  review: OxfordCalibrationReviewRecord
+): void {
+  if (
+    !sameMembers(metadata.domains, review.taxonomy.domains)
+    || !sameMembers(metadata.contentConcepts, review.taxonomy.contentConcepts)
+    || !sameMembers(metadata.prerequisiteConcepts, review.taxonomy.prerequisiteConcepts)
+    || !sameMembers(
+      metadata.skillEvidence.map((item) => item.skill),
+      review.taxonomy.reasoningSkills
+    )
+  ) {
+    throw new Error(
+      "Approved Oxford taxonomy metadata must match the independent taxonomy review"
+    );
+  }
+
+  const authoredMilestones = new Map(
+    metadata.stages.flatMap((stage) =>
+      stage.milestones.map((milestone) => [milestone.milestoneId, milestone] as const)
+    )
+  );
+  const reviewedMilestones = new Map(
+    review.taxonomy.milestoneSkillClaims.map((claim) => [claim.milestoneId, claim] as const)
+  );
+  if (
+    authoredMilestones.size !== reviewedMilestones.size
+    || reviewedMilestones.size !== review.taxonomy.milestoneSkillClaims.length
+  ) {
+    throw new Error(
+      "Approved Oxford taxonomy metadata requires independent review of every milestone attribution"
+    );
+  }
+
+  for (const [milestoneId, milestone] of authoredMilestones) {
+    const reviewed = reviewedMilestones.get(milestoneId);
+    if (
+      reviewed === undefined
+      || !sameMembers(
+        milestone.skillEvidence.map((item) => item.skill),
+        reviewed.skills
+      )
+      || !sameMembers(milestone.contentConcepts, reviewed.contentConcepts)
+    ) {
+      throw new Error(
+        `Approved Oxford milestone attribution "${milestoneId}" does not match the independent taxonomy review`
+      );
+    }
+  }
+}
+
+function sameMembers(left: readonly string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) return false;
+  const rightSet = new Set(right);
+  return rightSet.size === right.length && left.every((value) => rightSet.has(value));
 }
 
 function assertStageDifficultyMatchesMetadata(
