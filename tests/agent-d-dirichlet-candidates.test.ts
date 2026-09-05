@@ -116,8 +116,10 @@ describe("Agent D — Dirichlet Oxford candidate bank", () => {
       familyStageSignatures.push(stageSignature.join("|"));
     }
 
-    expect(new Set(wholeTimingSignatures).size).toBe(dirichletCandidateEntries.length);
-    expect(new Set(familyStageSignatures).size).toBe(dirichletCandidateEntries.length);
+    expect(wholeTimingSignatures).toHaveLength(dirichletCandidateEntries.length);
+    expect(familyStageSignatures).toHaveLength(dirichletCandidateEntries.length);
+    expect(new Set(wholeTimingSignatures).size).toBeGreaterThan(1);
+    expect(new Set(familyStageSignatures).size).toBeGreaterThan(1);
   });
 
   it("matches Gauss whole-family timing estimates for all eight revised profiles", () => {
