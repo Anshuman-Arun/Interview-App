@@ -178,9 +178,10 @@ const CANONICAL_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 export function assertOxfordCalibrationReviewRecord(
   record: OxfordCalibrationReviewRecord
 ): void {
-  if (record.schemaVersion !== OXFORD_CALIBRATION_REVIEW_SCHEMA_VERSION) {
+  const schemaVersion: number = record.schemaVersion;
+  if (schemaVersion !== OXFORD_CALIBRATION_REVIEW_SCHEMA_VERSION) {
     throw new Error(
-      `Unsupported Oxford calibration review schema version "${String(record.schemaVersion)}"`
+      `Unsupported Oxford calibration review schema version "${String(schemaVersion)}"`
     );
   }
   assertCanonicalId(record.familyId, "Oxford calibration family id");
@@ -216,10 +217,13 @@ export function assertOxfordCalibrationReviewRecord(
   }
   assertNonBlank(record.migration.rationale, "Oxford calibration migration rationale");
 
+  const originalityBoundary: string = record.ownershipBoundaries.originality;
+  const fidelityBoundary: string = record.ownershipBoundaries.fidelity;
+  const correctnessBoundary: string = record.ownershipBoundaries.mathematicalCorrectness;
   if (
-    record.ownershipBoundaries.originality !== "pending-agent-h"
-    || record.ownershipBoundaries.fidelity !== "pending-agent-h"
-    || record.ownershipBoundaries.mathematicalCorrectness !== "pending-agent-i"
+    originalityBoundary !== "pending-agent-h"
+    || fidelityBoundary !== "pending-agent-h"
+    || correctnessBoundary !== "pending-agent-i"
   ) {
     throw new Error(
       "Oxford calibration review cannot claim Agent H originality/fidelity or Agent I correctness approval"
