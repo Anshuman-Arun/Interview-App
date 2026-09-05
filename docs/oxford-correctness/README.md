@@ -84,93 +84,78 @@ Audited against `main` at commit `454a2fe993c8fd70676d04e5d262a1780161f0d6` (PR 
 
 These decisions are **mathematical-correctness decisions only**. They do not approve taxonomy classification, difficulty/timing, originality, or Oxford fidelity.
 
-## Full C/D/E certification
+## Final Wave 2 C/D/E certification
 
-Agent I — Itô completed independent current-version mathematical certification for every surviving Wave 2 author family. Each retained author-PR record is pinned to the exact author head reviewed.
+Agent I — Itô completed a final diff-based synchronization against the author heads below. Previously certified mathematics was not blindly re-solved: only surviving families whose candidate-visible or protected mathematical payload changed were independently re-checked.
 
-| Author PR | Reviewed head | Surviving families | Approved | Changes required |
+| Author PR | Final reviewed head | Final survivors | Approved | Changes required |
 | --- | --- | ---: | ---: | ---: |
-| Agent C — Cantor #132 | `794fe2282c2c8ef265869ccf84bb955695fbaa7f` | 18 | 18 | 0 |
-| Agent D — Dirichlet #133 | `ecece22058c997d37c4b352fa5ed32bd1daf5243` | 12 | 12 | 0 |
-| Agent E — Euler #134 | `b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6` | 17 | 17 | 0 |
+| Agent C — Cantor #132 | `8b22dc5df99111fb95e27a2c006d5e74544dd385` | 17 | 17 | 0 |
+| Agent D — Dirichlet #133 | `59c3f1b7ef7893eb93739936535668878a8fb8c5` | 11 | 11 | 0 |
+| Agent E — Euler #134 | `760467d4bfa54949bd7303cea944e338533289d9` | 13 | 13 | 0 |
 
-**Surviving total: 47. Correctness approvals: 47. Current C/D/E blockers: 0.**
+**Final surviving total: 41. Final correctness approvals: 41. Current C/D/E correctness blockers: 0.**
 
-The review standard for every retained family was: solve the candidate-visible problem independently; inspect the authored solution only afterward; verify all intended approaches, protected hints, extensions, prerequisites, parameter domains, and exceptional cases; and use finite computation only as supporting evidence, never as the general proof.
+Every retained author-PR record is pinned to its exact final author head. Removed families are not retained as current certifications.
 
-### Cantor current-version recheck
+### Cantor final diff-based recheck
 
-All 18 surviving Cantor families are correctness-approved at head `794fe228...`.
+Compared final head `8b22dc5...` against the latest previously reviewed Cantor head `794fe228...`.
 
-The previously repaired `oxford-cantor-reciprocal-implicit-curve` remains correct: the isolated origin is preserved separately from the four closest points on the nonzero branches, and the scaled extension retains that distinction.
+Final pruning removed `oxford-cantor-reciprocal-implicit-curve`, leaving 17 survivors. No replacement family was introduced.
 
-Cantor pruned `oxford-cantor-tangent-intersection-locus` and `oxford-cantor-line-envelope` and later changed protected hints/givens/extensions in surviving families. Agent I rechecked the current candidate-visible/protected material, including:
+Among surviving families, the only mathematical-payload change was candidate-visible guidance in:
 
-- `oxford-cantor-moving-v-envelope`;
-- `oxford-cantor-reciprocal-root-parabolas`;
-- `oxford-cantor-cubic-two-thresholds`;
-- `oxford-cantor-integral-sign-landscape`;
-- `oxford-cantor-mobius-recurrence`;
-- `oxford-cantor-squared-error-recurrence`;
-- `oxford-cantor-three-cycle-map`;
-- `oxford-cantor-reciprocal-increment-recurrence`;
-- `oxford-cantor-mobius-involution`;
-- `oxford-cantor-radical-asymptote`;
-- `oxford-cantor-shifted-cubic-intersections`;
-- `oxford-cantor-reciprocal-implicit-curve`.
+- `oxford-cantor-reciprocal-increment-recurrence`.
 
-The revised material remains mathematically valid and route-consistent. The current Möbius-involution hint explicitly defines the self-inverse composition property, resolving the earlier vocabulary concern. No replacement family was introduced. Latest post-certification Cantor commits were also diffed field-by-field and do not change any family statement, canonical solution, hint, extension, approach, or given; the decisions are therefore re-pinned to the newest head.
+The final given explicitly permits the decreasing-sum/integral comparison
 
-One non-blocking wording warning remains recorded: the `three-cycle-map` stretch asks broadly for “simple algebraic relations” rather than one unique target. This does not create a false mathematical claim or block correctness.
+`sum_{k=1}^{n-1} h(k) <= h(1) + integral_1^n h(t) dt`
 
-### Dirichlet current-version recheck
+for positive decreasing `h`. Agent I independently rechecked this guidance: for `k>=2`, monotonicity gives `h(k) <= integral_{k-1}^k h(t)dt`; summing yields the supplied inequality. Applying it to `h(t)=1/(a_0^2+2t)` gives a logarithmic bound on the reciprocal-square error, which is exactly what the canonical proof needs to conclude `a_n/sqrt(2n) -> 1`. The guidance is correct and removes the risk of treating harmonic/logarithmic comparison as hidden prior knowledge.
 
-Dirichlet pruned 10 previously present candidate families while this certification was in progress. The surviving 12 families at head `ecece220...` are:
+No other surviving Cantor statement, candidate-visible given, canonical solution, protected hint, approach, or extension changed. Existing correctness decisions were therefore re-pinned rather than re-solved.
 
-- `oxford-d-gcd-descent-network`
-- `oxford-d-thirds-closed-integers`
-- `oxford-d-balancing-transfers`
-- `oxford-d-cube-twist-equivalence`
-- `oxford-d-sliding-window-parity`
-- `oxford-d-weighted-cycle-readings`
-- `oxford-d-midpoint-closed-residues`
-- `oxford-d-mirror-orbits`
-- `oxford-d-odd-symmetric-difference`
-- `oxford-d-three-reversal-permutations`
-- `oxford-d-divisor-step-geometry`
-- `oxford-d-triple-flip-circle`
+### Dirichlet final diff-based recheck
 
-Their mathematical payloads did not materially change after the independent solves; the concurrent edits removed families and changed author-side metadata/support. Agent I therefore re-pinned the unchanged mathematical decisions to the latest author head and removed stale correctness records for the 10 non-surviving families.
+Compared final head `59c3f1b...` against previously reviewed head `ecece220...`.
 
-Important discrete checks included small-cardinality exceptions for thirds-closure, gcd/component assumptions, cyclic gcd-orbit counts, singular parity/readout cases, reachability kernels, and construction coverage.
+Final pruning removed:
 
-### Euler current-version recheck and repairs
+- `oxford-d-mirror-orbits`.
 
-Euler pruned two previously present candidate families, leaving 17 survivors. Mathematical source was certified at `e5f5b431...`; the subsequent `b0ac8821...` commits do not change mathematical family source, so Agent I re-pinned the unchanged mathematical decisions after inspecting that diff. The removed families are not counted as current certifications.
+The remaining 11 survivors have no changes to statement, candidate-visible givens, canonical solution, protected hints, approaches, or extensions. The changed Dirichlet files contain pruning plus author-side support/taxonomy/calibration/provenance work. The existing independent correctness decisions were re-pinned to the final head.
 
-The earlier queue specification blocker is repaired and independently reverified. The current `oxford-euler-periodic-queue-model` now explicitly states:
+### Euler final diff-based recheck
 
-- `a,b,q_0` are nonnegative integers;
-- `s` is a positive integer;
-- `q_0` is measured before odd minute 1;
-- arrivals occur before service;
-- the exact target is whether the queue ever reaches zero.
+Compared final head `760467d4...` against previously reviewed head `b0ac8821...`.
 
-With `Delta=a+b-2s`, Agent I independently verified that `Delta<0` forces eventual emptying, while for `Delta>=0` exact emptying is decided by the first two updated queue lengths; if both are positive, the same two-step map starts from a weakly larger even-phase queue and cannot create a later first zero. Exhaustive small-parameter simulation agreed with the proof.
+Final pruning removed:
 
-The circular random-adjacency domain is also repaired: candidate-visible givens now state `n>=3` for the circular version. The biased stop-on-change family explicitly states `0<p<1`, so its reciprocal waiting-time hints are valid. Euler also added explicit path/cycle size domains, kiosk positivity assumptions, and other boundary givens; Agent I rechecked these current candidate-visible versions.
+- `oxford-euler-locally-balanced-labels`;
+- `oxford-euler-random-adjacent-consecutives`;
+- `oxford-euler-random-subset-blocks`;
+- `oxford-euler-stop-on-change`.
 
-### Aggregate retained review state
+The remaining 13 family source files are unchanged. The other final Euler changes are registry/disclosure/authoring metadata rather than surviving mathematical payload. Existing independent correctness decisions were therefore re-pinned to the final head without unnecessary re-solving.
 
-Across the retained existing-bank and current author-PR records:
+The previously repaired `oxford-euler-periodic-queue-model` remains among the final survivors and remains correctness-approved with explicit domains, `q_0`, starting phase, event order, and exact emptying target.
 
-- Families independently solved/reviewed: **61**
-- Correctness approvals: **54**
-- Changes required: **7**
-- Reject recommendations: **0**
+### Final retained review state
+
+Across the final author snapshot plus the separate 14-family existing-bank baseline:
+
+- Retained review records: **55**
+- Final C/D/E author records: **41**
+- Final C/D/E correctness approvals: **41**
+- Existing-bank correctness approvals: **7**
+- Existing-bank changes required: **7**
+- Total retained approvals: **48**
+- Total retained changes required: **7**
+- Reject recommendations in the correctness ledger: **0**
 - Unresolved mathematical uncertainties: **0**
 
-All seven remaining `changes-required` records are the pre-existing legacy-bank solvability/prerequisite holds documented below. There are **no unresolved correctness blockers among surviving C/D/E families**.
+The seven remaining `changes-required` records are the pre-existing legacy-bank self-containment/prerequisite holds documented below. They are not blockers on the final C/D/E Wave 2 survivor set.
 
 ## Computational regression checks retained
 
@@ -186,11 +171,9 @@ All seven remaining `changes-required` records are the pre-existing legacy-bank 
 - triple-flip move-map kernel/image counts through `n=10`;
 - representative diagonal-bisector box-section vertex counts on both sides of the transition;
 - a finite-grid check of the circle-sweep sign-product criterion;
-- exhaustive line/circular random-subset block expectations through `n=7`;
 - regular-polygon random-chord midpoint expectations through `n=14`;
 - exhaustive small-set checks for the thirds-closed classification;
 - exhaustive sliding-window parity counts for every `1<=k<=n<=8`;
-- exhaustive random-adjacent linear/circular expectations through `n=7`;
 - exhaustive small-parameter queue checks for the revised emptying criterion.
 
 These checks are regression evidence only. The retained review records contain independent mathematical arguments for the general claims.
@@ -227,11 +210,13 @@ Specify `n` as an integer in the candidate-visible statement. Keep the reflectio
 
 ## Cross-agent handoff
 
-Agent I — Itô full-certification state is head-pinned and current:
+Agent I — Itô final Wave 2 correctness snapshot is head-pinned and complete:
 
-- Cantor #132: 18/18 surviving families approved at `794fe228...`;
-- Dirichlet #133: 12/12 surviving families approved at `ecece220...`;
-- Euler #134: 17/17 surviving families approved at `b0ac8821...`.
+- Cantor #132: **17/17** final survivors approved at `8b22dc5df99111fb95e27a2c006d5e74544dd385`;
+- Dirichlet #133: **11/11** final survivors approved at `59c3f1b7ef7893eb93739936535668878a8fb8c5`;
+- Euler #134: **13/13** final survivors approved at `760467d4bfa54949bd7303cea944e338533289d9`.
+
+Final total: **41/41 mathematicalCorrectness approved**.
 
 Removed author families are not retained as current certifications. Correctness decisions remain separate from Agent G taxonomy/difficulty/timing and Agent H originality/fidelity decisions.
 
