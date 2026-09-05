@@ -10,7 +10,7 @@ export const cantorGraphFamiliesA: readonly CantorFamilyAuthoring[] = [
     id: "oxford-cantor-moving-v-envelope",
     title: "The Lower Edge of Moving V-Shapes",
     category: "functions and graph sketching",
-    topics: ["absolute-value graphs", "parameter families", "optimization", "piecewise reasoning"],
+    topics: ["functions","graphs","absolute value","parameters"],
     prompt:
       "For each real number t, let g_t(x)=|x-t|+t². First sketch several members of this family. Then, for each fixed x, define m(x) to be the smallest value of g_t(x) as t varies over all real numbers. Determine and sketch m(x), and explain why its formula changes where it does.",
     givenInformation: [
@@ -143,7 +143,7 @@ export const cantorGraphFamiliesA: readonly CantorFamilyAuthoring[] = [
     id: "oxford-cantor-reciprocal-root-parabolas",
     title: "Parabolas with Reciprocal Roots",
     category: "algebra and graph sketching",
-    topics: ["quadratics", "parameter families", "reciprocal symmetry", "vertex loci"],
+    topics: ["quadratics","graphs","parameters","roots"],
     prompt:
       "For a>0, consider p_a(x)=(x-a)(x-1/a). Sketch a few examples. As a varies, what can you say about which different parabolas occur, where their axes lie, and the locus of their vertices?",
     givenInformation: [],
@@ -273,7 +273,7 @@ export const cantorGraphFamiliesA: readonly CantorFamilyAuthoring[] = [
     id: "oxford-cantor-cubic-two-thresholds",
     title: "A Cubic with Two Different Thresholds",
     category: "functions and calculus",
-    topics: ["cubic graphs", "parameter dependence", "turning points", "roots"],
+    topics: ["cubics","graphs","parameters","calculus"],
     prompt:
       "For real a, let f_a(x)=x(x²+a x+1). Investigate how the graph changes as a varies. In particular, identify the parameter values where turning points first appear and where additional real roots first appear, and explain why these are different thresholds.",
     givenInformation: [],
@@ -403,7 +403,7 @@ export const cantorGraphFamiliesA: readonly CantorFamilyAuthoring[] = [
     id: "oxford-cantor-cubic-divided-difference",
     title: "Equal Heights on a Cubic",
     category: "algebra and calculus",
-    topics: ["difference quotients", "cubic graphs", "equal function values", "parameter cases"],
+    topics: ["functions","cubics","algebra","calculus"],
     prompt:
       "Let f(x)=x³-x. Fix a real number a and, for x≠a, define q_a(x)=(f(x)-f(a))/(x-a). Simplify q_a, decide how it should be filled in at x=a, and use it to classify how many other real inputs x can satisfy f(x)=f(a) as a varies.",
     givenInformation: [],
@@ -533,7 +533,7 @@ export const cantorGraphFamiliesA: readonly CantorFamilyAuthoring[] = [
     id: "oxford-cantor-integral-sign-landscape",
     title: "Sketching an Integral from Its Derivative",
     category: "calculus and graph sketching",
-    topics: ["accumulation functions", "derivative signs", "symmetry", "root structure"],
+    topics: ["calculus","graphs","integrals","polynomials"],
     prompt:
       "Define F(x)=∫_0^x (t²-1)(t²-9) dt. Without first expanding and integrating, build as detailed a sketch of F as you can. Then determine exactly how many real zeros F has and locate them.",
     givenInformation: [],
