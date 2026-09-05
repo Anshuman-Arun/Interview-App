@@ -198,16 +198,21 @@ describe("editorial v10 adversarial UI states", () => {
     if (!(duration instanceof HTMLInputElement) || !(start instanceof HTMLButtonElement)) {
       throw new Error("New Interview duration controls did not mount");
     }
-    const setValue = Object.getOwnPropertyDescriptor(
+    const valueDescriptor = Object.getOwnPropertyDescriptor(
       HTMLInputElement.prototype,
       "value"
-    )?.set;
-    if (setValue === undefined) throw new Error("input value setter unavailable");
+    );
+    if (valueDescriptor?.set === undefined) {
+      throw new Error("input value setter unavailable");
+    }
+    const setValue = (value: string): void => {
+      valueDescriptor.set?.call(duration, value);
+    };
 
     expect(start.disabled).toBe(false);
 
     await act(async () => {
-      setValue.call(duration, "4");
+      setValue("4");
       duration.dispatchEvent(new Event("input", { bubbles: true }));
     });
     expect(duration.getAttribute("aria-invalid")).toBe("true");
@@ -217,14 +222,14 @@ describe("editorial v10 adversarial UI states", () => {
     );
 
     await act(async () => {
-      setValue.call(duration, "5");
+      setValue("5");
       duration.dispatchEvent(new Event("input", { bubbles: true }));
     });
     expect(duration.getAttribute("aria-invalid")).toBe("false");
     expect(start.disabled).toBe(false);
 
     await act(async () => {
-      setValue.call(duration, "5.5");
+      setValue("5.5");
       duration.dispatchEvent(new Event("input", { bubbles: true }));
     });
     expect(start.disabled).toBe(true);
