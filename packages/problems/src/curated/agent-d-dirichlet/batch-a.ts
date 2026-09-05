@@ -134,7 +134,7 @@ export const oxfordDThirdsClosedIntegersSpec: CuratedProblemSpec = {
     contentConcepts: ["modular-reasoning", "logical-structure"],
     prerequisiteConcepts: ["arithmetic", "modular-arithmetic", "logical-quantifiers"],
     skillEvidence: [evidence("small-case-exploration", "primary"), evidence("case-analysis", "primary"), evidence("pattern-recognition", "supporting"), evidence("proof-construction", "primary"), evidence("generalization", "supporting"), evidence("precision-checking", "supporting")],
-    difficulty: { entry: "introductory-plus", core: "standard", ceiling: "strong" },
+    difficulty: { entry: "introductory-plus", core: "strong", ceiling: "strong" },
     novelty: "high",
     abstraction: "moderate",
     introducesNewDefinition: true,
@@ -144,7 +144,7 @@ export const oxfordDThirdsClosedIntegersSpec: CuratedProblemSpec = {
         { milestoneId: "forbid-nearby-residue-repeat", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["modular-reasoning"] },
         { milestoneId: "force-three-residue-cycle", skillEvidence: [evidence("pattern-recognition", "primary")], contentConcepts: ["modular-reasoning"] },
         { milestoneId: "force-equal-gaps", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["logical-structure"] }
-      ], extensionIds: [], difficulty: "standard" },
+      ], extensionIds: [], difficulty: "strong" },
       { id: "thirds-transfer", role: "transfer", prerequisiteStageIds: ["thirds-core"], domains: ["number-theory", "logic-proof"], contentConcepts: ["modular-reasoning", "logical-structure"], skillEvidence: [evidence("generalization", "primary"), evidence("precision-checking", "supporting")], milestones: [{ milestoneId: "prove-classification-converse", skillEvidence: [evidence("precision-checking", "primary"), evidence("generalization", "supporting")], contentConcepts: ["logical-structure", "modular-reasoning"] }], extensionIds: ["small-size-boundary", "q-section-conjecture"], difficulty: "strong" }
     ]
   })
