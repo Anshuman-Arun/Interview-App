@@ -17,29 +17,23 @@ Every family keeps separate decisions:
 - originality: `PASS | PASS_WITH_NOTES | REVISE | REJECT_TOO_CLOSE`;
 - fidelity: `PASS | PASS_WITH_NOTES | REVISE | REJECT_NOT_OXFORD_LIKE`.
 
-A family can be Oxford-like but non-original, original but unsuitable as an Oxford interview, both, or neither.
-
-For the current-bank baseline, `REVISE` on originality means that a legacy/classic fixture is still stored with provisional/unknown adaptive provenance and therefore cannot receive an originality/provenance approval yet. It does **not** claim that a known classic must be deleted. A truthfully labelled `classic-problem` may later be recommendation-ready under the frozen contract after independent reviews and calibration pass.
-
-If the same known classic were submitted as a **new independent-original** family, the recorded hard structural match would instead justify `REJECT_TOO_CLOSE`.
+A family can be Oxford-like but non-original, original but unsuitable as an Oxford interview, both, or neither. Classic mathematics can clear Hilbert only with truthful provenance; new wording or staging never turns a classic kernel into an independent-original one.
 
 ## Mandatory five-pool retrieval
 
-Every production proposal must record completion of all five pools:
+Every retained production proposal records all five pools:
 
 - **A** — deep official benchmark corpus;
 - **B** — broader reference inventory;
 - **C** — current Interview App bank;
-- **D** — same-wave proposals;
-- **E** — external/classic mathematical search.
+- **D** — surviving same-wave proposals;
+- **E** — mandatory external/classic mathematical search.
 
-Pool E is mandatory even when A–D are clean. Phrase similarity alone is insufficient: reviewers compare normalized setup, target, kernel, decisive mechanism, diagram topology, progression, transfer/stretch, and solution dependency.
-
-A pool may truthfully report that no plausible neighbour was found, but it may not be omitted.
+Pool E is required even when A–D are clean. Absence from a local corpus is never treated as evidence of originality. Review compares objects, constraints, target, kernel, decisive mechanism, diagram topology, representation change, reveal sequence, extensions, and solution dependency structure.
 
 ## Mathematical fingerprint
 
-Audit records retain source-independent fingerprints rather than full source/problem text. The validator requires:
+Audit records retain source-independent fingerprints rather than copied external problem text. The validator requires:
 
 - surface objects and constraints;
 - target type;
@@ -53,19 +47,28 @@ Audit records retain source-independent fingerprints rather than full source/pro
 - classic overlap;
 - truthful provenance.
 
-This follows the Wave 1 fingerprint contract while avoiding copyrighted source reproduction.
-
 ## Guided adaptation and error recovery
 
-This audit does not infer either process-grounded skill from milestone completion. A family may be designed to elicit `guided-adaptation` or `error-recovery`, but candidate evidence still requires the authoritative event relationship defined by Agent A (intervention/error followed by grounded subsequent progress).
+This audit does not infer either process-grounded skill from milestone completion. A family may be designed to elicit `guided-adaptation` or `error-recovery`, but candidate evidence still requires the authoritative event relationship defined by Agent A.
 
-## Current baseline
+## Retained audit snapshots
 
 `current-bank-baseline.json` covers all 13 default Oxford fixtures plus the isolated Catalan expert-review fixture at main commit `454a2fe993c8fd70676d04e5d262a1780161f0d6`.
 
-`same-wave-high-risk-batch.json` adds a risk-prioritized 12-family audit across Agent C — Cantor PR #132, Agent D — Dirichlet PR #133, and Agent E — Euler PR #134. It is not an exhaustive audit of all 61 authored proposals; it satisfies the Wave 2 requirement to inspect a reasonable available batch while concentrating independent review on the highest collision risks.
+`same-wave-full-certification.json` is the authoritative Wave 2 C/D/E Hilbert snapshot. It certifies **every 47 surviving author family** at these exact heads:
 
-The baseline deliberately does **not** edit production problem metadata. It is an independent review artifact. A later migration must update provenance/review fields through the existing curated-problem path and must still satisfy Agent G calibration and Agent I correctness review.
+- Agent C — Cantor PR #132: `0d4941ab3197b2297ab389d7438df39f599b2ad5` — 18 survivors;
+- Agent D — Dirichlet PR #133: `ecece22058c997d37c4b352fa5ed32bd1daf5243` — 12 survivors;
+- Agent E — Euler PR #134: `165bb3100fb894158969abb808caad5bc9150807` — 17 survivors.
+
+The author completion passes introduced **no replacement families**. Cantor removed 2 prior hard rejects, Dirichlet pruned 10 classic/standard kernels, and Euler removed 2 prior hard rejects. Material provenance/staging changes were re-audited at the heads above.
+
+`same-wave-high-risk-batch.json` is retained only as an archival record of the earlier 12-family risk-prioritized pass. It does not drive completion or the default validator.
+
+Current same-wave certification counts:
+
+- originality: `PASS 0 / PASS_WITH_NOTES 35 / REVISE 6 / REJECT_TOO_CLOSE 6`;
+- fidelity: `PASS 40 / PASS_WITH_NOTES 7 / REVISE 0 / REJECT_NOT_OXFORD_LIKE 0`.
 
 ## Validation
 
@@ -75,6 +78,6 @@ Run:
 node scripts/validate-oxford-audits.mjs
 ```
 
-With no path argument, the validator checks both retained audit documents. A specific audit JSON path can be supplied to validate only that file.
+With no path argument, the validator checks the current-bank baseline and the authoritative full C/D/E certification. A specific audit JSON path can be supplied to validate only that file.
 
-The validator fails closed on incomplete fingerprints, missing retrieval pools, missing external search evidence, invalid decision enums, out-of-range similarity scores, originality passes that conflict with Wave 1 hard-fail score combinations, duplicate family IDs, or audit keys that attempt to store full source/problem/solution text.
+The validator fails closed on incomplete fingerprints, missing retrieval pools, missing external-search evidence, invalid decision enums, out-of-range similarity scores, originality passes that conflict with hard-fail score combinations unless provenance is explicitly truthful-classic, duplicate family IDs, or forbidden full source/problem/solution text keys.
