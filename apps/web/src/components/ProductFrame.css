@@ -32,7 +32,7 @@
   text-align: left;
 }
 
-.product-frame__brand:hover {
+.product-frame__brand:hover:not(:disabled) {
   border-color: var(--border-subtle);
 }
 
@@ -66,6 +66,12 @@
   cursor: pointer;
 }
 
+.product-frame__brand:disabled,
+.product-frame__new:disabled {
+  cursor: default;
+  opacity: .5;
+}
+
 .product-frame__new span:first-child {
   font: 500 11px/1 var(--font-ui);
 }
@@ -74,7 +80,7 @@
   font: 400 16px/1 var(--font-display);
 }
 
-.product-frame__new:hover {
+.product-frame__new:hover:not(:disabled) {
   transform: translate(-1px, -1px);
   box-shadow: 5px 5px 0 color-mix(in srgb, var(--text-primary) 8%, transparent);
 }
