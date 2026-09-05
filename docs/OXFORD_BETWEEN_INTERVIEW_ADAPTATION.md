@@ -27,6 +27,8 @@ The projector never rewrites session events or treats its own estimates as histo
 
 Problem eligibility is fail-closed through the canonical `isOxfordRecommendationReady(...)` helper. The recommender does not reconstruct that readiness contract.
 
+Wave 2 reviewer artifacts from G/Gauss, H/Hilbert, and I/Itô are **evidence packets**, not runtime approval. A JSON review record can exist and even recommend approval while the branch-local canonical problem metadata remains unapproved. Fourier never consumes those records as an admission override: the selectable pool changes only when the canonical metadata itself satisfies `isOxfordRecommendationReady(...)`.
+
 ## Competency layers
 
 The profile retains all canonical taxonomy members so an unseen competency is represented explicitly rather than disappearing from the model.
@@ -53,7 +55,7 @@ Assistance exposure, independent-work evidence, guided-adaptation evidence, and 
 
 ## Conservative evidence update math
 
-The numbers are heuristic indices, not psychometric probabilities.
+The numbers are heuristic indices, not psychometric probabilities. Strength is not a probability that a candidate "knows" a topic, confidence is evidence sufficiency for this derived heuristic rather than statistical confidence, and uncertainty is a conservative lack-of-evidence signal rather than a posterior variance. Low-evidence competencies therefore remain uncertainty-heavy.
 
 For grounded observation (i):
 
@@ -254,6 +256,8 @@ Tie-breaking is deterministic:
 
 No random selection is used.
 
+The ranking score is a **heuristic priority index**, not a probability, expected success rate, calibrated utility, or statistical confidence. A score gap such as 0.712 versus 0.705 must not be presented as evidence that the first problem is meaningfully or measurably better. The factor breakdown exists for deterministic explainability and debugging, not inferential precision.
+
 ## Cold start
 
 Cold start means there is no grounded competency evidence.
@@ -280,6 +284,18 @@ Weights are:
 | session fit | 0.08 |
 
 If only one recommendation-ready candidate remains, it is returned rather than introducing randomness.
+
+If **zero** candidates pass the canonical readiness gate, Fourier returns:
+
+```
+outcome: "NO_RECOMMENDATION_READY_CANDIDATES"
+selected: undefined
+recommendationReadyCandidateCount: 0
+```
+
+It does not fall back to author/expert-review candidates, branch-local G/H/I review records, provisional legacy, or an invented recommendation.
+
+If one or more candidates are canonical-ready but every one is removed by prerequisite, cooldown, time, or difficulty filters, the distinct outcome is `NO_ELIGIBLE_CANDIDATES`. This keeps certification shortage separate from ordinary scheduling/suitability filtering.
 
 ## Output contract
 
@@ -308,6 +324,16 @@ It is **not** accepted as an input to the recommender and is never used as:
 - a ranking weight.
 
 Tests explicitly verify that extraneous portfolio-count-shaped data cannot alter deterministic ranking.
+
+### Wave 2 certification compatibility
+
+At the current Wave 2 authoring heads inspected by Agent F — Fourier:
+
+- C / Cantor contributes 20 author candidates;
+- D / Dirichlet contributes 22 author candidates;
+- E / Euler contributes 19 author candidates.
+
+That is a temporary 61-family expert-review pool, but the author branches explicitly keep their canonical independent review/calibration gates non-ready. Fourier is intentionally mergeable before those branches finish certification: synthetic fixtures exercise admission and ranking without importing C/D/E branch-local files. When certification later lands in canonical metadata, the same readiness helper admits the newly approved families without a recommender-specific migration.
 
 ## Deferred integration
 
