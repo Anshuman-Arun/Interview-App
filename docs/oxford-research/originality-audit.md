@@ -190,82 +190,137 @@ The total is only a triage device. A reviewer may reject below 9 when the overla
 
 ---
 
-## 5. Retrieval / automated prefilter
+## 5. Mandatory nearest-neighbour retrieval
 
-Text similarity alone is insufficient. The practical pipeline should retrieve nearest neighbours using multiple normalized views.
+**The local benchmark corpus is not an exhaustive whitelist of Oxford questions. Passing local similarity checks alone is insufficient for originality approval.**
 
-### 5.1 Lexical pass
+Agent H must perform nearest-neighbour retrieval for **every** proposed family before giving an originality decision. This is a merge requirement, not an optional escalation for suspicious cases.
 
-Compare normalized problem/prompt text using:
+The retrieval packet must search the proposed family through multiple normalized views. Wording similarity is only one view.
 
-- case/punctuation normalization;
-- n-gram/shingle overlap;
-- distinctive phrase matching;
-- edit/sequence similarity.
+### 5.1 Normalized statement pass
 
-Flag nontrivial phrase overlap.
+Create a normalized representation where:
 
-### 5.2 Number/variable-normalized pass
-
-Create a copy where:
-
+- case/punctuation/formatting differences are removed;
 - variable names are canonicalized;
-- numeric constants are replaced by typed placeholders;
-- object names are generalized where safe;
-- formatting differences are removed.
+- numeric constants are replaced by typed placeholders where doing so preserves structure;
+- incidental story/object names are generalized;
+- distinctive mathematical relations and constraints are retained.
 
-This detects “same problem, different 7/11/x/y.”
+Compare lexical shingles/phrases **and** the normalized structure. This catches direct copying and trivial number/variable/context substitutions.
 
-### 5.3 Semantic pass
+### 5.2 Mathematical fingerprint pass
 
-Embed/search over short structural summaries:
+Search using the authored fingerprint fields independently and in combinations:
+
+- mathematical objects;
+- constraints;
+- target type;
+- central mechanism/invariant/construction;
+- secondary mechanisms;
+- small-case signature;
+- progression signature;
+- critical representation change;
+- extensions/generalizations.
+
+The search query should describe the mathematics, not quote the candidate wording.
+
+### 5.3 Semantic/structural pass
+
+Retrieve neighbours over concise source-independent summaries of:
 
 - setup;
 - target;
-- central mechanism;
-- progression signature.
+- mathematical kernel;
+- decisive mechanism;
+- progression;
+- transfer/stretch path.
 
-Retrieve top-k nearest neighbours. Do **not** use embedding score as the final originality verdict.
+Embedding/semantic score may rank candidates, but it must never be the final originality verdict.
 
-### 5.4 Mathematical-structure pass
+### 5.4 Mathematical-form pass
 
-Where feasible, canonicalize:
+Where feasible, normalize:
 
 - equations/inequalities;
-- graph/recurrence forms;
+- recurrence or graph forms;
 - combinatorial state descriptions;
-- incidence/adjacency structure;
-- proof mechanism tags.
+- incidence/adjacency relations;
+- proof-mechanism tags;
+- parameter roles.
 
-A later implementation may use symbolic/AST-like normalization, but human review remains mandatory.
+A later implementation may use symbolic/AST-like canonicalization. Human mathematical review remains mandatory even if automated structure matching improves.
 
-### 5.5 Diagram pass
+### 5.5 Diagram-topology pass
 
-For visual questions, compare a textual topology fingerprint rather than image pixels only:
+For visual questions, compare a textual topology fingerprint rather than image pixels alone:
 
 - number/type of objects;
 - incidence;
 - adjacency;
 - fixed/moving relationships;
 - symmetries;
-- which quantities are constrained;
-- which part is modified in extensions.
+- constrained quantities;
+- which object/constraint changes in extensions.
 
-A rotated/recolored/redrawn source diagram should still match structurally.
+Rotation, reflection, rescaling, recoloring, different drawing style, or different object names do not make the construction original.
+
+### 5.6 External mathematical search — mandatory
+
+For every proposal, Agent H must perform an **external/classic mathematical problem search** using the fingerprint, even when all local checks are clean.
+
+At minimum issue searches built from several of:
+
+- object + constraint + target;
+- central mechanism + target;
+- unusual representation change;
+- distinctive small cases or parameter relation;
+- progression signature;
+- diagram topology in words;
+- extension/generalization pattern.
+
+Search authoritative/primary sources when available, but also search broadly enough to detect famous olympiad, puzzle, textbook, contest, admissions, and recreational-mathematics families. The purpose here is collision detection, not source-quality endorsement.
+
+Do not search only the generated sentence. A rewritten classic will often have low textual similarity but high mathematical similarity.
+
+If external retrieval finds a plausible neighbour, record it and run the same pairwise similarity rubric as for local sources.
+
+### 5.7 Required retained retrieval evidence
+
+The final audit record must retain the **strongest nearest matches**, not merely a boolean “search passed.”
+
+For each retained match record:
+
+- source/id/URL when available;
+- which retrieval pool found it;
+- matched fingerprint features;
+- pairwise 0–3 similarity scores;
+- a short mathematical explanation of why it is or is not too close.
+
+Retain at least the strongest match from each pool that produced a plausible result. “No plausible result found” is acceptable only after the required search was actually performed.
 
 ---
 
-## 6. Review set
+## 6. Required comparison pools
 
-Agent H must compare against four pools.
+Agent H must compare against **five** pools.
 
-### Pool A — official benchmark corpus
+### Pool A — deep official benchmark corpus
 
 `docs/oxford-research/official-benchmark-corpus.json`
 
-Purpose: prevent direct or structural lifting from the very examples used to learn Oxford style.
+Purpose: prevent direct or structural lifting from the examples used to learn Oxford style.
 
-### Pool B — current Interview App bank
+### Pool B — broader Oxford/reference inventory
+
+`docs/oxford-research/reference-inventory.json`
+
+Purpose: catch collisions with official/sample/preparation/interview material that is not deeply annotated.
+
+This inventory is deliberately non-exhaustive. A missing entry has no originality implication.
+
+### Pool C — current Interview App bank
 
 Purpose:
 
@@ -273,15 +328,24 @@ Purpose:
 - prevent new “original” items from merely reworking legacy classics;
 - populate `similarityClusterId` for repetition control.
 
-### Pool C — same-wave proposals
+### Pool D — same-wave proposals
 
-Purpose: concurrent authors can independently converge on the same classic/invariant. Cross-compare all proposals before merge.
+Purpose: concurrent authors can independently converge on the same classic, invariant, diagram, or progression. Cross-compare all proposals before merge.
 
-### Pool D — known classics
+### Pool E — external/classic mathematical search
 
-If a proposal resembles a famous puzzle/theorem, search/identify it even if it is absent from the official corpus.
+This pool is **mandatory for every family**, not just a manual fallback.
 
-Examples of high-risk classic families include:
+Search outside the local repository using the mathematical fingerprint. Include likely:
+
+- classic puzzles/theorems;
+- olympiad/contest problem families;
+- admissions/interview collections;
+- textbooks/lecture problems;
+- recreational-mathematics sources;
+- official Oxford material not yet present in the inventory.
+
+Examples of already known high-risk classic families include:
 
 - mutilated-board coloring;
 - standard Euclid-prime contradiction;
@@ -291,6 +355,8 @@ Examples of high-risk classic families include:
 - textbook Fibonacci tilings.
 
 Classic material can remain in a legacy/training bank with explicit provenance, but should not be approved as a newly original Oxford family.
+
+**Approval invariant:** Pools A–D being clean does not permit `PASS` if Pool E was not searched.
 
 ---
 
@@ -349,8 +415,19 @@ ORIGINALITY_DECISION:
 FIDELITY_DECISION:
   PASS | PASS_WITH_NOTES | REVISE | REJECT_NOT_OXFORD_LIKE
 
+RETRIEVAL_COMPLETED:
+  deep_benchmark_corpus: yes/no
+  broad_reference_inventory: yes/no
+  current_app_bank: yes/no
+  same_wave_candidates: yes/no
+  external_mathematical_search: yes/no
+
 NEAREST_MATCHES:
-  - id/source:
+  - pool: A | B | C | D | E
+    id/source:
+    url:
+    matched_fingerprint_features:
+      - ...
     similarity:
       wording: 0-3
       setup: 0-3
@@ -360,7 +437,10 @@ NEAREST_MATCHES:
       diagram: 0-3
       progression: 0-3
       transfer_stretch: 0-3
-    explanation:
+    explanation_why_safe_or_too_close:
+
+EXTERNAL_SEARCH_QUERIES:
+  - ...
 
 HARD_FAIL_RULES_TRIGGERED:
   - none | R1 | R2 | R3 | R4 | R5 | R6 | R7
@@ -489,6 +569,8 @@ A new Oxford family may enter the production-ready bank only if:
 - difficulty is at least expert-estimated;
 - timing is explicitly internal/estimated unless empirically calibrated;
 - provenance is recorded;
+- mandatory five-pool nearest-neighbour retrieval is complete;
+- strongest nearest matches and their mathematical explanations are retained;
 - nearest-neighbour/similarity cluster is recorded where relevant.
 
-No author should self-approve originality for their own family.
+A missing external search is an automatic originality-review failure. No author should self-approve originality for their own family.
