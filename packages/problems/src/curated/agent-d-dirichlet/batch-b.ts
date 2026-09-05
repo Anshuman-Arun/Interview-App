@@ -212,7 +212,7 @@ export const oxfordDLaminarFamilySpec: CuratedProblemSpec = {
   category: "combinatorics",
   topics: ["set systems", "extremal reasoning", "tree representation"],
   difficulty: "uncalibrated-oxford-candidate",
-  prompt: "Let U be an n-element set. A family F of nonempty subsets of U contains U and every singleton, and has the property that for any A,B in F, either A is contained in B, B is contained in A, or A and B are disjoint. Prove a sharp upper bound on |F| and characterize when equality holds.",
+  prompt: "Let U be an n-element set with n>=1. A family F of nonempty subsets of U contains U and every singleton, and has the property that for any A,B in F, either A is contained in B, B is contained in A, or A and B are disjoint. Prove a sharp upper bound on |F| and characterize when equality holds.",
   givenInformation: ["The displayed nested-or-disjoint property is sometimes called laminarity, but no prior knowledge of that term is needed."],
   approaches: [{ id: "inclusion-tree", label: "Turn containment into a rooted tree and count leaves versus internal nodes" }],
   milestones: [
