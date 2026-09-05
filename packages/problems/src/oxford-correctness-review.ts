@@ -49,6 +49,7 @@ export interface OxfordCorrectnessReviewSource {
   readonly kind: "existing-bank" | "author-pr";
   readonly authorAgent?: string;
   readonly prNumber?: number;
+  readonly reviewedAuthorHead?: string;
 }
 
 export interface OxfordCorrectnessReviewRecord {
@@ -80,6 +81,7 @@ const FINDING_SEVERITY_SET = new Set<string>(OXFORD_CORRECTNESS_FINDING_SEVERITI
 const CANONICAL_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const SEMVER = /^\d+\.\d+\.\d+$/u;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
+const GIT_SHA = /^[0-9a-f]{40}$/u;
 
 export function assertOxfordCorrectnessReviewRecord(
   value: unknown
@@ -101,8 +103,13 @@ export function assertOxfordCorrectnessReviewRecord(
     if (!Number.isInteger(value.source.prNumber) || (value.source.prNumber as number) <= 0) {
       throw new Error("source.prNumber must be a positive integer for author-pr reviews");
     }
-  } else if (value.source.authorAgent !== undefined || value.source.prNumber !== undefined) {
-    throw new Error("existing-bank review source must not claim an author PR");
+    assertPatternString(value.source.reviewedAuthorHead, GIT_SHA, "source.reviewedAuthorHead");
+  } else if (
+    value.source.authorAgent !== undefined
+    || value.source.prNumber !== undefined
+    || value.source.reviewedAuthorHead !== undefined
+  ) {
+    throw new Error("existing-bank review source must not claim an author PR or author head");
   }
 
   if (typeof value.mathematicalCorrectness !== "string"
