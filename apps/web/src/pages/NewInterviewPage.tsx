@@ -507,7 +507,7 @@ export function NewInterviewPage({
                         disabled={startPending}
                         onChange={(event) => {
                           const next = event.target.value;
-                          if (!/^\d{0,3}$/u.test(next)) return;
+                          if (!/^\d{0,3}(?:\.\d*)?$/u.test(next)) return;
                           setDurationText(next);
                           if (formError !== null) setFormError(null);
                         }}
