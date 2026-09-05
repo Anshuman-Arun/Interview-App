@@ -212,7 +212,7 @@ export function VoiceControls({
       <details ref={detailsRef} className="voice-strip__devices">
         <summary aria-label="Choose audio devices">
           Audio
-          <span aria-hidden="true">⌄</span>
+          <span className="voice-strip__chevron" aria-hidden="true" />
         </summary>
         <div className="voice-strip__popover">
           <div className="voice-strip__popover-header">
