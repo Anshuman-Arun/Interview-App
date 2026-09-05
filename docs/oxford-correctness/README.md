@@ -91,8 +91,8 @@ Agent I — Itô completed a final diff-based synchronization against the author
 | Author PR | Final reviewed head | Final survivors | Approved | Changes required |
 | --- | --- | ---: | ---: | ---: |
 | Agent C — Cantor #132 | `8b22dc5df99111fb95e27a2c006d5e74544dd385` | 17 | 17 | 0 |
-| Agent D — Dirichlet #133 | `59c3f1b7ef7893eb93739936535668878a8fb8c5` | 11 | 11 | 0 |
-| Agent E — Euler #134 | `760467d4bfa54949bd7303cea944e338533289d9` | 13 | 13 | 0 |
+| Agent D — Dirichlet #133 | `1d9222ed89895f643b4f25429b0a5dbe1dac0a4c` | 11 | 11 | 0 |
+| Agent E — Euler #134 | `2373479c4f52c23f0a7f71ce423ec8511d5a9d91` | 13 | 13 | 0 |
 
 **Final surviving total: 41. Final correctness approvals: 41. Current C/D/E correctness blockers: 0.**
 
@@ -118,17 +118,17 @@ No other surviving Cantor statement, candidate-visible given, canonical solution
 
 ### Dirichlet final diff-based recheck
 
-Compared final head `59c3f1b...` against previously reviewed head `ecece220...`.
+Compared final head `1d9222ed...` against previously reviewed head `ecece220...`.
 
 Final pruning removed:
 
 - `oxford-d-mirror-orbits`.
 
-The remaining 11 survivors have no changes to statement, candidate-visible givens, canonical solution, protected hints, approaches, or extensions. The changed Dirichlet files contain pruning plus author-side support/taxonomy/calibration/provenance work. The existing independent correctness decisions were re-pinned to the final head.
+The remaining 11 survivors have no changes to statement, candidate-visible givens, canonical solution, protected hints, approaches, or extensions. A later post-prune diff to `1d9222ed...` also leaves all six mathematical payload fields unchanged. The changed Dirichlet files contain pruning plus author-side support/taxonomy/calibration/provenance work. The existing independent correctness decisions were re-pinned to the final head.
 
 ### Euler final diff-based recheck
 
-Compared final head `760467d4...` against previously reviewed head `b0ac8821...`.
+Compared final head `2373479c...` against previously reviewed head `b0ac8821...`.
 
 Final pruning removed:
 
@@ -137,7 +137,7 @@ Final pruning removed:
 - `oxford-euler-random-subset-blocks`;
 - `oxford-euler-stop-on-change`.
 
-The remaining 13 family source files are unchanged. The other final Euler changes are registry/disclosure/authoring metadata rather than surviving mathematical payload. Existing independent correctness decisions were therefore re-pinned to the final head without unnecessary re-solving.
+The remaining 13 family source files are unchanged. A later post-prune diff to `2373479c...` changes only docs/tests plus removal of the stale `random-subset-blocks` similarity-cluster entry from authoring metadata. No surviving mathematical payload changes. Existing independent correctness decisions were therefore re-pinned to the final head without unnecessary re-solving.
 
 The previously repaired `oxford-euler-periodic-queue-model` remains among the final survivors and remains correctness-approved with explicit domains, `q_0`, starting phase, event order, and exact emptying target.
 
@@ -213,8 +213,8 @@ Specify `n` as an integer in the candidate-visible statement. Keep the reflectio
 Agent I — Itô final Wave 2 correctness snapshot is head-pinned and complete:
 
 - Cantor #132: **17/17** final survivors approved at `8b22dc5df99111fb95e27a2c006d5e74544dd385`;
-- Dirichlet #133: **11/11** final survivors approved at `59c3f1b7ef7893eb93739936535668878a8fb8c5`;
-- Euler #134: **13/13** final survivors approved at `760467d4bfa54949bd7303cea944e338533289d9`.
+- Dirichlet #133: **11/11** final survivors approved at `1d9222ed89895f643b4f25429b0a5dbe1dac0a4c`;
+- Euler #134: **13/13** final survivors approved at `2373479c4f52c23f0a7f71ce423ec8511d5a9d91`.
 
 Final total: **41/41 mathematicalCorrectness approved**.
 
