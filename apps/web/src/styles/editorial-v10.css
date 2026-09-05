@@ -2213,8 +2213,8 @@ summary:focus-visible,
 
 @media (max-height: 360px) {
   .app-header {
-    min-height: 42px;
-    flex-basis: 42px;
+    min-height: 42px !important;
+    flex: 0 0 42px;
   }
 
   .compact-workspace-tabs {
@@ -3456,8 +3456,8 @@ summary:focus-visible,
 
 @media (max-height: 200px) {
   .app-header {
-    min-height: 30px;
-    flex-basis: 30px;
+    min-height: 30px !important;
+    flex: 0 0 30px;
   }
 
   .compact-workspace-tabs {
