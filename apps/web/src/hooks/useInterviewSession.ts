@@ -1308,7 +1308,7 @@ export function useInterviewSession(
           || resolvedConfiguration.mode === "OXFORD_MATHEMATICS";
         if (sessionId !== targetSessionId) {
           pendingSubmissionsRef.current.clear();
-    retrySubmissionsInFlightRef.current.clear();
+          retrySubmissionsInFlightRef.current.clear();
           resetBoardSync();
           if (usesOxfordWorkspace && sessionId === null) {
             boardBootstrapSessionRef.current = targetSessionId;
@@ -1421,7 +1421,7 @@ export function useInterviewSession(
 
         if (summary.status === "COMPLETED" || summary.status === "ARCHIVED") {
           pendingSubmissionsRef.current.clear();
-    retrySubmissionsInFlightRef.current.clear();
+          retrySubmissionsInFlightRef.current.clear();
           resetBoardSync();
           sessionMutationAdmissionRef.current = false;
           setSessionId(targetSessionId);
@@ -1453,7 +1453,7 @@ export function useInterviewSession(
         if (sessionTransitionEpochRef.current !== transitionEpoch) return null;
         if (sessionId !== targetSessionId) {
           pendingSubmissionsRef.current.clear();
-    retrySubmissionsInFlightRef.current.clear();
+          retrySubmissionsInFlightRef.current.clear();
           resetBoardSync();
         }
         setSessionId(targetSessionId);
