@@ -2211,6 +2211,71 @@ summary:focus-visible,
   }
 }
 
+@media (max-height: 360px) {
+  .app-header {
+    min-height: 42px;
+    flex-basis: 42px;
+  }
+
+  .compact-workspace-tabs {
+    min-height: 28px;
+    padding: 2px 6px;
+  }
+
+  .compact-workspace-tabs button {
+    min-height: 23px;
+  }
+
+  .problem-block {
+    display: none;
+  }
+
+  .live-transcript-region .transcript-feed__header {
+    min-height: 22px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+
+  .input-dock {
+    padding: 4px 6px 5px;
+  }
+
+  .input-dock .voice-strip {
+    min-height: 22px;
+    margin-bottom: 3px;
+  }
+
+  .input-dock .voice-strip__mic,
+  .input-dock .voice-strip__devices > summary {
+    min-height: 22px;
+  }
+
+  .input-dock .voice-strip__state {
+    display: none;
+  }
+
+  .input-dock .reasoning-composer__head,
+  .input-dock .reasoning-composer__meta {
+    display: none;
+  }
+
+  .input-dock .reasoning-composer__textarea {
+    min-height: 34px;
+    max-height: 48px;
+    padding: 5px 7px;
+  }
+
+  .input-dock .reasoning-composer__foot {
+    min-height: 26px;
+    padding: 2px 4px;
+    justify-content: flex-end;
+  }
+
+  .input-dock .reasoning-composer__submit {
+    min-height: 22px;
+  }
+}
+
 /* Quant workspaces -------------------------------------------------------- */
 
 .quant-session-shell {
