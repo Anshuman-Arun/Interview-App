@@ -4,7 +4,7 @@ import { makeEulerCandidateSpec } from "./oxford-euler-authoring.js";
 export const oxfordEulerCornerBalancedTablesSpec = makeEulerCandidateSpec({
   "id":"oxford-euler-corner-balanced-tables","title":"Corner-Balanced Tables","category":"definitions","topics":["arrays","local constraints","row-column decomposition","degrees of freedom"],
   "prompt":"A rectangular table of real numbers is called corner-balanced if every adjacent 2 by 2 block has equal diagonal sums: top-left + bottom-right = top-right + bottom-left. Explore small examples. Characterize every corner-balanced m by n table, and decide how much information is needed to determine the whole table.",
-  "givenInformation":["Only adjacent 2 by 2 blocks are assumed in the definition.","Rows and columns are labeled, but no ordering of the numerical entries is assumed."],
+  "givenInformation":["m and n are positive integers; the cases m=1 or n=1 are allowed.","Only adjacent 2 by 2 blocks are assumed in the definition.","Rows and columns are labeled, but no ordering of the numerical entries is assumed."],
   "domains":["algebra","combinatorics"],"contentConcepts":["algebraic-identities","counting-structure"],"prerequisiteConcepts":["arithmetic","algebraic-manipulation","counting-principles"],
   "skills":["definition-exploration","small-case-exploration","pattern-recognition","proof-construction","abstraction","generalization","representation-switching","precision-checking","transfer"],
   "difficulty":{"entry":"warm-up","core":"standard","ceiling":"strong"},"novelty":"moderate","abstraction":"high","introducesNewDefinition":true,
