@@ -61,6 +61,38 @@ describe("editorial v10 adversarial UI states", () => {
     vi.restoreAllMocks();
   });
 
+  it("contains rejecting transcript retry callbacks at the component boundary", async () => {
+    const onRetry = vi.fn(async () => {
+      throw new Error("retry transport failed");
+    });
+
+    await act(async () => {
+      root?.render(
+        <TranscriptFeed
+          items={[{
+            ...transcriptItem("retry-1", "Retry this turn"),
+            errorMessage: "transport failed"
+          }]}
+          onRetry={onRetry}
+        />
+      );
+    });
+
+    const retry = Array.from(document.querySelectorAll("button"))
+      .find((button) => button.textContent.trim() === "Retry");
+    if (!(retry instanceof HTMLButtonElement)) {
+      throw new Error("Transcript retry action did not mount");
+    }
+
+    await act(async () => {
+      retry.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
   it("resets transcript follow state when session identity changes", async () => {
     await act(async () => {
       root?.render(
