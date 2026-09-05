@@ -176,6 +176,38 @@ function setupActionLabel(
   return `Install ${noun}`;
 }
 
+function localSetupErrorMessage(
+  error: unknown,
+  kind: "PYTHON" | "VOICE" | "VISION"
+): string {
+  const raw = error instanceof Error ? error.message : "";
+  const prefix = kind === "PYTHON"
+    ? "Python component setup"
+    : kind === "VOICE"
+      ? "Voice model installation"
+      : "Vision model installation";
+
+  if (raw.includes("LOCAL_SETUP_DOWNLOAD_TIMEOUT")) {
+    return `${prefix} timed out while downloading a model. Retry on a stable connection; partial downloads are discarded safely.`;
+  }
+  if (raw.includes("LOCAL_SETUP_NETWORK")) {
+    return `${prefix} could not reach an upstream model host. Check network filtering or VPN settings and retry.`;
+  }
+  if (raw.includes("LOCAL_SETUP_DISK")) {
+    return `${prefix} needs more free disk space for the verified model cache and runtime copy.`;
+  }
+  if (raw.includes("LOCAL_SETUP_INTEGRITY")) {
+    return `${prefix} rejected a downloaded file because its size or SHA-256 did not match. Retry the download.`;
+  }
+  if (raw.includes("LOCAL_SETUP_PYTHON")) {
+    return `${prefix} could not use the isolated CPython runtime. Reinstall Python components, then retry.`;
+  }
+  if (raw.includes("LOCAL_SETUP_CANCELLED")) {
+    return `${prefix} was cancelled before it finished.`;
+  }
+  return `${prefix} failed. Check Python, network access, and free disk space, then retry.`;
+}
+
 export function SettingsPage({
   connection,
   providerOptions = [],
@@ -324,10 +356,8 @@ export function SettingsPage({
       if (parsed === undefined) throw new Error("Malformed Python setup response");
       setRuntimeStatus(parsed);
       setRuntimeStatusError(undefined);
-    } catch {
-      setPythonInstallError(
-        "Python component setup failed. Verify CPython 3.12/3.13 and network access, then retry."
-      );
+    } catch (error) {
+      setPythonInstallError(localSetupErrorMessage(error, "PYTHON"));
       await refreshRuntime();
     } finally {
       setupOperationInFlightRef.current = false;
@@ -364,15 +394,11 @@ export function SettingsPage({
       if (parsed === undefined) throw new Error("Malformed model setup response");
       setRuntimeStatus(parsed);
       setRuntimeStatusError(undefined);
-    } catch {
+    } catch (error) {
       if (kind === "VOICE") {
-        setVoiceInstallError(
-          "Voice model installation failed. Check Python, network access, and disk space, then retry."
-        );
+        setVoiceInstallError(localSetupErrorMessage(error, "VOICE"));
       } else {
-        setVisionInstallError(
-          "Vision model installation failed. Check Python, network access, and disk space, then retry."
-        );
+        setVisionInstallError(localSetupErrorMessage(error, "VISION"));
       }
       await refreshRuntime();
     } finally {
