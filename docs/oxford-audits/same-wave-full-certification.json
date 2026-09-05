@@ -158,7 +158,7 @@
       },
       "originalityDecision": "PASS_WITH_NOTES",
       "fidelityDecision": "PASS",
-      "provenanceDisposition": "classic-problem-classic-mathematics",
+      "provenanceDisposition": "truthful-classic",
       "retrieval": {
         "A": {
           "completed": true,
@@ -4874,7 +4874,7 @@
       },
       "originalityDecision": "PASS_WITH_NOTES",
       "fidelityDecision": "PASS",
-      "provenanceDisposition": "structural-adaptation-classic-mathematics",
+      "provenanceDisposition": "truthful-classic",
       "retrieval": {
         "A": {
           "completed": true,
@@ -5034,7 +5034,7 @@
       },
       "originalityDecision": "PASS_WITH_NOTES",
       "fidelityDecision": "PASS",
-      "provenanceDisposition": "structural-adaptation-classic-mathematics",
+      "provenanceDisposition": "truthful-classic",
       "retrieval": {
         "A": {
           "completed": true,
@@ -5517,7 +5517,7 @@
       },
       "originalityDecision": "PASS_WITH_NOTES",
       "fidelityDecision": "PASS",
-      "provenanceDisposition": "structural-adaptation-classic-mathematics",
+      "provenanceDisposition": "truthful-classic",
       "retrieval": {
         "A": {
           "completed": true,
@@ -6001,7 +6001,7 @@
       },
       "originalityDecision": "PASS_WITH_NOTES",
       "fidelityDecision": "PASS",
-      "provenanceDisposition": "structural-adaptation-classic-mathematics",
+      "provenanceDisposition": "truthful-classic",
       "retrieval": {
         "A": {
           "completed": true,
