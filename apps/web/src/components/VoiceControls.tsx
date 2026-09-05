@@ -35,7 +35,7 @@ function DevicePicker({
   readonly selectedId: string | undefined;
   readonly disabled: boolean;
   readonly fallbackLabel: string;
-  readonly onSelect: (deviceId: string | undefined) => void;
+  readonly onSelect: (deviceId: string | undefined) => void | Promise<void>;
 }) {
   const choices = devices.filter((device) => !device.isDefault);
   const options = [
@@ -80,7 +80,9 @@ function DevicePicker({
     event.preventDefault();
     const next = options[nextIndex];
     if (next === undefined) return;
-    onSelect(next.deviceId);
+    void Promise.resolve()
+      .then(() => onSelect(next.deviceId))
+      .catch(() => undefined);
     optionRefs.current[nextIndex]?.focus();
   };
 
@@ -107,7 +109,11 @@ function DevicePicker({
             aria-checked={selectedId === option.deviceId}
             tabIndex={selectedIndex === index ? 0 : -1}
             disabled={disabled}
-            onClick={() => onSelect(option.deviceId)}
+            onClick={() => {
+              void Promise.resolve()
+                .then(() => onSelect(option.deviceId))
+                .catch(() => undefined);
+            }}
             onKeyDown={(event) => moveSelection(event, index)}
           >
             <span className="voice-device-picker__choice-mark" aria-hidden="true" />
