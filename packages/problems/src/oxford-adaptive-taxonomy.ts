@@ -83,6 +83,12 @@ export const OXFORD_SKILL_EVIDENCE_BASIS: Readonly<
   "precision-checking": "milestone-grounded"
 });
 
+export function getOxfordSkillEvidenceBasis(
+  skill: OxfordReasoningSkill
+): OxfordSkillEvidenceBasis {
+  return OXFORD_SKILL_EVIDENCE_BASIS[skill];
+}
+
 export const OXFORD_CONTENT_CONCEPTS = [
   "algebraic-identities",
   "equations-inequalities",
@@ -563,6 +569,41 @@ export function assertOxfordAdaptiveMetadataIntegrity(
   assertAuthoredStages(metadata, problem);
 }
 
+/**
+ * Authoritative eligibility gate for the adaptive recommendation pool.
+ *
+ * Legacy catalog readiness is intentionally irrelevant here. A problem is
+ * recommendation-ready only when its adaptive contract is fully authored,
+ * independently reviewed, and at least expert-calibrated for both difficulty
+ * and timing. Malformed metadata fails closed.
+ */
+export function isOxfordRecommendationReady(
+  metadata: OxfordAdaptiveMetadata | undefined
+): boolean {
+  if (metadata === undefined || metadata.status !== "authored") return false;
+
+  try {
+    assertOxfordAdaptiveMetadataIntegrity(metadata);
+  } catch {
+    return false;
+  }
+
+  const review = metadata.review;
+  if (
+    review.taxonomyClassification !== "approved"
+    || review.originality !== "approved"
+    || review.fidelity !== "approved"
+    || review.mathematicalCorrectness !== "approved"
+  ) {
+    return false;
+  }
+
+  return (
+    review.difficultyCalibration !== "unreviewed"
+    && review.timingCalibration !== "unreviewed"
+  );
+}
+
 function assertProvisionalLegacyMetadata(metadata: OxfordAdaptiveMetadata): void {
   if (
     metadata.domains.length !== 0
@@ -941,6 +982,36 @@ function assertSkillEvidence(
       throw new Error(`${label} repeats reasoning skill "${item.skill}"`);
     }
     seen.add(item.skill);
+  }
+}
+
+function assertMilestoneSkillEvidence(
+  evidence: readonly OxfordSkillEvidence[],
+  label: string
+): void {
+  assertSkillEvidence(evidence, label);
+  for (const item of evidence) {
+    if (getOxfordSkillEvidenceBasis(item.skill) === "process-grounded") {
+      throw new Error(
+        `${label} cannot treat process-grounded skill "${item.skill}" as milestone-completion evidence`
+      );
+    }
+  }
+}
+
+function assertContentConceptHierarchy(
+  concepts: readonly OxfordContentConcept[],
+  domains: readonly OxfordMathDomain[],
+  label: string
+): void {
+  const declaredDomains = new Set<OxfordMathDomain>(domains);
+  for (const concept of concepts) {
+    const parentDomains = OXFORD_CONTENT_CONCEPT_DOMAINS[concept];
+    if (!parentDomains.some((domain) => declaredDomains.has(domain))) {
+      throw new Error(
+        `${label} content concept "${concept}" requires one of parent domains: ${parentDomains.join(", ")}`
+      );
+    }
   }
 }
 
