@@ -223,7 +223,7 @@ export const oxfordDOrientationParitiesSpec: CuratedProblemSpec = {
   title: "Orienting a Graph with Prescribed Outdegree Parities",
   mode: "OXFORD_MATHEMATICS",
   category: "graph theory",
-  topics: ["graph theory", "parity", "constructive proof"],
+  topics: ["parity", "constructive proof"],
   difficulty: "uncalibrated-oxford-candidate",
   prompt: "Let G be a finite connected simple graph. For each vertex v, someone prescribes a bit p(v), where p(v)=0 means the final outdegree of v should be even and p(v)=1 means it should be odd. Characterize exactly when the edges of G can be oriented to realize all the prescribed parities, and give a constructive proof.",
   givenInformation: ["Every undirected edge must receive exactly one direction.", "The graph is connected."],
