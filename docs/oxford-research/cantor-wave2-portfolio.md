@@ -8,7 +8,7 @@ The original batch contained **20** analytical / graphical Oxford Mathematics ca
 
 - Removed `oxford-cantor-tangent-intersection-locus` after Hilbert `REJECT_TOO_CLOSE / PASS`.
 - Removed `oxford-cantor-line-envelope` after Hilbert `REJECT_TOO_CLOSE / PASS`.
-- Kept `oxford-cantor-moving-v-envelope`, but changed provenance to `structural-adaptation / classic-mathematics` and explicitly recorded the Huber/Moreau relationship. Its historical `parameter-envelope` similarity marker is retained for repetition control.
+- Kept `oxford-cantor-moving-v-envelope`, but changed provenance to `classic-problem / classic-mathematics` and explicitly recorded the Huber/Moreau relationship. Its historical `parameter-envelope` similarity marker is retained for repetition control.
 - Kept `oxford-cantor-exponential-rotating-line` as `classic-problem / secondary-reference`.
 - Changed `oxford-cantor-cubic-divided-difference` ceiling from `stretch` to `strong` per Gauss.
 - Kept `oxford-cantor-reciprocal-increment-recurrence` at `introductory-plus / strong / stretch`; supplied a decreasing-sum/integral comparison so unfamiliarity with harmonic/logarithmic comparison is not treated as weakness.
@@ -24,7 +24,7 @@ The original batch contained **20** analytical / graphical Oxford Mathematics ca
 - Every surviving family has five protected hint stages, five reasoning milestones, a mathematically substantive `core`, two authored extensions, a canonical solution, verification notes, and low-confidence author timing/difficulty estimates.
 - `guided-adaptation` and `error-recovery` remain process-grounded only and are never milestone-completion evidence.
 - Similarity/repetition markers:
-  - `parameter-envelope` remains on the moving-V structural adaptation so the reviewed overlap history is not erased when the rejected line-envelope candidate is removed.
+  - `parameter-envelope` remains on the moving-V classic-adjacent presentation so the reviewed overlap history is not erased when the rejected line-envelope candidate is removed.
   - `mobius-iteration` remains on the related fractional-iteration material.
 
 ## Surviving candidate inventory
@@ -54,7 +54,7 @@ Risk legend: **O** = originality, **C** = correctness, **K** = calibration. L/M/
 
 ## Provenance corrections and author-side external checks
 
-Hilbert's retained five-pool record identifies `oxford-cantor-moving-v-envelope` as the Moreau-Yosida envelope of `|x|`, equivalently a scaled Huber function after a variable substitution. The family therefore uses `structural-adaptation / classic-mathematics`; the moving-V representation does not make the kernel independent-original.
+Hilbert's retained five-pool record identifies `oxford-cantor-moving-v-envelope` as the Moreau-Yosida envelope of `|x|`, equivalently a scaled Huber function after a variable substitution. The frozen schema reserves `structural-adaptation` for records with a reference family ID. Because Hilbert's Huber/Moreau match is an external classic construction rather than an internal reference family, this family uses `classic-problem / classic-mathematics`; the moving-V representation does not make the kernel independent-original.
 
 The completion-pass exact-formula sweep also found established public instances for three kernels the first author check missed:
 
