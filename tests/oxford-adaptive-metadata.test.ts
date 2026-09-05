@@ -5,6 +5,7 @@ import {
 } from "../packages/domain/src/index.js";
 import { oxfordDivisorsSquareParitySpec } from "../packages/problems/src/curated/oxford-divisors-square-parity.js";
 import {
+  OXFORD_CONTENT_CONCEPTS,
   OXFORD_DIFFICULTY_BANDS,
   OXFORD_MATH_DOMAINS,
   OXFORD_PREREQUISITE_CONCEPTS,
@@ -14,6 +15,8 @@ import {
   assertOxfordAdaptiveMetadataIntegrity,
   authorCuratedProblem,
   createProvisionalLegacyOxfordMetadata,
+  getOxfordSkillEvidenceBasis,
+  isOxfordRecommendationReady,
   type OxfordAdaptiveMetadata,
   type OxfordStageMetadata
 } from "../packages/problems/src/index.js";
@@ -21,6 +24,7 @@ import {
 describe("Oxford adaptive metadata contract", () => {
   it("publishes a bounded, duplicate-free v1 taxonomy", () => {
     expect(new Set(OXFORD_MATH_DOMAINS).size).toBe(OXFORD_MATH_DOMAINS.length);
+    expect(new Set(OXFORD_CONTENT_CONCEPTS).size).toBe(OXFORD_CONTENT_CONCEPTS.length);
     expect(new Set(OXFORD_REASONING_SKILLS).size).toBe(OXFORD_REASONING_SKILLS.length);
     expect(new Set(OXFORD_PREREQUISITE_CONCEPTS).size).toBe(
       OXFORD_PREREQUISITE_CONCEPTS.length
@@ -52,7 +56,9 @@ describe("Oxford adaptive metadata contract", () => {
       "generalization",
       "transfer",
       "representation-switching",
-      "error-recovery"
+      "error-recovery",
+      "guided-adaptation",
+      "precision-checking"
     ]));
     expect(OXFORD_STAGE_ROLES).toEqual([
       "warm-up",
@@ -70,6 +76,19 @@ describe("Oxford adaptive metadata contract", () => {
       "strong",
       "stretch"
     ]);
+    expect(getOxfordSkillEvidenceBasis("guided-adaptation")).toBe("process-grounded");
+    expect(getOxfordSkillEvidenceBasis("error-recovery")).toBe("process-grounded");
+    expect(getOxfordSkillEvidenceBasis("precision-checking")).toBe("milestone-grounded");
+    expect(OXFORD_CONTENT_CONCEPTS).toEqual(expect.arrayContaining([
+      "divisibility",
+      "modular-reasoning",
+      "parity",
+      "prime-structure",
+      "function-transformations",
+      "asymptotic-behavior",
+      "parameter-dependent-curves",
+      "roots-intersections"
+    ]));
   });
 
   it("migrates existing Oxford entries without inventing calibration claims", () => {
@@ -81,6 +100,7 @@ describe("Oxford adaptive metadata contract", () => {
       expect(metadata.oxfordAdaptive).toBeDefined();
       if (metadata.oxfordAdaptive?.status !== "provisional-legacy") continue;
       expect(metadata.oxfordAdaptive.domains).toEqual([]);
+      expect(metadata.oxfordAdaptive.contentConcepts).toEqual([]);
       expect(metadata.oxfordAdaptive.skillEvidence).toEqual([]);
       expect(metadata.oxfordAdaptive.stages).toEqual([]);
       expect(metadata.oxfordAdaptive.difficulty).toBeUndefined();
@@ -238,6 +258,109 @@ describe("Oxford adaptive metadata contract", () => {
     expect(() => assertOxfordAdaptiveMetadataIntegrity(duplicate, problem)).toThrow(
       /assigned to multiple Oxford stages/
     );
+  });
+
+  it("prevents milestone completion from proving process-grounded skills", () => {
+    const processTarget = cloneMetadata();
+    (processTarget.skillEvidence as unknown as Array<{ skill: string; weight: string }>).push({
+      skill: "guided-adaptation",
+      weight: "supporting"
+    });
+    (
+      requireStage(processTarget, 1).skillEvidence
+      as unknown as Array<{ skill: string; weight: string }>
+    ).push({
+      skill: "guided-adaptation",
+      weight: "supporting"
+    });
+    expect(() => assertOxfordAdaptiveMetadataIntegrity(processTarget)).not.toThrow();
+
+    (
+      requireMilestone(requireStage(processTarget, 1), 0).skillEvidence
+      as unknown as Array<{ skill: string; weight: string }>
+    ).push({
+      skill: "guided-adaptation",
+      weight: "supporting"
+    });
+    expect(() => assertOxfordAdaptiveMetadataIntegrity(processTarget)).toThrow(
+      /cannot treat process-grounded skill "guided-adaptation" as milestone-completion evidence/
+    );
+  });
+
+  it("validates fine-content hierarchy separately from prerequisites", () => {
+    const illegal = cloneMetadata();
+    (illegal.contentConcepts as unknown as string[])[0] = "made-up-subtopic";
+    expect(() => assertOxfordAdaptiveMetadataIntegrity(illegal)).toThrow(
+      /Oxford content concept "made-up-subtopic" is not part of taxonomy/
+    );
+
+    const wrongDomain = cloneMetadata();
+    (wrongDomain.contentConcepts as unknown as string[])[0] = "graph-coloring";
+    expect(() => assertOxfordAdaptiveMetadataIntegrity(wrongDomain)).toThrow(
+      /content concept "graph-coloring" requires one of parent domains/
+    );
+
+    const missingAtStage = cloneMetadata();
+    (
+      requireMilestone(requireStage(missingAtStage, 0), 0).contentConcepts
+      as unknown as string[]
+    ).push("parity");
+    expect(() => assertOxfordAdaptiveMetadataIntegrity(missingAtStage)).toThrow(
+      /content concept "parity" is not declared at stage level/
+    );
+  });
+
+  it("uses one authoritative recommendation-readiness gate", () => {
+    const ready = recommendationReadyMetadata();
+    expect(isOxfordRecommendationReady(ready)).toBe(true);
+
+    for (const reviewField of [
+      "taxonomyClassification",
+      "originality",
+      "fidelity",
+      "mathematicalCorrectness"
+    ] as const) {
+      const blocked = recommendationReadyMetadata();
+      (
+        blocked.review as unknown as Record<string, string>
+      )[reviewField] = "in-review";
+      expect(isOxfordRecommendationReady(blocked)).toBe(false);
+    }
+
+    const noDifficultyCalibration = recommendationReadyMetadata();
+    (
+      noDifficultyCalibration.review as unknown as { difficultyCalibration: string }
+    ).difficultyCalibration = "unreviewed";
+    expect(isOxfordRecommendationReady(noDifficultyCalibration)).toBe(false);
+
+    const noTimingCalibration = recommendationReadyMetadata();
+    (
+      noTimingCalibration.review as unknown as { timingCalibration: string }
+    ).timingCalibration = "unreviewed";
+    expect(isOxfordRecommendationReady(noTimingCalibration)).toBe(false);
+
+    expect(
+      isOxfordRecommendationReady(createProvisionalLegacyOxfordMetadata("legacy-fixture"))
+    ).toBe(false);
+  });
+
+  it("allows a reviewed classic problem to be recommendation-ready without calling it original", () => {
+    const classic = recommendationReadyMetadata();
+    (
+      classic.provenance as unknown as {
+        originType: string;
+        sourceCategory: string;
+      }
+    ).originType = "classic-problem";
+    (
+      classic.provenance as unknown as {
+        originType: string;
+        sourceCategory: string;
+      }
+    ).sourceCategory = "classic-mathematics";
+
+    expect(classic.review.originality).toBe("approved");
+    expect(isOxfordRecommendationReady(classic)).toBe(true);
   });
 
   it("rejects inconsistent authored provenance and review states", () => {
