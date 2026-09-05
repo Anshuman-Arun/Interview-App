@@ -37,7 +37,7 @@ describe("Oxford mathematical correctness audit gate", () => {
           ? "8b22dc5df99111fb95e27a2c006d5e74544dd385"
           : record.source.authorAgent === "D — Dirichlet"
             ? "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c"
-            : "2373479c4f52c23f0a7f71ce423ec8511d5a9d91";
+            : "8846c612825d2b8ae53a81f6f8861fd851f452c6";
       expect(record.source.reviewedAuthorHead).toBe(expectedHead);
     }
   });
