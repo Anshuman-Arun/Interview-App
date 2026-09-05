@@ -258,7 +258,7 @@
         "Hilbert re-review required after revision",
         "Oxford-fidelity gate cleared"
       ],
-      "wouldRejectIfClaimedOriginal": false,
+      "wouldRejectIfClaimedOriginal": true,
       "handoff": {
         "canProgressAfterGI": false,
         "note": "Hilbert originality revision/replacement is required before recommendation readiness."
@@ -4809,7 +4809,7 @@
         "Hilbert re-review required after revision",
         "Oxford-fidelity gate cleared"
       ],
-      "wouldRejectIfClaimedOriginal": false,
+      "wouldRejectIfClaimedOriginal": true,
       "handoff": {
         "canProgressAfterGI": false,
         "note": "Hilbert originality revision/replacement is required before recommendation readiness."
@@ -4961,7 +4961,7 @@
         "Hilbert re-review required after revision",
         "Oxford-fidelity gate cleared"
       ],
-      "wouldRejectIfClaimedOriginal": false,
+      "wouldRejectIfClaimedOriginal": true,
       "handoff": {
         "canProgressAfterGI": false,
         "note": "Hilbert originality revision/replacement is required before recommendation readiness."
@@ -5599,7 +5599,7 @@
         "Hilbert re-review required after revision",
         "Oxford-fidelity gate cleared"
       ],
-      "wouldRejectIfClaimedOriginal": false,
+      "wouldRejectIfClaimedOriginal": true,
       "handoff": {
         "canProgressAfterGI": false,
         "note": "Hilbert originality revision/replacement is required before recommendation readiness."
@@ -5758,7 +5758,7 @@
         "Hilbert re-review required after revision",
         "Oxford-fidelity gate cleared"
       ],
-      "wouldRejectIfClaimedOriginal": false,
+      "wouldRejectIfClaimedOriginal": true,
       "handoff": {
         "canProgressAfterGI": false,
         "note": "Hilbert originality revision/replacement is required before recommendation readiness."
@@ -6401,7 +6401,7 @@
         "Hilbert re-review required after revision",
         "Oxford-fidelity gate cleared"
       ],
-      "wouldRejectIfClaimedOriginal": false,
+      "wouldRejectIfClaimedOriginal": true,
       "handoff": {
         "canProgressAfterGI": false,
         "note": "Hilbert originality revision/replacement is required before recommendation readiness."
@@ -7043,7 +7043,7 @@
         "Hilbert re-review required after revision",
         "Oxford-fidelity gate cleared"
       ],
-      "wouldRejectIfClaimedOriginal": false,
+      "wouldRejectIfClaimedOriginal": true,
       "handoff": {
         "canProgressAfterGI": false,
         "note": "Hilbert originality revision/replacement is required before recommendation readiness."
