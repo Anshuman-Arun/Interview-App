@@ -10,7 +10,7 @@ export const cantorFunctionFamiliesB: readonly CantorFamilyAuthoring[] = [
     id: "oxford-cantor-three-cycle-map",
     title: "A Function Whose Third Iterate Comes Home",
     category: "functions and iteration",
-    topics: ["function iteration", "fractional-linear maps", "periodic orbits", "domain restrictions"],
+    topics: ["functions","iteration","algebra","domains"],
     prompt:
       "Consider f(x)=1-1/x. Determine the largest real set on which repeated iteration can continue indefinitely, explore f(f(x)) and f(f(f(x))), and classify the real orbit structure on that set.",
     givenInformation: [],
@@ -142,7 +142,7 @@ export const cantorFunctionFamiliesB: readonly CantorFamilyAuthoring[] = [
     id: "oxford-cantor-quartic-horizontal-levels",
     title: "Horizontal Slices Through a Double-Well Quartic",
     category: "functions and graph sketching",
-    topics: ["quartic graphs", "horizontal intersections", "scaling", "parameter structure"],
+    topics: ["quartics","graphs","equations","parameters"],
     prompt:
       "For a>0 let Q_a(x)=x⁴-2a x². Sketch the graph, then classify the number of distinct real solutions of Q_a(x)=c for every real c. Finally show how all values of a>0 are rescaled versions of one master graph.",
     givenInformation: [],
@@ -274,7 +274,7 @@ export const cantorFunctionFamiliesB: readonly CantorFamilyAuthoring[] = [
     id: "oxford-cantor-reciprocal-increment-recurrence",
     title: "How Fast Does Reciprocal Growth Accumulate?",
     category: "sequences and recurrences",
-    topics: ["nonlinear recurrence", "asymptotic growth", "bounds", "telescoping squares"],
+    topics: ["sequences","recurrences","asymptotics","inequalities"],
     prompt:
       "Let a_0>0 and define a_{n+1}=a_n+1/a_n. Prove that the sequence grows without bound, then determine its asymptotic size as precisely as you can. A useful target is to decide whether a_n/sqrt(2n) has a limit.",
     givenInformation: [],
@@ -404,7 +404,7 @@ export const cantorFunctionFamiliesB: readonly CantorFamilyAuthoring[] = [
     id: "oxford-cantor-line-envelope",
     title: "The Parabola Touched by a Family of Lines",
     category: "functions and graph sketching",
-    topics: ["line families", "envelopes", "optimization", "tangency"],
+    topics: ["line families","graphs","parameters","quadratics"],
     prompt:
       "For each real t, draw the line L_t:y=t x-t²-t. As t varies, the collection seems to trace the edge of a curve. Determine that envelope exactly, prove every line lies on the same side of it, and identify where each line touches it.",
     givenInformation: [],
@@ -537,7 +537,7 @@ export const cantorFunctionFamiliesB: readonly CantorFamilyAuthoring[] = [
     id: "oxford-cantor-mobius-involution",
     title: "A Family of Self-Undoing Fractional Maps",
     category: "functions and graph sketching",
-    topics: ["fractional-linear functions", "involutions", "hyperbolas", "fixed points"],
+    topics: ["functions","fractional functions","graphs","parameters"],
     prompt:
       "For real a define T_a(x)=(a-x)/(1+x), wherever this makes sense. Investigate the graph and the effect of applying T_a twice. Classify how the fixed points change with a, paying special attention to the exceptional value a=-1.",
     givenInformation: [],
