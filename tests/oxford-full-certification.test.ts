@@ -137,7 +137,7 @@ describe("Agent G full C/D/E certification", () => {
       expect.objectContaining({
         agent: "E — Euler",
         prNumber: 134,
-        headSha: "165bb3100fb894158969abb808caad5bc9150807",
+        headSha: "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
         survivingFamilyCount: 17
       })
     ]);
