@@ -943,6 +943,10 @@ describe("editorial v10 adversarial UI states", () => {
     expect(voice).toContain(
       "controls.selectInputDevice(deviceId).catch(() => undefined)"
     );
+    expect(voice).toContain("onSelect: (deviceId: string | undefined) => void | Promise<void>");
+    expect(voice).toContain("onSelect(option.deviceId)");
+    expect(voice).toContain(".catch(() => undefined);");
+    expect(voice).toContain("onSelect={controls.selectOutputDevice}");
   });
 
   it("contains rejected quant refresh reads instead of creating unhandled promises", () => {
