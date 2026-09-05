@@ -50,7 +50,7 @@ export const oxfordDGcdDescentNetworkSpec: CuratedProblemSpec = {
     domains: ["number-theory", "graph-theory"],
     contentConcepts: ["divisibility", "paths-cycles-connectivity"],
     prerequisiteConcepts: ["arithmetic", "divisibility", "graph-basics"],
-    skillEvidence: [evidence("small-case-exploration", "supporting"), evidence("invariants", "primary"), evidence("proof-construction", "primary"), evidence("precision-checking", "supporting")],
+    skillEvidence: [evidence("small-case-exploration", "supporting"), evidence("invariants", "primary"), evidence("proof-construction", "primary"), evidence("precision-checking", "supporting"), evidence("generalization", "supporting")],
     difficulty: { entry: "introductory-plus", core: "standard", ceiling: "strong" },
     novelty: "moderate",
     abstraction: "moderate",
@@ -132,7 +132,7 @@ export const oxfordDSwitchingCutsSpec: CuratedProblemSpec = {
     domains: ["graph-theory", "combinatorics"],
     contentConcepts: ["paths-cycles-connectivity", "parity"],
     prerequisiteConcepts: ["graph-basics", "set-notation"],
-    skillEvidence: [evidence("small-case-exploration", "supporting"), evidence("invariants", "primary"), evidence("representation-switching", "primary"), evidence("proof-construction", "primary")],
+    skillEvidence: [evidence("small-case-exploration", "supporting"), evidence("invariants", "primary"), evidence("representation-switching", "primary"), evidence("proof-construction", "primary"), evidence("generalization", "supporting")],
     difficulty: { entry: "introductory-plus", core: "standard", ceiling: "strong" },
     novelty: "moderate",
     abstraction: "moderate",
@@ -200,7 +200,7 @@ export const oxfordDThirdsClosedIntegersSpec: CuratedProblemSpec = {
     domains: ["number-theory", "logic-proof"],
     contentConcepts: ["modular-reasoning", "logical-structure"],
     prerequisiteConcepts: ["arithmetic", "modular-arithmetic", "logical-quantifiers"],
-    skillEvidence: [evidence("small-case-exploration", "primary"), evidence("case-analysis", "primary"), evidence("pattern-recognition", "supporting"), evidence("proof-construction", "primary"), evidence("generalization", "supporting")],
+    skillEvidence: [evidence("small-case-exploration", "primary"), evidence("case-analysis", "primary"), evidence("pattern-recognition", "supporting"), evidence("proof-construction", "primary"), evidence("generalization", "supporting"), evidence("precision-checking", "supporting")],
     difficulty: { entry: "introductory-plus", core: "standard", ceiling: "strong" },
     novelty: "high",
     abstraction: "moderate",
@@ -267,14 +267,14 @@ export const oxfordDOrientationParitiesSpec: CuratedProblemSpec = {
     domains: ["graph-theory", "combinatorics"],
     contentConcepts: ["degree-structure", "parity"],
     prerequisiteConcepts: ["graph-basics", "modular-arithmetic"],
-    skillEvidence: [evidence("proof-construction", "primary"), evidence("case-analysis", "supporting"), evidence("strategic-simplification", "primary"), evidence("generalization", "supporting")],
+    skillEvidence: [evidence("proof-construction", "primary"), evidence("case-analysis", "supporting"), evidence("strategic-simplification", "primary"), evidence("generalization", "supporting"), evidence("precision-checking", "supporting")],
     difficulty: { entry: "introductory-plus", core: "standard", ceiling: "strong" },
     novelty: "moderate",
     abstraction: "moderate",
     introducesNewDefinition: false,
     stages: [
       { id: "orientation-opening", role: "technique-check", prerequisiteStageIds: [], domains: ["graph-theory", "combinatorics"], contentConcepts: ["degree-structure", "parity"], skillEvidence: [evidence("proof-construction", "supporting")], milestones: [{ milestoneId: "find-global-necessary-parity", skillEvidence: [evidence("proof-construction", "supporting")], contentConcepts: ["degree-structure", "parity"] }], extensionIds: [], difficulty: "introductory-plus", timingKind: "opening" },
-      { id: "orientation-core", role: "core", prerequisiteStageIds: ["orientation-opening"], domains: ["graph-theory", "combinatorics"], contentConcepts: ["degree-structure", "parity"], skillEvidence: [evidence("strategic-simplification", "primary"), evidence("proof-construction", "primary")], milestones: [
+      { id: "orientation-core", role: "core", prerequisiteStageIds: ["orientation-opening"], domains: ["graph-theory", "combinatorics"], contentConcepts: ["degree-structure", "parity"], skillEvidence: [evidence("strategic-simplification", "primary"), evidence("proof-construction", "primary"), evidence("precision-checking", "supporting")], milestones: [
         { milestoneId: "freeze-nontree-edges", skillEvidence: [evidence("strategic-simplification", "primary")], contentConcepts: ["degree-structure"] },
         { milestoneId: "process-nonroot-vertices", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["parity"] },
         { milestoneId: "prove-root-automatic", skillEvidence: [evidence("precision-checking", "primary")], contentConcepts: ["degree-structure", "parity"] }
@@ -334,7 +334,7 @@ export const oxfordDBalancingTransfersSpec: CuratedProblemSpec = {
     domains: ["combinatorics", "algebra"],
     contentConcepts: ["extremal-configuration", "inequalities-bounds"],
     prerequisiteConcepts: ["arithmetic", "algebraic-manipulation"],
-    skillEvidence: [evidence("small-case-exploration", "supporting"), evidence("invariants", "primary"), evidence("proof-construction", "primary"), evidence("counterexample-construction", "primary")],
+    skillEvidence: [evidence("small-case-exploration", "supporting"), evidence("invariants", "primary"), evidence("proof-construction", "primary"), evidence("counterexample-construction", "primary"), evidence("precision-checking", "supporting")],
     difficulty: { entry: "introductory", core: "standard", ceiling: "strong" },
     novelty: "moderate",
     abstraction: "low",
@@ -402,14 +402,14 @@ export const oxfordDCubeTwistEquivalenceSpec: CuratedProblemSpec = {
     domains: ["number-theory", "set-theory", "logic-proof"],
     contentConcepts: ["prime-structure", "divisibility", "relations-operations", "logical-structure"],
     prerequisiteConcepts: ["prime-factorization", "divisibility", "modular-arithmetic", "logical-quantifiers"],
-    skillEvidence: [evidence("definition-exploration", "primary"), evidence("representation-switching", "primary"), evidence("proof-construction", "primary"), evidence("generalization", "supporting")],
+    skillEvidence: [evidence("definition-exploration", "primary"), evidence("representation-switching", "primary"), evidence("proof-construction", "primary"), evidence("generalization", "supporting"), evidence("pattern-recognition", "supporting"), evidence("precision-checking", "supporting")],
     difficulty: { entry: "introductory-plus", core: "standard", ceiling: "strong" },
     novelty: "moderate",
     abstraction: "moderate",
     introducesNewDefinition: true,
     stages: [
       { id: "cube-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["number-theory", "set-theory", "logic-proof"], contentConcepts: ["prime-structure", "relations-operations", "logical-structure"], skillEvidence: [evidence("definition-exploration", "primary")], milestones: [{ milestoneId: "test-relation-examples", skillEvidence: [evidence("definition-exploration", "primary")], contentConcepts: ["relations-operations"] }], extensionIds: [], difficulty: "introductory-plus", timingKind: "opening", introducesNewDefinition: true },
-      { id: "cube-core", role: "core", prerequisiteStageIds: ["cube-opening"], domains: ["number-theory", "set-theory", "logic-proof"], contentConcepts: ["prime-structure", "divisibility", "relations-operations", "logical-structure"], skillEvidence: [evidence("representation-switching", "primary"), evidence("proof-construction", "primary")], milestones: [
+      { id: "cube-core", role: "core", prerequisiteStageIds: ["cube-opening"], domains: ["number-theory", "set-theory", "logic-proof"], contentConcepts: ["prime-structure", "divisibility", "relations-operations", "logical-structure"], skillEvidence: [evidence("representation-switching", "primary"), evidence("proof-construction", "primary"), evidence("pattern-recognition", "supporting")], milestones: [
         { milestoneId: "translate-prime-exponents", skillEvidence: [evidence("representation-switching", "primary")], contentConcepts: ["prime-structure"] },
         { milestoneId: "discover-equal-residue-vectors", skillEvidence: [evidence("pattern-recognition", "primary")], contentConcepts: ["divisibility"] },
         { milestoneId: "prove-equivalence-and-classes", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["relations-operations", "logical-structure"] }
