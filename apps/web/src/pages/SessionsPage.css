@@ -44,6 +44,15 @@
   line-height: 1.6;
 }
 
+.expressive-sessions__authority-error {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-left: 2px solid var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font: 500 9px/1.45 var(--font-ui);
+}
+
 .expressive-sessions__toolbar {
   display: grid;
   grid-template-columns: auto minmax(220px, 1fr) auto;
