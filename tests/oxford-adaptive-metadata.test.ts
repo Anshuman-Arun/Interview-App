@@ -211,6 +211,22 @@ describe("Oxford adaptive metadata contract", () => {
     );
   });
 
+  it("rejects unknown and multiply assigned reasoning extensions", () => {
+    const entry = authorCuratedProblem(validSpec());
+
+    const unknown = cloneMetadata();
+    (unknown.stages[1]!.extensionIds as unknown as string[])[0] = "missing-extension";
+    expect(() => assertOxfordAdaptiveMetadataIntegrity(unknown, entry.problem)).toThrow(
+      /unknown reasoning extension/
+    );
+
+    const duplicate = cloneMetadata();
+    (duplicate.stages[0]!.extensionIds as unknown as string[]).push("generalize");
+    expect(() => assertOxfordAdaptiveMetadataIntegrity(duplicate, entry.problem)).toThrow(
+      /assigned to multiple Oxford stages/
+    );
+  });
+
   it("rejects inconsistent authored provenance and review states", () => {
     const structural = cloneMetadata();
     (
@@ -353,6 +369,7 @@ function validAdaptiveMetadata(): OxfordAdaptiveMetadata {
             ]
           }
         ],
+        extensionIds: [],
         difficulty: "introductory",
         timing: {
           firstMeaningfulInsightMinutes: { min: 0.5, max: 2 },
@@ -383,6 +400,7 @@ function validAdaptiveMetadata(): OxfordAdaptiveMetadata {
             ]
           }
         ],
+        extensionIds: ["generalize"],
         difficulty: "standard",
         timing: {
           firstMeaningfulInsightMinutes: { min: 1, max: 4 },
