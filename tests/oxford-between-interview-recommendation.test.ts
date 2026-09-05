@@ -13,13 +13,19 @@ import {
   projectOxfordStudentProfile,
   recommendNextOxfordProblem,
   type CuratedProblemMetadata,
+  isOxfordRecommendationReady,
   type OxfordAdaptiveMetadata,
+  type OxfordCalibrationStatus,
   type OxfordContentConcept,
   type OxfordDifficultyBand,
   type OxfordMathDomain,
+  type OxfordOriginType,
   type OxfordPrerequisiteConcept,
   type OxfordProfileSessionEvidence,
-  type OxfordRecommendationCandidate
+  type OxfordRecommendationCandidate,
+  type OxfordRecommendationOptions,
+  type OxfordReviewStatus,
+  type OxfordSourceCategory
 } from "../packages/problems/src/index.js";
 
 const AS_OF = "2026-09-05T12:00:00.000Z";
@@ -401,10 +407,156 @@ describe("Oxford between-interview adaptation", () => {
     expect(polluted.selected).toEqual(baseline.selected);
   });
 
+  it("returns an explicit safe outcome when the recommendation-ready pool is empty", () => {
+    const profile = projectOxfordStudentProfile([], { asOf: AS_OF });
+    const empty = recommendNextOxfordProblem(profile, []);
+
+    expect(empty.outcome).toBe("NO_RECOMMENDATION_READY_CANDIDATES");
+    expect(empty.recommendationReadyCandidateCount).toBe(0);
+    expect(empty.eligibleCandidateCount).toBe(0);
+    expect(empty.selected).toBeUndefined();
+    expect(empty.alternatives).toEqual([]);
+  });
+
+  it("keeps all 61 author expert-review candidates out until canonical readiness passes", () => {
+    const profile = projectOxfordStudentProfile([], { asOf: AS_OF });
+    const expertReviewCandidates = Array.from({ length: 61 }, (_, index) =>
+      candidate(`expert-review-${String(index).padStart(2, "0")}`, {
+        familyId: `expert-review-family-${String(index).padStart(2, "0")}`,
+        reviewTaxonomy: "in-review",
+        reviewOriginality: "in-review",
+        reviewFidelity: "in-review",
+        reviewCorrectness: "in-review",
+        difficultyCalibration: "unreviewed",
+        timingCalibration: "unreviewed"
+      })
+    );
+
+    const result = recommendNextOxfordProblem(profile, expertReviewCandidates);
+
+    expect(result.outcome).toBe("NO_RECOMMENDATION_READY_CANDIDATES");
+    expect(result.recommendationReadyCandidateCount).toBe(0);
+    expect(result.eligibleCandidateCount).toBe(0);
+    expect(result.selected).toBeUndefined();
+    expect(result.exclusions).toHaveLength(61);
+    expect(result.exclusions.every((item) =>
+      item.codes.includes("NOT_RECOMMENDATION_READY")
+    )).toBe(true);
+  });
+
+  it("does not let external reviewer records promote unapproved canonical metadata", () => {
+    const profile = projectOxfordStudentProfile([], { asOf: AS_OF });
+    const unapproved = candidate("externally-reviewed-only", {
+      familyId: "externally-reviewed-only-family",
+      reviewTaxonomy: "in-review",
+      reviewOriginality: "in-review",
+      reviewFidelity: "in-review",
+      reviewCorrectness: "in-review",
+      difficultyCalibration: "unreviewed",
+      timingCalibration: "unreviewed"
+    });
+    const optionsWithExternalRecords: OxfordRecommendationOptions & {
+      readonly externalReviewerRecords: readonly {
+        readonly agent: string;
+        readonly decision: string;
+      }[];
+    } = {
+      topK: 3,
+      externalReviewerRecords: [
+        { agent: "G — Gauss", decision: "approve" },
+        { agent: "H — Hilbert", decision: "approve" },
+        { agent: "I — Itô", decision: "approve" }
+      ]
+    };
+
+    const result = recommendNextOxfordProblem(
+      profile,
+      [unapproved],
+      optionsWithExternalRecords
+    );
+
+    expect(result.outcome).toBe("NO_RECOMMENDATION_READY_CANDIDATES");
+    expect(result.selected).toBeUndefined();
+    expect(exclusion(result, "externally-reviewed-only"))
+      .toContain("NOT_RECOMMENDATION_READY");
+  });
+
+  it("ranks only canonical-ready candidates while H/G/I changes-required remain excluded", () => {
+    const profile = projectOxfordStudentProfile([], { asOf: AS_OF });
+    const hRejected = candidate("h-rejected", {
+      familyId: "h-rejected-family",
+      reviewOriginality: "changes-required"
+    });
+    const gChangesRequired = candidate("g-changes-required", {
+      familyId: "g-changes-required-family",
+      reviewTaxonomy: "changes-required"
+    });
+    const iChangesRequired = candidate("i-changes-required", {
+      familyId: "i-changes-required-family",
+      reviewCorrectness: "changes-required"
+    });
+    const ready = candidate("canonical-ready", {
+      familyId: "canonical-ready-family"
+    });
+
+    expect(isOxfordRecommendationReady(hRejected.metadata.oxfordAdaptive)).toBe(false);
+    expect(isOxfordRecommendationReady(gChangesRequired.metadata.oxfordAdaptive)).toBe(false);
+    expect(isOxfordRecommendationReady(iChangesRequired.metadata.oxfordAdaptive)).toBe(false);
+    expect(isOxfordRecommendationReady(ready.metadata.oxfordAdaptive)).toBe(true);
+
+    const result = recommendNextOxfordProblem(
+      profile,
+      [hRejected, gChangesRequired, iChangesRequired, ready]
+    );
+
+    expect(result.outcome).toBe("RECOMMENDATION_SELECTED");
+    expect(result.recommendationReadyCandidateCount).toBe(1);
+    expect(result.selected?.problemId).toBe("canonical-ready");
+    expect(exclusion(result, "h-rejected")).toContain("NOT_RECOMMENDATION_READY");
+    expect(exclusion(result, "g-changes-required")).toContain("NOT_RECOMMENDATION_READY");
+    expect(exclusion(result, "i-changes-required")).toContain("NOT_RECOMMENDATION_READY");
+  });
+
+  it("allows truthful classic provenance after every canonical gate approves it", () => {
+    const profile = projectOxfordStudentProfile([], { asOf: AS_OF });
+    const classic = candidate("classic-ready", {
+      familyId: "classic-ready-family",
+      originType: "classic-problem",
+      sourceCategory: "classic-mathematics"
+    });
+
+    expect(isOxfordRecommendationReady(classic.metadata.oxfordAdaptive)).toBe(true);
+    const result = recommendNextOxfordProblem(profile, [classic]);
+
+    expect(result.outcome).toBe("RECOMMENDATION_SELECTED");
+    expect(result.selected?.problemId).toBe("classic-ready");
+  });
+
+  it("reports ready-but-filtered separately from a zero-ready certification pool", () => {
+    const previousMeta = readyMetadata("filtered-source", {
+      familyId: "filtered-family"
+    });
+    const profile = projectOxfordStudentProfile([
+      source("session-filtered-source", previousMeta, {})
+    ], { asOf: AS_OF });
+    const cooling = candidate("filtered-next", {
+      familyId: "filtered-family"
+    });
+
+    const result = recommendNextOxfordProblem(profile, [cooling]);
+
+    expect(result.recommendationReadyCandidateCount).toBe(1);
+    expect(result.eligibleCandidateCount).toBe(0);
+    expect(result.outcome).toBe("NO_ELIGIBLE_CANDIDATES");
+    expect(result.selected).toBeUndefined();
+  });
+
   it("still returns a useful cold-start result when only one ready problem exists", () => {
     const profile = projectOxfordStudentProfile([], { asOf: AS_OF });
     const only = candidate("only-ready", { familyId: "only-family" });
     const result = recommendNextOxfordProblem(profile, [only]);
+    expect(result.outcome).toBe("RECOMMENDATION_SELECTED");
+    expect(result.recommendationReadyCandidateCount).toBe(1);
     expect(result.selected?.problemId).toBe("only-ready");
     expect(result.alternatives).toEqual([]);
   });
@@ -420,7 +572,14 @@ interface MetadataOptions {
   readonly core?: OxfordDifficultyBand;
   readonly ceiling?: OxfordDifficultyBand;
   readonly calibration?: "expert-estimate" | "empirically-calibrated";
-  readonly reviewOriginality?: "approved" | "unreviewed";
+  readonly reviewTaxonomy?: OxfordReviewStatus;
+  readonly reviewOriginality?: OxfordReviewStatus;
+  readonly reviewFidelity?: OxfordReviewStatus;
+  readonly reviewCorrectness?: OxfordReviewStatus;
+  readonly difficultyCalibration?: OxfordCalibrationStatus;
+  readonly timingCalibration?: OxfordCalibrationStatus;
+  readonly originType?: OxfordOriginType;
+  readonly sourceCategory?: OxfordSourceCategory;
   readonly promptedMin?: number;
   readonly promptedMax?: number;
   readonly softCutoff?: number;
@@ -547,16 +706,18 @@ function readyMetadata(
       }
     ],
     provenance: {
-      originType: "original",
-      sourceCategory: "independent-original"
+      originType: options.originType ?? "original",
+      sourceCategory: options.sourceCategory ?? "independent-original"
     },
     review: {
-      taxonomyClassification: "approved",
+      taxonomyClassification: options.reviewTaxonomy ?? "approved",
       originality: options.reviewOriginality ?? "approved",
-      fidelity: "approved",
-      mathematicalCorrectness: "approved",
-      difficultyCalibration: options.calibration ?? "expert-estimate",
-      timingCalibration: options.calibration ?? "expert-estimate"
+      fidelity: options.reviewFidelity ?? "approved",
+      mathematicalCorrectness: options.reviewCorrectness ?? "approved",
+      difficultyCalibration:
+        options.difficultyCalibration ?? options.calibration ?? "expert-estimate",
+      timingCalibration:
+        options.timingCalibration ?? options.calibration ?? "expert-estimate"
     }
   };
 
