@@ -37,9 +37,15 @@ export function ProductFrame({
   readonly transitionLocked?: boolean;
 }) {
   const headingRef = useRef<HTMLHeadingElement | null>(null);
+  const initialHeadingRef = useRef(true);
 
   useEffect(() => {
-    headingRef.current?.focus();
+    if (initialHeadingRef.current) {
+      initialHeadingRef.current = false;
+      globalThis.getSelection?.()?.removeAllRanges();
+      return;
+    }
+    headingRef.current?.focus({ preventScroll: true });
   }, [title]);
 
   const readinessChecking = reasoningChecking || authorityChecking;
