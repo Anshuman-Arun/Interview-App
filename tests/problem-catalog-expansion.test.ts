@@ -153,14 +153,14 @@ describe("curated problem bank", () => {
     expect(getProblemsByCategory("   ")).toEqual([]);
   });
 
-  it("compiles all 41 authored fixtures to five protected disclosures without assuming stage equals severity", () => {
+  it("compiles all 39 authored fixtures to five protected disclosures without assuming stage equals severity", () => {
     const curatedEntries = [
       ...oxfordCuratedEntries,
       ...quantCuratedEntries,
       ...oxfordCuratedReviewEntries,
       ...quantCuratedReviewEntries
     ];
-    expect(curatedEntries).toHaveLength(41);
+    expect(curatedEntries).toHaveLength(39);
 
     for (const entry of curatedEntries) {
       const disclosures = entry.problem.interviewer.protectedDisclosures;
@@ -182,11 +182,11 @@ describe("curated problem bank", () => {
   it("exposes expert-review fixtures only through the isolated review tooling surface", () => {
     const reviewProblemIds = EXPERT_REVIEW_PROBLEMS.map((problem) => problem.id).sort();
     const reviewMetadataIds = EXPERT_REVIEW_METADATA.map((metadata) => metadata.id).sort();
-    expect(reviewProblemIds).toHaveLength(22);
+    expect(reviewProblemIds).toHaveLength(20);
     expect(reviewMetadataIds).toEqual(reviewProblemIds);
     expect(reviewProblemIds).toContain("oxford-catalan-paths");
     expect(reviewProblemIds).toContain("quant-random-walk-drawdown");
-    expect(reviewProblemIds.filter((id) => id.startsWith("oxford-cantor-"))).toHaveLength(20);
+    expect(reviewProblemIds.filter((id) => id.startsWith("oxford-cantor-"))).toHaveLength(18);
     expect(Object.isFrozen(EXPERT_REVIEW_PROBLEMS)).toBe(true);
     expect(Object.isFrozen(EXPERT_REVIEW_METADATA)).toBe(true);
 
@@ -221,10 +221,10 @@ describe("curated problem bank", () => {
     const reviewEntries = [...oxfordCuratedReviewEntries, ...quantCuratedReviewEntries];
     const reviewIds = reviewEntries.map((entry) => entry.problem.id).sort();
 
-    expect(reviewIds).toHaveLength(22);
+    expect(reviewIds).toHaveLength(20);
     expect(reviewIds).toContain("oxford-catalan-paths");
     expect(reviewIds).toContain("quant-random-walk-drawdown");
-    expect(reviewIds.filter((id) => id.startsWith("oxford-cantor-"))).toHaveLength(20);
+    expect(reviewIds.filter((id) => id.startsWith("oxford-cantor-"))).toHaveLength(18);
     expect(PROBLEM_METADATA.every((metadata) => metadata.reviewStatus === "ready")).toBe(true);
     for (const entry of reviewEntries) {
       expect(entry.metadata.reviewStatus).toBe("expert-review");
