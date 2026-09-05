@@ -29,7 +29,7 @@ describe("Agent C — Cantor Wave 2 Oxford candidates", () => {
     expect(oxfordCantorReviewEntries).toHaveLength(17);
 
     const ids = oxfordCantorReviewEntries.map((candidate) => candidate.problem.id);
-    expect(new Set(ids).size).toBe(18);
+    expect(new Set(ids).size).toBe(17);
     expect(ids).not.toContain("oxford-cantor-tangent-intersection-locus");
     expect(ids).not.toContain("oxford-cantor-line-envelope");
     expect(ids).not.toContain("oxford-cantor-reciprocal-implicit-curve");
