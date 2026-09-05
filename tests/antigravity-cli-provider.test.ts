@@ -12,6 +12,7 @@ import {
   ANTIGRAVITY_CLI_ADAPTER_VERSION,
   ANTIGRAVITY_CLI_AGENT_ID,
   ANTIGRAVITY_CLI_MODEL_ID,
+  ANTIGRAVITY_CLI_MODEL_IDS,
   ANTIGRAVITY_CLI_PROPOSAL_SCHEMA_ARGUMENT,
   ANTIGRAVITY_CLI_PROVIDER_DEFINITION,
   ANTIGRAVITY_CLI_PROVIDER_ID,
@@ -229,7 +230,7 @@ describe("Antigravity structured-output contract alignment", () => {
 });
 
 describe("Antigravity CLI provider registration and policy truthfulness", () => {
-  it("registers one pinned real model with conservative remote/billing capabilities", () => {
+  it("registers the audited Flash model/tier matrix with conservative remote/billing capabilities", () => {
     const registry = registerBuiltInProviders();
     const provider = registry.getProvider(ANTIGRAVITY_CLI_PROVIDER_ID);
     const model = registry.getModel(
@@ -239,10 +240,12 @@ describe("Antigravity CLI provider registration and policy truthfulness", () => 
 
     expect(provider).toMatchObject({
       id: ANTIGRAVITY_CLI_PROVIDER_ID,
-      kind: "OTHER",
+      kind: "LOCAL_PROCESS",
       adapterVersion: ANTIGRAVITY_CLI_ADAPTER_VERSION,
       credentialRequirement: "NONE"
     });
+    expect(registry.enumerateModels(ANTIGRAVITY_CLI_PROVIDER_ID).map((entry) => entry.id))
+      .toEqual([...ANTIGRAVITY_CLI_MODEL_IDS].sort());
     expect(model.capabilities).toMatchObject({
       textGeneration: "SUPPORTED",
       imageInput: "UNSUPPORTED",
