@@ -13,7 +13,7 @@ The representative first-round review has been superseded by complete current-ve
 
 Reviewed heads:
 
-- Agent C — Cantor, PR #132: `29ae86d5bccfa10eb91987bfaccc94adfbd57fcf` — 18 survivors.
+- Agent C — Cantor, PR #132: `f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1` — 18 survivors.
 - Agent D — Dirichlet, PR #133: `ecece22058c997d37c4b352fa5ed32bd1daf5243` — 12 survivors.
 - Agent E — Euler, PR #134: `b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6` — 17 survivors.
 
