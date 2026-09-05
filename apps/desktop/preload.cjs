@@ -216,7 +216,7 @@ if (
   cachedAppearanceSettings !== null
   && (
     typeof cachedAppearanceSettings !== "string"
-    || Buffer.byteLength(cachedAppearanceSettings, "utf8") > MAX_APPEARANCE_SETTINGS_BYTES
+    || cachedAppearanceSettings.length > MAX_APPEARANCE_SETTINGS_BYTES
   )
 ) {
   cachedAppearanceSettings = null;
@@ -240,7 +240,7 @@ contextBridge.exposeInMainWorld("interviewDesktop", Object.freeze({
     if (
       typeof raw !== "string"
       || raw.length === 0
-      || Buffer.byteLength(raw, "utf8") > MAX_APPEARANCE_SETTINGS_BYTES
+      || raw.length > MAX_APPEARANCE_SETTINGS_BYTES
     ) {
       throw new Error("Desktop appearance payload is unsupported");
     }
