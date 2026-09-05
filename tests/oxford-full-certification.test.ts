@@ -12,6 +12,18 @@ interface RecordShape {
   authorHeadReviewed: string;
   taxonomy: {
     decision: Decision;
+    author: {
+      domains: readonly string[];
+      contentConcepts: readonly string[];
+      prerequisiteConcepts: readonly string[];
+      reasoningSkills: readonly string[];
+    };
+    recommended: {
+      domains: readonly string[];
+      contentConcepts: readonly string[];
+      prerequisiteConcepts: readonly string[];
+      reasoningSkills: readonly string[];
+    };
     stageRoles: readonly { stageId: string; recommendedRole: string; decision: Decision }[];
     milestoneContentSkillAttribution: readonly {
       milestoneId: string;
