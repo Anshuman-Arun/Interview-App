@@ -136,7 +136,7 @@ export const cantorGraphFamiliesA: readonly CantorFamilyAuthoring[] = [
     novelty: "moderate",
     abstraction: "moderate",
     similarityClusterId: "parameter-envelope",
-    provenance: { originType: "structural-adaptation", sourceCategory: "classic-mathematics" },
+    provenance: { originType: "classic-problem", sourceCategory: "classic-mathematics" },
     originalityRisk: "high",
     correctnessRisk: "low",
     calibrationRisk: "medium"
