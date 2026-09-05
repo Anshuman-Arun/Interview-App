@@ -189,6 +189,7 @@ describe("expressive product integration invariants", () => {
     expect(reviewRouting).toContain('currentRoute.page !== "review"');
     expect(reviewRouting).toContain("currentRoute.sessionId !== targetSessionId");
     expect(reviewRouting).toContain('currentRoute.view !== "replay"');
+    expect(reviewRouting).toContain("reviewAutoUpgradeEpochRef.current !== autoUpgradeEpoch");
     expect(reviewRouting).toContain('view: "evaluation"');
     expect(hook).toContain("readSessionConfiguration");
     expect(hook).toContain("getInterviewSessionContext(targetSessionId)");
