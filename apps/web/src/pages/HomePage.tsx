@@ -142,7 +142,7 @@ export function HomePage({
                     ? onOpenSessions
                     : () => onResumeInterview(activeSessionId)
                 }
-                disabled={entryBlocked}
+                disabled={sessionEntryPending}
               >
                 <span>{activeSessionId === null ? "Choose active session" : "Resume current interview"}</span>
                 <i aria-hidden="true">→</i>
@@ -255,7 +255,7 @@ export function HomePage({
           </div>
           <button
             type="button"
-            disabled={entryBlocked}
+            disabled={sessionEntryPending}
             onClick={
               activeSessionId === null
                 ? onOpenSessions
