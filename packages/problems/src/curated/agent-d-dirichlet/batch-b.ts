@@ -1,74 +1,6 @@
 import { authorCuratedProblem, type CuratedProblemSpec } from "../../curated-authoring.js";
 import { DIRICHLET_CANDIDATE_REVIEW_NOTES, evidence, makeDirichletAdaptive } from "./support.js";
 
-export const oxfordDPrimeDivisorThreeCyclesSpec: CuratedProblemSpec = {
-  id: "oxford-d-prime-divisor-three-cycles",
-  title: "Prime Divisors Seen Through Multiplication Cycles",
-  mode: "OXFORD_MATHEMATICS",
-  category: "number theory",
-  topics: ["modular arithmetic", "prime divisors", "orbits"],
-  difficulty: "uncalibrated-oxford-candidate",
-  prompt: "Let p be a prime other than 3, and suppose p divides n^2+n+1 for some integer n. Determine what this forces about p modulo 3. Give a proof by studying what repeated multiplication by n does to the nonzero residue classes modulo p, rather than quoting a theorem about multiplicative orders.",
-  givenInformation: ["p is prime and p!=3.", "You may use that multiplication by a nonzero residue modulo p permutes the nonzero residue classes."],
-  approaches: [{ id: "multiplication-orbits", label: "Turn the polynomial congruence into fixed-length orbits on nonzero residues" }],
-  milestones: [
-    { id: "derive-cubic-congruence", description: "Use (n-1)(n^2+n+1)=n^3-1 to prove n^3≡1 mod p.", approachIds: ["multiplication-orbits"], hintLevels: [1] },
-    { id: "exclude-short-period", description: "Use p!=3 to exclude n≡1 mod p and then exclude periods one and two for multiplication by n.", approachIds: ["multiplication-orbits"], prerequisiteIds: ["derive-cubic-congruence"], hintLevels: [2] },
-    { id: "build-three-cycles", description: "Consider x,nx,n^2x for every nonzero residue x and prove these form disjoint three-cycles.", approachIds: ["multiplication-orbits"], prerequisiteIds: ["exclude-short-period"], hintLevels: [3] },
-    { id: "count-residue-orbits", description: "Partition the p-1 nonzero residues into three-cycles and conclude 3 divides p-1.", approachIds: ["multiplication-orbits"], prerequisiteIds: ["build-three-cycles"], hintLevels: [4] },
-    { id: "transfer-four-cycles", description: "Apply the same orbit idea to an odd prime divisor of n^2+1 and derive a congruence modulo 4.", approachIds: ["multiplication-orbits"], prerequisiteIds: ["count-residue-orbits"], hintLevels: [5] }
-  ],
-  edges: [
-    { from: "derive-cubic-congruence", to: "exclude-short-period" },
-    { from: "exclude-short-period", to: "build-three-cycles" },
-    { from: "build-three-cycles", to: "count-residue-orbits" },
-    { from: "count-residue-orbits", to: "transfer-four-cycles" }
-  ],
-  commonErrors: [
-    { id: "forgets-p-three", description: "Concludes n is not 1 modulo p without isolating the exceptional prime p=3." },
-    { id: "assumes-cycles-length-three", description: "Uses n^3≡1 to claim every orbit has length three without ruling out shorter periods." },
-    { id: "quotes-group-order", description: "Invokes Lagrange or multiplicative-order machinery instead of explaining the elementary cycle partition requested by the family." }
-  ],
-  followUps: ["Why is p=3 the only exception to n not being 1 modulo p?", "What happens for an odd prime divisor of n^2+1?"],
-  extensions: [
-    { id: "four-cycle-transfer", prompt: "If an odd prime p divides n^2+1, use multiplication-by-n orbits to prove p≡1 (mod 4)." },
-    { id: "geometric-sum-conjecture", prompt: "For 1+n+...+n^{q-1} with prime q, state the analogous conclusion you expect after excluding exceptional cases." }
-  ],
-  hints: [
-    { level: 1, text: "Multiply n^2+n+1 by n-1. The product is n^3-1.", formulations: ["turn the quadratic into n cubed equals one", "use the geometric-series factorization"] },
-    { level: 2, text: "If n≡1 mod p, then n^2+n+1≡3 mod p, forcing p=3. Also a period of two together with period three would force period one.", formulations: ["rule out shorter multiplication periods", "p not equal three excludes n equals one"] },
-    { level: 3, text: "For nonzero x, examine x -> nx -> n^2x -> n^3x=x. The three displayed residues are distinct.", formulations: ["partition by multiplication orbits", "each nonzero residue sits in a three-cycle"] },
-    { level: 4, text: "The p-1 nonzero residues are partitioned into blocks of size 3, so p-1 is divisible by 3.", formulations: ["count the three-cycles", "three divides p minus one"] },
-    { level: 5, text: "For n^2≡-1 mod p with p odd, multiplication by n returns after four steps and cannot return after one or two; count four-cycles.", formulations: ["repeat with four-cycles", "derive p equals one mod four"] }
-  ],
-  canonicalSolution: "Since p divides n^2+n+1, the identity (n-1)(n^2+n+1)=n^3-1 gives n^3≡1 mod p. Also n is nonzero mod p. If n≡1 mod p, then n^2+n+1≡3 mod p, so p=3, contrary to the hypothesis. Thus multiplication by n is not the identity on nonzero residues. It cannot have period two either: n^2≡1 together with n^3≡1 would imply n≡1. Therefore, for every nonzero residue x, the three residues x,nx,n^2x are distinct and multiplication by n cycles through them. These cycles partition all p-1 nonzero residues, so 3 divides p-1 and p≡1 mod 3. For the extension, if odd p divides n^2+1, then n^2≡-1 and n^4≡1. The multiplication map has no period one or two because n^2 is not 1, so its nonzero residues split into four-cycles; hence 4 divides p-1.",
-  verificationNotes: "The exception p=3 is essential: n≡1 mod 3 makes n^2+n+1 divisible by 3. For p!=3, n cannot be zero or one modulo p. The orbit proof avoids assuming group-order results but is mathematically equivalent to an order-3 argument. This family has a known theorem-level near-neighbor and is explicitly high-risk for Agent H.",
-  reviewStatus: "expert-review",
-  reviewNotes: DIRICHLET_CANDIDATE_REVIEW_NOTES,
-  oxfordAdaptive: makeDirichletAdaptive({
-    familyId: "oxford-d-prime-divisor-three-cycles",
-    domains: ["number-theory"],
-    contentConcepts: ["modular-reasoning", "prime-structure", "divisibility"],
-    prerequisiteConcepts: ["arithmetic", "divisibility", "modular-arithmetic"],
-    skillEvidence: [evidence("representation-switching", "primary"), evidence("proof-construction", "primary"), evidence("case-analysis", "supporting"), evidence("transfer", "supporting"), evidence("generalization", "supporting")],
-    difficulty: { entry: "introductory-plus", core: "strong", ceiling: "stretch" },
-    novelty: "moderate",
-    abstraction: "moderate",
-    introducesNewDefinition: false,
-    stages: [
-      { id: "prime-cycle-opening", role: "technique-check", prerequisiteStageIds: [], domains: ["number-theory"], contentConcepts: ["modular-reasoning", "divisibility"], skillEvidence: [evidence("proof-construction", "supporting")], milestones: [{ milestoneId: "derive-cubic-congruence", skillEvidence: [evidence("proof-construction", "supporting")], contentConcepts: ["divisibility", "modular-reasoning"] }], extensionIds: [], difficulty: "introductory-plus", timingKind: "opening" },
-      { id: "prime-cycle-core", role: "core", prerequisiteStageIds: ["prime-cycle-opening"], domains: ["number-theory"], contentConcepts: ["modular-reasoning", "prime-structure"], skillEvidence: [evidence("case-analysis", "primary"), evidence("representation-switching", "primary"), evidence("proof-construction", "primary")], milestones: [
-        { milestoneId: "exclude-short-period", skillEvidence: [evidence("case-analysis", "primary")], contentConcepts: ["modular-reasoning"] },
-        { milestoneId: "build-three-cycles", skillEvidence: [evidence("representation-switching", "primary")], contentConcepts: ["modular-reasoning"] },
-        { milestoneId: "count-residue-orbits", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["prime-structure"] }
-      ], extensionIds: [], difficulty: "strong", timingKind: "core" },
-      { id: "prime-cycle-transfer", role: "transfer", prerequisiteStageIds: ["prime-cycle-core"], domains: ["number-theory"], contentConcepts: ["modular-reasoning", "prime-structure"], skillEvidence: [evidence("transfer", "primary"), evidence("generalization", "supporting")], milestones: [{ milestoneId: "transfer-four-cycles", skillEvidence: [evidence("transfer", "primary")], contentConcepts: ["modular-reasoning", "prime-structure"] }], extensionIds: ["four-cycle-transfer", "geometric-sum-conjecture"], difficulty: "stretch", timingKind: "transfer"
-      }
-    ]
-  })
-};
-export const oxfordDPrimeDivisorThreeCyclesEntry = authorCuratedProblem(oxfordDPrimeDivisorThreeCyclesSpec);
-
 export const oxfordDSlidingWindowParitySpec: CuratedProblemSpec = {
   id: "oxford-d-sliding-window-parity",
   title: "Equal-Parity Windows Around a Circle",
@@ -124,13 +56,13 @@ export const oxfordDSlidingWindowParitySpec: CuratedProblemSpec = {
     abstraction: "moderate",
     introducesNewDefinition: false,
     stages: [
-      { id: "window-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["combinatorics", "number-theory"], contentConcepts: ["parity", "modular-reasoning"], skillEvidence: [evidence("representation-switching", "primary")], milestones: [{ milestoneId: "compare-neighboring-windows", skillEvidence: [evidence("representation-switching", "primary")], contentConcepts: ["parity"] }], extensionIds: [], difficulty: "introductory", timingKind: "opening" },
+      { id: "window-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["combinatorics", "number-theory"], contentConcepts: ["parity", "modular-reasoning"], skillEvidence: [evidence("representation-switching", "primary")], milestones: [{ milestoneId: "compare-neighboring-windows", skillEvidence: [evidence("representation-switching", "primary")], contentConcepts: ["parity"] }], extensionIds: [], difficulty: "introductory" },
       { id: "window-core", role: "core", prerequisiteStageIds: ["window-opening"], domains: ["combinatorics", "number-theory"], contentConcepts: ["parity", "modular-reasoning", "counting-structure"], skillEvidence: [evidence("pattern-recognition", "primary"), evidence("proof-construction", "primary")], milestones: [
         { milestoneId: "derive-step-k-equality", skillEvidence: [evidence("proof-construction", "supporting")], contentConcepts: ["parity"] },
         { milestoneId: "analyze-step-k-orbits", skillEvidence: [evidence("pattern-recognition", "primary")], contentConcepts: ["modular-reasoning"] },
         { milestoneId: "count-and-prove-converse", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["counting-structure"] }
-      ], extensionIds: [], difficulty: "standard", timingKind: "core" },
-      { id: "window-transfer", role: "transfer", prerequisiteStageIds: ["window-core"], domains: ["combinatorics", "number-theory"], contentConcepts: ["parity", "modular-reasoning", "counting-structure"], skillEvidence: [evidence("generalization", "primary"), evidence("precision-checking", "supporting")], milestones: [{ milestoneId: "classify-odd-common-parity", skillEvidence: [evidence("generalization", "primary")], contentConcepts: ["parity", "counting-structure"] }], extensionIds: ["odd-window-count", "exact-window-sums"], difficulty: "strong", timingKind: "transfer"
+      ], extensionIds: [], difficulty: "standard" },
+      { id: "window-transfer", role: "transfer", prerequisiteStageIds: ["window-core"], domains: ["combinatorics", "number-theory"], contentConcepts: ["parity", "modular-reasoning", "counting-structure"], skillEvidence: [evidence("generalization", "primary"), evidence("precision-checking", "supporting")], milestones: [{ milestoneId: "classify-odd-common-parity", skillEvidence: [evidence("generalization", "primary")], contentConcepts: ["parity", "counting-structure"] }], extensionIds: ["odd-window-count", "exact-window-sums"], difficulty: "strong"
       }
     ]
   })
@@ -192,86 +124,18 @@ export const oxfordDWeightedCycleReadingsSpec: CuratedProblemSpec = {
     abstraction: "moderate",
     introducesNewDefinition: false,
     stages: [
-      { id: "weighted-cycle-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["graph-theory", "algebra"], contentConcepts: ["paths-cycles-connectivity", "parameter-dependent-algebra"], skillEvidence: [evidence("small-case-exploration", "primary")], milestones: [{ milestoneId: "solve-small-cycles", skillEvidence: [evidence("small-case-exploration", "primary")], contentConcepts: ["paths-cycles-connectivity"] }], extensionIds: [], difficulty: "introductory-plus", timingKind: "opening" },
+      { id: "weighted-cycle-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["graph-theory", "algebra"], contentConcepts: ["paths-cycles-connectivity", "parameter-dependent-algebra"], skillEvidence: [evidence("small-case-exploration", "primary")], milestones: [{ milestoneId: "solve-small-cycles", skillEvidence: [evidence("small-case-exploration", "primary")], contentConcepts: ["paths-cycles-connectivity"] }], extensionIds: [], difficulty: "introductory-plus" },
       { id: "weighted-cycle-core", role: "core", prerequisiteStageIds: ["weighted-cycle-opening"], domains: ["graph-theory", "algebra"], contentConcepts: ["paths-cycles-connectivity", "parameter-dependent-algebra"], skillEvidence: [evidence("representation-switching", "primary"), evidence("case-analysis", "primary"), evidence("proof-construction", "primary")], milestones: [
         { milestoneId: "derive-one-step-recurrence", skillEvidence: [evidence("representation-switching", "primary")], contentConcepts: ["parameter-dependent-algebra"] },
         { milestoneId: "close-after-n-steps", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["paths-cycles-connectivity", "parameter-dependent-algebra"] },
         { milestoneId: "classify-singular-parameters", skillEvidence: [evidence("case-analysis", "primary")], contentConcepts: ["parameter-dependent-algebra"] }
-      ], extensionIds: [], difficulty: "standard", timingKind: "core" },
-      { id: "weighted-cycle-transfer", role: "transfer", prerequisiteStageIds: ["weighted-cycle-core"], domains: ["graph-theory", "algebra"], contentConcepts: ["paths-cycles-connectivity", "parameter-dependent-algebra"], skillEvidence: [evidence("precision-checking", "primary"), evidence("case-analysis", "supporting")], milestones: [{ milestoneId: "analyze-exception-consistency", skillEvidence: [evidence("precision-checking", "primary"), evidence("case-analysis", "supporting")], contentConcepts: ["parameter-dependent-algebra"] }], extensionIds: ["ordinary-sum-specialization", "difference-specialization"], difficulty: "strong", timingKind: "transfer"
+      ], extensionIds: [], difficulty: "standard" },
+      { id: "weighted-cycle-transfer", role: "transfer", prerequisiteStageIds: ["weighted-cycle-core"], domains: ["graph-theory", "algebra"], contentConcepts: ["paths-cycles-connectivity", "parameter-dependent-algebra"], skillEvidence: [evidence("precision-checking", "primary"), evidence("case-analysis", "supporting")], milestones: [{ milestoneId: "analyze-exception-consistency", skillEvidence: [evidence("precision-checking", "primary"), evidence("case-analysis", "supporting")], contentConcepts: ["parameter-dependent-algebra"] }], extensionIds: ["ordinary-sum-specialization", "difference-specialization"], difficulty: "strong"
       }
     ]
   })
 };
 export const oxfordDWeightedCycleReadingsEntry = authorCuratedProblem(oxfordDWeightedCycleReadingsSpec);
-
-export const oxfordDLaminarFamilySpec: CuratedProblemSpec = {
-  id: "oxford-d-laminar-family",
-  title: "How Large Can a Nested-or-Disjoint Set Family Be?",
-  mode: "OXFORD_MATHEMATICS",
-  category: "combinatorics",
-  topics: ["set systems", "extremal reasoning", "tree representation"],
-  difficulty: "uncalibrated-oxford-candidate",
-  prompt: "Let U be an n-element set with n>=1. A family F of nonempty subsets of U contains U and every singleton, and has the property that for any A,B in F, either A is contained in B, B is contained in A, or A and B are disjoint. Prove a sharp upper bound on |F| and characterize when equality holds.",
-  givenInformation: ["The displayed nested-or-disjoint property is sometimes called laminarity, but no prior knowledge of that term is needed."],
-  approaches: [{ id: "inclusion-tree", label: "Turn containment into a rooted tree and count leaves versus internal nodes" }],
-  milestones: [
-    { id: "draw-small-families", description: "Build examples for n=2,3,4 and conjecture the sharp value 2n-1.", approachIds: ["inclusion-tree"], hintLevels: [1] },
-    { id: "define-parent-relation", description: "For each set other than U, identify its unique smallest strict superset in F and form an inclusion tree.", approachIds: ["inclusion-tree"], prerequisiteIds: ["draw-small-families"], hintLevels: [2] },
-    { id: "identify-leaves-and-children", description: "Show the leaves are exactly the n singletons and every internal node has at least two children whose union is the node.", approachIds: ["inclusion-tree"], prerequisiteIds: ["define-parent-relation"], hintLevels: [3] },
-    { id: "count-tree-nodes", description: "Use edge counting in a rooted tree with n leaves and at least two children per internal node to prove |F|<=2n-1.", approachIds: ["inclusion-tree"], prerequisiteIds: ["identify-leaves-and-children"], hintLevels: [4] },
-    { id: "characterize-equality", description: "Show equality holds exactly when every non-singleton set splits into exactly two maximal proper members of F.", approachIds: ["inclusion-tree"], prerequisiteIds: ["count-tree-nodes"], hintLevels: [5] }
-  ],
-  edges: [
-    { from: "draw-small-families", to: "define-parent-relation" },
-    { from: "define-parent-relation", to: "identify-leaves-and-children" },
-    { from: "identify-leaves-and-children", to: "count-tree-nodes" },
-    { from: "count-tree-nodes", to: "characterize-equality" }
-  ],
-  commonErrors: [
-    { id: "parent-not-unique", description: "Introduces an inclusion tree without proving the laminar condition makes the minimal strict superset unique." },
-    { id: "children-do-not-cover", description: "Counts children without using the singleton assumption to show every element of a non-singleton node lies in some maximal proper child." },
-    { id: "equality-not-sharp", description: "Proves the inequality but does not exhibit or characterize full binary hierarchies attaining 2n-1." }
-  ],
-  followUps: ["Why are singletons important for the leaf count?", "Construct an equality example for every n."],
-  extensions: [
-    { id: "full-binary-construction", prompt: "Construct a family of size 2n-1 for every n by recursively splitting sets into two nonempty parts." },
-    { id: "missing-singletons", prompt: "Drop the assumption that all singletons belong to F. Which part of the proof changes, and what bound remains true for a nonempty laminar family?" }
-  ],
-  hints: [
-    { level: 1, text: "Try drawing each set as a node and connect it to the smallest larger set in F that contains it.", formulations: ["represent containment as a tree", "look for a hierarchy"] },
-    { level: 2, text: "Laminarity makes two supersets of the same set comparable, so the smallest strict superset is unique.", formulations: ["prove the parent is unique", "supersets lie on one chain"] },
-    { level: 3, text: "The leaves are singletons. For a non-singleton A, maximal proper subsets in F are disjoint, and the singleton containing each element of A lies below one of them, so they cover A.", formulations: ["internal nodes have at least two children", "children partition their parent"] },
-    { level: 4, text: "If I is the number of internal nodes and L=n the number of leaves, then the tree has I+L-1 edges, while summing child counts gives at least 2I edges.", formulations: ["compare edges with child counts", "I is at most L minus one"] },
-    { level: 5, text: "Equality requires every inequality above to be tight, so every internal node has exactly two children; conversely any full binary hierarchy gives equality.", formulations: ["equality means binary splitting everywhere", "characterize the sharp case"] }
-  ],
-  canonicalSolution: "Order F by inclusion. Because U is in F, every A!=U has a strict superset in F. Among them choose one minimal by inclusion; it is unique, because any two supersets of A intersect and laminarity therefore makes them comparable. Connect A to this parent. The result is a rooted tree with root U. Its leaves are exactly the singletons: a non-singleton A contains singleton members of F and therefore has descendants. For an internal node A, its children are maximal proper F-subsets of A. They are pairwise disjoint by laminarity. They cover A because each element a in A lies in the singleton {a}, and along the containment chain from {a} to A there is a child of A containing it. Hence every internal node has at least two children. Let L=n be the leaves and I the internal nodes. A tree with I+L vertices has I+L-1 edges, while summing the numbers of children over internal nodes also counts the edges and is at least 2I. Thus I+L-1>=2I, so I<=L-1=n-1 and |F|=I+L<=2n-1. Equality holds exactly when every internal node has exactly two children. Such full binary containment trees exist for every n by repeatedly splitting a non-singleton set into two nonempty pieces, so the bound is sharp.",
-  verificationNotes: "For n=1, F={U} and the bound gives 1 with equality. The singleton assumption ensures exactly n leaves and guarantees children cover their parent. The numerical tree inequality is I+L-1>=2I. This theorem is known in laminar-family literature and should be treated as a high-risk originality candidate, not self-approved.",
-  reviewStatus: "expert-review",
-  reviewNotes: DIRICHLET_CANDIDATE_REVIEW_NOTES,
-  oxfordAdaptive: makeDirichletAdaptive({
-    familyId: "oxford-d-laminar-family",
-    domains: ["combinatorics", "set-theory"],
-    contentConcepts: ["extremal-configuration", "set-relations"],
-    prerequisiteConcepts: ["set-notation", "counting-principles"],
-    skillEvidence: [evidence("small-case-exploration", "supporting"), evidence("representation-switching", "primary"), evidence("proof-construction", "primary"), evidence("precision-checking", "supporting"), evidence("generalization", "supporting")],
-    difficulty: { entry: "introductory-plus", core: "standard", ceiling: "strong" },
-    novelty: "moderate",
-    abstraction: "moderate",
-    introducesNewDefinition: true,
-    stages: [
-      { id: "laminar-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["combinatorics", "set-theory"], contentConcepts: ["extremal-configuration", "set-relations"], skillEvidence: [evidence("small-case-exploration", "primary")], milestones: [{ milestoneId: "draw-small-families", skillEvidence: [evidence("small-case-exploration", "primary")], contentConcepts: ["set-relations"] }], extensionIds: [], difficulty: "introductory-plus", timingKind: "opening", introducesNewDefinition: true },
-      { id: "laminar-core", role: "core", prerequisiteStageIds: ["laminar-opening"], domains: ["combinatorics", "set-theory"], contentConcepts: ["extremal-configuration", "set-relations"], skillEvidence: [evidence("representation-switching", "primary"), evidence("proof-construction", "primary")], milestones: [
-        { milestoneId: "define-parent-relation", skillEvidence: [evidence("representation-switching", "primary")], contentConcepts: ["set-relations"] },
-        { milestoneId: "identify-leaves-and-children", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["set-relations"] },
-        { milestoneId: "count-tree-nodes", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["extremal-configuration"] }
-      ], extensionIds: [], difficulty: "standard", timingKind: "core" },
-      { id: "laminar-transfer", role: "transfer", prerequisiteStageIds: ["laminar-core"], domains: ["combinatorics", "set-theory"], contentConcepts: ["extremal-configuration", "set-relations"], skillEvidence: [evidence("precision-checking", "primary"), evidence("generalization", "supporting")], milestones: [{ milestoneId: "characterize-equality", skillEvidence: [evidence("precision-checking", "primary")], contentConcepts: ["extremal-configuration"] }], extensionIds: ["full-binary-construction", "missing-singletons"], difficulty: "strong", timingKind: "transfer"
-      }
-    ]
-  })
-};
-export const oxfordDLaminarFamilyEntry = authorCuratedProblem(oxfordDLaminarFamilySpec);
 
 export const oxfordDMidpointClosedResiduesSpec: CuratedProblemSpec = {
   id: "oxford-d-midpoint-closed-residues",
@@ -329,13 +193,13 @@ export const oxfordDMidpointClosedResiduesSpec: CuratedProblemSpec = {
     abstraction: "high",
     introducesNewDefinition: true,
     stages: [
-      { id: "midpoint-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["number-theory", "set-theory"], contentConcepts: ["modular-reasoning", "relations-operations"], skillEvidence: [evidence("small-case-exploration", "primary")], milestones: [{ milestoneId: "test-small-residue-sets", skillEvidence: [evidence("small-case-exploration", "primary")], contentConcepts: ["modular-reasoning"] }], extensionIds: [], difficulty: "introductory-plus", timingKind: "opening", introducesNewDefinition: true },
+      { id: "midpoint-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["number-theory", "set-theory"], contentConcepts: ["modular-reasoning", "relations-operations"], skillEvidence: [evidence("small-case-exploration", "primary")], milestones: [{ milestoneId: "test-small-residue-sets", skillEvidence: [evidence("small-case-exploration", "primary")], contentConcepts: ["modular-reasoning"] }], extensionIds: [], difficulty: "introductory-plus", introducesNewDefinition: true },
       { id: "midpoint-core", role: "core", prerequisiteStageIds: ["midpoint-opening"], domains: ["number-theory", "set-theory"], contentConcepts: ["modular-reasoning", "relations-operations"], skillEvidence: [evidence("abstraction", "primary"), evidence("proof-construction", "primary")], milestones: [
         { milestoneId: "translate-to-zero", skillEvidence: [evidence("abstraction", "primary")], contentConcepts: ["relations-operations"] },
         { milestoneId: "recover-doubling", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["modular-reasoning"] },
         { milestoneId: "prove-additive-subgroup", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["relations-operations"] }
-      ], extensionIds: [], difficulty: "standard", timingKind: "core" },
-      { id: "midpoint-transfer", role: "transfer", prerequisiteStageIds: ["midpoint-core"], domains: ["number-theory", "set-theory"], contentConcepts: ["modular-reasoning", "relations-operations"], skillEvidence: [evidence("generalization", "primary"), evidence("precision-checking", "supporting")], milestones: [{ milestoneId: "classify-prime-and-composite", skillEvidence: [evidence("generalization", "primary")], contentConcepts: ["modular-reasoning", "relations-operations"] }], extensionIds: ["odd-composite-cosets", "mod-nine-examples"], difficulty: "strong", timingKind: "transfer"
+      ], extensionIds: [], difficulty: "standard" },
+      { id: "midpoint-transfer", role: "transfer", prerequisiteStageIds: ["midpoint-core"], domains: ["number-theory", "set-theory"], contentConcepts: ["modular-reasoning", "relations-operations"], skillEvidence: [evidence("generalization", "primary"), evidence("precision-checking", "supporting")], milestones: [{ milestoneId: "classify-prime-and-composite", skillEvidence: [evidence("generalization", "primary")], contentConcepts: ["modular-reasoning", "relations-operations"] }], extensionIds: ["odd-composite-cosets", "mod-nine-examples"], difficulty: "strong"
       }
     ]
   })
@@ -397,13 +261,13 @@ export const oxfordDMirrorOrbitsSpec: CuratedProblemSpec = {
     abstraction: "moderate",
     introducesNewDefinition: false,
     stages: [
-      { id: "mirror-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["number-theory", "functions"], contentConcepts: ["modular-reasoning", "composition-iteration"], skillEvidence: [evidence("small-case-exploration", "primary")], milestones: [{ milestoneId: "experiment-small-clocks", skillEvidence: [evidence("small-case-exploration", "primary")], contentConcepts: ["modular-reasoning"] }], extensionIds: [], difficulty: "introductory", timingKind: "opening" },
+      { id: "mirror-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["number-theory", "functions"], contentConcepts: ["modular-reasoning", "composition-iteration"], skillEvidence: [evidence("small-case-exploration", "primary")], milestones: [{ milestoneId: "experiment-small-clocks", skillEvidence: [evidence("small-case-exploration", "primary")], contentConcepts: ["modular-reasoning"] }], extensionIds: [], difficulty: "introductory" },
       { id: "mirror-core", role: "core", prerequisiteStageIds: ["mirror-opening"], domains: ["number-theory", "functions"], contentConcepts: ["modular-reasoning", "composition-iteration"], skillEvidence: [evidence("representation-switching", "primary"), evidence("proof-construction", "primary")], milestones: [
         { milestoneId: "compose-to-translation", skillEvidence: [evidence("representation-switching", "primary")], contentConcepts: ["composition-iteration"] },
         { milestoneId: "construct-all-multiples", skillEvidence: [evidence("proof-construction", "supporting")], contentConcepts: ["modular-reasoning"] },
         { milestoneId: "prove-gcd-obstruction", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["modular-reasoning"] }
-      ], extensionIds: [], difficulty: "standard", timingKind: "core" },
-      { id: "mirror-transfer", role: "transfer", prerequisiteStageIds: ["mirror-core"], domains: ["number-theory", "functions"], contentConcepts: ["modular-reasoning", "composition-iteration"], skillEvidence: [evidence("generalization", "primary"), evidence("precision-checking", "supporting")], milestones: [{ milestoneId: "general-starting-orbit", skillEvidence: [evidence("generalization", "primary")], contentConcepts: ["composition-iteration", "modular-reasoning"] }], extensionIds: ["arbitrary-start", "orbit-size-boundary"], difficulty: "strong", timingKind: "transfer"
+      ], extensionIds: [], difficulty: "standard" },
+      { id: "mirror-transfer", role: "transfer", prerequisiteStageIds: ["mirror-core"], domains: ["number-theory", "functions"], contentConcepts: ["modular-reasoning", "composition-iteration"], skillEvidence: [evidence("generalization", "primary"), evidence("precision-checking", "supporting")], milestones: [{ milestoneId: "general-starting-orbit", skillEvidence: [evidence("generalization", "primary")], contentConcepts: ["composition-iteration", "modular-reasoning"] }], extensionIds: ["arbitrary-start", "orbit-size-boundary"], difficulty: "strong"
       }
     ]
   })
@@ -411,10 +275,8 @@ export const oxfordDMirrorOrbitsSpec: CuratedProblemSpec = {
 export const oxfordDMirrorOrbitsEntry = authorCuratedProblem(oxfordDMirrorOrbitsSpec);
 
 export const dirichletBatchBEntries = Object.freeze([
-  oxfordDPrimeDivisorThreeCyclesEntry,
   oxfordDSlidingWindowParityEntry,
   oxfordDWeightedCycleReadingsEntry,
-  oxfordDLaminarFamilyEntry,
   oxfordDMidpointClosedResiduesEntry,
   oxfordDMirrorOrbitsEntry
 ] as const);
