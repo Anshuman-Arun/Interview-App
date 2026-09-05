@@ -1098,9 +1098,12 @@ summary:focus-visible {
 /* Installed live-room fidelity + recovery pass                               */
 /* -------------------------------------------------------------------------- */
 .interview-app-container:not(.interview-app-container--backgrounded) .app-header {
+  position: relative;
+  z-index: 10000;
   height: 58px;
   min-height: 58px !important;
   flex-basis: 58px;
+  overflow: visible;
   padding: 0 15px 0 18px !important;
   border-bottom-color: var(--border-subtle) !important;
 }
@@ -1113,13 +1116,32 @@ summary:focus-visible {
 }
 .interview-app-container:not(.interview-app-container--backgrounded) .app-header__actions,
 .interview-app-container:not(.interview-app-container--backgrounded) .app-header__session-actions {
+  align-items: center;
   gap: 7px;
 }
+.interview-app-container:not(.interview-app-container--backgrounded) .appearance-dock {
+  z-index: 10001;
+  display: flex;
+  height: 28px;
+  flex: 0 0 28px;
+  align-self: center;
+  align-items: center;
+}
+.interview-app-container:not(.interview-app-container--backgrounded) .appearance-dock[open] {
+  z-index: 10002;
+}
 .interview-app-container:not(.interview-app-container--backgrounded) .appearance-dock__trigger {
+  display: grid;
   width: 28px;
   height: 28px;
   min-height: 28px;
+  box-sizing: border-box;
+  place-items: center;
   padding: 0;
+  line-height: 0;
+}
+.interview-app-container:not(.interview-app-container--backgrounded) .appearance-dock__panel {
+  z-index: 1;
 }
 .live-main {
   background: #ebe7dc !important;
