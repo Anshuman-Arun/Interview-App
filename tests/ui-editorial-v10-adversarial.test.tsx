@@ -581,6 +581,10 @@ describe("editorial v10 adversarial UI states", () => {
     expect(editorialCss).toContain(
       ".input-dock .voice-strip__popover"
     );
+    expect(editorialCss).toContain("@media (max-height: 360px)");
+    expect(editorialCss).toMatch(
+      /@media \(max-height: 360px\)[\s\S]*?\.problem-block\s*\{\s*display:\s*none;[\s\S]*?\.input-dock \.reasoning-composer__textarea\s*\{[\s\S]*?min-height:\s*34px;/u
+    );
     expect(editorialCss).toContain(
       "width: min(340px, 24vw);"
     );
