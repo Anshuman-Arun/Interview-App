@@ -100,6 +100,25 @@
       ],
       "nearestMatches": [
         {
+          "pool": "C",
+          "source": "oxford-even-odd-degrees",
+          "matchedFingerprintFeatures": [
+            "people-to-graph representation",
+            "elementary graph structure"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 2,
+            "target": 0,
+            "kernel": 0,
+            "decisiveMechanism": 0,
+            "diagram": 1,
+            "progression": 0,
+            "transferStretch": 0
+          },
+          "explanation": "Potential adjacent-session repetition at the surface/representation level; theorem and decisive mechanism differ."
+        },
+        {
           "pool": "E",
           "source": "OpenText Ramsey Theory — Friends and Strangers",
           "url": "https://opentext.uleth.ca/Ramsey/Friends.html",
@@ -453,6 +472,27 @@
       ],
       "nearestMatches": [
         {
+          "pool": "B",
+          "source": "REF-OX-OOMC-MISSING-CORNERS",
+          "url": "https://www.maths.ox.ac.uk/outreach/oxford-online-maths-club/season-2-episode-9",
+          "matchedFingerprintFeatures": [
+            "removed cells from bipartite grid",
+            "checkerboard invariant",
+            "tiling impossibility"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 3,
+            "target": 3,
+            "kernel": 3,
+            "decisiveMechanism": 3,
+            "diagram": 3,
+            "progression": 3,
+            "transferStretch": 2
+          },
+          "explanation": "The broader inventory intentionally stores this exact classic family as an anti-lifting guard."
+        },
+        {
           "pool": "E",
           "source": "Wikipedia — Mutilated chessboard problem",
           "url": "https://en.wikipedia.org/wiki/Mutilated_chessboard_problem",
@@ -805,6 +845,48 @@
       ],
       "nearestMatches": [
         {
+          "pool": "B",
+          "source": "REF-OX-2026-ITERATED-FUNCTION-SKETCH",
+          "url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/visualisation",
+          "matchedFingerprintFeatures": [
+            "iteration",
+            "convergence",
+            "quantitative extension"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 1,
+            "target": 1,
+            "kernel": 1,
+            "decisiveMechanism": 1,
+            "diagram": 0,
+            "progression": 1,
+            "transferStretch": 1
+          },
+          "explanation": "Same source surfaced through the broad inventory; overlap is pedagogical rather than a shared mathematical kernel."
+        },
+        {
+          "pool": "A",
+          "source": "OX-2026-ITERATED-FUNCTION-SKETCH",
+          "url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/visualisation",
+          "matchedFingerprintFeatures": [
+            "function iteration",
+            "convergence",
+            "fixed-point reasoning"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 1,
+            "target": 1,
+            "kernel": 1,
+            "decisiveMechanism": 1,
+            "diagram": 0,
+            "progression": 1,
+            "transferStretch": 1
+          },
+          "explanation": "Structural neighbour only: different function, opening representation, and core proof."
+        },
+        {
           "pool": "E",
           "source": "Northwestern Math 320 worked examples",
           "url": "https://sites.math.northwestern.edu/scg479/courses/320/notes/examples-2011.pdf",
@@ -1039,6 +1121,25 @@
       ],
       "nearestMatches": [
         {
+          "pool": "C",
+          "source": "oxford-six-people",
+          "matchedFingerprintFeatures": [
+            "people-to-graph representation",
+            "elementary graph structure"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 2,
+            "target": 0,
+            "kernel": 0,
+            "decisiveMechanism": 0,
+            "diagram": 1,
+            "progression": 0,
+            "transferStretch": 0
+          },
+          "explanation": "Potential adjacent-session repetition at the surface/representation level; mathematical kernel and target differ."
+        },
+        {
           "pool": "E",
           "source": "Wikipedia — Handshaking lemma",
           "url": "https://en.wikipedia.org/wiki/Handshaking_lemma",
@@ -1154,6 +1255,47 @@
         "choose n+1 from 1 to 2n one divides another odd part powers of 2"
       ],
       "nearestMatches": [
+        {
+          "pool": "C",
+          "source": "oxford-prefix-sums-mod-n",
+          "matchedFingerprintFeatures": [
+            "pigeonhole principle",
+            "elementary number theory",
+            "n-versus-n+1 counting"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 1,
+            "target": 0,
+            "kernel": 1,
+            "decisiveMechanism": 1,
+            "diagram": 0,
+            "progression": 1,
+            "transferStretch": 0
+          },
+          "explanation": "Technique/cadence overlap only; odd-part chains and prefix residues are distinct kernels."
+        },
+        {
+          "pool": "A",
+          "source": "OX-MATHCS-SQUARE-CUBE-CONSTRAINT",
+          "url": "https://www.cs.ox.ac.uk/people/varun.kanade/website/post/2022/09/15/interview-question1-discussion.html",
+          "matchedFingerprintFeatures": [
+            "finite selection",
+            "class/pair structure",
+            "elementary number theory"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 1,
+            "target": 1,
+            "kernel": 1,
+            "decisiveMechanism": 1,
+            "diagram": 0,
+            "progression": 1,
+            "transferStretch": 1
+          },
+          "explanation": "Shares selection-and-structure pedagogy, but the classes, target, and decisive mechanism differ."
+        },
         {
           "pool": "E",
           "source": "Mathematics Stack Exchange — choose n+1 numbers from 1 to 2n",
@@ -1272,6 +1414,27 @@
       ],
       "nearestMatches": [
         {
+          "pool": "B",
+          "source": "REF-OX-2026-MOUNTAIN-CROSSING-CONTINUITY",
+          "url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/visualisation",
+          "matchedFingerprintFeatures": [
+            "continuity",
+            "endpoint order/sign change",
+            "crossing existence"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 1,
+            "target": 1,
+            "kernel": 1,
+            "decisiveMechanism": 2,
+            "diagram": 1,
+            "progression": 1,
+            "transferStretch": 1
+          },
+          "explanation": "Meaningful IVT/crossing neighbour, but it has a different setup, target, and representation."
+        },
+        {
           "pool": "E",
           "source": "Mathematics Stack Exchange — closed interval self-map fixed point",
           "url": "https://math.stackexchange.com/questions/1335778/every-continuous-map-of-a-closed-interval-into-itself-has-a-fixed-point",
@@ -1389,6 +1552,26 @@
         "n integers consecutive subsequence sum divisible by n prefix sums pigeonhole"
       ],
       "nearestMatches": [
+        {
+          "pool": "C",
+          "source": "oxford-divisibility-chain",
+          "matchedFingerprintFeatures": [
+            "pigeonhole principle",
+            "elementary number theory",
+            "n-versus-n+1 counting"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 1,
+            "target": 0,
+            "kernel": 1,
+            "decisiveMechanism": 1,
+            "diagram": 0,
+            "progression": 1,
+            "transferStretch": 0
+          },
+          "explanation": "Technique/cadence overlap only; representations and solution dependency graphs differ."
+        },
         {
           "pool": "E",
           "source": "Berkeley Math Circle handout",
@@ -1628,6 +1811,27 @@
         "Catalan paths below diagonal reflection principle"
       ],
       "nearestMatches": [
+        {
+          "pool": "A",
+          "source": "OX-SAMPLE-TILING-RECURRENCE",
+          "url": "https://www.ox.ac.uk/admissions/undergraduate/applying/guide-for-applicants/interviews/sample_questions",
+          "matchedFingerprintFeatures": [
+            "small cases",
+            "recurrence",
+            "structural combinatorial proof"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 1,
+            "target": 1,
+            "kernel": 1,
+            "decisiveMechanism": 1,
+            "diagram": 1,
+            "progression": 2,
+            "transferStretch": 1
+          },
+          "explanation": "Materially similar interview progression, but different objects and decisive mechanism."
+        },
         {
           "pool": "E",
           "source": "Wikipedia — Catalan number",
