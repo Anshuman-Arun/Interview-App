@@ -6,6 +6,7 @@ import {
   problemCatalog
 } from "../packages/problems/src/index.js";
 import { CURATED_DISCLOSURE_LEVELS } from "../packages/problems/src/curated-disclosure-levels.js";
+import { eulerOxfordCandidateEntries } from "../packages/problems/src/curated/oxford-euler-candidates.js";
 import { oxfordCuratedReviewEntries } from "../packages/problems/src/oxford-curated.js";
 import { quantCuratedReviewEntries } from "../packages/problems/src/quant-curated.js";
 
@@ -36,7 +37,9 @@ describe("curated semantic disclosure review", () => {
   });
 
   it("covers every curated problem with five explicit reviewed semantic levels", () => {
-    expect(Object.keys(CURATED_DISCLOSURE_LEVELS)).toHaveLength(21);
+    expect(Object.keys(CURATED_DISCLOSURE_LEVELS)).toHaveLength(
+      ALL_PROBLEMS.length + oxfordCuratedReviewEntries.length + quantCuratedReviewEntries.length
+    );
     for (const [problemId, levels] of Object.entries(CURATED_DISCLOSURE_LEVELS)) {
       expect(Object.keys(levels)).toEqual(["1", "2", "3", "4", "5"]);
       for (const stage of [1, 2, 3, 4, 5] as const) {
@@ -112,7 +115,11 @@ describe("curated semantic disclosure review", () => {
       ...oxfordCuratedReviewEntries.map((entry) => entry.problem.id),
       ...quantCuratedReviewEntries.map((entry) => entry.problem.id)
     ]);
-    expect(reviewIds).toEqual(new Set(["oxford-catalan-paths", "quant-random-walk-drawdown"]));
+    expect(reviewIds).toEqual(new Set([
+      "oxford-catalan-paths",
+      ...eulerOxfordCandidateEntries.map((entry) => entry.problem.id),
+      "quant-random-walk-drawdown"
+    ]));
     expect(problemCatalog.some((problem) => reviewIds.has(problem.id))).toBe(false);
     expect(PROBLEM_METADATA.some((metadata) => reviewIds.has(metadata.id))).toBe(false);
   });
