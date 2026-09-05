@@ -78,8 +78,14 @@ export function ProductFrame({
           type="button"
           className="product-frame__new"
           onClick={() => onNavigate("new")}
-          disabled={transitionLocked}
-          title={transitionLocked ? "Session transition in progress." : undefined}
+          disabled={transitionLocked || navigationLocked}
+          title={
+            transitionLocked
+              ? "Session transition in progress."
+              : navigationLocked
+                ? "Resume or finish the paused interview before starting a new interview."
+                : undefined
+          }
         >
           <span>New interview</span>
           <span aria-hidden="true">↗</span>
