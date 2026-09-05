@@ -124,6 +124,7 @@ describe("Oxford adaptive metadata contract", () => {
     expect(entry.problem).not.toHaveProperty("oxfordAdaptive");
     expect(entry.problem.public).not.toHaveProperty("familyId");
     expect(JSON.stringify(entry.problem.public)).not.toContain("skillEvidence");
+    expect(JSON.stringify(entry.problem.public)).not.toContain("contentConcepts");
 
     const publicView = {
       id: entry.problem.id,
