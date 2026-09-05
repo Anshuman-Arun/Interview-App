@@ -581,7 +581,7 @@ Empirical calibration should later use distributions conditioned on candidate st
 
 ## 10. Reconciliation with Agent A PR #126
 
-Re-checked against **Agent A PR #126**, latest reviewed head `00824aebdc7392c9c83a2c1cd29bb02c93b73487`.
+Re-checked against **Agent A PR #126** through latest reviewed head `c065fe6e9c874ea06a5733b2e594751f1ab06400`.
 
 ### Strong alignment
 
@@ -599,18 +599,18 @@ Agent A's current contract still cleanly supports the core research needs:
 | provenance/originality | provenance + independent review status |
 | uncertain calibration | estimate confidence + calibration status |
 
-### Remaining synchronization requirement: two reasoning skills are still absent
+### Synchronization result: both research-requested skills are now represented
 
-At the latest #126 head, the canonical reasoning enum still has neither:
+At the latest reviewed #126 head, Agent A's canonical reasoning enum now includes both:
 
 - `guided-adaptation`;
 - `precision-checking`.
 
-Agent B recommends adding both (or semantically equivalent bounded tags) **before Wave 2 authoring freezes metadata**, rather than forcing authors to misuse nearby tags.
+This resolves Agent B's substantive taxonomy amendment request. Wave 2 authors should use these exact canonical tags rather than inventing equivalents.
 
-#### Why `guided-adaptation` is distinct
+#### Why `guided-adaptation` must remain distinct in downstream evidence
 
-The product needs two separate facts:
+The product still needs two separate facts:
 
 1. **Assistance/prompt dependency:** did the candidate need a tutor intervention to progress?
 2. **Guided adaptation:** once an intervention supplied a new representation, observation, subproblem, or idea, did the candidate understand it, integrate it, and use it productively?
@@ -626,9 +626,9 @@ Those are not opposites and should not collapse into one score.
 
 Recommended evidence unit: milestone/stage evidence should record assistance through the existing evaluation seam and independently tag `guided-adaptation` when the post-prompt response itself is what the milestone tests.
 
-#### Why `precision-checking` remains useful
+#### `precision-checking` interpretation
 
-This skill covers deliberate verification that:
+Use this tag for deliberate verification that:
 
 - all cases have been considered;
 - an assumption has not slipped in unnoticed;
@@ -640,7 +640,7 @@ It overlaps with technique and error recovery but is observable even when no err
 
 ### Coordination boundary
 
-Agent B is not editing Agent A's branch. PR #127 remains docs/data-only and independent. The synchronization needed before Agents C–E bulk-author metadata is unambiguous: Agent A should either add these two bounded concepts or explicitly provide equivalent canonical representations so authoring agents do not improvise free-form tags.
+Agent B did not edit Agent A's branch. PR #127 remains docs/data-only and independent. Agent A has now supplied the two bounded concepts requested by this research, so Agents C–E can use the canonical tags directly.
 
 ### Timing warning for Agent A
 
@@ -807,7 +807,7 @@ Before a family is production-ready:
 8. Agent H approves Oxford fidelity.
 9. The family does not create an unacceptable similarity/repetition cluster in the overall bank.
 
-Agents C–E should not bulk-author ahead of unresolved taxonomy semantics for `guided-adaptation` / `precision-checking`; if Agent A has not synchronized those tags, record the evidence need without inventing replacement free-form strings.
+Agents C–E should use Agent A's canonical `guided-adaptation` and `precision-checking` tags directly and must not invent replacement free-form strings.
 
 ---
 
