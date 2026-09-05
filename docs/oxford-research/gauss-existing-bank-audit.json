@@ -9,28 +9,28 @@
   },
   "scopeNote": "Independent taxonomy/difficulty/timing review proposals for the existing Oxford bank. These records do not mutate problem metadata, do not make a family recommendation-ready, and do not claim Agent H originality/fidelity or Agent I mathematical-correctness approval.",
   "crossAgentSnapshot": {
-    "checkedAt": "2026-09-04T22:28-07:00",
+    "checkedAt": "2026-09-04T22:38-07:00",
     "openAgentCDEPullRequests": [],
-    "note": "No open pull requests with required Agent C, D, or E title prefixes were found at the initial Gauss snapshot. A final snapshot is recorded in the PR handoff."
+    "note": "No open pull request whose title begins with the required Agent C, D, or E marker was present at the final pre-PR sweep. Concurrent Agent I PR #128 and handoff issue #129 were inspected because their prerequisite/solvability findings materially affect calibration."
   },
   "summary": {
     "reviewedFamilies": 14,
     "safeForLaterCalibration": [
       "oxford-divisors-square-parity",
-      "oxford-nested-radical-sequence",
+      "oxford-nested-radical-sequence"
+    ],
+    "needsRevision": [
       "oxford-monotone-cauchy",
+      "oxford-even-odd-degrees",
       "oxford-divisibility-chain",
       "oxford-continuous-fixed-point",
       "oxford-prefix-sums-mod-n",
-      "oxford-triangle-medians"
-    ],
-    "needsRevision": [
+      "oxford-triangle-medians",
       "oxford-catalan-paths"
     ],
     "retainLegacy": [
       "oxford-domino-chessboard",
       "oxford-euclid-primes",
-      "oxford-even-odd-degrees",
       "oxford-six-people",
       "oxford-hilbert-hotel",
       "oxford-prisoner-hats"
@@ -826,20 +826,23 @@
         },
         "rationale": "The main proof can legitimately consume almost the entire ~25-minute interview. Completion is not required; a natural stopping point after the rational case or monotonicity squeeze remains informative."
       },
-      "disposition": "safe-for-later-calibration",
+      "disposition": "needs-revision",
       "migration": {
         "worthMigrating": true,
-        "recommendation": "migrate",
-        "rationale": "High-value deep-dive family if staged with an accessible algebraic opening and optional ceiling; worth migration after H/I review."
+        "recommendation": "revise-before-migration",
+        "rationale": "The rational-squeeze core remains high-value, but the Hamel-basis/pathology extension is outside the stated prerequisite envelope and should be removed or reframed."
       },
-      "blockers": [],
+      "blockers": [
+        "Agent I issue #129: the pathological-note extension assumes a basis of R over Q / Hamel-basis machinery. Treat that as an authoring repair, not as extra candidate prerequisite burden."
+      ],
       "ownershipBoundaries": {
         "originality": "pending-agent-h",
         "fidelity": "pending-agent-h",
         "mathematicalCorrectness": "pending-agent-i"
       },
       "reviewNotes": [
-        "Legacy stretch-oxford is appropriate for the ceiling, not for the entry or necessarily the core."
+        "Legacy stretch-oxford is appropriate for the ceiling, not for the entry or necessarily the core.",
+        "Gauss incorporated the concurrent Agent I solvability handoff without adopting Agent I's correctness decision as a calibration decision."
       ]
     },
     {
@@ -981,20 +984,23 @@
         },
         "rationale": "The theorem is compact; alternative invariant proof and Euler-trail discussion are where extra interview time becomes useful."
       },
-      "disposition": "retain-legacy",
+      "disposition": "needs-revision",
       "migration": {
         "worthMigrating": false,
-        "recommendation": "retain-legacy",
-        "rationale": "Classic handshaking material is useful for training but not a priority adaptive family absent a later H/I case."
+        "recommendation": "revise-before-migration",
+        "rationale": "The core calibration remains usable, but Agent I issue #129 flags the Euler-trail extension as undefined under current prerequisites. Remove or self-contain that extension before any adaptive migration."
       },
-      "blockers": [],
+      "blockers": [
+        "Agent I issue #129: the Euler-trail extension is not candidate-solvable under the stated prerequisites; do not calibrate it as a viable extension until repaired."
+      ],
       "ownershipBoundaries": {
         "originality": "pending-agent-h",
         "fidelity": "pending-agent-h",
         "mathematicalCorrectness": "pending-agent-i"
       },
       "reviewNotes": [
-        "Legacy introductory-plus is a good core calibration."
+        "Legacy introductory-plus is a good core calibration.",
+        "Gauss incorporated the concurrent Agent I solvability handoff without adopting Agent I's correctness decision as a calibration decision."
       ]
     },
     {
@@ -1132,19 +1138,23 @@
         },
         "rationale": "Time is dominated by discovery of the power-of-two decomposition; prompting can naturally expose the classification without forcing a topic switch."
       },
-      "disposition": "safe-for-later-calibration",
+      "disposition": "needs-revision",
       "migration": {
         "worthMigrating": true,
-        "recommendation": "migrate",
-        "rationale": "Coherent one-family progression with a strong representation insight and natural extension; worth adaptive migration after independent gates."
+        "recommendation": "revise-before-migration",
+        "rationale": "The core family remains a strong migration candidate, but the poset extension must be removed or made self-contained before migration."
       },
-      "blockers": [],
+      "blockers": [
+        "Agent I issue #129: the poset extension assumes undefined partially ordered set language. This is an authoring/prerequisite repair, not a reason to add a frozen taxonomy tag."
+      ],
       "ownershipBoundaries": {
         "originality": "pending-agent-h",
         "fidelity": "pending-agent-h",
         "mathematicalCorrectness": "pending-agent-i"
       },
-      "reviewNotes": []
+      "reviewNotes": [
+        "Gauss incorporated the concurrent Agent I solvability handoff without adopting Agent I's correctness decision as a calibration decision."
+      ]
     },
     {
       "schemaVersion": 1,
@@ -1280,20 +1290,23 @@
         },
         "rationale": "The proof is short enough that a realistic interview should reserve time for why the codomain matters, endpoint equality, and the interval generalization."
       },
-      "disposition": "safe-for-later-calibration",
+      "disposition": "needs-revision",
       "migration": {
         "worthMigrating": true,
-        "recommendation": "migrate",
-        "rationale": "Clean technique-to-concept family and easy to stage without changing the mathematical kernel; worth migration after H/I review."
+        "recommendation": "revise-before-migration",
+        "rationale": "The IVT core is a good migration candidate, but the higher-dimensional Brouwer extension is outside the supplied prerequisite envelope and must be removed or reframed."
       },
-      "blockers": [],
+      "blockers": [
+        "Agent I issue #129: the Brouwer/higher-dimensional extension depends on machinery outside the stated prerequisites. Do not inflate core difficulty to compensate; repair the extension instead."
+      ],
       "ownershipBoundaries": {
         "originality": "pending-agent-h",
         "fidelity": "pending-agent-h",
         "mathematicalCorrectness": "pending-agent-i"
       },
       "reviewNotes": [
-        "Major disagreement: Gauss recommends an introductory-plus core rather than treating standard-oxford as the family-wide level."
+        "Major disagreement: Gauss recommends an introductory-plus core rather than treating standard-oxford as the family-wide level.",
+        "Gauss incorporated the concurrent Agent I solvability handoff without adopting Agent I's correctness decision as a calibration decision."
       ]
     },
     {
@@ -1433,19 +1446,23 @@
         },
         "rationale": "Discovery of prefix sums is the main pacing uncertainty. A productive prompt can make the rest of the proof unfold naturally without timer-driven stage changes."
       },
-      "disposition": "safe-for-later-calibration",
+      "disposition": "needs-revision",
       "migration": {
         "worthMigrating": true,
-        "recommendation": "migrate",
-        "rationale": "Good diagnostic representation-switch family with a coherent extension path; worth migration after independent gates."
+        "recommendation": "revise-before-migration",
+        "rationale": "The core prefix-sum proof remains a strong migration candidate, but Agent I PR #128 found the cyclic-block extension is not a determinate theorem/task and should be repaired or removed first."
       },
-      "blockers": [],
+      "blockers": [
+        "Agent I PR #128: the cyclic-block stretch prompt is not a determinate candidate-solvable task as authored."
+      ],
       "ownershipBoundaries": {
         "originality": "pending-agent-h",
         "fidelity": "pending-agent-h",
         "mathematicalCorrectness": "pending-agent-i"
       },
-      "reviewNotes": []
+      "reviewNotes": [
+        "Gauss incorporated the concurrent Agent I solvability handoff without adopting Agent I's correctness decision as a calibration decision."
+      ]
     },
     {
       "schemaVersion": 1,
@@ -1588,20 +1605,23 @@
         },
         "rationale": "A candidate can enter visually, then spend most time choosing and executing coordinates/vectors; the extension should be optional."
       },
-      "disposition": "safe-for-later-calibration",
+      "disposition": "needs-revision",
       "migration": {
         "worthMigrating": true,
-        "recommendation": "migrate",
-        "rationale": "Useful geometry/representation family in an underrepresented area; worth migration after H/I review."
+        "recommendation": "revise-before-migration",
+        "rationale": "The coordinate/vector route remains a good geometry migration candidate, but the declared mass-points route assumes nonstandard undeclared machinery."
       },
-      "blockers": [],
+      "blockers": [
+        "Agent I issue #129: the mass-points approach is not self-contained. Prefer the vector/coordinate route or explicitly teach the idea within the family; do not invent a new prerequisite tag."
+      ],
       "ownershipBoundaries": {
         "originality": "pending-agent-h",
         "fidelity": "pending-agent-h",
         "mathematicalCorrectness": "pending-agent-i"
       },
       "reviewNotes": [
-        "No frozen-taxonomy blocker found; affine/vector structure fits the existing geometry/content vocabulary without adding tags."
+        "No frozen-taxonomy blocker found; affine/vector structure fits the existing geometry/content vocabulary without adding tags.",
+        "Gauss incorporated the concurrent Agent I solvability handoff without adopting Agent I's correctness decision as a calibration decision."
       ]
     },
     {
@@ -1749,10 +1769,11 @@
       "migration": {
         "worthMigrating": true,
         "recommendation": "revise-before-migration",
-        "rationale": "Mathematically rich, but the current expert-review note already flags exposition around the reflection inverse. Stage design should select one coherent core route and treat the alternative as extension/transfer."
+        "rationale": "Rich family, but the candidate statement and alternate route need repair before migration. One coherent proof route should be the core and the alternative only used once complete/self-contained."
       },
       "blockers": [
-        "Agent I should resolve the existing reflection-bijection exposition/correctness review before production migration."
+        "Agent I should resolve the existing reflection-bijection exposition/correctness review before production migration.",
+        "Agent I issue #129: n's domain is omitted and the recurrence route is incomplete as an independent route; the existing expert-review reflection concern also remains."
       ],
       "ownershipBoundaries": {
         "originality": "pending-agent-h",
@@ -1761,7 +1782,8 @@
       },
       "reviewNotes": [
         "Major disagreement: legacy stretch-oxford is best interpreted as the ceiling; Gauss recommends a standard entry and strong core.",
-        "No H originality/fidelity or I correctness approval is claimed."
+        "No H originality/fidelity or I correctness approval is claimed.",
+        "Gauss incorporated the concurrent Agent I solvability handoff without adopting Agent I's correctness decision as a calibration decision."
       ]
     },
     {
@@ -2211,6 +2233,15 @@
       "reviewNotes": [
         "Major disagreement: the legacy standard-oxford label understates Gauss's strong core calibration."
       ]
+    }
+  ],
+  "concurrentHandoffs": [
+    {
+      "source": "Agent I — Itô",
+      "prNumber": 128,
+      "issueNumber": 129,
+      "scope": "Prerequisite/solvability findings only; Gauss retains ownership of taxonomy/difficulty/timing decisions.",
+      "schemaBlockerConclusion": "No frozen-taxonomy expansion is warranted. Undefined Euler-trail, poset, Brouwer, mass-points, and Hamel-basis material should be removed, reframed, or taught self-contained rather than silently encoded as new prerequisite tags."
     }
   ]
 }
