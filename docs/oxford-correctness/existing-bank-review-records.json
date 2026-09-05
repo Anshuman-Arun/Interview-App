@@ -598,5 +598,349 @@
         "evidence": "The core already establishes the property T(T(x))=x, so the extension is mathematically viable; rephrasing the extension in terms of that property would remove the vocabulary assumption."
       }
     ]
+  },
+  {
+    "schemaVersion": 1,
+    "problemVersion": "1.0.0",
+    "reviewerAgent": "I — Itô",
+    "reviewedAt": "2026-09-05",
+    "source": {
+      "kind": "author-pr",
+      "authorAgent": "D — Dirichlet",
+      "prNumber": 133
+    },
+    "independentlySolved": true,
+    "statementChecked": true,
+    "approachesChecked": true,
+    "canonicalSolutionChecked": true,
+    "hintsChecked": true,
+    "extensionsChecked": true,
+    "prerequisitesChecked": true,
+    "unresolvedUncertainties": [],
+    "familyId": "oxford-d-orientation-parities",
+    "mathematicalCorrectness": "approved",
+    "recommendation": "approve",
+    "independentSolutionSummary": "Necessity is sum_v outdeg(v)=|E|, so the prescribed parity sum must equal |E| modulo 2. For sufficiency, orient non-tree edges arbitrarily, root a spanning tree, and process non-root vertices from leaves upward; each parent edge is the last parity switch for its child. Once every non-root parity is correct, the global parity identity forces the root. Componentwise application gives the disconnected extension.",
+    "computationalChecks": [],
+    "findings": []
+  },
+  {
+    "schemaVersion": 1,
+    "problemVersion": "1.0.0",
+    "reviewerAgent": "I — Itô",
+    "reviewedAt": "2026-09-05",
+    "source": {
+      "kind": "author-pr",
+      "authorAgent": "D — Dirichlet",
+      "prNumber": 133
+    },
+    "independentlySolved": true,
+    "statementChecked": true,
+    "approachesChecked": true,
+    "canonicalSolutionChecked": true,
+    "hintsChecked": true,
+    "extensionsChecked": true,
+    "prerequisitesChecked": true,
+    "unresolvedUncertainties": [],
+    "familyId": "oxford-d-prime-divisor-three-cycles",
+    "mathematicalCorrectness": "approved",
+    "recommendation": "approve",
+    "independentSolutionSummary": "From p|(n²+n+1), n³≡1 mod p. For p≠3, n is neither 0 nor 1 modulo p; period two together with period three would force n≡1. Thus multiplication by n partitions the p-1 nonzero residues into 3-cycles, so p≡1 mod 3. The n²+1 transfer similarly gives 4-cycles for odd p and hence p≡1 mod 4.",
+    "computationalChecks": [],
+    "findings": []
+  },
+  {
+    "schemaVersion": 1,
+    "problemVersion": "1.0.0",
+    "reviewerAgent": "I — Itô",
+    "reviewedAt": "2026-09-05",
+    "source": {
+      "kind": "author-pr",
+      "authorAgent": "D — Dirichlet",
+      "prNumber": 133
+    },
+    "independentlySolved": true,
+    "statementChecked": true,
+    "approachesChecked": true,
+    "canonicalSolutionChecked": true,
+    "hintsChecked": true,
+    "extensionsChecked": true,
+    "prerequisitesChecked": true,
+    "unresolvedUncertainties": [],
+    "familyId": "oxford-d-laminar-family",
+    "mathematicalCorrectness": "approved",
+    "recommendation": "approve",
+    "independentSolutionSummary": "Containment gives a rooted inclusion tree. Because every singleton is present, the leaves are exactly the n singletons and maximal proper children of any non-singleton node are disjoint and cover it, so each internal node has at least two children. Edge counting gives I≤L-1 and |F|≤2n-1; equality is exactly the full-binary case. The missing-singletons extension retains the same bound, e.g. by adjoining missing singletons (and U if needed) without breaking laminarity.",
+    "computationalChecks": [],
+    "findings": []
+  },
+  {
+    "schemaVersion": 1,
+    "problemVersion": "1.0.0",
+    "reviewerAgent": "I — Itô",
+    "reviewedAt": "2026-09-05",
+    "source": {
+      "kind": "author-pr",
+      "authorAgent": "D — Dirichlet",
+      "prNumber": 133
+    },
+    "independentlySolved": true,
+    "statementChecked": true,
+    "approachesChecked": true,
+    "canonicalSolutionChecked": true,
+    "hintsChecked": true,
+    "extensionsChecked": true,
+    "prerequisitesChecked": true,
+    "unresolvedUncertainties": [],
+    "familyId": "oxford-d-midpoint-closed-residues",
+    "mathematicalCorrectness": "approved",
+    "recommendation": "approve",
+    "independentSolutionSummary": "Translate a chosen element to 0. Midpoint closure then gives closure under halving; on the finite translated set, halving is injective and hence bijective, so doubling is also closed. Averaging then doubling gives addition, and finiteness supplies inverses. Thus the translate is an additive subgroup. Modulo a prime the only possibilities are {0} and the full group; for odd composite moduli the solutions are exactly cosets of additive subgroups.",
+    "computationalChecks": [],
+    "findings": []
+  },
+  {
+    "schemaVersion": 1,
+    "problemVersion": "1.0.0",
+    "reviewerAgent": "I — Itô",
+    "reviewedAt": "2026-09-05",
+    "source": {
+      "kind": "author-pr",
+      "authorAgent": "D — Dirichlet",
+      "prNumber": 133
+    },
+    "independentlySolved": true,
+    "statementChecked": true,
+    "approachesChecked": true,
+    "canonicalSolutionChecked": true,
+    "hintsChecked": true,
+    "extensionsChecked": true,
+    "prerequisitesChecked": true,
+    "unresolvedUncertainties": [],
+    "familyId": "oxford-d-directed-flow-decomposition",
+    "mathematicalCorrectness": "approved",
+    "recommendation": "approve",
+    "independentSolutionSummary": "A nonempty balanced finite digraph contains a directed cycle; deleting a cycle preserves indegree/outdegree balance, so induction decomposes all edges into directed cycles. Adding t→s balances the stated one-unit source/sink graph. Removing that artificial edge from its decomposition cycle leaves an s→t path. With r artificial return edges, breaking the affected cycles yields r s→t paths plus cycles.",
+    "computationalChecks": [],
+    "findings": []
+  },
+  {
+    "schemaVersion": 1,
+    "problemVersion": "1.0.0",
+    "reviewerAgent": "I — Itô",
+    "reviewedAt": "2026-09-05",
+    "source": {
+      "kind": "author-pr",
+      "authorAgent": "D — Dirichlet",
+      "prNumber": 133
+    },
+    "independentlySolved": true,
+    "statementChecked": true,
+    "approachesChecked": true,
+    "canonicalSolutionChecked": true,
+    "hintsChecked": true,
+    "extensionsChecked": true,
+    "prerequisitesChecked": true,
+    "unresolvedUncertainties": [],
+    "familyId": "oxford-d-triple-flip-circle",
+    "mathematicalCorrectness": "approved",
+    "recommendation": "approve",
+    "independentSolutionSummary": "Over F2, final lamps satisfy x_i=y_i+y_{i-1}+y_{i-2}. The zero-effect recurrence y_i=y_{i-1}+y_{i-2} has period three. Cyclic closure gives a trivial kernel when 3∤n and a four-element kernel when 3|n. Hence every target is uniquely reachable in the former case; in the latter, the image has size 2^(n-2), exactly matching the configurations whose three residue-class parities are equal, and every reachable target has four realizing move subsets.",
+    "computationalChecks": [
+      "Exhaustive enumeration of all move subsets for n=3,...,10 confirmed kernel size, image size, residue-class parity obstruction, and realizing-subset multiplicity."
+    ],
+    "findings": []
+  },
+  {
+    "schemaVersion": 1,
+    "problemVersion": "1.0.0",
+    "reviewerAgent": "I — Itô",
+    "reviewedAt": "2026-09-05",
+    "source": {
+      "kind": "author-pr",
+      "authorAgent": "E — Euler",
+      "prNumber": 134
+    },
+    "independentlySolved": true,
+    "statementChecked": true,
+    "approachesChecked": true,
+    "canonicalSolutionChecked": true,
+    "hintsChecked": true,
+    "extensionsChecked": true,
+    "prerequisitesChecked": true,
+    "unresolvedUncertainties": [],
+    "familyId": "oxford-euler-box-diagonal-bisector",
+    "mathematicalCorrectness": "approved",
+    "recommendation": "approve",
+    "independentSolutionSummary": "Equidistance gives ax+by+cz=0; after x=au,y=bv,z=cw this is αu+βv+γw=0 in the cube with α=a²≤β=b²≤γ=c². Direct edge-family tests show four distinct section vertices when γ≥α+β and six when γ<α+β, with equality causing multiple edge incidences to coalesce at cube vertices. For a=b=c the six vertices are the permutations of (1,-1,0), forming a regular hexagon.",
+    "computationalChecks": [
+      "Enumerated all cube-edge intersections for representative γ>α+β, γ=α+β, γ<α+β, and cube cases; distinct vertex counts were 4,4,6,6 respectively."
+    ],
+    "findings": []
+  },
+  {
+    "schemaVersion": 1,
+    "problemVersion": "1.0.0",
+    "reviewerAgent": "I — Itô",
+    "reviewedAt": "2026-09-05",
+    "source": {
+      "kind": "author-pr",
+      "authorAgent": "E — Euler",
+      "prNumber": 134
+    },
+    "independentlySolved": true,
+    "statementChecked": true,
+    "approachesChecked": true,
+    "canonicalSolutionChecked": true,
+    "hintsChecked": true,
+    "extensionsChecked": true,
+    "prerequisitesChecked": true,
+    "unresolvedUncertainties": [],
+    "familyId": "oxford-euler-circle-sweep",
+    "mathematicalCorrectness": "approved",
+    "recommendation": "approve",
+    "independentSolutionSummary": "A point X=(x,y) is on the diameter circle exactly when r²=ax+by. With b=1-a/2 and a∈[0,2], the right side ranges over the interval between y and 2x, so existence is equivalent to (r²-y)(r²-2x)≤0. This is precisely the closure of the symmetric difference of the two endpoint disks. The λ,L transfer replaces the endpoint values by Ly/λ and Lx.",
+    "computationalChecks": [
+      "Checked a rectangular grid of sample points against the exact solved parameter a and the sign-product criterion; the two membership tests agreed."
+    ],
+    "findings": []
+  },
+  {
+    "schemaVersion": 1,
+    "problemVersion": "1.0.0",
+    "reviewerAgent": "I — Itô",
+    "reviewedAt": "2026-09-05",
+    "source": {
+      "kind": "author-pr",
+      "authorAgent": "E — Euler",
+      "prNumber": 134
+    },
+    "independentlySolved": true,
+    "statementChecked": true,
+    "approachesChecked": true,
+    "canonicalSolutionChecked": true,
+    "hintsChecked": true,
+    "extensionsChecked": true,
+    "prerequisitesChecked": true,
+    "unresolvedUncertainties": [],
+    "familyId": "oxford-euler-random-chord-midpoint",
+    "mathematicalCorrectness": "approved",
+    "recommendation": "approve",
+    "independentSolutionSummary": "For unit endpoint vectors u,v, OM²=|(u+v)/2|²=(1+u·v)/2. The regular-polygon vertex sum is 0, so conditioned on a fixed endpoint and a distinct second endpoint, the average dot product is -1/(n-1), giving (n-2)/(2(n-1)). Independent draws with replacement have E[U·V]=E[U]·E[V]=0 and therefore mean 1/2.",
+    "computationalChecks": [
+      "Enumerated all unordered vertex pairs for regular n-gons with n=3,...,14; the empirical mean matched (n-2)/(2(n-1))."
+    ],
+    "findings": []
+  },
+  {
+    "schemaVersion": 1,
+    "problemVersion": "1.0.0",
+    "reviewerAgent": "I — Itô",
+    "reviewedAt": "2026-09-05",
+    "source": {
+      "kind": "author-pr",
+      "authorAgent": "E — Euler",
+      "prNumber": 134
+    },
+    "independentlySolved": true,
+    "statementChecked": true,
+    "approachesChecked": true,
+    "canonicalSolutionChecked": true,
+    "hintsChecked": true,
+    "extensionsChecked": true,
+    "prerequisitesChecked": true,
+    "unresolvedUncertainties": [],
+    "familyId": "oxford-euler-random-subset-blocks",
+    "mathematicalCorrectness": "approved",
+    "recommendation": "approve",
+    "independentSolutionSummary": "On a line, block starts are position 1 when selected plus each later 0→1 transition, so E[X]=1/2+(n-1)/4=(n+1)/4. On a circle ordinary blocks equal cyclic 0→1 transitions except the all-selected configuration, adding the correction 2^-n; thus E[X]=n/4+2^-n. Replacing 1/2 by p gives p+(n-1)p(1-p) and np(1-p)+p^n.",
+    "computationalChecks": [
+      "Exhaustive enumeration of all subsets for n=2,...,7 matched both the line and circular expectation formulas."
+    ],
+    "findings": []
+  },
+  {
+    "schemaVersion": 1,
+    "problemVersion": "1.0.0",
+    "reviewerAgent": "I — Itô",
+    "reviewedAt": "2026-09-05",
+    "source": {
+      "kind": "author-pr",
+      "authorAgent": "E — Euler",
+      "prNumber": 134
+    },
+    "independentlySolved": true,
+    "statementChecked": true,
+    "approachesChecked": true,
+    "canonicalSolutionChecked": true,
+    "hintsChecked": true,
+    "extensionsChecked": true,
+    "prerequisitesChecked": true,
+    "unresolvedUncertainties": [],
+    "familyId": "oxford-euler-difference-closed-sets",
+    "mathematicalCorrectness": "approved",
+    "recommendation": "approve",
+    "independentSolutionSummary": "A finite nonnegative difference-closed set with at least two elements has a least positive d. Repeated subtraction of d from any x in the set leaves a remainder in the set below d, forcing remainder 0; hence every element is a nonnegative integer multiple of d. Repeated subtraction from the maximum fills every multiple up to it. Conversely such finite initial arithmetic grids are difference-closed. Signed difference closure would generate all integer multiples of any nonzero element, contradicting finiteness, so only {0} remains.",
+    "computationalChecks": [],
+    "findings": []
+  },
+  {
+    "schemaVersion": 1,
+    "problemVersion": "1.0.0",
+    "reviewerAgent": "I — Itô",
+    "reviewedAt": "2026-09-05",
+    "source": {
+      "kind": "author-pr",
+      "authorAgent": "E — Euler",
+      "prNumber": 134
+    },
+    "independentlySolved": true,
+    "statementChecked": true,
+    "approachesChecked": true,
+    "canonicalSolutionChecked": true,
+    "hintsChecked": true,
+    "extensionsChecked": true,
+    "prerequisitesChecked": true,
+    "unresolvedUncertainties": [],
+    "familyId": "oxford-euler-random-halving-interval",
+    "mathematicalCorrectness": "approved",
+    "recommendation": "approve",
+    "independentSolutionSummary": "After n fair halvings the left/right word is a uniformly distributed n-bit integer K, and M_n=(K+1/2)/2^n. This gives mean 1/2 and variance (1-4^-n)/12. With right-half probability p, digitwise expectation gives E[K]=p(2^n-1) and E[M_n]=p+(1/2-p)2^-n. Endpoint conventions matter only for containment questions, not the midpoint distribution.",
+    "computationalChecks": [],
+    "findings": []
+  },
+  {
+    "schemaVersion": 1,
+    "problemVersion": "1.0.0",
+    "reviewerAgent": "I — Itô",
+    "reviewedAt": "2026-09-05",
+    "source": {
+      "kind": "author-pr",
+      "authorAgent": "E — Euler",
+      "prNumber": 134
+    },
+    "independentlySolved": true,
+    "statementChecked": true,
+    "approachesChecked": true,
+    "canonicalSolutionChecked": true,
+    "hintsChecked": true,
+    "extensionsChecked": true,
+    "prerequisitesChecked": true,
+    "unresolvedUncertainties": [],
+    "familyId": "oxford-euler-periodic-queue-model",
+    "mathematicalCorrectness": "changes-required",
+    "recommendation": "revise",
+    "independentSolutionSummary": "Under an arrivals-then-service convention the correct recurrence is q_{n+1}=max(0,q_n+a_n-s), and away from the reflecting boundary the two-minute drift is a+b-2s. Positive drift eventually grows, negative drift forces a visit to the reflecting boundary, and zero drift can sustain a periodic positive orbit. However the exact emptying question is a function of the initial queue and starting phase, which the candidate-visible statement does not specify.",
+    "computationalChecks": [],
+    "findings": [
+      {
+        "id": "queue-parameter-domain-missing",
+        "area": "statement",
+        "severity": "error",
+        "status": "open",
+        "summary": "The modelling statement omits the parameter and initial-state assumptions needed to make the exact emptying question well-posed.",
+        "evidence": "The prompt introduces a,b,s only through story language and never introduces q_0 or fixes the phase at which q_0 is measured. Exact emptiness depends on q_0 and phase. State explicit nonnegative-integer customer/capacity assumptions (with s>0 if intended), q_0≥0, and a starting phase, or narrow the task to a qualitative dependence statement."
+      }
+    ]
   }
 ]
