@@ -756,6 +756,12 @@ describe("editorial v10 adversarial UI states", () => {
     expect(editorialCss).toContain("@media (max-width: 240px)");
     expect(editorialCss).toContain("@media (max-height: 200px)");
     expect(editorialCss).toMatch(
+      /@media \(max-height: 360px\)[\s\S]*?\.app-header\s*\{[\s\S]*?min-height:\s*42px !important;[\s\S]*?flex:\s*0 0 42px;/u
+    );
+    expect(editorialCss).toMatch(
+      /@media \(max-height: 200px\)[\s\S]*?\.app-header\s*\{[\s\S]*?min-height:\s*30px !important;[\s\S]*?flex:\s*0 0 30px;/u
+    );
+    expect(editorialCss).toMatch(
       /@media \(max-width: 240px\)[\s\S]*?\.app-header__end-long\s*\{\s*display:\s*none;[\s\S]*?\.expressive-settings__zoom-stepper\s*\{[\s\S]*?grid-template-columns:\s*28px minmax\(0, 1fr\) 28px;/u
     );
     expect(editorialCss).toMatch(
