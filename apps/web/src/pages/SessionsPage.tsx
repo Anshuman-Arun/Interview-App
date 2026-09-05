@@ -19,7 +19,8 @@ export function SessionsPage({
   onRefresh,
   history,
   historyLoading,
-  historyError
+  historyError,
+  sessionEntryPending = false
 }: {
   readonly sessions: readonly StoredSessionSummary[];
   readonly currentSessionId: SessionId | null;
@@ -30,6 +31,7 @@ export function SessionsPage({
   readonly history: SessionHistoryReadResponse | null;
   readonly historyLoading: boolean;
   readonly historyError: string | null;
+  readonly sessionEntryPending?: boolean;
 }) {
   const [filter, setFilter] = useState<Filter>("ALL");
   const [query, setQuery] = useState("");
@@ -53,7 +55,7 @@ export function SessionsPage({
   const completedCount = sessions.filter((session) => session.status === "COMPLETED").length;
 
   return (
-    <div className="expressive-sessions">
+    <div className="expressive-sessions" aria-busy={sessionEntryPending}>
       <section className="expressive-sessions__summary">
         <div>
           <span>ROOMS</span>
@@ -155,6 +157,7 @@ export function SessionsPage({
           type="button"
           className="expressive-sessions__refresh"
           onClick={onRefresh}
+          disabled={sessionEntryPending}
         >
           Refresh
         </button>
@@ -204,7 +207,10 @@ export function SessionsPage({
                 </time>
                 <button
                   type="button"
-                  disabled={session.status !== "ACTIVE" && !reviewable}
+                  disabled={
+                    sessionEntryPending
+                    || (session.status !== "ACTIVE" && !reviewable)
+                  }
                   onClick={
                     session.status === "ACTIVE"
                       ? () => onResume(session.sessionId)
