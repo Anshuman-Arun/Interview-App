@@ -24,14 +24,15 @@ function entry(id: string) {
 }
 
 describe("Agent C — Cantor Wave 2 Oxford candidates", () => {
-  it("keeps exactly 18 surviving candidate families isolated in expert review", () => {
-    expect(oxfordCantorFamilies).toHaveLength(18);
-    expect(oxfordCantorReviewEntries).toHaveLength(18);
+  it("keeps exactly 17 surviving candidate families isolated in expert review", () => {
+    expect(oxfordCantorFamilies).toHaveLength(17);
+    expect(oxfordCantorReviewEntries).toHaveLength(17);
 
     const ids = oxfordCantorReviewEntries.map((candidate) => candidate.problem.id);
     expect(new Set(ids).size).toBe(18);
     expect(ids).not.toContain("oxford-cantor-tangent-intersection-locus");
     expect(ids).not.toContain("oxford-cantor-line-envelope");
+    expect(ids).not.toContain("oxford-cantor-reciprocal-implicit-curve");
 
     const reviewProblemIds = new Set(EXPERT_REVIEW_PROBLEMS.map((problem) => problem.id));
     const reviewMetadataIds = new Set(EXPERT_REVIEW_METADATA.map((metadata) => metadata.id));
@@ -119,7 +120,7 @@ describe("Agent C — Cantor Wave 2 Oxford candidates", () => {
     });
 
     const graphHeavy = adaptive.filter((metadata) => metadata.domains.includes("graph-sketching"));
-    expect(graphHeavy).toHaveLength(14);
+    expect(graphHeavy).toHaveLength(13);
 
     const concepts = new Set(adaptive.flatMap((metadata) => metadata.contentConcepts));
     for (const required of [
@@ -181,6 +182,8 @@ describe("Agent C — Cantor Wave 2 Oxford candidates", () => {
 
     expect(entry("oxford-cantor-cubic-divided-difference").metadata.oxfordAdaptive?.difficulty)
       .toMatchObject({ entry: "introductory-plus", core: "strong", ceiling: "strong" });
+    expect(entry("oxford-cantor-cubic-two-thresholds").metadata.oxfordAdaptive?.difficulty)
+      .toMatchObject({ entry: "introductory-plus", core: "strong", ceiling: "strong" });
     expect(entry("oxford-cantor-reciprocal-increment-recurrence").metadata.oxfordAdaptive?.difficulty)
       .toMatchObject({ entry: "introductory-plus", core: "strong", ceiling: "stretch" });
   });
@@ -233,7 +236,6 @@ describe("Agent C — Cantor Wave 2 Oxford candidates", () => {
       "oxford-cantor-squared-error-recurrence": "error-square-and-exact-rate",
       "oxford-cantor-radical-asymptote": "strict-decrease-and-range",
       "oxford-cantor-shifted-cubic-intersections": "transition-and-small-shift",
-      "oxford-cantor-reciprocal-implicit-curve": "asymptotes-and-closest",
       "oxford-cantor-three-cycle-map": "exact-period-three",
       "oxford-cantor-reciprocal-increment-recurrence": "error-sum-and-limit",
       "oxford-cantor-mobius-involution": "fixed-points-and-exception"
@@ -250,18 +252,11 @@ describe("Agent C — Cantor Wave 2 Oxford candidates", () => {
     }
   });
 
-  it("preserves the Itô implicit-curve correction and removes vocabulary-only prerequisites", () => {
-    const implicit = family("oxford-cantor-reciprocal-implicit-curve");
-    expect(implicit.prompt).toContain("nonzero branches");
-    expect(implicit.commonErrors.find((error) => error.id === "include-axis-points")?.description)
-      .toContain("deleting the isolated solution (0,0)");
-    expect(implicit.canonicalSolution)
-      .toContain("globally the isolated origin itself is of course the closest point");
-    expect(implicit.canonicalSolution).toContain("closest nonzero branch points");
-
+  it("keeps prerequisite-sensitive guidance self-contained after pruning the implicit-curve reject", () => {
     const recurrence = family("oxford-cantor-reciprocal-increment-recurrence");
     expect(recurrence.givenInformation.join(" ")).toContain("positive decreasing function h");
-    expect(recurrence.givenInformation.join(" ")).toContain("integral");
+    expect(recurrence.givenInformation.join(" ")).toContain("sum-integral comparison");
+    expect(recurrence.givenInformation.join(" ")).toContain("integral comparison");
 
     const selfInverse = family("oxford-cantor-mobius-involution");
     const shifted = selfInverse.extensions.find(
@@ -270,12 +265,18 @@ describe("Agent C — Cantor Wave 2 Oxford candidates", () => {
     expect(shifted?.prompt).toContain("S(S(x))=x");
   });
 
-  it("retains the surviving similarity/repetition signals", () => {
+  it("retains Hilbert's surviving similarity/repetition signals", () => {
     expect(entry("oxford-cantor-moving-v-envelope").metadata.oxfordAdaptive?.similarityClusterId)
       .toBe("parameter-envelope");
-    const mobius = oxfordCantorReviewEntries.filter(
-      (candidate) => candidate.metadata.oxfordAdaptive?.similarityClusterId === "mobius-iteration"
-    );
-    expect(mobius).toHaveLength(2);
+
+    const clusterCounts = new Map<string, number>();
+    for (const candidate of oxfordCantorReviewEntries) {
+      const cluster = candidate.metadata.oxfordAdaptive?.similarityClusterId;
+      if (cluster === undefined) continue;
+      clusterCounts.set(cluster, (clusterCounts.get(cluster) ?? 0) + 1);
+    }
+    expect(clusterCounts.get("cantor-cubic-graph-structure")).toBe(3);
+    expect(clusterCounts.get("mobius-iteration")).toBe(3);
+    expect(clusterCounts.get("cantor-reciprocal-symmetry")).toBe(2);
   });
 });
