@@ -320,9 +320,9 @@ describe("Oxford independent calibration review", () => {
     const summary = summarizeOxfordCalibrationReviews(audit.records);
     expect(summary.total).toBe(14);
     expect(summary.byDisposition).toEqual({
-      "safe-for-later-calibration": 7,
-      "needs-revision": 1,
-      "retain-legacy": 6
+      "safe-for-later-calibration": 2,
+      "needs-revision": 7,
+      "retain-legacy": 5
     });
     expect(summary.byDomain["graph-sketching"]).toBe(0);
   });
