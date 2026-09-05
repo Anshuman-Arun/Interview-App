@@ -236,7 +236,7 @@ describe("editorial v10 adversarial UI states", () => {
     );
     expect(configure).toContain("ACTIVE SESSION CONFLICT");
     expect(configure).toMatch(
-      /data-testid="start-configured-session-btn"[^>]*disabled/
+      /<button(?=[^>]*data-testid="start-configured-session-btn")(?=[^>]*disabled)[^>]*>/
     );
   });
 
@@ -257,7 +257,7 @@ describe("editorial v10 adversarial UI states", () => {
       />
     );
     expect(home).toContain("Checking rooms…");
-    expect(home).toMatch(/data-testid="start-session-btn"[^>]*disabled=""/u);
+    expect(home).toMatch(/<button(?=[^>]*data-testid="start-session-btn")(?=[^>]*disabled="")[^>]*>/u);
 
     const onStart = vi.fn(async () => undefined);
     await act(async () => {
@@ -1033,8 +1033,8 @@ describe("editorial v10 adversarial UI states", () => {
       "controls.selectInputDevice(deviceId).catch(() => undefined)"
     );
     expect(voice).toContain("onSelect: (deviceId: string | undefined) => void | Promise<void>");
-    expect(voice).toContain("onSelect(option.deviceId)");
-    expect(voice).toContain(".catch(() => undefined);");
+    expect(voice).toContain("Promise.resolve(onSelect(deviceId)).catch(() => undefined)");
+    expect(voice).toContain("selectOption(option.deviceId)");
     expect(voice).toContain("onSelect={controls.selectOutputDevice}");
   });
 
@@ -1128,11 +1128,11 @@ describe("editorial v10 adversarial UI states", () => {
       />
     );
 
-    expect(markup).toMatch(/data-testid="interview-target-select"[^>]*disabled=""/u);
-    expect(markup).toMatch(/data-testid="duration-input"[^>]*disabled=""/u);
-    expect(markup).toMatch(/data-testid="provider-select"[^>]*disabled=""/u);
-    expect(markup).toMatch(/data-testid="intervention-balanced"[^>]*disabled=""/u);
-    expect(markup).toMatch(/data-testid="start-configured-session-btn"[^>]*disabled/u);
+    expect(markup).toMatch(/<select(?=[^>]*data-testid="interview-target-select")(?=[^>]*disabled="")[^>]*>/u);
+    expect(markup).toMatch(/<input(?=[^>]*data-testid="duration-input")(?=[^>]*disabled="")[^>]*>/u);
+    expect(markup).toMatch(/<select(?=[^>]*data-testid="provider-select")(?=[^>]*disabled="")[^>]*>/u);
+    expect(markup).toMatch(/<button(?=[^>]*data-testid="intervention-balanced")(?=[^>]*disabled="")[^>]*>/u);
+    expect(markup).toMatch(/<button(?=[^>]*data-testid="start-configured-session-btn")(?=[^>]*disabled)[^>]*>/u);
   });
 
   it("fails closed when stored session authority cannot be verified", () => {
@@ -1152,7 +1152,7 @@ describe("editorial v10 adversarial UI states", () => {
       />
     );
     expect(home).toContain("Stored session authority is unavailable");
-    expect(home).toMatch(/data-testid="start-session-btn"[^>]*disabled=""/u);
+    expect(home).toMatch(/<button(?=[^>]*data-testid="start-session-btn")(?=[^>]*disabled="")[^>]*>/u);
 
     const configure = renderToStaticMarkup(
       <NewInterviewPage
@@ -1188,7 +1188,7 @@ describe("editorial v10 adversarial UI states", () => {
     );
     expect(configure).toContain("Stored session authority unavailable");
     expect(configure).toMatch(
-      /data-testid="start-configured-session-btn"[^>]*disabled/u
+      /<button(?=[^>]*data-testid="start-configured-session-btn")(?=[^>]*disabled)[^>]*>/u
     );
 
     const settings = renderToStaticMarkup(
