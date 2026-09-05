@@ -525,6 +525,8 @@ describe("Antigravity CLI one-turn protocol", () => {
     expect(request?.args).toContain("--json-schema");
     expect(request?.args).not.toContain("--sandbox");
     expect(request?.args).toContain(ANTIGRAVITY_CLI_MODEL_ID);
+    expect(request?.args).toContain("--effort");
+    expect(request?.args).toContain("medium");
     expect(request?.args).toContain("--agent");
     expect(request?.args).toContain(ANTIGRAVITY_CLI_AGENT_ID);
     expect(request?.args).not.toContain("--continue");
@@ -551,6 +553,29 @@ describe("Antigravity CLI one-turn protocol", () => {
     expect(contextIndex).toBeGreaterThanOrEqual(0);
     const serializedContext = content.slice(contextIndex + contextMarker.length);
     expect(JSON.parse(serializedContext)).toEqual(context);
+    await session.close();
+  });
+
+  it("maps a logical low tier to the documented medium slug plus explicit low effort", async () => {
+    let captured: SupervisedCliExecutionRequest | undefined;
+    const provider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async (request) => {
+        captured = request;
+        request.onProcessStart();
+        return executionResult(antigravityStream());
+      }),
+      "gemini-3.8-flash-low"
+    );
+    const session = await provider.createSession();
+
+    await expect(collectProposals(session.sendTurn(turnInput({ tier: "low" }))))
+      .resolves.toEqual([PROPOSAL]);
+
+    const args = captured?.args ?? [];
+    const modelIndex = args.indexOf("--model");
+    const effortIndex = args.indexOf("--effort");
+    expect(args[modelIndex + 1]).toBe("gemini-3.8-flash-medium");
+    expect(args[effortIndex + 1]).toBe("low");
     await session.close();
   });
 
