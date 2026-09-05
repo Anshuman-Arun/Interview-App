@@ -21,8 +21,7 @@
       },
       "broad_area": [
         "coordinate-geometry",
-        "euclidean-geometry",
-        "modelling"
+        "euclidean-geometry"
       ],
       "assumed_prerequisites": [
         "right-triangle geometry",
@@ -235,8 +234,7 @@
       },
       "broad_area": [
         "euclidean-geometry",
-        "combinatorics",
-        "construction"
+        "combinatorics"
       ],
       "assumed_prerequisites": [
         "rectangle geometry",
@@ -374,7 +372,6 @@
       },
       "broad_area": [
         "number-theory",
-        "algorithms",
         "algebra"
       ],
       "assumed_prerequisites": [
@@ -515,8 +512,7 @@
       },
       "broad_area": [
         "euclidean-geometry",
-        "algebra",
-        "optimization"
+        "algebra"
       ],
       "assumed_prerequisites": [
         "circle geometry",
