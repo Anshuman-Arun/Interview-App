@@ -74,6 +74,98 @@ function providerRouteLabel(option: ProviderLaunchOption | null): string {
   }
 }
 
+
+interface EditorialSelectOption {
+  readonly value: string;
+  readonly label: string;
+  readonly meta?: string;
+  readonly disabled?: boolean;
+}
+
+function EditorialSelect({
+  value,
+  options,
+  placeholder,
+  disabled,
+  testId,
+  model = false,
+  onChange
+}: {
+  readonly value: string;
+  readonly options: readonly EditorialSelectOption[];
+  readonly placeholder: string;
+  readonly disabled: boolean;
+  readonly testId: string;
+  readonly model?: boolean;
+  readonly onChange: (value: string) => void;
+}) {
+  const selected = options.find((option) => option.value === value);
+
+  return (
+    <>
+      <select
+        className="new-interview__test-select"
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        data-testid={testId}
+        tabIndex={-1}
+        aria-hidden="true"
+      >
+        {options.length === 0 && <option value="">{placeholder}</option>}
+        {options.map((option) => (
+          <option key={option.value} value={option.value} disabled={option.disabled}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      <details
+        className={
+          model
+            ? "new-interview__custom-select new-interview__custom-select--model"
+            : "new-interview__custom-select"
+        }
+      >
+        <summary
+          aria-disabled={disabled}
+          onClick={(event) => {
+            if (disabled) event.preventDefault();
+          }}
+          onKeyDown={(event) => {
+            if (disabled && (event.key === "Enter" || event.key === " ")) {
+              event.preventDefault();
+            }
+          }}
+        >
+          <span>
+            <strong>{selected?.label ?? placeholder}</strong>
+            {selected?.meta !== undefined && <small>{selected.meta}</small>}
+          </span>
+          <i aria-hidden="true">⌄</i>
+        </summary>
+        <div className="new-interview__custom-menu" role="listbox">
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              role="option"
+              aria-selected={option.value === value}
+              disabled={disabled || option.disabled === true}
+              onClick={(event) => {
+                onChange(option.value);
+                event.currentTarget.closest("details")?.removeAttribute("open");
+              }}
+            >
+              <span>{option.label}</span>
+              {option.meta !== undefined && <small>{option.meta}</small>}
+            </button>
+          ))}
+        </div>
+      </details>
+    </>
+  );
+}
+
 export function NewInterviewPage({
   catalog,
   catalogLoading,
@@ -365,11 +457,21 @@ export function NewInterviewPage({
               <div className="new-interview__error" role="alert"><p>{catalogError}</p><button type="button" onClick={() => void onRefreshCatalog().catch(() => undefined)}>Retry catalog</button></div>
             ) : modes.length === 0 ? <p className="new-interview__status">No interview targets are currently available.</p> : (
               <div className="new-interview__basics">
-                <label className="new-interview__field"><span>{mode === "OXFORD_MATHEMATICS" ? "Problem" : "Scenario"}</span><div className="new-interview__select-wrap">
-                  <select value={selectedTargetKey} onChange={(event) => setSelectedTargetKey(event.target.value)} disabled={startPending || catalogLoading} data-testid="interview-target-select">
-                    {targets.map((entry) => <option key={targetKey(entry)} value={targetKey(entry)}>{entry.title}</option>)}
-                  </select><i aria-hidden="true">⌄</i>
-                </div></label>
+                <div className="new-interview__field">
+                  <span>{mode === "OXFORD_MATHEMATICS" ? "Problem" : "Scenario"}</span>
+                  <EditorialSelect
+                    value={selectedTargetKey}
+                    options={targets.map((entry) => ({
+                      value: targetKey(entry),
+                      label: entry.title,
+                      meta: `${entry.category} · ${entry.difficulty}`
+                    }))}
+                    placeholder="No target available"
+                    disabled={startPending || catalogLoading || targets.length === 0}
+                    testId="interview-target-select"
+                    onChange={setSelectedTargetKey}
+                  />
+                </div>
                 <label className="new-interview__field new-interview__duration-field"><span>Duration</span><div className="new-interview__duration">
                   <input
                     type="number"
@@ -400,12 +502,25 @@ export function NewInterviewPage({
                 <div className="new-interview__error" role="alert"><p>{providerOptionsError}</p><button type="button" onClick={() => void onRefreshProviderOptions().catch(() => undefined)}>Retry providers</button></div>
               ) : (
                 <div className="new-interview__provider-main">
-                  <label className="new-interview__field"><span>Model</span><div className="new-interview__select-wrap new-interview__select-wrap--model">
-                    <select value={selectedProviderKey} onChange={(event) => setSelectedProviderKey(event.target.value)} disabled={startPending || availableProviders.length === 0} data-testid="provider-select">
-                      {availableProviders.length === 0 && <option value="">No launch-ready provider</option>}
-                      {availableProviders.map((option) => <option key={providerKey(option)} value={providerKey(option)}>{option.providerDisplayName} · {option.modelDisplayName}</option>)}
-                    </select><i aria-hidden="true">⌄</i>
-                  </div></label>
+                  <div className="new-interview__field">
+                    <span>Model</span>
+                    <EditorialSelect
+                      value={selectedProviderKey}
+                      options={providerOptions.map((option) => ({
+                        value: providerKey(option),
+                        label: `${option.providerDisplayName} · ${option.modelDisplayName}`,
+                        meta: option.availability === "AVAILABLE"
+                          ? `${providerRouteLabel(option)} · READY`
+                          : providerReason(option.reason),
+                        disabled: option.availability !== "AVAILABLE"
+                      }))}
+                      placeholder="No launch-ready provider"
+                      disabled={startPending || availableProviders.length === 0}
+                      testId="provider-select"
+                      model
+                      onChange={setSelectedProviderKey}
+                    />
+                  </div>
                   {selectedProvider !== null && <div className="new-interview__provider-facts"><span><b>PROVIDER</b>{selectedProvider.providerDisplayName}</span><span><b>MODEL</b>{selectedProvider.modelDisplayName}</span><span><b>ROUTE</b>{selectedProvider.providerId}</span></div>}
                   {providerOptions.some((option) => option.availability === "UNAVAILABLE") && <details className="new-interview__unavailable"><summary>Registered but unavailable</summary><ul>
                     {providerOptions.filter((option) => option.availability === "UNAVAILABLE").map((option) => <li key={providerKey(option)}><strong>{option.providerDisplayName} · {option.modelDisplayName}</strong><span>{providerReason(option.reason)}</span></li>)}
