@@ -481,6 +481,7 @@ function reviewedFixtureAdaptiveMetadata(): OxfordAdaptiveMetadata {
     status: "authored",
     familyId: "divisor-parity-fixture-family",
     domains: ["number-theory"],
+    contentConcepts: ["divisibility", "parity", "prime-structure"],
     prerequisiteConcepts: ["divisibility", "prime-factorization"],
     skillEvidence: [
       { skill: "proof-construction", weight: "primary" }
@@ -508,6 +509,7 @@ function reviewedFixtureAdaptiveMetadata(): OxfordAdaptiveMetadata {
         role: "core",
         prerequisiteStageIds: [],
         domains: ["number-theory"],
+        contentConcepts: ["divisibility", "parity", "prime-structure"],
         skillEvidence: [
           { skill: "proof-construction", weight: "primary" }
         ],
@@ -521,7 +523,8 @@ function reviewedFixtureAdaptiveMetadata(): OxfordAdaptiveMetadata {
           milestoneId,
           skillEvidence: [
             { skill: "proof-construction" as const, weight: "primary" as const }
-          ]
+          ],
+          contentConcepts: ["divisibility" as const]
         })),
         extensionIds: ["exactly-three", "divisor-count-formula"],
         difficulty: "standard",
@@ -553,6 +556,43 @@ function reviewedFixtureAdaptiveMetadata(): OxfordAdaptiveMetadata {
   };
 }
 
+function recommendationReadyMetadata(): OxfordAdaptiveMetadata {
+  const metadata = structuredClone(validAdaptiveMetadata());
+  (
+    metadata.review as unknown as {
+      taxonomyClassification: string;
+      originality: string;
+      fidelity: string;
+      mathematicalCorrectness: string;
+    }
+  ).taxonomyClassification = "approved";
+  (
+    metadata.review as unknown as {
+      taxonomyClassification: string;
+      originality: string;
+      fidelity: string;
+      mathematicalCorrectness: string;
+    }
+  ).originality = "approved";
+  (
+    metadata.review as unknown as {
+      taxonomyClassification: string;
+      originality: string;
+      fidelity: string;
+      mathematicalCorrectness: string;
+    }
+  ).fidelity = "approved";
+  (
+    metadata.review as unknown as {
+      taxonomyClassification: string;
+      originality: string;
+      fidelity: string;
+      mathematicalCorrectness: string;
+    }
+  ).mathematicalCorrectness = "approved";
+  return metadata;
+}
+
 function validAdaptiveMetadata(): OxfordAdaptiveMetadata {
   return {
     schemaVersion: 1,
@@ -561,6 +601,7 @@ function validAdaptiveMetadata(): OxfordAdaptiveMetadata {
     familyId: "adaptive-fixture-family",
     similarityClusterId: "adaptive-fixture-cluster",
     domains: ["number-theory"],
+    contentConcepts: ["divisibility", "parity"],
     prerequisiteConcepts: ["divisibility"],
     skillEvidence: [
       { skill: "small-case-exploration", weight: "primary" },
@@ -590,6 +631,7 @@ function validAdaptiveMetadata(): OxfordAdaptiveMetadata {
         role: "warm-up",
         prerequisiteStageIds: [],
         domains: ["number-theory"],
+        contentConcepts: ["divisibility"],
         skillEvidence: [
           { skill: "small-case-exploration", weight: "primary" },
           { skill: "proof-construction", weight: "secondary" }
@@ -599,7 +641,8 @@ function validAdaptiveMetadata(): OxfordAdaptiveMetadata {
             milestoneId: "explore",
             skillEvidence: [
               { skill: "small-case-exploration", weight: "primary" }
-            ]
+            ],
+            contentConcepts: ["divisibility"]
           }
         ],
         extensionIds: [],
@@ -620,6 +663,7 @@ function validAdaptiveMetadata(): OxfordAdaptiveMetadata {
         role: "core",
         prerequisiteStageIds: ["opening"],
         domains: ["number-theory"],
+        contentConcepts: ["divisibility", "parity"],
         skillEvidence: [
           { skill: "proof-construction", weight: "primary" },
           { skill: "generalization", weight: "supporting" }
@@ -630,7 +674,8 @@ function validAdaptiveMetadata(): OxfordAdaptiveMetadata {
             skillEvidence: [
               { skill: "proof-construction", weight: "primary" },
               { skill: "generalization", weight: "supporting" }
-            ]
+            ],
+            contentConcepts: ["divisibility", "parity"]
           }
         ],
         extensionIds: ["generalize"],
