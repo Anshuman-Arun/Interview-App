@@ -126,7 +126,7 @@ Final pruning removed:
 
 - `oxford-d-mirror-orbits`.
 
-The remaining 11 survivors have no changes to statement, candidate-visible givens, canonical solution, protected hints, approaches, or extensions. A later post-prune diff to `1d9222ed...` also leaves all six mathematical payload fields unchanged. The changed Dirichlet files contain pruning plus author-side support/taxonomy/calibration/provenance work. The existing independent correctness decisions were re-pinned to the final head.
+The remaining 11 survivors have no changes to statement, candidate-visible givens, canonical solution, protected hints, approaches, or extensions. The post-prune diff through `1d9222ed...` leaves all six mathematical payload fields unchanged, and the final move to `44b13bab...` changes tests only. The existing independent correctness decisions were therefore re-pinned to the final head.
 
 ### Euler final diff-based recheck
 
