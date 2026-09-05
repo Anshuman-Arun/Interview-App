@@ -11,7 +11,8 @@ import {
   authorCuratedProblem,
   createProvisionalLegacyOxfordMetadata,
   type CuratedProblemSpec,
-  type OxfordAdaptiveMetadata
+  type OxfordAdaptiveMetadata,
+  type OxfordStageMetadata
 } from "../packages/problems/src/index.js";
 
 describe("Oxford adaptive metadata contract", () => {
@@ -161,21 +162,23 @@ describe("Oxford adaptive metadata contract", () => {
 
   it("rejects duplicate stages, broken prerequisites, and stage cycles", () => {
     const duplicate = cloneMetadata();
-    (duplicate.stages as unknown as Array<{ id: string }>)[1]!.id = "opening";
+    (requireStage(duplicate, 1) as unknown as { id: string }).id = "opening";
     expect(() => assertOxfordAdaptiveMetadataIntegrity(duplicate)).toThrow(
       /Duplicate Oxford stage id/
     );
 
     const broken = cloneMetadata();
     (
-      broken.stages[1]!.prerequisiteStageIds as unknown as string[]
+      requireStage(broken, 1).prerequisiteStageIds as unknown as string[]
     )[0] = "missing-stage";
     expect(() => assertOxfordAdaptiveMetadataIntegrity(broken)).toThrow(
       /unknown prerequisite stage/
     );
 
     const cyclic = cloneMetadata();
-    (cyclic.stages[0]!.prerequisiteStageIds as unknown as string[]).push("core-proof");
+    (
+      requireStage(cyclic, 0).prerequisiteStageIds as unknown as string[]
+    ).push("core-proof");
     expect(() => assertOxfordAdaptiveMetadataIntegrity(cyclic)).toThrow(
       /stage graph must be acyclic/
     );
@@ -185,16 +188,16 @@ describe("Oxford adaptive metadata contract", () => {
     const entry = authorCuratedProblem(validSpec());
     const unknown = cloneMetadata();
     (
-      unknown.stages[1]!.milestones as unknown as Array<{ milestoneId: string }>
-    )[0]!.milestoneId = "not-a-real-milestone";
+      requireMilestone(requireStage(unknown, 1), 0) as unknown as { milestoneId: string }
+    ).milestoneId = "not-a-real-milestone";
     expect(() => assertOxfordAdaptiveMetadataIntegrity(unknown, entry.problem)).toThrow(
       /unknown reasoning milestone/
     );
 
     const duplicate = cloneMetadata();
     (
-      duplicate.stages[1]!.milestones as unknown as Array<{ milestoneId: string }>
-    )[0]!.milestoneId = "explore";
+      requireMilestone(requireStage(duplicate, 1), 0) as unknown as { milestoneId: string }
+    ).milestoneId = "explore";
     expect(() => assertOxfordAdaptiveMetadataIntegrity(duplicate, entry.problem)).toThrow(
       /assigned to multiple Oxford stages/
     );
@@ -204,7 +207,7 @@ describe("Oxford adaptive metadata contract", () => {
     const entry = authorCuratedProblem(validSpec());
     const disconnected = cloneMetadata();
     (
-      disconnected.stages[1]!.prerequisiteStageIds as unknown as string[]
+      requireStage(disconnected, 1).prerequisiteStageIds as unknown as string[]
     ).splice(0);
     expect(() => assertOxfordAdaptiveMetadataIntegrity(disconnected, entry.problem)).toThrow(
       /does not preserve reasoning dependency/
@@ -215,13 +218,17 @@ describe("Oxford adaptive metadata contract", () => {
     const entry = authorCuratedProblem(validSpec());
 
     const unknown = cloneMetadata();
-    (unknown.stages[1]!.extensionIds as unknown as string[])[0] = "missing-extension";
+    (
+      requireStage(unknown, 1).extensionIds as unknown as string[]
+    )[0] = "missing-extension";
     expect(() => assertOxfordAdaptiveMetadataIntegrity(unknown, entry.problem)).toThrow(
       /unknown reasoning extension/
     );
 
     const duplicate = cloneMetadata();
-    (duplicate.stages[0]!.extensionIds as unknown as string[]).push("generalize");
+    (
+      requireStage(duplicate, 0).extensionIds as unknown as string[]
+    ).push("generalize");
     expect(() => assertOxfordAdaptiveMetadataIntegrity(duplicate, entry.problem)).toThrow(
       /assigned to multiple Oxford stages/
     );
@@ -253,7 +260,7 @@ describe("Oxford adaptive metadata contract", () => {
     const provisional = createProvisionalLegacyOxfordMetadata("legacy-fixture");
     expect(() => assertOxfordAdaptiveMetadataIntegrity(provisional)).not.toThrow();
 
-    const fabricated = structuredClone(provisional) as OxfordAdaptiveMetadata;
+    const fabricated = structuredClone(provisional);
     (
       fabricated.review as unknown as { difficultyCalibration: string }
     ).difficultyCalibration = "expert-estimate";
@@ -264,7 +271,29 @@ describe("Oxford adaptive metadata contract", () => {
 });
 
 function cloneMetadata(): OxfordAdaptiveMetadata {
-  return structuredClone(validAdaptiveMetadata()) as OxfordAdaptiveMetadata;
+  return structuredClone(validAdaptiveMetadata());
+}
+
+function requireStage(
+  metadata: OxfordAdaptiveMetadata,
+  index: number
+): OxfordStageMetadata {
+  const stage = metadata.stages[index];
+  if (stage === undefined) {
+    throw new Error(`Missing Oxford metadata fixture stage at index ${index}`);
+  }
+  return stage;
+}
+
+function requireMilestone(
+  stage: OxfordStageMetadata,
+  index: number
+): OxfordStageMetadata["milestones"][number] {
+  const milestone = stage.milestones[index];
+  if (milestone === undefined) {
+    throw new Error(`Missing Oxford metadata fixture milestone at index ${index}`);
+  }
+  return milestone;
 }
 
 function validSpec(): CuratedProblemSpec {
