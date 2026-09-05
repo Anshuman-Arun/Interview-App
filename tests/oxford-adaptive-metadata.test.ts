@@ -280,7 +280,7 @@ function requireStage(
 ): OxfordStageMetadata {
   const stage = metadata.stages[index];
   if (stage === undefined) {
-    throw new Error(`Missing Oxford metadata fixture stage at index ${index}`);
+    throw new Error(`Missing Oxford metadata fixture stage at index ${String(index)}`);
   }
   return stage;
 }
@@ -291,7 +291,7 @@ function requireMilestone(
 ): OxfordStageMetadata["milestones"][number] {
   const milestone = stage.milestones[index];
   if (milestone === undefined) {
-    throw new Error(`Missing Oxford metadata fixture milestone at index ${index}`);
+    throw new Error(`Missing Oxford metadata fixture milestone at index ${String(index)}`);
   }
   return milestone;
 }
