@@ -6,7 +6,6 @@ import {
   defaultAntigravityCliExecutablePath
 } from "../../../packages/local-runtime/src/index.js";
 import {
-  ANTIGRAVITY_CLI_MODEL_ID,
   ANTIGRAVITY_CLI_PROVIDER_ID,
   ANTIGRAVITY_CLI_TURN_ARGUMENTS,
   ANTIGRAVITY_CLI_ZERO_TURN_PREFLIGHT_INPUT,
