@@ -679,7 +679,7 @@ function evaluation(
       description: milestoneId,
       achieved,
       ...(achieved
-        ? { achievedAtTurnId: undefined }
+        ? {}
         : { notAchievedReason: "Grounded milestone not achieved" }),
       assistanceLevel,
       supportLevel,
