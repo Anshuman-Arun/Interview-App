@@ -51,7 +51,7 @@ export const oxfordDGcdDescentNetworkSpec: CuratedProblemSpec = {
     contentConcepts: ["divisibility", "paths-cycles-connectivity"],
     prerequisiteConcepts: ["arithmetic", "divisibility", "graph-basics"],
     skillEvidence: [evidence("small-case-exploration", "supporting"), evidence("invariants", "primary"), evidence("proof-construction", "primary"), evidence("precision-checking", "supporting"), evidence("generalization", "supporting")],
-    difficulty: { entry: "introductory-plus", core: "standard", ceiling: "strong" },
+    difficulty: { entry: "introductory", core: "standard", ceiling: "standard" },
     novelty: "moderate",
     abstraction: "moderate",
     introducesNewDefinition: false,
@@ -60,7 +60,7 @@ export const oxfordDGcdDescentNetworkSpec: CuratedProblemSpec = {
         id: "network-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["number-theory", "graph-theory"], contentConcepts: ["divisibility", "paths-cycles-connectivity"],
         skillEvidence: [evidence("small-case-exploration", "primary")],
         milestones: [{ milestoneId: "test-small-networks", skillEvidence: [evidence("small-case-exploration", "primary")], contentConcepts: ["divisibility"] }],
-        extensionIds: [], difficulty: "introductory-plus", timingKind: "opening"
+        extensionIds: [], difficulty: "introductory"
       },
       {
         id: "network-core", role: "core", prerequisiteStageIds: ["network-opening"], domains: ["number-theory", "graph-theory"], contentConcepts: ["divisibility", "paths-cycles-connectivity"],
@@ -70,85 +70,18 @@ export const oxfordDGcdDescentNetworkSpec: CuratedProblemSpec = {
           { milestoneId: "prove-gcd-invariant", skillEvidence: [evidence("invariants", "primary"), evidence("proof-construction", "supporting")], contentConcepts: ["divisibility"] },
           { milestoneId: "classify-terminal-state", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["paths-cycles-connectivity"] }
         ],
-        extensionIds: [], difficulty: "standard", timingKind: "core"
+        extensionIds: [], difficulty: "standard"
       },
       {
         id: "network-transfer", role: "transfer", prerequisiteStageIds: ["network-core"], domains: ["number-theory", "graph-theory"], contentConcepts: ["divisibility", "paths-cycles-connectivity"],
         skillEvidence: [evidence("precision-checking", "primary"), evidence("generalization", "supporting")],
         milestones: [{ milestoneId: "identify-terminal-gcd", skillEvidence: [evidence("precision-checking", "primary")], contentConcepts: ["divisibility"] }],
-        extensionIds: ["componentwise-terminal", "choice-dependent-duration"], difficulty: "strong", timingKind: "transfer"
+        extensionIds: ["componentwise-terminal", "choice-dependent-duration"], difficulty: "standard"
       }
     ]
   })
 };
 export const oxfordDGcdDescentNetworkEntry = authorCuratedProblem(oxfordDGcdDescentNetworkSpec);
-
-export const oxfordDSwitchingCutsSpec: CuratedProblemSpec = {
-  id: "oxford-d-switching-cuts",
-  title: "Which Edge Colorings Can Vertex Switches Reach?",
-  mode: "OXFORD_MATHEMATICS",
-  category: "graph theory",
-  topics: ["parity", "constructive proof"],
-  difficulty: "uncalibrated-oxford-candidate",
-  prompt: "A finite connected simple graph starts with every edge white. A move chooses one vertex and flips the color of every edge incident with that vertex. Given a desired set B of black edges, find a necessary and sufficient condition for B to be reachable, and prove both directions.",
-  givenInformation: ["Flipping an edge twice returns it to its previous color.", "A vertex may be switched any number of times."],
-  approaches: [{ id: "cycle-cut-parity", label: "Discover a cycle invariant and reconstruct vertex switches from a spanning tree" }],
-  milestones: [
-    { id: "inspect-cycle-effects", description: "Test paths, triangles, and squares and record how a switch meets a cycle.", approachIds: ["cycle-cut-parity"], hintLevels: [1] },
-    { id: "derive-cycle-parity", description: "Prove every reachable target has an even number of black edges on every cycle.", approachIds: ["cycle-cut-parity"], prerequisiteIds: ["inspect-cycle-effects"], hintLevels: [2] },
-    { id: "choose-tree-potentials", description: "Choose a root and spanning tree and assign each vertex a bit from the parity of target-black tree edges on its root path.", approachIds: ["cycle-cut-parity"], prerequisiteIds: ["derive-cycle-parity"], hintLevels: [3] },
-    { id: "verify-nontree-edges", description: "Use the fundamental cycle of each non-tree edge to prove its target color equals the xor of its endpoint bits.", approachIds: ["cycle-cut-parity"], prerequisiteIds: ["choose-tree-potentials"], hintLevels: [4] },
-    { id: "construct-switch-set", description: "Switch exactly the vertices whose assigned bit is 1 and prove this realizes every edge of B.", approachIds: ["cycle-cut-parity"], prerequisiteIds: ["verify-nontree-edges"], hintLevels: [5] }
-  ],
-  edges: [
-    { from: "inspect-cycle-effects", to: "derive-cycle-parity" },
-    { from: "derive-cycle-parity", to: "choose-tree-potentials" },
-    { from: "choose-tree-potentials", to: "verify-nontree-edges" },
-    { from: "verify-nontree-edges", to: "construct-switch-set" }
-  ],
-  commonErrors: [
-    { id: "checks-one-cycle", description: "Verifies parity on a single visible cycle but does not state the condition for every cycle." },
-    { id: "tree-condition-only", description: "Constructs vertex bits that work on tree edges and forgets to justify non-tree edges." },
-    { id: "assumes-unique-switches", description: "Claims the switching set is unique; in a connected graph switching every vertex changes no edge, so complementary switch sets agree." }
-  ],
-  followUps: ["Why is every target reachable when the graph is a tree?", "How many vertex-switch sets realize a reachable target in a connected graph?"],
-  extensions: [
-    { id: "tree-vacuity", prompt: "Specialize the characterization to trees and explain constructively why every edge-color target is reachable." },
-    { id: "switch-set-nonuniqueness", prompt: "For a connected graph, prove that a reachable target has exactly two switch sets modulo switching a vertex at most once." }
-  ],
-  hints: [
-    { level: 1, text: "Look at one fixed cycle. A switch at a cycle vertex flips either zero or two edges of that cycle.", formulations: ["study cycle parity", "a vertex meets a cycle in two incident cycle edges"] },
-    { level: 2, text: "Therefore the parity of the number of black edges on each cycle stays even from the all-white start.", formulations: ["every cycle has even black-edge count", "cycle parity is invariant"] },
-    { level: 3, text: "Choose a spanning tree rooted at r. Give v a bit equal to the parity of black target edges on the unique tree path from r to v.", formulations: ["assign root-path parity bits", "use a spanning tree to define vertex states"] },
-    { level: 4, text: "For a non-tree edge uv, its edge plus the two root paths contains a fundamental cycle. Even cycle parity forces its target bit to equal p(u) xor p(v).", formulations: ["use the fundamental cycle", "non-tree edge follows from cycle parity"] },
-    { level: 5, text: "Switch every vertex with p(v)=1. An edge flips exactly when its endpoint bits differ, which is exactly when it belongs to B.", formulations: ["switch the one-bit vertices", "edge color is endpoint xor"] }
-  ],
-  canonicalSolution: "Necessity: fix any cycle C. A switch at a vertex outside C flips no edge of C, while a switch at a vertex of C flips exactly the two cycle edges incident with that vertex. Hence the parity of the number of black edges on C never changes, so every reachable target B has |B∩C| even for every cycle C. Sufficiency: choose a rooted spanning tree T. For each vertex v, let p(v) be the parity of the number of B-edges on the unique T-path from the root to v. For a tree edge uv with u the parent of v, its membership bit in B is p(u) xor p(v). For a non-tree edge uv, add uv to T; the resulting fundamental cycle has even B-parity, and cancelling the tree-path contributions gives the same identity b(uv)=p(u) xor p(v). Now switch exactly the vertices with p(v)=1. Each edge is flipped exactly when its endpoint bits differ, so the final black-edge set is exactly B. Thus B is reachable iff every cycle contains an even number of edges of B.",
-  verificationNotes: "The graph is simple and connected only to keep spanning-tree language clean; the parity characterization is the cut-space condition. The sufficiency proof must explicitly cover non-tree edges. For a connected graph, if two vertex bit assignments produce the same edge colors, their xor is constant on every edge and therefore on all vertices, giving exactly the complementary pair of switch sets.",
-  reviewStatus: "expert-review",
-  reviewNotes: DIRICHLET_CANDIDATE_REVIEW_NOTES,
-  oxfordAdaptive: makeDirichletAdaptive({
-    familyId: "oxford-d-switching-cuts",
-    domains: ["graph-theory", "combinatorics"],
-    contentConcepts: ["paths-cycles-connectivity", "parity"],
-    prerequisiteConcepts: ["graph-basics", "set-notation"],
-    skillEvidence: [evidence("small-case-exploration", "supporting"), evidence("invariants", "primary"), evidence("representation-switching", "primary"), evidence("proof-construction", "primary"), evidence("generalization", "supporting")],
-    difficulty: { entry: "introductory-plus", core: "standard", ceiling: "strong" },
-    novelty: "moderate",
-    abstraction: "moderate",
-    introducesNewDefinition: false,
-    stages: [
-      { id: "switch-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["graph-theory", "combinatorics"], contentConcepts: ["paths-cycles-connectivity", "parity"], skillEvidence: [evidence("small-case-exploration", "primary"), evidence("invariants", "supporting")], milestones: [{ milestoneId: "inspect-cycle-effects", skillEvidence: [evidence("small-case-exploration", "primary")], contentConcepts: ["paths-cycles-connectivity"] }], extensionIds: [], difficulty: "introductory-plus", timingKind: "opening" },
-      { id: "switch-core", role: "core", prerequisiteStageIds: ["switch-opening"], domains: ["graph-theory", "combinatorics"], contentConcepts: ["paths-cycles-connectivity", "parity"], skillEvidence: [evidence("invariants", "primary"), evidence("representation-switching", "primary"), evidence("proof-construction", "primary")], milestones: [
-        { milestoneId: "derive-cycle-parity", skillEvidence: [evidence("invariants", "primary")], contentConcepts: ["parity", "paths-cycles-connectivity"] },
-        { milestoneId: "choose-tree-potentials", skillEvidence: [evidence("representation-switching", "primary")], contentConcepts: ["paths-cycles-connectivity"] },
-        { milestoneId: "verify-nontree-edges", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["paths-cycles-connectivity", "parity"] }
-      ], extensionIds: [], difficulty: "standard", timingKind: "core" },
-      { id: "switch-transfer", role: "transfer", prerequisiteStageIds: ["switch-core"], domains: ["graph-theory", "combinatorics"], contentConcepts: ["paths-cycles-connectivity", "parity"], skillEvidence: [evidence("proof-construction", "primary"), evidence("generalization", "supporting")], milestones: [{ milestoneId: "construct-switch-set", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["parity"] }], extensionIds: ["tree-vacuity", "switch-set-nonuniqueness"], difficulty: "strong", timingKind: "transfer" }
-    ]
-  })
-};
-export const oxfordDSwitchingCutsEntry = authorCuratedProblem(oxfordDSwitchingCutsSpec);
 
 export const oxfordDThirdsClosedIntegersSpec: CuratedProblemSpec = {
   id: "oxford-d-thirds-closed-integers",
@@ -206,84 +139,17 @@ export const oxfordDThirdsClosedIntegersSpec: CuratedProblemSpec = {
     abstraction: "moderate",
     introducesNewDefinition: true,
     stages: [
-      { id: "thirds-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["number-theory", "logic-proof"], contentConcepts: ["modular-reasoning", "logical-structure"], skillEvidence: [evidence("small-case-exploration", "primary"), evidence("case-analysis", "supporting")], milestones: [{ milestoneId: "classify-tiny-sizes", skillEvidence: [evidence("small-case-exploration", "primary"), evidence("case-analysis", "supporting")], contentConcepts: ["modular-reasoning"] }], extensionIds: [], difficulty: "introductory-plus", timingKind: "opening", introducesNewDefinition: true },
+      { id: "thirds-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["number-theory", "logic-proof"], contentConcepts: ["modular-reasoning", "logical-structure"], skillEvidence: [evidence("small-case-exploration", "primary"), evidence("case-analysis", "supporting")], milestones: [{ milestoneId: "classify-tiny-sizes", skillEvidence: [evidence("small-case-exploration", "primary"), evidence("case-analysis", "supporting")], contentConcepts: ["modular-reasoning"] }], extensionIds: [], difficulty: "introductory-plus", introducesNewDefinition: true },
       { id: "thirds-core", role: "core", prerequisiteStageIds: ["thirds-opening"], domains: ["number-theory", "logic-proof"], contentConcepts: ["modular-reasoning", "logical-structure"], skillEvidence: [evidence("pattern-recognition", "primary"), evidence("proof-construction", "primary"), evidence("case-analysis", "supporting")], milestones: [
         { milestoneId: "forbid-nearby-residue-repeat", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["modular-reasoning"] },
         { milestoneId: "force-three-residue-cycle", skillEvidence: [evidence("pattern-recognition", "primary")], contentConcepts: ["modular-reasoning"] },
         { milestoneId: "force-equal-gaps", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["logical-structure"] }
-      ], extensionIds: [], difficulty: "standard", timingKind: "core" },
-      { id: "thirds-transfer", role: "transfer", prerequisiteStageIds: ["thirds-core"], domains: ["number-theory", "logic-proof"], contentConcepts: ["modular-reasoning", "logical-structure"], skillEvidence: [evidence("generalization", "primary"), evidence("precision-checking", "supporting")], milestones: [{ milestoneId: "prove-classification-converse", skillEvidence: [evidence("precision-checking", "primary"), evidence("generalization", "supporting")], contentConcepts: ["logical-structure", "modular-reasoning"] }], extensionIds: ["small-size-boundary", "q-section-conjecture"], difficulty: "strong", timingKind: "transfer" }
+      ], extensionIds: [], difficulty: "standard" },
+      { id: "thirds-transfer", role: "transfer", prerequisiteStageIds: ["thirds-core"], domains: ["number-theory", "logic-proof"], contentConcepts: ["modular-reasoning", "logical-structure"], skillEvidence: [evidence("generalization", "primary"), evidence("precision-checking", "supporting")], milestones: [{ milestoneId: "prove-classification-converse", skillEvidence: [evidence("precision-checking", "primary"), evidence("generalization", "supporting")], contentConcepts: ["logical-structure", "modular-reasoning"] }], extensionIds: ["small-size-boundary", "q-section-conjecture"], difficulty: "strong" }
     ]
   })
 };
 export const oxfordDThirdsClosedIntegersEntry = authorCuratedProblem(oxfordDThirdsClosedIntegersSpec);
-
-export const oxfordDOrientationParitiesSpec: CuratedProblemSpec = {
-  id: "oxford-d-orientation-parities",
-  title: "Orienting a Graph with Prescribed Outdegree Parities",
-  mode: "OXFORD_MATHEMATICS",
-  category: "graph theory",
-  topics: ["parity", "constructive proof"],
-  difficulty: "uncalibrated-oxford-candidate",
-  prompt: "Let G be a finite connected simple graph. For each vertex v, someone prescribes a bit p(v), where p(v)=0 means the final outdegree of v should be even and p(v)=1 means it should be odd. Characterize exactly when the edges of G can be oriented to realize all the prescribed parities, and give a constructive proof.",
-  givenInformation: ["Every undirected edge must receive exactly one direction.", "The graph is connected."],
-  approaches: [{ id: "tree-leaf-orientation", label: "Use the global parity condition, then orient a spanning tree from the leaves upward" }],
-  milestones: [
-    { id: "find-global-necessary-parity", description: "Sum all outdegrees modulo 2 and obtain the necessary condition involving |E| and the prescribed bits.", approachIds: ["tree-leaf-orientation"], hintLevels: [1] },
-    { id: "freeze-nontree-edges", description: "Choose a spanning tree and orient all non-tree edges arbitrarily, reducing the remaining choices to tree edges.", approachIds: ["tree-leaf-orientation"], prerequisiteIds: ["find-global-necessary-parity"], hintLevels: [2] },
-    { id: "process-nonroot-vertices", description: "Root the tree and process vertices from leaves upward, using each parent edge as the last free switch for that vertex parity.", approachIds: ["tree-leaf-orientation"], prerequisiteIds: ["freeze-nontree-edges"], hintLevels: [3] },
-    { id: "prove-root-automatic", description: "Show the root parity is forced correctly by the global parity condition after every other vertex has been fixed.", approachIds: ["tree-leaf-orientation"], prerequisiteIds: ["process-nonroot-vertices"], hintLevels: [4] },
-    { id: "state-component-generalization", description: "Explain why the same argument gives one parity condition per connected component when connectedness is dropped.", approachIds: ["tree-leaf-orientation"], prerequisiteIds: ["prove-root-automatic"], hintLevels: [5] }
-  ],
-  edges: [
-    { from: "find-global-necessary-parity", to: "freeze-nontree-edges" },
-    { from: "freeze-nontree-edges", to: "process-nonroot-vertices" },
-    { from: "process-nonroot-vertices", to: "prove-root-automatic" },
-    { from: "prove-root-automatic", to: "state-component-generalization" }
-  ],
-  commonErrors: [
-    { id: "uses-degree-sum-wrongly", description: "Uses the undirected degree sum 2|E| instead of the fact that the sum of outdegrees is exactly |E|." },
-    { id: "greedy-without-last-edge", description: "Orients edges greedily at a vertex without reserving one controllable parent edge." },
-    { id: "fixes-root-directly", description: "Tries to independently choose the root parity after every edge is already oriented; the root must follow from the global condition." }
-  ],
-  followUps: ["Why can the non-tree edges truly be oriented arbitrarily?", "What changes if G has several connected components?"],
-  extensions: [
-    { id: "disconnected-parity", prompt: "Give the exact condition and construction for a graph with several connected components." },
-    { id: "prescribed-indegrees", prompt: "Rephrase the result for prescribed indegree parities and compare the condition." }
-  ],
-  hints: [
-    { level: 1, text: "Every edge contributes exactly 1 to the sum of all outdegrees, so reduce that identity modulo 2.", formulations: ["sum outdegrees equals number of edges", "derive the global parity condition"] },
-    { level: 2, text: "Choose a spanning tree. Orient non-tree edges first; their contributions simply become fixed terms in the parity requirements.", formulations: ["leave a spanning tree undecided", "freeze chords first"] },
-    { level: 3, text: "Root the tree. When a non-root vertex is processed after all its children, only its edge to its parent remains unoriented, and its two possible directions have opposite effects on that vertex's outdegree parity.", formulations: ["use the parent edge as a parity switch", "process leaves upward"] },
-    { level: 4, text: "Once every non-root vertex has the requested parity, compare the parity of their outdegree sum with |E|; the root must then have the remaining prescribed parity.", formulations: ["the root condition is automatic", "use the global parity at the last vertex"] },
-    { level: 5, text: "In a disconnected graph, no orientation choice crosses components, so impose the same edge-count parity equation separately inside each component.", formulations: ["one condition per component", "generalize componentwise"] }
-  ],
-  canonicalSolution: "Necessity is immediate from sum_v outdeg(v)=|E|: modulo 2 we must have sum_v p(v)≡|E|. For sufficiency assume this congruence. Choose a spanning tree T and a root r. Orient every edge outside T arbitrarily. Now process the non-root vertices in an order from leaves toward r. When v is processed, every incident edge except its parent edge has already been oriented: non-tree edges were fixed initially and child edges were fixed when the children were processed. Direct the parent edge out of v if that makes outdeg(v) have parity p(v), and into v otherwise. Exactly one of the two choices works. After all non-root vertices are fixed, every edge is oriented. The parity of outdeg(r) is forced by the identity sum outdeg=|E|; because the total prescribed parity has the same parity as |E| and every other vertex is correct, r is correct too. Thus the congruence is sufficient. For a disconnected graph, the same proof applies independently to each component, so the condition is sum_{v in C}p(v)≡|E(C)| mod 2 for every component C.",
-  verificationNotes: "The proof is for finite simple graphs, though parallel edges cause no conceptual issue. The spanning-tree construction does not depend on how non-tree edges are initially oriented. At a non-root vertex exactly one parent-edge direction fixes parity because reversing that single edge toggles its outdegree parity. The root argument uses the necessary global congruence and must not be omitted.",
-  reviewStatus: "expert-review",
-  reviewNotes: DIRICHLET_CANDIDATE_REVIEW_NOTES,
-  oxfordAdaptive: makeDirichletAdaptive({
-    familyId: "oxford-d-orientation-parities",
-    domains: ["graph-theory", "combinatorics"],
-    contentConcepts: ["degree-structure", "parity"],
-    prerequisiteConcepts: ["graph-basics", "modular-arithmetic"],
-    skillEvidence: [evidence("proof-construction", "primary"), evidence("case-analysis", "supporting"), evidence("strategic-simplification", "primary"), evidence("generalization", "supporting"), evidence("precision-checking", "supporting")],
-    difficulty: { entry: "introductory-plus", core: "standard", ceiling: "strong" },
-    novelty: "moderate",
-    abstraction: "moderate",
-    introducesNewDefinition: false,
-    stages: [
-      { id: "orientation-opening", role: "technique-check", prerequisiteStageIds: [], domains: ["graph-theory", "combinatorics"], contentConcepts: ["degree-structure", "parity"], skillEvidence: [evidence("proof-construction", "supporting")], milestones: [{ milestoneId: "find-global-necessary-parity", skillEvidence: [evidence("proof-construction", "supporting")], contentConcepts: ["degree-structure", "parity"] }], extensionIds: [], difficulty: "introductory-plus", timingKind: "opening" },
-      { id: "orientation-core", role: "core", prerequisiteStageIds: ["orientation-opening"], domains: ["graph-theory", "combinatorics"], contentConcepts: ["degree-structure", "parity"], skillEvidence: [evidence("strategic-simplification", "primary"), evidence("proof-construction", "primary"), evidence("precision-checking", "supporting")], milestones: [
-        { milestoneId: "freeze-nontree-edges", skillEvidence: [evidence("strategic-simplification", "primary")], contentConcepts: ["degree-structure"] },
-        { milestoneId: "process-nonroot-vertices", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["parity"] },
-        { milestoneId: "prove-root-automatic", skillEvidence: [evidence("precision-checking", "primary")], contentConcepts: ["degree-structure", "parity"] }
-      ], extensionIds: [], difficulty: "standard", timingKind: "core" },
-      { id: "orientation-transfer", role: "transfer", prerequisiteStageIds: ["orientation-core"], domains: ["graph-theory", "combinatorics"], contentConcepts: ["degree-structure", "parity"], skillEvidence: [evidence("generalization", "primary"), evidence("case-analysis", "supporting")], milestones: [{ milestoneId: "state-component-generalization", skillEvidence: [evidence("generalization", "primary"), evidence("case-analysis", "supporting")], contentConcepts: ["parity"] }], extensionIds: ["disconnected-parity", "prescribed-indegrees"], difficulty: "strong", timingKind: "transfer" }
-    ]
-  })
-};
-export const oxfordDOrientationParitiesEntry = authorCuratedProblem(oxfordDOrientationParitiesSpec);
 
 export const oxfordDBalancingTransfersSpec: CuratedProblemSpec = {
   id: "oxford-d-balancing-transfers",
@@ -340,13 +206,13 @@ export const oxfordDBalancingTransfersSpec: CuratedProblemSpec = {
     abstraction: "low",
     introducesNewDefinition: false,
     stages: [
-      { id: "balancing-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["combinatorics", "algebra"], contentConcepts: ["extremal-configuration", "inequalities-bounds"], skillEvidence: [evidence("small-case-exploration", "primary")], milestones: [{ milestoneId: "experiment-balancing", skillEvidence: [evidence("small-case-exploration", "primary")], contentConcepts: ["extremal-configuration"] }], extensionIds: [], difficulty: "introductory", timingKind: "opening" },
+      { id: "balancing-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["combinatorics", "algebra"], contentConcepts: ["extremal-configuration", "inequalities-bounds"], skillEvidence: [evidence("small-case-exploration", "primary")], milestones: [{ milestoneId: "experiment-balancing", skillEvidence: [evidence("small-case-exploration", "primary")], contentConcepts: ["extremal-configuration"] }], extensionIds: [], difficulty: "introductory" },
       { id: "balancing-core", role: "core", prerequisiteStageIds: ["balancing-opening"], domains: ["combinatorics", "algebra"], contentConcepts: ["extremal-configuration", "inequalities-bounds"], skillEvidence: [evidence("invariants", "primary"), evidence("proof-construction", "primary")], milestones: [
         { milestoneId: "preserve-total", skillEvidence: [evidence("invariants", "supporting")], contentConcepts: [] },
         { milestoneId: "decrease-squares", skillEvidence: [evidence("invariants", "primary"), evidence("proof-construction", "supporting")], contentConcepts: ["inequalities-bounds"] },
         { milestoneId: "classify-terminal-multiset", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["extremal-configuration"] }
-      ], extensionIds: [], difficulty: "standard", timingKind: "core" },
-      { id: "balancing-transfer", role: "transfer", prerequisiteStageIds: ["balancing-core"], domains: ["combinatorics", "algebra"], contentConcepts: ["extremal-configuration", "inequalities-bounds"], skillEvidence: [evidence("counterexample-construction", "primary"), evidence("precision-checking", "supporting")], milestones: [{ milestoneId: "test-local-move-variant", skillEvidence: [evidence("counterexample-construction", "primary")], contentConcepts: ["extremal-configuration"] }], extensionIds: ["path-local-counterexample", "graph-local-termination"], difficulty: "strong", timingKind: "transfer"
+      ], extensionIds: [], difficulty: "standard" },
+      { id: "balancing-transfer", role: "transfer", prerequisiteStageIds: ["balancing-core"], domains: ["combinatorics", "algebra"], contentConcepts: ["extremal-configuration", "inequalities-bounds"], skillEvidence: [evidence("counterexample-construction", "primary"), evidence("precision-checking", "supporting")], milestones: [{ milestoneId: "test-local-move-variant", skillEvidence: [evidence("counterexample-construction", "primary")], contentConcepts: ["extremal-configuration"] }], extensionIds: ["path-local-counterexample", "graph-local-termination"], difficulty: "strong"
       }
     ]
   })
@@ -408,13 +274,13 @@ export const oxfordDCubeTwistEquivalenceSpec: CuratedProblemSpec = {
     abstraction: "moderate",
     introducesNewDefinition: true,
     stages: [
-      { id: "cube-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["number-theory", "set-theory", "logic-proof"], contentConcepts: ["prime-structure", "relations-operations", "logical-structure"], skillEvidence: [evidence("definition-exploration", "primary")], milestones: [{ milestoneId: "test-relation-examples", skillEvidence: [evidence("definition-exploration", "primary")], contentConcepts: ["relations-operations"] }], extensionIds: [], difficulty: "introductory-plus", timingKind: "opening", introducesNewDefinition: true },
+      { id: "cube-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["number-theory", "set-theory", "logic-proof"], contentConcepts: ["prime-structure", "relations-operations", "logical-structure"], skillEvidence: [evidence("definition-exploration", "primary")], milestones: [{ milestoneId: "test-relation-examples", skillEvidence: [evidence("definition-exploration", "primary")], contentConcepts: ["relations-operations"] }], extensionIds: [], difficulty: "introductory-plus", introducesNewDefinition: true },
       { id: "cube-core", role: "core", prerequisiteStageIds: ["cube-opening"], domains: ["number-theory", "set-theory", "logic-proof"], contentConcepts: ["prime-structure", "divisibility", "relations-operations", "logical-structure"], skillEvidence: [evidence("representation-switching", "primary"), evidence("proof-construction", "primary"), evidence("pattern-recognition", "supporting")], milestones: [
         { milestoneId: "translate-prime-exponents", skillEvidence: [evidence("representation-switching", "primary")], contentConcepts: ["prime-structure"] },
         { milestoneId: "discover-equal-residue-vectors", skillEvidence: [evidence("pattern-recognition", "primary")], contentConcepts: ["divisibility"] },
         { milestoneId: "prove-equivalence-and-classes", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["relations-operations", "logical-structure"] }
-      ], extensionIds: [], difficulty: "standard", timingKind: "core" },
-      { id: "cube-transfer", role: "transfer", prerequisiteStageIds: ["cube-core"], domains: ["number-theory", "set-theory", "logic-proof"], contentConcepts: ["prime-structure", "divisibility", "relations-operations", "logical-structure"], skillEvidence: [evidence("generalization", "primary"), evidence("precision-checking", "supporting")], milestones: [{ milestoneId: "generalize-rth-power", skillEvidence: [evidence("generalization", "primary")], contentConcepts: ["prime-structure", "relations-operations"] }], extensionIds: ["identity-class", "rth-power-relation"], difficulty: "strong", timingKind: "transfer"
+      ], extensionIds: [], difficulty: "standard" },
+      { id: "cube-transfer", role: "transfer", prerequisiteStageIds: ["cube-core"], domains: ["number-theory", "set-theory", "logic-proof"], contentConcepts: ["prime-structure", "divisibility", "relations-operations", "logical-structure"], skillEvidence: [evidence("generalization", "primary"), evidence("precision-checking", "supporting")], milestones: [{ milestoneId: "generalize-rth-power", skillEvidence: [evidence("generalization", "primary")], contentConcepts: ["prime-structure", "relations-operations"] }], extensionIds: ["identity-class", "rth-power-relation"], difficulty: "strong"
       }
     ]
   })
@@ -423,9 +289,7 @@ export const oxfordDCubeTwistEquivalenceEntry = authorCuratedProblem(oxfordDCube
 
 export const dirichletBatchAEntries = Object.freeze([
   oxfordDGcdDescentNetworkEntry,
-  oxfordDSwitchingCutsEntry,
   oxfordDThirdsClosedIntegersEntry,
-  oxfordDOrientationParitiesEntry,
   oxfordDBalancingTransfersEntry,
   oxfordDCubeTwistEquivalenceEntry
 ] as const);
