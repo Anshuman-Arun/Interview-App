@@ -10,7 +10,7 @@ export const cantorFunctionFamiliesA: readonly CantorFamilyAuthoring[] = [
     id: "oxford-cantor-reciprocal-paired-inputs",
     title: "A Function that Pairs Reciprocal Inputs",
     category: "functions and graph sketching",
-    topics: ["reciprocal symmetry", "inverse branches", "range", "generalization"],
+    topics: ["functions","graphs","algebra","inequalities"],
     prompt:
       "For x>0 define f(x)=x/(1+x)². Sketch the graph as efficiently as possible, determine its exact range, and characterize precisely when two different positive inputs give the same output.",
     givenInformation: [],
@@ -141,7 +141,7 @@ export const cantorFunctionFamiliesA: readonly CantorFamilyAuthoring[] = [
     id: "oxford-cantor-tangent-intersection-locus",
     title: "Where Two Parabola Tangents Meet",
     category: "calculus and coordinate geometry",
-    topics: ["tangent lines", "moving intersections", "loci", "parameter generalization"],
+    topics: ["calculus","parabolas","coordinate geometry","graphs"],
     prompt:
       "On the parabola y=x², take the tangent at x=u and the tangent at x=u+1. As u varies, their intersection moves. Determine and sketch the locus of that intersection. Then replace the separation 1 by a fixed positive separation h.",
     givenInformation: [],
@@ -272,7 +272,7 @@ export const cantorFunctionFamiliesA: readonly CantorFamilyAuthoring[] = [
     id: "oxford-cantor-exponential-rotating-line",
     title: "When an Exponential Meets a Rotating Line",
     category: "functions and calculus",
-    topics: ["exponential graphs", "parameter root counts", "tangency", "scaling"],
+    topics: ["functions","exponentials","graphs","calculus"],
     prompt:
       "For a>0, investigate the number of real solutions of e^x=a x. Do this graphically and then justify the transition values of a exactly. Explain what happens at the transition and how the result changes for e^{b x}=a x with b>0.",
     givenInformation: [
@@ -408,7 +408,7 @@ export const cantorFunctionFamiliesA: readonly CantorFamilyAuthoring[] = [
     id: "oxford-cantor-mobius-recurrence",
     title: "A Recurrence Hidden Inside a Translation",
     category: "sequences and functions",
-    topics: ["fractional-linear recurrence", "fixed points", "convergence", "change of variables"],
+    topics: ["sequences","recurrences","functions","algebra"],
     prompt:
       "Let x_0<1 and define x_{n+1}=1/(2-x_n). Explore the sequence numerically for a few starting values, conjecture its long-term behavior, and then find a change of variables that makes the recurrence completely explicit.",
     givenInformation: [],
@@ -538,7 +538,7 @@ export const cantorFunctionFamiliesA: readonly CantorFamilyAuthoring[] = [
     id: "oxford-cantor-squared-error-recurrence",
     title: "A Recurrence that Squares Its Own Error",
     category: "sequences and recurrences",
-    topics: ["nonlinear recurrence", "convergence", "error transformation", "rapid convergence"],
+    topics: ["sequences","recurrences","convergence","algebra"],
     prompt:
       "Let 0<x_0<1 and define x_{n+1}=x_n(2-x_n). Explore the first few terms, prove the sequence converges, and then find an exact formula revealing how fast it approaches its limit.",
     givenInformation: [],
