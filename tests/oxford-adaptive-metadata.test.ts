@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { InterviewProblemPublicViewSchema } from "../packages/domain/src/index.js";
+import {
+  InterviewProblemPublicViewSchema,
+  type InterviewProblem
+} from "../packages/domain/src/index.js";
+import { oxfordDivisorsSquareParitySpec } from "../packages/problems/src/curated/oxford-divisors-square-parity.js";
 import {
   OXFORD_DIFFICULTY_BANDS,
   OXFORD_MATH_DOMAINS,
@@ -10,7 +14,6 @@ import {
   assertOxfordAdaptiveMetadataIntegrity,
   authorCuratedProblem,
   createProvisionalLegacyOxfordMetadata,
-  type CuratedProblemSpec,
   type OxfordAdaptiveMetadata,
   type OxfordStageMetadata
 } from "../packages/problems/src/index.js";
@@ -88,7 +91,10 @@ describe("Oxford adaptive metadata contract", () => {
   });
 
   it("keeps adaptive metadata backend-only while authoring the existing problem contract", () => {
-    const entry = authorCuratedProblem(validSpec());
+    const entry = authorCuratedProblem({
+      ...oxfordDivisorsSquareParitySpec,
+      oxfordAdaptive: reviewedFixtureAdaptiveMetadata()
+    });
     expect(entry.metadata.oxfordAdaptive?.status).toBe("authored");
     expect(() => assertOxfordAdaptiveMetadataIntegrity(
       entry.metadata.oxfordAdaptive as OxfordAdaptiveMetadata,
@@ -185,12 +191,12 @@ describe("Oxford adaptive metadata contract", () => {
   });
 
   it("rejects unknown or multiply assigned reasoning milestones", () => {
-    const entry = authorCuratedProblem(validSpec());
+    const problem = fixtureProblem();
     const unknown = cloneMetadata();
     (
       requireMilestone(requireStage(unknown, 1), 0) as unknown as { milestoneId: string }
     ).milestoneId = "not-a-real-milestone";
-    expect(() => assertOxfordAdaptiveMetadataIntegrity(unknown, entry.problem)).toThrow(
+    expect(() => assertOxfordAdaptiveMetadataIntegrity(unknown, problem)).toThrow(
       /unknown reasoning milestone/
     );
 
@@ -198,30 +204,30 @@ describe("Oxford adaptive metadata contract", () => {
     (
       requireMilestone(requireStage(duplicate, 1), 0) as unknown as { milestoneId: string }
     ).milestoneId = "explore";
-    expect(() => assertOxfordAdaptiveMetadataIntegrity(duplicate, entry.problem)).toThrow(
+    expect(() => assertOxfordAdaptiveMetadataIntegrity(duplicate, problem)).toThrow(
       /assigned to multiple Oxford stages/
     );
   });
 
   it("requires authored metadata to preserve cross-stage reasoning dependencies", () => {
-    const entry = authorCuratedProblem(validSpec());
+    const problem = fixtureProblem();
     const disconnected = cloneMetadata();
     (
       requireStage(disconnected, 1).prerequisiteStageIds as unknown as string[]
     ).splice(0);
-    expect(() => assertOxfordAdaptiveMetadataIntegrity(disconnected, entry.problem)).toThrow(
+    expect(() => assertOxfordAdaptiveMetadataIntegrity(disconnected, problem)).toThrow(
       /does not preserve reasoning dependency/
     );
   });
 
   it("rejects unknown and multiply assigned reasoning extensions", () => {
-    const entry = authorCuratedProblem(validSpec());
+    const problem = fixtureProblem();
 
     const unknown = cloneMetadata();
     (
       requireStage(unknown, 1).extensionIds as unknown as string[]
     )[0] = "missing-extension";
-    expect(() => assertOxfordAdaptiveMetadataIntegrity(unknown, entry.problem)).toThrow(
+    expect(() => assertOxfordAdaptiveMetadataIntegrity(unknown, problem)).toThrow(
       /unknown reasoning extension/
     );
 
@@ -229,7 +235,7 @@ describe("Oxford adaptive metadata contract", () => {
     (
       requireStage(duplicate, 0).extensionIds as unknown as string[]
     ).push("generalize");
-    expect(() => assertOxfordAdaptiveMetadataIntegrity(duplicate, entry.problem)).toThrow(
+    expect(() => assertOxfordAdaptiveMetadataIntegrity(duplicate, problem)).toThrow(
       /assigned to multiple Oxford stages/
     );
   });
@@ -296,56 +302,131 @@ function requireMilestone(
   return milestone;
 }
 
-function validSpec(): CuratedProblemSpec {
+function fixtureProblem(): InterviewProblem {
   return {
     id: "oxford-adaptive-fixture",
-    title: "Adaptive Contract Fixture",
-    mode: "OXFORD_MATHEMATICS",
-    category: "number theory",
-    topics: ["divisibility"],
-    difficulty: "standard-oxford",
-    prompt: "Investigate a simple divisibility pattern and prove the pattern you find.",
-    givenInformation: [],
-    approaches: [
-      { id: "direct", label: "Direct exploration and proof" }
-    ],
-    milestones: [
-      {
-        id: "explore",
-        description: "Test small cases and formulate the relevant pattern.",
-        approachIds: ["direct"],
-        hintLevels: [1, 2]
+    version: "1.0.0",
+    public: {
+      prompt: "Investigate a simple pattern and justify it.",
+      givenInformation: []
+    },
+    interviewer: {
+      topics: ["fixture"],
+      difficulty: "fixture",
+      reasoningGraph: {
+        version: "1.0.0",
+        approaches: [
+          { id: "direct", label: "Direct exploration and proof" }
+        ],
+        milestones: [
+          {
+            id: "explore",
+            description: "Explore small cases.",
+            approachIds: ["direct"],
+            optionalPrerequisiteIds: [],
+            protectedDisclosureIds: []
+          },
+          {
+            id: "prove",
+            description: "Prove the observed pattern.",
+            approachIds: ["direct"],
+            optionalPrerequisiteIds: ["explore"],
+            protectedDisclosureIds: []
+          }
+        ],
+        edges: [
+          { from: "explore", to: "prove" }
+        ],
+        commonErrors: [],
+        extensions: [
+          { id: "generalize", prompt: "Generalize the pattern." }
+        ]
       },
+      protectedDisclosures: []
+    },
+    private: {
+      canonicalSolution: "Fixture solution.",
+      verificationNotes: "Fixture verification notes."
+    }
+  };
+}
+
+function reviewedFixtureAdaptiveMetadata(): OxfordAdaptiveMetadata {
+  return {
+    schemaVersion: 1,
+    taxonomyVersion: "1.0.0",
+    status: "authored",
+    familyId: "divisor-parity-fixture-family",
+    domains: ["number-theory"],
+    prerequisiteConcepts: ["divisibility", "prime-factorization"],
+    skillEvidence: [
+      { skill: "proof-construction", weight: "primary" }
+    ],
+    difficulty: {
+      entry: "introductory-plus",
+      core: "standard",
+      ceiling: "stretch",
+      confidence: "low"
+    },
+    timing: {
+      firstMeaningfulInsightMinutes: { min: 1, max: 4 },
+      independentCompletionMinutes: { min: 8, max: 16 },
+      promptedCompletionMinutes: { min: 6, max: 14 },
+      optionalExtensionMinutes: { min: 4, max: 10 },
+      softCutoffMinutes: 12,
+      confidence: "low"
+    },
+    novelty: "low",
+    abstraction: "moderate",
+    introducesNewDefinition: false,
+    stages: [
       {
-        id: "prove",
-        description: "Prove the pattern and explain why the argument generalizes.",
-        approachIds: ["direct"],
-        prerequisiteIds: ["explore"],
-        hintLevels: [3, 4, 5]
+        id: "core",
+        role: "core",
+        prerequisiteStageIds: [],
+        domains: ["number-theory"],
+        skillEvidence: [
+          { skill: "proof-construction", weight: "primary" }
+        ],
+        milestones: [
+          "test-pairing",
+          "identify-fixed-point",
+          "pairing-conclusion",
+          "factorization-route",
+          "iff-finish"
+        ].map((milestoneId) => ({
+          milestoneId,
+          skillEvidence: [
+            { skill: "proof-construction" as const, weight: "primary" as const }
+          ]
+        })),
+        extensionIds: ["exactly-three", "divisor-count-formula"],
+        difficulty: "standard",
+        timing: {
+          firstMeaningfulInsightMinutes: { min: 1, max: 4 },
+          independentCompletionMinutes: { min: 8, max: 16 },
+          promptedCompletionMinutes: { min: 6, max: 14 },
+          optionalExtensionMinutes: { min: 4, max: 10 },
+          softCutoffMinutes: 12,
+          confidence: "low"
+        },
+        novelty: "low",
+        abstraction: "moderate",
+        introducesNewDefinition: false
       }
     ],
-    edges: [
-      { from: "explore", to: "prove" }
-    ],
-    commonErrors: [
-      { id: "examples-only", description: "Stops after examples without proving the claim." }
-    ],
-    followUps: ["What changes if the numerical parameter is varied?"],
-    extensions: [
-      { id: "generalize", prompt: "Generalize the claim to a wider class of integers." }
-    ],
-    hints: [
-      { level: 1, text: "Try the smallest few cases.", formulations: ["test small cases"] },
-      { level: 2, text: "Record what remains unchanged.", formulations: ["look for a stable pattern"] },
-      { level: 3, text: "State the pattern as a precise claim.", formulations: ["formulate the claim"] },
-      { level: 4, text: "Use the divisibility definition directly.", formulations: ["apply divisibility directly"] },
-      { level: 5, text: "Close the argument for an arbitrary case.", formulations: ["finish for a general case"] }
-    ],
-    canonicalSolution: "A complete fixture solution establishes the observed divisibility pattern for an arbitrary input.",
-    verificationNotes: "Examples are insufficient; the final response must include a general proof.",
-    reviewStatus: "expert-review",
-    reviewNotes: "Synthetic fixture used only to exercise metadata validation.",
-    oxfordAdaptive: validAdaptiveMetadata()
+    provenance: {
+      originType: "classic-problem",
+      sourceCategory: "classic-mathematics"
+    },
+    review: {
+      taxonomyClassification: "unreviewed",
+      originality: "unreviewed",
+      fidelity: "unreviewed",
+      mathematicalCorrectness: "unreviewed",
+      difficultyCalibration: "expert-estimate",
+      timingCalibration: "expert-estimate"
+    }
   };
 }
 
