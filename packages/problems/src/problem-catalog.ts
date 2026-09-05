@@ -9,6 +9,13 @@ import {
   oxfordCuratedReviewEntries
 } from "./oxford-curated.js";
 import { prisonerHatsProblem } from "./prisoner-hats.js";
+import {
+  assertOxfordAdaptiveMetadataIntegrity,
+  createProvisionalLegacyOxfordMetadata,
+  type OxfordAdaptiveMetadata,
+  type OxfordMathDomain,
+  type OxfordReasoningSkill
+} from "./oxford-adaptive-taxonomy.js";
 import { assertInterviewProblemIntegrity } from "./problem-integrity.js";
 import {
   quantCuratedMetadata,
@@ -26,7 +33,8 @@ const LEGACY_PROBLEM_METADATA: readonly ProblemCatalogMetadata[] = [
     mode: "OXFORD_MATHEMATICS",
     category: "combinatorics",
     followUps: ["Why is five people not enough?"],
-    reviewStatus: "ready"
+    reviewStatus: "ready",
+    oxfordAdaptive: createProvisionalLegacyOxfordMetadata(sixPeopleProblem.id)
   },
   {
     id: hilbertHotelProblem.id,
@@ -34,7 +42,8 @@ const LEGACY_PROBLEM_METADATA: readonly ProblemCatalogMetadata[] = [
     mode: "OXFORD_MATHEMATICS",
     category: "set theory",
     followUps: ["How would you accommodate countably many infinite buses?"],
-    reviewStatus: "ready"
+    reviewStatus: "ready",
+    oxfordAdaptive: createProvisionalLegacyOxfordMetadata(hilbertHotelProblem.id)
   },
   {
     id: prisonerHatsProblem.id,
@@ -42,7 +51,8 @@ const LEGACY_PROBLEM_METADATA: readonly ProblemCatalogMetadata[] = [
     mode: "OXFORD_MATHEMATICS",
     category: "combinatorics",
     followUps: ["How does the strategy generalize to three hat colours?"],
-    reviewStatus: "ready"
+    reviewStatus: "ready",
+    oxfordAdaptive: createProvisionalLegacyOxfordMetadata(prisonerHatsProblem.id)
   },
   {
     id: gamblersRuinProblem.id,
@@ -99,9 +109,10 @@ export function assertProblemBankIntegrity(
   }
   assertUniqueDisclosureOwnership(problems);
 
+  const problemsById = new Map(problems.map((problem) => [problem.id, problem] as const));
   const metadataIds = new Set<string>();
   for (const item of metadata) {
-    assertMetadataStructure(item);
+    assertMetadataStructure(item, problemsById.get(item.id));
     if (item.reviewStatus !== "ready") {
       throw new Error(`Default problem bank cannot include non-ready problem "${item.id}"`);
     }
@@ -184,6 +195,39 @@ export function getProblemMetadataById(id: string): ProblemCatalogMetadata | und
   return PROBLEM_METADATA.find((metadata) => metadata.id === id);
 }
 
+export function getOxfordAdaptiveMetadataById(id: string): OxfordAdaptiveMetadata | undefined {
+  const metadata = getProblemMetadataById(id);
+  return metadata?.mode === "OXFORD_MATHEMATICS" ? metadata.oxfordAdaptive : undefined;
+}
+
+export function getOxfordProblemsByDomain(domain: OxfordMathDomain): readonly InterviewProblem[] {
+  const ids = new Set(
+    PROBLEM_METADATA
+      .filter(
+        (metadata) =>
+          metadata.mode === "OXFORD_MATHEMATICS"
+          && metadata.oxfordAdaptive?.domains.includes(domain)
+      )
+      .map((metadata) => metadata.id)
+  );
+  return problemCatalog.filter((problem) => ids.has(problem.id));
+}
+
+export function getOxfordProblemsByReasoningSkill(
+  skill: OxfordReasoningSkill
+): readonly InterviewProblem[] {
+  const ids = new Set(
+    PROBLEM_METADATA
+      .filter(
+        (metadata) =>
+          metadata.mode === "OXFORD_MATHEMATICS"
+          && metadata.oxfordAdaptive?.skillEvidence.some((item) => item.skill === skill)
+      )
+      .map((metadata) => metadata.id)
+  );
+  return problemCatalog.filter((problem) => ids.has(problem.id));
+}
+
 export function getProblemsByTopic(topic: string): readonly InterviewProblem[] {
   const normalized = topic.toLowerCase().trim();
   if (normalized.length === 0) return [];
@@ -239,6 +283,7 @@ function assertExpertReviewCatalogIntegrity(
 ): void {
   assertUniqueDisclosureOwnership(problems);
   const problemIds = new Set(problems.map((problem) => problem.id));
+  const problemsById = new Map(problems.map((problem) => [problem.id, problem] as const));
   const metadataIds = new Set<string>();
 
   if (problemIds.size !== problems.length) {
@@ -246,7 +291,7 @@ function assertExpertReviewCatalogIntegrity(
   }
 
   for (const item of metadata) {
-    assertMetadataStructure(item);
+    assertMetadataStructure(item, problemsById.get(item.id));
     if (item.reviewStatus !== "expert-review") {
       throw new Error(`Expert-review metadata for "${item.id}" must be marked expert-review`);
     }
@@ -286,7 +331,10 @@ function assertUniqueDisclosureOwnership(
   }
 }
 
-function assertMetadataStructure(item: ProblemCatalogMetadata): void {
+function assertMetadataStructure(
+  item: ProblemCatalogMetadata,
+  problem?: InterviewProblem
+): void {
   assertNonBlank(item.id, "Problem metadata id");
   assertNonBlank(item.title, `Problem metadata title for "${item.id}"`);
   assertNonBlank(item.category, `Problem metadata category for "${item.id}"`);
@@ -295,6 +343,15 @@ function assertMetadataStructure(item: ProblemCatalogMetadata): void {
     throw new Error(
       `Problem metadata for "${item.id}" has invalid mode "${String(mode)}"`
     );
+  }
+
+  if (mode === "OXFORD_MATHEMATICS") {
+    if (item.oxfordAdaptive === undefined) {
+      throw new Error(`Oxford problem metadata for "${item.id}" is missing adaptive metadata`);
+    }
+    assertOxfordAdaptiveMetadataIntegrity(item.oxfordAdaptive, problem);
+  } else if (item.oxfordAdaptive !== undefined) {
+    throw new Error(`QUANT problem metadata for "${item.id}" cannot contain Oxford adaptive metadata`);
   }
 
   const normalizedFollowUps = new Set<string>();

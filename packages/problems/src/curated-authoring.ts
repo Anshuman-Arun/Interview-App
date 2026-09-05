@@ -4,6 +4,11 @@ import {
   type InterviewProblem
 } from "../../domain/src/index.js";
 import { reviewedDisclosureLevelFor } from "./curated-disclosure-levels.js";
+import {
+  assertOxfordAdaptiveMetadataIntegrity,
+  createProvisionalLegacyOxfordMetadata,
+  type OxfordAdaptiveMetadata
+} from "./oxford-adaptive-taxonomy.js";
 import { assertInterviewProblemIntegrity } from "./problem-integrity.js";
 
 export type CuratedProblemMode = "OXFORD_MATHEMATICS" | "QUANT";
@@ -46,6 +51,11 @@ export interface CuratedProblemSpec {
   readonly verificationNotes: string;
   readonly reviewStatus?: CuratedReviewStatus;
   readonly reviewNotes?: string;
+  /**
+   * Backend-only Oxford recommendation/calibration metadata.
+   * Existing Oxford fixtures may omit this and receive an explicitly provisional legacy record.
+   */
+  readonly oxfordAdaptive?: OxfordAdaptiveMetadata;
 }
 
 export interface CuratedProblemMetadata {
@@ -56,6 +66,10 @@ export interface CuratedProblemMetadata {
   readonly followUps: readonly string[];
   readonly reviewStatus: CuratedReviewStatus;
   readonly reviewNotes?: string;
+  /**
+   * Backend-only. Never spread this object into student/public catalog views.
+   */
+  readonly oxfordAdaptive?: OxfordAdaptiveMetadata;
 }
 
 export interface CuratedProblemEntry {
@@ -192,6 +206,15 @@ export function authorCuratedProblem(spec: CuratedProblemSpec): CuratedProblemEn
   };
 
   assertInterviewProblemIntegrity(problem);
+
+  let oxfordAdaptive: OxfordAdaptiveMetadata | undefined;
+  if (spec.mode === "OXFORD_MATHEMATICS") {
+    oxfordAdaptive = spec.oxfordAdaptive ?? createProvisionalLegacyOxfordMetadata(spec.id);
+    assertOxfordAdaptiveMetadataIntegrity(oxfordAdaptive, problem);
+  } else if (spec.oxfordAdaptive !== undefined) {
+    throw new Error(`Problem "${spec.id}" cannot define Oxford adaptive metadata in QUANT mode`);
+  }
+
   const metadata: CuratedProblemMetadata = {
     id: spec.id,
     title,
@@ -199,7 +222,8 @@ export function authorCuratedProblem(spec: CuratedProblemSpec): CuratedProblemEn
     category,
     followUps,
     reviewStatus,
-    ...(reviewNotes === undefined ? {} : { reviewNotes })
+    ...(reviewNotes === undefined ? {} : { reviewNotes }),
+    ...(oxfordAdaptive === undefined ? {} : { oxfordAdaptive })
   };
 
   return deepFreeze({
