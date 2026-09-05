@@ -342,8 +342,25 @@ export const App: React.FC = () => {
     }
   };
 
-  const refreshStoredSessions = useCallback((): void => {
-    void session.fetchAvailableSessions();
+  const beginSessionAuthorityCheck = useCallback((): (() => void) => {
+    const checkEpoch = sessionAuthorityCheckEpochRef.current + 1;
+    sessionAuthorityCheckEpochRef.current = checkEpoch;
+    setSessionAuthorityChecking(true);
+    void session.fetchAvailableSessions()
+      .finally(() => {
+        if (sessionAuthorityCheckEpochRef.current === checkEpoch) {
+          setSessionAuthorityChecking(false);
+        }
+      });
+    return () => {
+      if (sessionAuthorityCheckEpochRef.current === checkEpoch) {
+        sessionAuthorityCheckEpochRef.current += 1;
+      }
+    };
+  }, [session.fetchAvailableSessions]);
+
+  const refreshStoredSessions = useCallback((): (() => void) => {
+    const cancelAuthorityCheck = beginSessionAuthorityCheck();
     historyAbortRef.current?.abort();
     const controller = new AbortController();
     historyAbortRef.current = controller;
@@ -362,7 +379,8 @@ export const App: React.FC = () => {
         setHistoryError("Bounded session history could not be loaded.");
         setHistoryLoading(false);
       });
-  }, [session.fetchAvailableSessions, session.readSessionHistory]);
+    return cancelAuthorityCheck;
+  }, [beginSessionAuthorityCheck, session.readSessionHistory]);
 
   const navigateProductPage = useCallback((page: ProductPageId): void => {
     navigate({ page });
@@ -382,35 +400,14 @@ export const App: React.FC = () => {
       setSessionAuthorityChecking(false);
       return;
     }
-    if (
-      route.page === "home"
-      || route.page === "new"
-      || route.page === "settings"
-    ) {
-      const checkEpoch = sessionAuthorityCheckEpochRef.current + 1;
-      sessionAuthorityCheckEpochRef.current = checkEpoch;
-      setSessionAuthorityChecking(true);
-      void session.fetchAvailableSessions()
-        .finally(() => {
-          if (sessionAuthorityCheckEpochRef.current === checkEpoch) {
-            setSessionAuthorityChecking(false);
-          }
-        });
-      return () => {
-        if (sessionAuthorityCheckEpochRef.current === checkEpoch) {
-          sessionAuthorityCheckEpochRef.current += 1;
-        }
-      };
-    }
-    sessionAuthorityCheckEpochRef.current += 1;
-    setSessionAuthorityChecking(false);
     if (route.page === "sessions") {
-      refreshStoredSessions();
+      return refreshStoredSessions();
     }
+    return beginSessionAuthorityCheck();
   }, [
+    beginSessionAuthorityCheck,
     refreshStoredSessions,
     route.page,
-    session.fetchAvailableSessions,
     session.isSessionStarted,
     session.sessionStatus
   ]);
@@ -434,6 +431,7 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     return () => {
+      sessionAuthorityCheckEpochRef.current += 1;
       historyAbortRef.current?.abort();
       historyAbortRef.current = null;
     };
