@@ -13,15 +13,15 @@ The representative first-round review has been superseded by complete current-ve
 
 Reviewed heads:
 
-- Agent C — Cantor, PR #132: `794fe2282c2c8ef265869ccf84bb955695fbaa7f` — 18 survivors.
+- Agent C — Cantor, PR #132: `8b22dc5df99111fb95e27a2c006d5e74544dd385` — 17 survivors.
 - Agent D — Dirichlet, PR #133: `ecece22058c997d37c4b352fa5ed32bd1daf5243` — 12 survivors.
 - Agent E — Euler, PR #134: `b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6` — 17 survivors.
 
-Current certification totals are **47 / 47 survivors reviewed**: taxonomy **45 approved / 2 changes-required**, difficulty **43 approved / 4 changes-required**, timing **35 approved / 12 changes-required**.
+Current certification totals are **46 / 46 survivors reviewed**: taxonomy **44 approved / 2 changes-required**, difficulty **43 approved / 3 changes-required**, timing **34 approved / 12 changes-required**.
 
-The remaining G-owned changes are deliberately narrow. Taxonomy changes are required only for `oxford-d-weighted-cycle-readings` (make recurrence structure explicit) and `oxford-d-mirror-orbits` (make divisibility/gcd content explicit). Difficulty changes remain for Cantor `cubic-two-thresholds` and Dirichlet `thirds-closed-integers`, `weighted-cycle-readings`, and `midpoint-closed-residues`. Twelve families still need author timing aligned to the independent G estimate; all other current family timings are accepted as low-confidence expert estimates.
+The remaining G-owned changes are deliberately narrow. Taxonomy changes are required only for `oxford-d-weighted-cycle-readings` (make recurrence structure explicit) and `oxford-d-mirror-orbits` (make divisibility/gcd content explicit). Difficulty changes remain only for Dirichlet `thirds-closed-integers`, `weighted-cycle-readings`, and `midpoint-closed-residues`; Cantor has consumed the `cubic-two-thresholds` strong-core correction. Twelve families still need author timing aligned to the independent G estimate; all other current family timings are accepted as low-confidence expert estimates.
 
-Systemic fixes were rechecked on the current versions: Cantor shortened its overlong timing portfolio and fixed the cubic-divided-difference ceiling; Dirichlet removed the generic timing template and applied the Triple Flip recurrence/difficulty corrections; Euler removed its generic timing/mechanical-core machinery and now keys stage roles/timing explicitly by mathematical stage, including the Circle Sweep and Self-Averaging corrections.
+Systemic fixes were rechecked on the current versions: Cantor pruned another non-surviving family, shortened its overlong timing portfolio, fixed the cubic-divided-difference ceiling, and adopted the `cubic-two-thresholds` strong core; Dirichlet removed the generic timing template and applied the Triple Flip recurrence/difficulty corrections; Euler removed its generic timing/mechanical-core machinery and now keys stage roles/timing explicitly by mathematical stage, including the Circle Sweep and Self-Averaging corrections.
 
 ## Review framework
 
