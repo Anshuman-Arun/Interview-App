@@ -329,14 +329,11 @@ function antigravityCliModelExecutionProfile(
     : modelId.endsWith("-low")
       ? "low"
       : "medium";
-  // Antigravity currently publishes explicit high/medium model slugs while
-  // also exposing --effort low|medium|high. Keep the logical low tier stable
-  // in Interview App by pinning the corresponding medium model slug and
-  // explicitly lowering effort, rather than inventing an undocumented CLI slug.
-  const cliModelId = effort === "low"
-    ? modelId.replace(/-low$/u, "-medium")
-    : modelId;
-  return Object.freeze({ logicalModelId: modelId, cliModelId, effort });
+  return Object.freeze({
+    logicalModelId: modelId,
+    cliModelId: modelId,
+    effort
+  });
 }
 
 export function antigravityCliTurnArguments(
