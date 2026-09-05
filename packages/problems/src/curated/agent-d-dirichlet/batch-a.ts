@@ -88,7 +88,7 @@ export const oxfordDSwitchingCutsSpec: CuratedProblemSpec = {
   title: "Which Edge Colorings Can Vertex Switches Reach?",
   mode: "OXFORD_MATHEMATICS",
   category: "graph theory",
-  topics: ["graph theory", "parity", "constructive proof"],
+  topics: ["parity", "constructive proof"],
   difficulty: "uncalibrated-oxford-candidate",
   prompt: "A finite connected simple graph starts with every edge white. A move chooses one vertex and flips the color of every edge incident with that vertex. Given a desired set B of black edges, find a necessary and sufficient condition for B to be reachable, and prove both directions.",
   givenInformation: ["Flipping an edge twice returns it to its previous color.", "A vertex may be switched any number of times."],
