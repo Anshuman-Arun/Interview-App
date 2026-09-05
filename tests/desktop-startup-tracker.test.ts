@@ -65,7 +65,7 @@ describe("desktop startup tracker", () => {
   it("bounds maximum recorded stages to prevent memory growth", () => {
     const tracker = new StartupTracker();
     for (let i = 0; i < MAX_STARTUP_STAGES + 20; i++) {
-      tracker.recordStage(`stage_${i}`);
+      tracker.recordStage(`stage_${String(i)}`);
     }
     const report = tracker.getReport();
     expect(report.stages.length).toBeLessThanOrEqual(MAX_STARTUP_STAGES);

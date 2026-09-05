@@ -9,6 +9,7 @@ import {
   type ReasoningTurnInput
 } from "../packages/domain/src/index.js";
 import {
+  ANTIGRAVITY_AUDITED_CLI_TOOLS,
   ANTIGRAVITY_CLI_ADAPTER_VERSION,
   ANTIGRAVITY_CLI_AGENT_ID,
   ANTIGRAVITY_CLI_MODEL_ID,
@@ -179,7 +180,7 @@ describe("Antigravity zero-turn runtime preflight", () => {
   const invalidProfiles: readonly (
     readonly [string, ZeroTurnPreflightOverrides]
   )[] = [
-    ["tool exposure", { tools: ["run_command"] }],
+    ["unauthorized tool exposure", { tools: ["unauthorized_tool"] }],
     ["permission drift", { permissionMode: "request-review" }],
     ["model drift", { model: "unexpected-model" }],
     ["agent drift", { agent: "unexpected-agent" }],
@@ -309,6 +310,47 @@ describe("Antigravity zero-turn runtime preflight", () => {
     } catch (err) {
       expect((err as AntigravityCliAdapterError).code).toBe("INVALID_PROTOCOL");
     }
+  });
+
+  it("admits real audited built-in tool response from Antigravity CLI when pinned model matches", () => {
+    const admittedStdout = [
+      JSON.stringify({
+        event: "init",
+        conversation_id: "de7acfde-d421-4b57-a208-882dbc7a7d4e",
+        init: {
+          model: ANTIGRAVITY_CLI_MODEL_ID,
+          cwd: "C:\\Users\\user\\work",
+          agent: "interview-realizer",
+          tools: [...ANTIGRAVITY_AUDITED_CLI_TOOLS],
+          permission_mode: "strict",
+          json_schema: ANTIGRAVITY_CLI_PROPOSAL_SCHEMA
+        }
+      }),
+      JSON.stringify({
+        event: "result",
+        result: {
+          conversation_id: "de7acfde-d421-4b57-a208-882dbc7a7d4e",
+          status: "ERROR",
+          response: "",
+          error: 'stream input message event "control_request" is not supported yet',
+          duration_seconds: 0,
+          num_turns: 0,
+          usage: {
+            input_tokens: 0,
+            output_tokens: 0,
+            thinking_tokens: 0,
+            cache_read_tokens: 0,
+            total_tokens: 0
+          }
+        }
+      })
+    ].join("\n") + "\n";
+
+    expect(() =>
+      assertAntigravityCliZeroTurnPreflightResult(
+        executionResult(admittedStdout, { exitCode: 2 })
+      )
+    ).not.toThrow();
   });
 });
 
@@ -884,7 +926,7 @@ describe("Antigravity CLI one-turn protocol", () => {
         '"agent":"' + ANTIGRAVITY_CLI_AGENT_ID + '"',
         '"agent":"unexpected-agent"'
       ),
-      antigravityStream().replace('"tools":[]', '"tools":["run_command"]'),
+      antigravityStream().replace('"tools":[]', '"tools":["unauthorized_tool"]'),
       antigravityStream().replace(
         '"conversation_id":"fake-conversation","status":"SUCCESS"',
         '"conversation_id":"other-conversation","status":"SUCCESS"'

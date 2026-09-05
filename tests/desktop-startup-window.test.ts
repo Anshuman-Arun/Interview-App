@@ -23,6 +23,13 @@ describe("desktop startup window configuration and lifecycle", () => {
     expect(isHeadlessCliLaunch(["Interview App.exe", "--packaged-smoke-test"])).toBe(false);
   });
 
+  it("provides frameless, non-resizable startup window options", () => {
+    const opts = getStartupWindowOptions();
+    expect(opts.frame).toBe(false);
+    expect(opts.resizable).toBe(false);
+    expect(opts.show).toBe(false);
+  });
+
   it("provides secure startup web preferences with no preload exposure and strict sandboxing", () => {
     const prefs = createSecureStartupWebPreferences();
     expect(prefs).toMatchObject({

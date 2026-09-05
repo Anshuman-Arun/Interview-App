@@ -54,8 +54,7 @@ import {
 import {
   DESKTOP_MIN_HEIGHT,
   DESKTOP_MIN_WIDTH,
-  createSecureWebPreferences,
-  createSecureStartupWebPreferences
+  createSecureWebPreferences
 } from "./window-config.js";
 import {
   StartupTracker,
@@ -82,9 +81,10 @@ import {
 
 let startupWindow: BrowserWindow | undefined;
 const startupTracker = new StartupTracker();
+const isShuttingDown = (): boolean => shuttingDown;
 
 export async function createStartupWindow(): Promise<void> {
-  if (startupWindow !== undefined || shuttingDown) return;
+  if (startupWindow !== undefined || isShuttingDown()) return;
 
   const window = new BrowserWindow(getStartupWindowOptions());
 
@@ -96,7 +96,7 @@ export async function createStartupWindow(): Promise<void> {
     }
     // If the startup window is closed before the main window is created,
     // the user intentionally aborted startup. Cancel and cleanly shut down.
-    if (mainWindow === undefined && !shuttingDown) {
+    if (mainWindow === undefined && !isShuttingDown()) {
       startupAbort.abort();
       void shutdownDesktop().finally(() => {
         shutdownComplete = true;
@@ -109,7 +109,7 @@ export async function createStartupWindow(): Promise<void> {
   window.webContents.on("will-navigate", (event) => event.preventDefault());
 
   await window.loadURL(STARTUP_WINDOW_DATA_URL);
-  if (!window.isDestroyed() && !shuttingDown) {
+  if (!window.isDestroyed() && !isShuttingDown()) {
     window.show();
     window.focus();
   }
