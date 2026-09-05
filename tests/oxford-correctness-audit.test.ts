@@ -42,6 +42,54 @@ describe("Oxford mathematical correctness audit gate", () => {
     }
   });
 
+  it("retains an exact 41-family final Wave 2 correctness snapshot", () => {
+    const raw = readFileSync(
+      new URL("../docs/oxford-correctness/final-wave2-certification.json", import.meta.url),
+      "utf8"
+    );
+    const snapshot = JSON.parse(raw) as {
+      summary: {
+        totalFamilies: number;
+        approved: number;
+        changesRequired: number;
+        authorPrs: Array<{ number: number; head: string; surviving: number; approved: number }>;
+      };
+      records: OxfordCorrectnessReviewRecord[];
+    };
+
+    expect(snapshot.summary).toEqual({
+      totalFamilies: 41,
+      approved: 41,
+      changesRequired: 0,
+      authorPrs: [
+        {
+          agent: "C — Cantor",
+          number: 132,
+          head: "8b22dc5df99111fb95e27a2c006d5e74544dd385",
+          surviving: 17,
+          approved: 17
+        },
+        {
+          agent: "D — Dirichlet",
+          number: 133,
+          head: "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
+          surviving: 11,
+          approved: 11
+        },
+        {
+          agent: "E — Euler",
+          number: 134,
+          head: "8846c612825d2b8ae53a81f6f8861fd851f452c6",
+          surviving: 13,
+          approved: 13
+        }
+      ]
+    });
+    expect(snapshot.records).toHaveLength(41);
+    expect(() => assertOxfordCorrectnessReviewBatch(snapshot.records)).not.toThrow();
+    expect(snapshot.records.every((record) => record.mathematicalCorrectness === "approved")).toBe(true);
+  });
+
   it("fails closed when author reviews omit the exact reviewed head", () => {
     const invalid = {
       ...validReviewRecord(),
