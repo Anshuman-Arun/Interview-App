@@ -373,7 +373,8 @@ export const cantorFunctionFamiliesA: readonly CantorFamilyAuthoring[] = [
       "sequence-convergence",
       "monotonicity-boundedness",
       "composition-iteration",
-      "continuity-fixed-points"
+      "continuity-fixed-points",
+      "qualitative-function-behavior"
     ],
     prerequisiteConcepts: ["algebraic-manipulation", "sequences-series", "functions-graphs"],
     skills: cantorSkills(
@@ -505,7 +506,8 @@ export const cantorFunctionFamiliesA: readonly CantorFamilyAuthoring[] = [
       "sequence-convergence",
       "monotonicity-boundedness",
       "continuity-fixed-points",
-      "composition-iteration"
+      "composition-iteration",
+      "inequalities-bounds"
     ],
     prerequisiteConcepts: ["algebraic-manipulation", "sequences-series"],
     skills: cantorSkills(
