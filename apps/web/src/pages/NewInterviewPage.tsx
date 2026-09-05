@@ -306,6 +306,18 @@ export function NewInterviewPage({
       || durationCandidate > 480
     );
 
+  const adjustDuration = (delta: number): void => {
+    const parsed = Number(durationText);
+    const base = Number.isInteger(parsed) && parsed >= 5 && parsed <= 480
+      ? parsed
+      : delta > 0
+        ? 25
+        : 35;
+    const next = Math.min(480, Math.max(5, base + delta));
+    setDurationText(String(next));
+    if (formError !== null) setFormError(null);
+  };
+
   const submit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     setFormError(null);
@@ -476,24 +488,46 @@ export function NewInterviewPage({
                     onChange={setSelectedTargetKey}
                   />
                 </div>
-                <label className="new-interview__field new-interview__duration-field"><span>Duration</span><div className="new-interview__duration">
-                  <input
-                    type="number"
-                    min={5}
-                    max={480}
-                    step={1}
-                    value={durationText}
-                    disabled={startPending}
-                    onChange={(event) => {
-                      setDurationText(event.target.value);
-                      if (formError !== null) setFormError(null);
-                    }}
-                    placeholder="—"
-                    aria-invalid={durationInvalid}
-                    title={durationInvalid ? "Enter a whole number from 5 to 480 minutes" : undefined}
-                    data-testid="duration-input"
-                  /><small>min</small>
-                </div><small className="new-interview__duration-help">Planning reminder only; the interview will not end automatically.</small></label>
+                <label className="new-interview__field new-interview__duration-field">
+                  <span>Duration</span>
+                  <div className="new-interview__duration">
+                    <button
+                      type="button"
+                      className="new-interview__duration-step"
+                      aria-label="Decrease duration by 5 minutes"
+                      disabled={startPending || durationText === "5"}
+                      onClick={() => adjustDuration(-5)}
+                    >−</button>
+                    <div className="new-interview__duration-value">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={durationText}
+                        disabled={startPending}
+                        onChange={(event) => {
+                          const next = event.target.value;
+                          if (!/^\d{0,3}$/u.test(next)) return;
+                          setDurationText(next);
+                          if (formError !== null) setFormError(null);
+                        }}
+                        placeholder="—"
+                        aria-invalid={durationInvalid}
+                        title={durationInvalid ? "Enter a whole number from 5 to 480 minutes" : undefined}
+                        data-testid="duration-input"
+                      />
+                      <small>min</small>
+                    </div>
+                    <button
+                      type="button"
+                      className="new-interview__duration-step"
+                      aria-label="Increase duration by 5 minutes"
+                      disabled={startPending || durationText === "480"}
+                      onClick={() => adjustDuration(5)}
+                    >+</button>
+                  </div>
+                  <small className="new-interview__duration-help">Planning reminder only; the interview will not end automatically.</small>
+                </label>
               </div>
             )}
           </section>
