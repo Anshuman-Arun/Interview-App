@@ -57,7 +57,7 @@ import {
   createSecureWebPreferences
 } from "./window-config.js";
 
-const OPTIONAL_LOCAL_RUNTIME_STARTUP_BUDGET_MS = 60_000;
+const OPTIONAL_LOCAL_RUNTIME_STARTUP_BUDGET_MS = 15_000;
 const PACKAGED_SMOKE_PROOF_MAX_BYTES = 64 * 1024;
 const MAX_APPEARANCE_SETTINGS_BYTES = 4 * 1024;
 const PACKAGED_SMOKE_INPUT = "Packaged Windows desktop smoke input.";
