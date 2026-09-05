@@ -628,7 +628,8 @@ function assertDifficultyProfile(profile: OxfordDifficultyProfile): void {
       throw new Error(`Invalid Oxford ${label} difficulty "${String(band)}"`);
     }
   }
-  if (!ESTIMATE_CONFIDENCE_SET.has(profile.confidence) || profile.confidence === "unknown") {
+  const difficultyConfidence: string = profile.confidence;
+  if (!ESTIMATE_CONFIDENCE_SET.has(difficultyConfidence) || difficultyConfidence === "unknown") {
     throw new Error(`Invalid Oxford difficulty confidence "${String(profile.confidence)}"`);
   }
   if (
@@ -652,7 +653,8 @@ function assertTimingEstimate(estimate: OxfordTimingEstimate, label: string): vo
   if (estimate.softCutoffMinutes < estimate.firstMeaningfulInsightMinutes.min) {
     throw new Error(`${label} soft cutoff cannot precede the earliest first-insight estimate`);
   }
-  if (!ESTIMATE_CONFIDENCE_SET.has(estimate.confidence) || estimate.confidence === "unknown") {
+  const timingConfidence: string = estimate.confidence;
+  if (!ESTIMATE_CONFIDENCE_SET.has(timingConfidence) || timingConfidence === "unknown") {
     throw new Error(`Invalid ${label} timing confidence "${String(estimate.confidence)}"`);
   }
 }
