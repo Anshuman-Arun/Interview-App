@@ -399,6 +399,7 @@ export function useInterviewSession(
   });
 
   const pendingSubmissionsRef = useRef<Map<string, PendingSubmissionRecord>>(new Map());
+  const retrySubmissionsInFlightRef = useRef<Set<string>>(new Set());
   const abortControllerRef = useRef<AbortController | null>(null);
   const rendererStreamTaskRef = useRef<Promise<void> | null>(null);
   const rendererLaunchEpochRef = useRef(0);
@@ -535,6 +536,7 @@ export function useInterviewSession(
     sessionTransitionEpochRef.current += 1;
     sessionMutationAdmissionRef.current = false;
     pendingSubmissionsRef.current.clear();
+    retrySubmissionsInFlightRef.current.clear();
     resetBoardSync();
     setAvailableSessions([]);
     setInterviewCatalog([]);
@@ -1306,6 +1308,7 @@ export function useInterviewSession(
           || resolvedConfiguration.mode === "OXFORD_MATHEMATICS";
         if (sessionId !== targetSessionId) {
           pendingSubmissionsRef.current.clear();
+    retrySubmissionsInFlightRef.current.clear();
           resetBoardSync();
           if (usesOxfordWorkspace && sessionId === null) {
             boardBootstrapSessionRef.current = targetSessionId;
@@ -1418,6 +1421,7 @@ export function useInterviewSession(
 
         if (summary.status === "COMPLETED" || summary.status === "ARCHIVED") {
           pendingSubmissionsRef.current.clear();
+    retrySubmissionsInFlightRef.current.clear();
           resetBoardSync();
           sessionMutationAdmissionRef.current = false;
           setSessionId(targetSessionId);
@@ -1449,6 +1453,7 @@ export function useInterviewSession(
         if (sessionTransitionEpochRef.current !== transitionEpoch) return null;
         if (sessionId !== targetSessionId) {
           pendingSubmissionsRef.current.clear();
+    retrySubmissionsInFlightRef.current.clear();
           resetBoardSync();
         }
         setSessionId(targetSessionId);
@@ -1936,6 +1941,8 @@ export function useInterviewSession(
         pendingSubmissionsRef.current.delete(itemId);
         throw new Error("Cannot retry a submission in a different session");
       }
+      if (retrySubmissionsInFlightRef.current.has(itemId)) return;
+      retrySubmissionsInFlightRef.current.add(itemId);
 
       setError(null);
       setTranscript((prev) =>
@@ -1989,6 +1996,8 @@ export function useInterviewSession(
               : item
           )
         );
+      } finally {
+        retrySubmissionsInFlightRef.current.delete(itemId);
       }
     },
     [sessionId, sessionStatus, getCommandClient]
