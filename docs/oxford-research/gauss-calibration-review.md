@@ -94,18 +94,18 @@ All current Oxford entries are still `provisional-legacy` in the adaptive contra
 | `oxford-divisors-square-parity` | introductory / introductory-plus / standard | safe for later calibration | migrate after H/I |
 | `oxford-euclid-primes` | introductory / introductory-plus / standard | retain legacy | canonical classic |
 | `oxford-nested-radical-sequence` | introductory-plus / standard / strong | safe for later calibration | migrate after H/I |
-| `oxford-monotone-cauchy` | introductory-plus / strong / stretch | safe for later calibration | migrate after H/I |
-| `oxford-even-odd-degrees` | introductory / introductory-plus / standard | retain legacy | canonical handshaking family |
-| `oxford-divisibility-chain` | introductory-plus / standard / strong | safe for later calibration | migrate after H/I |
-| `oxford-continuous-fixed-point` | introductory / introductory-plus / standard | safe for later calibration | migrate after H/I |
-| `oxford-prefix-sums-mod-n` | introductory-plus / standard / strong | safe for later calibration | migrate after H/I |
-| `oxford-triangle-medians` | introductory / standard / strong | safe for later calibration | migrate after H/I |
+| `oxford-monotone-cauchy` | introductory-plus / strong / stretch | needs revision | repair Hamel-basis extension first |
+| `oxford-even-odd-degrees` | introductory / introductory-plus / standard | needs revision | repair Euler-trail extension first |
+| `oxford-divisibility-chain` | introductory-plus / standard / strong | needs revision | repair poset extension first |
+| `oxford-continuous-fixed-point` | introductory / introductory-plus / standard | needs revision | repair Brouwer extension first |
+| `oxford-prefix-sums-mod-n` | introductory-plus / standard / strong | needs revision | make cyclic extension determinate first |
+| `oxford-triangle-medians` | introductory / standard / strong | needs revision | remove/self-contain mass-points route first |
 | `oxford-catalan-paths` | standard / strong / stretch | needs revision | resolve existing expert-review issue first |
 | `oxford-six-people` | introductory / standard / strong | retain legacy | famous Ramsey classic |
 | `oxford-hilbert-hotel` | warm-up / introductory / strong | retain legacy | famous conceptual classic |
 | `oxford-prisoner-hats` | standard / strong / stretch | retain legacy | highly circulated parity puzzle |
 
-“Safe for later calibration” means the taxonomy/difficulty/timing proposal is coherent enough to hand to a migration author. It does **not** mean recommendation-ready and does not approve Agent H/I fields.
+“Safe for later calibration” means the current family plus Gauss taxonomy/difficulty/timing proposal has no known authoring blocker from the independent reviews inspected so far. It does **not** mean recommendation-ready and does not approve Agent H/I fields. “Needs revision” may still have a sound core calibration; it means a declared route/extension must be repaired before migration.
 
 ### Major disagreements with legacy single labels
 
@@ -139,9 +139,21 @@ The framework hard-codes those ownership boundaries in review records so a Gauss
 
 ## Agent C/D/E cross-review
 
-Initial snapshot on 4 September 2026: no open PR whose title carried a required Agent C, Agent D, or Agent E marker was available. The Gauss PR is independently useful without those author branches.
+Initial and final pre-PR snapshots on 4 September 2026 found **no open PR whose title begins with a required Agent C, Agent D, or Agent E marker**. The Gauss PR is independently useful without those author branches.
 
-Before final handoff, Agent G re-checks open C/D/E PRs. Any available family review is recorded by family ID and PR number here and in the PR body; author branches are never modified by Gauss.
+A concurrent correctness review, **Agent I — Itô PR #128**, did become available and handed prerequisite/solvability findings to Gauss in **issue #129**. Gauss incorporated only the calibration-relevant consequences:
+
+- `oxford-even-odd-degrees`: Euler-trail extension is undefined under current prerequisites;
+- `oxford-divisibility-chain`: poset extension assumes undeclared order-theory language;
+- `oxford-continuous-fixed-point`: Brouwer extension jumps outside the supplied prerequisite envelope;
+- `oxford-triangle-medians`: mass-points route assumes nonstandard undeclared machinery;
+- `oxford-monotone-cauchy`: Hamel-basis/pathology extension assumes undeclared machinery;
+- `oxford-catalan-paths`: statement/alternate recurrence route need repair;
+- `oxford-prefix-sums-mod-n`: PR #128 separately flags the cyclic-block extension as indeterminate.
+
+These are **authoring/prerequisite-envelope blockers, not reasons to expand the frozen taxonomy**. The affected extensions should be removed, reframed, or taught self-contained. Gauss does not inherit or restate Itô's correctness approvals as calibration decisions.
+
+If C/D/E author PRs appear later, their actual families still need traceable review by family ID and PR number; their branches must not be modified by Gauss.
 
 ## Future empirical-calibration plan
 
