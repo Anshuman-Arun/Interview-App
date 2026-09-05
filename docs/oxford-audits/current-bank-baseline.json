@@ -1,0 +1,1884 @@
+{
+  "schemaVersion": 1,
+  "agent": "H — Hilbert",
+  "basedOnMainCommit": "454a2fe993c8fd70676d04e5d262a1780161f0d6",
+  "reviewedAt": "2026-09-04",
+  "frameworkRefs": [
+    "docs/oxford-adaptive-problem-contract.md",
+    "docs/oxford-research/README.md",
+    "docs/oxford-research/official-benchmark-corpus.json",
+    "docs/oxford-research/reference-inventory.json",
+    "docs/oxford-research/bank-portfolio.json",
+    "docs/oxford-research/originality-audit.md"
+  ],
+  "scopeNote": "All 13 default Oxford fixtures plus the isolated Catalan expert-review fixture. REVISE means truthful provenance/review work is required; the same classic structure would be REJECT_TOO_CLOSE if submitted as a new independent-original family.",
+  "summary": {
+    "totalFamilies": 14,
+    "defaultBankFamilies": 13,
+    "expertReviewFamilies": 1,
+    "originality": {
+      "PASS": 0,
+      "PASS_WITH_NOTES": 0,
+      "REVISE": 14,
+      "REJECT_TOO_CLOSE": 0
+    },
+    "fidelity": {
+      "PASS": 0,
+      "PASS_WITH_NOTES": 7,
+      "REVISE": 6,
+      "REJECT_NOT_OXFORD_LIKE": 1
+    },
+    "sameWaveAuthorPRsAvailable": 0,
+    "similarityClustersProposed": []
+  },
+  "audits": [
+    {
+      "familyId": "oxford-six-people",
+      "sourceRef": "packages/problems/src/six-people.ts",
+      "subjectKind": "current-bank",
+      "reviewedAt": "2026-09-04",
+      "reviewer": {
+        "agent": "H",
+        "name": "Hilbert"
+      },
+      "fingerprint": {
+        "surfaceObjects": [
+          "six people",
+          "binary pair relation"
+        ],
+        "constraints": [
+          "each pair has one of two relation types"
+        ],
+        "targetType": "prove a homogeneous triple exists",
+        "centralMechanism": "two-colour K6 Ramsey argument using a three-edge pigeonhole fan",
+        "secondaryMechanisms": [],
+        "criticalRepresentationChange": "people -> two-coloured complete graph",
+        "diagramTopology": "K6 with two-coloured edges",
+        "smallCaseSignature": "five people is the sharp counterexample",
+        "progressionSignature": {
+          "opening": "model relations",
+          "firstDeepening": "focus on one vertex",
+          "core": "close a monochromatic triangle",
+          "transfer": "compare complement view",
+          "stretch": "test five-person sharpness"
+        },
+        "solutionDependencyGraphSummary": "K6 model -> three same-colour incident edges -> inspect endpoints -> monochromatic triangle",
+        "distinctiveFeatures": [
+          "six vertices",
+          "friends/strangers",
+          "monochromatic triangle"
+        ],
+        "knownClassicOverlap": "Exact R(3,3)=6 friends-or-strangers classic.",
+        "authorProvenance": "Legacy fixture; adaptive provenance is provisional-legacy."
+      },
+      "originalityDecision": "REVISE",
+      "fidelityDecision": "PASS_WITH_NOTES",
+      "retrieval": {
+        "A": {
+          "completed": true,
+          "note": "Deep benchmark corpus checked; no exact match retained."
+        },
+        "B": {
+          "completed": true,
+          "note": "Broad reference inventory checked; no exact match retained."
+        },
+        "C": {
+          "completed": true,
+          "note": "Current bank checked with subject excluded; no exact duplicate retained."
+        },
+        "D": {
+          "completed": true,
+          "note": "No Agent C/D/E proposal PR was available at this snapshot."
+        },
+        "E": {
+          "completed": true,
+          "note": "External search found the exact Ramsey classic."
+        }
+      },
+      "externalSearchQueries": [
+        "six people mutual acquaintances strangers Ramsey R(3,3)"
+      ],
+      "nearestMatches": [
+        {
+          "pool": "C",
+          "source": "oxford-even-odd-degrees",
+          "matchedFingerprintFeatures": [
+            "people-to-graph representation",
+            "elementary graph structure"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 2,
+            "target": 0,
+            "kernel": 0,
+            "decisiveMechanism": 0,
+            "diagram": 1,
+            "progression": 0,
+            "transferStretch": 0
+          },
+          "explanation": "Potential adjacent-session repetition at the surface/representation level; theorem and decisive mechanism differ."
+        },
+        {
+          "pool": "E",
+          "source": "OpenText Ramsey Theory — Friends and Strangers",
+          "url": "https://opentext.uleth.ca/Ramsey/Friends.html",
+          "matchedFingerprintFeatures": [
+            "six people",
+            "binary relations",
+            "monochromatic triangle"
+          ],
+          "similarity": {
+            "wording": 1,
+            "setup": 3,
+            "target": 3,
+            "kernel": 3,
+            "decisiveMechanism": 3,
+            "diagram": 2,
+            "progression": 3,
+            "transferStretch": 2
+          },
+          "explanation": "Same mathematical problem and decisive proof mechanism."
+        }
+      ],
+      "classicProblemCheck": {
+        "result": "KNOWN_CLASSIC",
+        "notes": "Standard Ramsey-theory classic; useful only with truthful classic provenance."
+      },
+      "fidelityNotes": {
+        "accessibleOpening": "Very accessible.",
+        "promptability": "Natural vertex/edge prompts.",
+        "reasoningEvidence": "Modelling, pigeonhole, case analysis, proof.",
+        "transfer": "Five-person sharpness is coherent.",
+        "ceiling": "Moderate.",
+        "prerequisiteBurden": "Low."
+      },
+      "requiredChanges": [
+        "Migrate provenance to classic-problem/classic-mathematics."
+      ],
+      "bankDisposition": [
+        "useful classic/legacy fixture",
+        "fidelity-suitable but not original"
+      ],
+      "wouldRejectIfClaimedOriginal": true,
+      "handoff": {
+        "canProgressAfterGI": false,
+        "note": "Could advance only after truthful classic migration and Hilbert re-approval, then G/I."
+      }
+    },
+    {
+      "familyId": "oxford-hilbert-hotel",
+      "sourceRef": "packages/problems/src/hilbert-hotel.ts",
+      "subjectKind": "current-bank",
+      "reviewedAt": "2026-09-04",
+      "reviewer": {
+        "agent": "H",
+        "name": "Hilbert"
+      },
+      "fingerprint": {
+        "surfaceObjects": [
+          "countably infinite rooms",
+          "arriving guests"
+        ],
+        "constraints": [
+          "all rooms occupied",
+          "assign everyone to positive-integer rooms"
+        ],
+        "targetType": "construct valid assignments for new countable arrivals",
+        "centralMechanism": "explicit bijections of positive integers with proper subsets",
+        "secondaryMechanisms": [
+          "countability",
+          "injectivity/surjectivity"
+        ],
+        "criticalRepresentationChange": "hotel logistics -> integer maps",
+        "diagramTopology": "none",
+        "smallCaseSignature": "none",
+        "progressionSignature": {
+          "opening": "one new guest",
+          "firstDeepening": "shift rooms",
+          "core": "partition rooms for an infinite bus",
+          "transfer": "verify mappings",
+          "stretch": "many buses"
+        },
+        "solutionDependencyGraphSummary": "countable self-similarity -> shift -> even/odd partition -> verify assignments",
+        "distinctiveFeatures": [
+          "infinite hotel",
+          "shift map",
+          "even/odd split"
+        ],
+        "knownClassicOverlap": "Exact Hilbert's Hotel classic.",
+        "authorProvenance": "Legacy fixture; adaptive provenance is provisional-legacy."
+      },
+      "originalityDecision": "REVISE",
+      "fidelityDecision": "PASS_WITH_NOTES",
+      "retrieval": {
+        "A": {
+          "completed": true,
+          "note": "Deep benchmark corpus checked; no exact match retained."
+        },
+        "B": {
+          "completed": true,
+          "note": "Inventory checked; Wave 1 names textbook Hilbert Hotel as high-risk classic."
+        },
+        "C": {
+          "completed": true,
+          "note": "Current bank checked with subject excluded; no exact duplicate retained."
+        },
+        "D": {
+          "completed": true,
+          "note": "No Agent C/D/E proposal PR was available at this snapshot."
+        },
+        "E": {
+          "completed": true,
+          "note": "External search found the canonical Hilbert Hotel construction."
+        }
+      },
+      "externalSearchQueries": [
+        "Hilbert infinite hotel one guest infinite bus room reassignment"
+      ],
+      "nearestMatches": [
+        {
+          "pool": "E",
+          "source": "Encyclopedia of Mathematics — Hilbert infinite hotel",
+          "url": "https://encyclopediaofmath.org/wiki/Hilbert_infinite_hotel",
+          "matchedFingerprintFeatures": [
+            "infinite occupied hotel",
+            "countable reassignment"
+          ],
+          "similarity": {
+            "wording": 1,
+            "setup": 3,
+            "target": 3,
+            "kernel": 3,
+            "decisiveMechanism": 3,
+            "diagram": 0,
+            "progression": 3,
+            "transferStretch": 3
+          },
+          "explanation": "Named classic with the same constructive kernel."
+        }
+      ],
+      "classicProblemCheck": {
+        "result": "KNOWN_CLASSIC",
+        "notes": "Named textbook paradox/problem."
+      },
+      "fidelityNotes": {
+        "accessibleOpening": "Immediate intuitive setup.",
+        "promptability": "One guest to many guests gives natural prompts.",
+        "reasoningEvidence": "Abstraction, set maps, generalization.",
+        "transfer": "Many-bus extensions are coherent.",
+        "ceiling": "Moderate with pairing extensions.",
+        "prerequisiteBurden": "Low."
+      },
+      "requiredChanges": [
+        "Record classic provenance.",
+        "Avoid recall-only use for candidates already familiar with it."
+      ],
+      "bankDisposition": [
+        "useful classic/legacy fixture",
+        "fidelity-suitable but not original"
+      ],
+      "wouldRejectIfClaimedOriginal": true,
+      "handoff": {
+        "canProgressAfterGI": false,
+        "note": "Potentially usable as a classic after authored metadata and Hilbert re-review, then G/I."
+      }
+    },
+    {
+      "familyId": "oxford-prisoner-hats",
+      "sourceRef": "packages/problems/src/prisoner-hats.ts",
+      "subjectKind": "current-bank",
+      "reviewedAt": "2026-09-04",
+      "reviewer": {
+        "agent": "H",
+        "name": "Hilbert"
+      },
+      "fingerprint": {
+        "surfaceObjects": [
+          "ordered people",
+          "binary hats",
+          "sequential guesses"
+        ],
+        "constraints": [
+          "one-way visibility",
+          "one binary utterance per turn"
+        ],
+        "targetType": "construct a strategy making all but the first deduction certain",
+        "centralMechanism": "first speaker encodes global parity; later speakers reconstruct bits",
+        "secondaryMechanisms": [
+          "modular arithmetic",
+          "one-bit communication"
+        ],
+        "criticalRepresentationChange": "hat colours -> bits mod 2",
+        "diagramTopology": "linear order with one-way visibility",
+        "smallCaseSignature": "short lines expose the one-bit signalling role",
+        "progressionSignature": {
+          "opening": "understand information flow",
+          "firstDeepening": "encode parity",
+          "core": "deduce next bit",
+          "transfer": "iterate reconstruction",
+          "stretch": "generalize colours"
+        },
+        "solutionDependencyGraphSummary": "one-bit signal -> parity convention -> first signal -> iterative deduction",
+        "distinctiveFeatures": [
+          "hat line",
+          "parity signal",
+          "all-but-first guarantee"
+        ],
+        "knownClassicOverlap": "Exact canonical hats/parity puzzle.",
+        "authorProvenance": "Legacy fixture; adaptive provenance is provisional-legacy."
+      },
+      "originalityDecision": "REVISE",
+      "fidelityDecision": "REJECT_NOT_OXFORD_LIKE",
+      "retrieval": {
+        "A": {
+          "completed": true,
+          "note": "Deep benchmark corpus checked; no exact match retained."
+        },
+        "B": {
+          "completed": true,
+          "note": "Inventory checked; Wave 1 explicitly names canonical hat/prisoner puzzles as high-risk classics."
+        },
+        "C": {
+          "completed": true,
+          "note": "Current bank checked with subject excluded; no exact duplicate retained."
+        },
+        "D": {
+          "completed": true,
+          "note": "No Agent C/D/E proposal PR was available at this snapshot."
+        },
+        "E": {
+          "completed": true,
+          "note": "External search found the same parity strategy."
+        }
+      },
+      "externalSearchQueries": [
+        "line of people hats parity strategy all but first guaranteed"
+      ],
+      "nearestMatches": [
+        {
+          "pool": "E",
+          "source": "Leino Science — The line of persons with hats",
+          "url": "https://leino.science/puzzles/the-line-of-persons-with-hats/",
+          "matchedFingerprintFeatures": [
+            "ordered hat line",
+            "binary colours",
+            "parity signalling"
+          ],
+          "similarity": {
+            "wording": 1,
+            "setup": 3,
+            "target": 3,
+            "kernel": 3,
+            "decisiveMechanism": 3,
+            "diagram": 2,
+            "progression": 3,
+            "transferStretch": 3
+          },
+          "explanation": "Same puzzle kernel and decisive parity signalling mechanism."
+        }
+      ],
+      "classicProblemCheck": {
+        "result": "KNOWN_CLASSIC",
+        "notes": "Famous one-trick puzzle; familiarity dominates."
+      },
+      "fidelityNotes": {
+        "accessibleOpening": "Easy to understand but story-heavy.",
+        "promptability": "A parity hint nearly collapses the core.",
+        "reasoningEvidence": "Invariant/information reasoning is visible but brittle.",
+        "transfer": "More colours is mostly a modulo-k restatement.",
+        "ceiling": "Low for a full Oxford family.",
+        "prerequisiteBurden": "Low, but prior-exposure sensitivity is high."
+      },
+      "requiredChanges": [
+        "Do not promote as canonical Oxford-like adaptive family in current form."
+      ],
+      "bankDisposition": [
+        "too puzzle-like",
+        "retain for training/manual selection only"
+      ],
+      "wouldRejectIfClaimedOriginal": true,
+      "handoff": {
+        "canProgressAfterGI": false,
+        "note": "Fails Hilbert fidelity; G/I cannot make it recommendation-ready."
+      }
+    },
+    {
+      "familyId": "oxford-domino-chessboard",
+      "sourceRef": "packages/problems/src/curated/oxford-domino-chessboard.ts",
+      "subjectKind": "current-bank",
+      "reviewedAt": "2026-09-04",
+      "reviewer": {
+        "agent": "H",
+        "name": "Hilbert"
+      },
+      "fingerprint": {
+        "surfaceObjects": [
+          "8×8 grid with opposite corners removed",
+          "dominoes"
+        ],
+        "constraints": [
+          "cover each remaining cell once"
+        ],
+        "targetType": "prove tiling impossibility",
+        "centralMechanism": "checkerboard colour-balance invariant",
+        "secondaryMechanisms": [
+          "counting invariant"
+        ],
+        "criticalRepresentationChange": "tiling search -> bipartite colour counts",
+        "diagramTopology": "square grid with opposite corners removed",
+        "smallCaseSignature": "placement attempts precede the global obstruction",
+        "progressionSignature": {
+          "opening": "try tiling",
+          "firstDeepening": "colour board",
+          "core": "inspect removed colours",
+          "transfer": "derive contradiction",
+          "stretch": "alter removed cells"
+        },
+        "solutionDependencyGraphSummary": "two-colouring -> each domino uses one each -> removed cells same colour -> imbalance -> impossible",
+        "distinctiveFeatures": [
+          "mutilated chessboard",
+          "opposite corners",
+          "checkerboard invariant"
+        ],
+        "knownClassicOverlap": "Exact mutilated-chessboard classic.",
+        "authorProvenance": "Legacy fixture; adaptive provenance is provisional-legacy."
+      },
+      "originalityDecision": "REVISE",
+      "fidelityDecision": "PASS_WITH_NOTES",
+      "retrieval": {
+        "A": {
+          "completed": true,
+          "note": "Deep benchmark corpus checked; no exact match retained."
+        },
+        "B": {
+          "completed": true,
+          "note": "REF-OX-OOMC-MISSING-CORNERS is an exact anti-lifting fingerprint."
+        },
+        "C": {
+          "completed": true,
+          "note": "Current bank checked with subject excluded; no exact duplicate retained."
+        },
+        "D": {
+          "completed": true,
+          "note": "No Agent C/D/E proposal PR was available at this snapshot."
+        },
+        "E": {
+          "completed": true,
+          "note": "External search found the named mutilated-chessboard problem."
+        }
+      },
+      "externalSearchQueries": [
+        "mutilated chessboard opposite corners domino checkerboard invariant"
+      ],
+      "nearestMatches": [
+        {
+          "pool": "B",
+          "source": "REF-OX-OOMC-MISSING-CORNERS",
+          "url": "https://www.maths.ox.ac.uk/outreach/oxford-online-maths-club/season-2-episode-9",
+          "matchedFingerprintFeatures": [
+            "removed cells from bipartite grid",
+            "checkerboard invariant",
+            "tiling impossibility"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 3,
+            "target": 3,
+            "kernel": 3,
+            "decisiveMechanism": 3,
+            "diagram": 3,
+            "progression": 3,
+            "transferStretch": 2
+          },
+          "explanation": "The broader inventory intentionally stores this exact classic family as an anti-lifting guard."
+        },
+        {
+          "pool": "E",
+          "source": "Wikipedia — Mutilated chessboard problem",
+          "url": "https://en.wikipedia.org/wiki/Mutilated_chessboard_problem",
+          "matchedFingerprintFeatures": [
+            "opposite corners removed",
+            "domino tiling",
+            "checkerboard invariant"
+          ],
+          "similarity": {
+            "wording": 1,
+            "setup": 3,
+            "target": 3,
+            "kernel": 3,
+            "decisiveMechanism": 3,
+            "diagram": 3,
+            "progression": 3,
+            "transferStretch": 2
+          },
+          "explanation": "Exact named classic and same decisive invariant."
+        }
+      ],
+      "classicProblemCheck": {
+        "result": "KNOWN_CLASSIC",
+        "notes": "Canonical invariant problem."
+      },
+      "fidelityNotes": {
+        "accessibleOpening": "Concrete and diagram-friendly.",
+        "promptability": "Natural move from placement attempts to colouring.",
+        "reasoningEvidence": "Visualization, invariants, representation switching, proof.",
+        "transfer": "Changing removed cells tests mechanism use.",
+        "ceiling": "Moderate.",
+        "prerequisiteBurden": "Very low."
+      },
+      "requiredChanges": [
+        "Record classic provenance."
+      ],
+      "bankDisposition": [
+        "useful classic/legacy fixture",
+        "fidelity-suitable but not original"
+      ],
+      "wouldRejectIfClaimedOriginal": true,
+      "handoff": {
+        "canProgressAfterGI": false,
+        "note": "Could advance as a classic after provenance migration/H approval, then G/I."
+      }
+    },
+    {
+      "familyId": "oxford-divisors-square-parity",
+      "sourceRef": "packages/problems/src/curated/oxford-divisors-square-parity.ts",
+      "subjectKind": "current-bank",
+      "reviewedAt": "2026-09-04",
+      "reviewer": {
+        "agent": "H",
+        "name": "Hilbert"
+      },
+      "fingerprint": {
+        "surfaceObjects": [
+          "positive integer",
+          "positive divisors"
+        ],
+        "constraints": [
+          "d divides n"
+        ],
+        "targetType": "prove odd divisor count iff perfect square",
+        "centralMechanism": "involution d↔n/d has a fixed point exactly at a square root",
+        "secondaryMechanisms": [
+          "prime-exponent divisor formula"
+        ],
+        "criticalRepresentationChange": "divisor list -> involution/fixed point",
+        "diagramTopology": "none",
+        "smallCaseSignature": "squares show one unpaired divisor",
+        "progressionSignature": {
+          "opening": "inspect pairs",
+          "firstDeepening": "find self-pair",
+          "core": "prove parity classification",
+          "transfer": "compare factorization route",
+          "stretch": "derive a corollary"
+        },
+        "solutionDependencyGraphSummary": "pair divisors -> fixed point iff square -> orbit parity -> iff",
+        "distinctiveFeatures": [
+          "odd divisor count",
+          "perfect square",
+          "d and n/d"
+        ],
+        "knownClassicOverlap": "Standard textbook theorem.",
+        "authorProvenance": "Legacy fixture; adaptive provenance is provisional-legacy."
+      },
+      "originalityDecision": "REVISE",
+      "fidelityDecision": "REVISE",
+      "retrieval": {
+        "A": {
+          "completed": true,
+          "note": "Deep benchmark corpus checked; no exact match retained."
+        },
+        "B": {
+          "completed": true,
+          "note": "Broad reference inventory checked; no exact match retained."
+        },
+        "C": {
+          "completed": true,
+          "note": "Current bank checked with subject excluded; no exact duplicate retained."
+        },
+        "D": {
+          "completed": true,
+          "note": "No Agent C/D/E proposal PR was available at this snapshot."
+        },
+        "E": {
+          "completed": true,
+          "note": "External search found the exact theorem and pairing proof."
+        }
+      },
+      "externalSearchQueries": [
+        "odd number of divisors iff perfect square pairing d n/d"
+      ],
+      "nearestMatches": [
+        {
+          "pool": "E",
+          "source": "Mathematics Stack Exchange — perfect square iff odd number of divisors",
+          "url": "https://math.stackexchange.com/questions/906159/a-number-is-a-perfect-square-if-and-only-if-it-has-odd-number-of-positive-diviso",
+          "matchedFingerprintFeatures": [
+            "exact iff target",
+            "divisor pairing",
+            "square-root fixed point"
+          ],
+          "similarity": {
+            "wording": 1,
+            "setup": 3,
+            "target": 3,
+            "kernel": 3,
+            "decisiveMechanism": 3,
+            "diagram": 0,
+            "progression": 2,
+            "transferStretch": 2
+          },
+          "explanation": "Exact standard theorem and same involution mechanism."
+        }
+      ],
+      "classicProblemCheck": {
+        "result": "TEXTBOOK_CLASSIC",
+        "notes": "Common elementary number-theory exercise."
+      },
+      "fidelityNotes": {
+        "accessibleOpening": "Examples help, but prompt starts directly at theorem proof.",
+        "promptability": "Pairing is natural but nearly determines the route.",
+        "reasoningEvidence": "Pattern, proof, iff precision.",
+        "transfer": "Exactly-three-divisors is coherent but routine.",
+        "ceiling": "Low-to-moderate.",
+        "prerequisiteBurden": "Low."
+      },
+      "requiredChanges": [
+        "Add a more exploratory opening/higher ceiling if retained for Oxford mode.",
+        "Record classic provenance."
+      ],
+      "bankDisposition": [
+        "potentially fidelity-suitable but not original",
+        "retain pending fidelity revision"
+      ],
+      "wouldRejectIfClaimedOriginal": true,
+      "handoff": {
+        "canProgressAfterGI": false,
+        "note": "Needs Hilbert fidelity revision and provenance correction before G/I."
+      }
+    },
+    {
+      "familyId": "oxford-euclid-primes",
+      "sourceRef": "packages/problems/src/curated/oxford-euclid-primes.ts",
+      "subjectKind": "current-bank",
+      "reviewedAt": "2026-09-04",
+      "reviewer": {
+        "agent": "H",
+        "name": "Hilbert"
+      },
+      "fingerprint": {
+        "surfaceObjects": [
+          "finite hypothetical prime list",
+          "product-plus-one integer"
+        ],
+        "constraints": [
+          "assume list contains all primes"
+        ],
+        "targetType": "prove infinitely many primes",
+        "centralMechanism": "product-plus-one has a prime divisor absent from the list",
+        "secondaryMechanisms": [
+          "contradiction",
+          "modular remainder"
+        ],
+        "criticalRepresentationChange": "finiteness assumption -> constructed counterexample integer",
+        "diagramTopology": "none",
+        "smallCaseSignature": "examples show the constructed number need not be prime",
+        "progressionSignature": {
+          "opening": "assume finite list",
+          "firstDeepening": "construct product plus one",
+          "core": "take new prime divisor",
+          "transfer": "check composite case",
+          "stretch": "factorial variant"
+        },
+        "solutionDependencyGraphSummary": "finite list -> product+1 -> prime divisor -> absent from list -> contradiction",
+        "distinctiveFeatures": [
+          "Euclid product plus one",
+          "prime divisor",
+          "infinitude"
+        ],
+        "knownClassicOverlap": "Exact Euclid proof.",
+        "authorProvenance": "Legacy fixture; adaptive provenance is provisional-legacy."
+      },
+      "originalityDecision": "REVISE",
+      "fidelityDecision": "REVISE",
+      "retrieval": {
+        "A": {
+          "completed": true,
+          "note": "Deep benchmark corpus checked; no exact match retained."
+        },
+        "B": {
+          "completed": true,
+          "note": "Broad reference inventory checked; no exact match retained."
+        },
+        "C": {
+          "completed": true,
+          "note": "Current bank checked with subject excluded; no exact duplicate retained."
+        },
+        "D": {
+          "completed": true,
+          "note": "No Agent C/D/E proposal PR was available at this snapshot."
+        },
+        "E": {
+          "completed": true,
+          "note": "External search found Euclid's theorem with identical construction."
+        }
+      },
+      "externalSearchQueries": [
+        "Euclid proof infinitely many primes product plus one prime divisor"
+      ],
+      "nearestMatches": [
+        {
+          "pool": "E",
+          "source": "Wikipedia — Euclid's theorem",
+          "url": "https://en.wikipedia.org/wiki/Euclid%27s_theorem",
+          "matchedFingerprintFeatures": [
+            "finite prime list",
+            "product plus one",
+            "new prime divisor"
+          ],
+          "similarity": {
+            "wording": 1,
+            "setup": 3,
+            "target": 3,
+            "kernel": 3,
+            "decisiveMechanism": 3,
+            "diagram": 0,
+            "progression": 3,
+            "transferStretch": 2
+          },
+          "explanation": "Canonical Euclid argument itself."
+        }
+      ],
+      "classicProblemCheck": {
+        "result": "KNOWN_CLASSIC",
+        "notes": "Foundational theorem with highly familiar proof."
+      },
+      "fidelityNotes": {
+        "accessibleOpening": "Clear but often recalled rather than discovered.",
+        "promptability": "Stepwise, but one familiar construction dominates.",
+        "reasoningEvidence": "Contradiction and precision are visible.",
+        "transfer": "Composite-check is useful; factorial variant is close.",
+        "ceiling": "Low/familiar as written.",
+        "prerequisiteBurden": "Very low."
+      },
+      "requiredChanges": [
+        "Keep as explicit classic/training fixture or deepen conversational progression.",
+        "Record classic provenance."
+      ],
+      "bankDisposition": [
+        "useful classic/legacy fixture",
+        "retain pending fidelity revision"
+      ],
+      "wouldRejectIfClaimedOriginal": true,
+      "handoff": {
+        "canProgressAfterGI": false,
+        "note": "Needs fidelity/provenance changes before G/I."
+      }
+    },
+    {
+      "familyId": "oxford-nested-radical-sequence",
+      "sourceRef": "packages/problems/src/curated/oxford-nested-radical-sequence.ts",
+      "subjectKind": "current-bank",
+      "reviewedAt": "2026-09-04",
+      "reviewer": {
+        "agent": "H",
+        "name": "Hilbert"
+      },
+      "fingerprint": {
+        "surfaceObjects": [
+          "recurrence x₁=0, xₙ₊₁=√(2+xₙ)"
+        ],
+        "constraints": [
+          "nonnegative square root"
+        ],
+        "targetType": "prove convergence and find limit",
+        "centralMechanism": "bounded monotone convergence followed by fixed-point equation",
+        "secondaryMechanisms": [
+          "induction",
+          "continuity",
+          "error contraction"
+        ],
+        "criticalRepresentationChange": "recurrence -> monotone bounded sequence/fixed point",
+        "diagramTopology": "none",
+        "smallCaseSignature": "early terms suggest convergence to 2",
+        "progressionSignature": {
+          "opening": "compute terms",
+          "firstDeepening": "prove bound",
+          "core": "prove monotonicity",
+          "transfer": "identify limit",
+          "stretch": "generalize parameter/rate"
+        },
+        "solutionDependencyGraphSummary": "bound -> monotonicity -> convergence -> fixed point -> admissible root",
+        "distinctiveFeatures": [
+          "sqrt(2+x) recurrence",
+          "limit 2",
+          "monotone bounded proof"
+        ],
+        "knownClassicOverlap": "Standard nested-radical recurrence exercise.",
+        "authorProvenance": "Legacy fixture; adaptive provenance is provisional-legacy."
+      },
+      "originalityDecision": "REVISE",
+      "fidelityDecision": "PASS_WITH_NOTES",
+      "retrieval": {
+        "A": {
+          "completed": true,
+          "note": "OX-2026-ITERATED-FUNCTION-SKETCH is a structural iteration/convergence neighbour, not the same kernel."
+        },
+        "B": {
+          "completed": true,
+          "note": "REF-OX-2026-ITERATED-FUNCTION-SKETCH is likewise structural only."
+        },
+        "C": {
+          "completed": true,
+          "note": "Current bank checked with subject excluded; no exact duplicate retained."
+        },
+        "D": {
+          "completed": true,
+          "note": "No Agent C/D/E proposal PR was available at this snapshot."
+        },
+        "E": {
+          "completed": true,
+          "note": "External search found the exact recurrence as a textbook convergence example."
+        }
+      },
+      "externalSearchQueries": [
+        "sequence x_n+1 sqrt(2+x_n) convergence limit 2"
+      ],
+      "nearestMatches": [
+        {
+          "pool": "B",
+          "source": "REF-OX-2026-ITERATED-FUNCTION-SKETCH",
+          "url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/visualisation",
+          "matchedFingerprintFeatures": [
+            "iteration",
+            "convergence",
+            "quantitative extension"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 1,
+            "target": 1,
+            "kernel": 1,
+            "decisiveMechanism": 1,
+            "diagram": 0,
+            "progression": 1,
+            "transferStretch": 1
+          },
+          "explanation": "Same source surfaced through the broad inventory; overlap is pedagogical rather than a shared mathematical kernel."
+        },
+        {
+          "pool": "A",
+          "source": "OX-2026-ITERATED-FUNCTION-SKETCH",
+          "url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/visualisation",
+          "matchedFingerprintFeatures": [
+            "function iteration",
+            "convergence",
+            "fixed-point reasoning"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 1,
+            "target": 1,
+            "kernel": 1,
+            "decisiveMechanism": 1,
+            "diagram": 0,
+            "progression": 1,
+            "transferStretch": 1
+          },
+          "explanation": "Structural neighbour only: different function, opening representation, and core proof."
+        },
+        {
+          "pool": "E",
+          "source": "Northwestern Math 320 worked examples",
+          "url": "https://sites.math.northwestern.edu/scg479/courses/320/notes/examples-2011.pdf",
+          "matchedFingerprintFeatures": [
+            "sqrt(2+x) recurrence",
+            "monotone bounded convergence",
+            "limit 2"
+          ],
+          "similarity": {
+            "wording": 1,
+            "setup": 3,
+            "target": 3,
+            "kernel": 3,
+            "decisiveMechanism": 3,
+            "diagram": 0,
+            "progression": 3,
+            "transferStretch": 2
+          },
+          "explanation": "Exact recurrence and proof kernel."
+        }
+      ],
+      "classicProblemCheck": {
+        "result": "TEXTBOOK_CLASSIC",
+        "notes": "Standard sequences/analysis exercise."
+      },
+      "fidelityNotes": {
+        "accessibleOpening": "Early values support conjecture.",
+        "promptability": "Bound/monotonicity/convergence are natural checkpoints.",
+        "reasoningEvidence": "Conjecture, induction, bounds, proof precision.",
+        "transfer": "Parameter/rate extensions are coherent.",
+        "ceiling": "Reasonable with extensions.",
+        "prerequisiteBurden": "Moderate but controllable."
+      },
+      "requiredChanges": [
+        "Record textbook/classic provenance."
+      ],
+      "bankDisposition": [
+        "useful classic/legacy fixture",
+        "fidelity-suitable but not original"
+      ],
+      "wouldRejectIfClaimedOriginal": true,
+      "handoff": {
+        "canProgressAfterGI": false,
+        "note": "Potentially usable as a classic after provenance/H approval, then G/I."
+      }
+    },
+    {
+      "familyId": "oxford-monotone-cauchy",
+      "sourceRef": "packages/problems/src/curated/oxford-monotone-cauchy.ts",
+      "subjectKind": "current-bank",
+      "reviewedAt": "2026-09-04",
+      "reviewer": {
+        "agent": "H",
+        "name": "Hilbert"
+      },
+      "fingerprint": {
+        "surfaceObjects": [
+          "additive real function",
+          "monotonicity"
+        ],
+        "constraints": [
+          "f(x+y)=f(x)+f(y)",
+          "f increasing"
+        ],
+        "targetType": "prove f(x)=cx on all reals",
+        "centralMechanism": "rational linearity plus monotonicity/density squeeze",
+        "secondaryMechanisms": [
+          "derived continuity"
+        ],
+        "criticalRepresentationChange": "functional equation -> rationals -> order squeeze",
+        "diagramTopology": "none",
+        "smallCaseSignature": "integer/rational inputs form the algebraic skeleton",
+        "progressionSignature": {
+          "opening": "derive integer structure",
+          "firstDeepening": "determine rationals",
+          "core": "use monotonicity",
+          "transfer": "extend to reals",
+          "stretch": "weaken regularity"
+        },
+        "solutionDependencyGraphSummary": "additivity -> rational linearity -> rational bounds -> density -> global linearity",
+        "distinctiveFeatures": [
+          "Cauchy equation",
+          "monotonicity regularity",
+          "rational density"
+        ],
+        "knownClassicOverlap": "Classical Cauchy functional-equation regularity theorem.",
+        "authorProvenance": "Legacy fixture; adaptive provenance is provisional-legacy."
+      },
+      "originalityDecision": "REVISE",
+      "fidelityDecision": "REVISE",
+      "retrieval": {
+        "A": {
+          "completed": true,
+          "note": "Deep benchmark corpus checked; no exact match retained."
+        },
+        "B": {
+          "completed": true,
+          "note": "Broad reference inventory checked; no exact match retained."
+        },
+        "C": {
+          "completed": true,
+          "note": "Current bank checked with subject excluded; no exact duplicate retained."
+        },
+        "D": {
+          "completed": true,
+          "note": "No Agent C/D/E proposal PR was available at this snapshot."
+        },
+        "E": {
+          "completed": true,
+          "note": "External search found the classical theorem and same proof skeleton."
+        }
+      },
+      "externalSearchQueries": [
+        "Cauchy functional equation additive monotone implies linear proof"
+      ],
+      "nearestMatches": [
+        {
+          "pool": "E",
+          "source": "Wikipedia — Cauchy's functional equation",
+          "url": "https://en.wikipedia.org/wiki/Cauchy%27s_functional_equation",
+          "matchedFingerprintFeatures": [
+            "additive equation",
+            "monotonicity",
+            "linear conclusion"
+          ],
+          "similarity": {
+            "wording": 1,
+            "setup": 3,
+            "target": 3,
+            "kernel": 3,
+            "decisiveMechanism": 3,
+            "diagram": 0,
+            "progression": 2,
+            "transferStretch": 2
+          },
+          "explanation": "Standard named theorem with canonical rational-to-real mechanism."
+        }
+      ],
+      "classicProblemCheck": {
+        "result": "TEXTBOOK_CLASSIC",
+        "notes": "Classical theorem; not independent-original."
+      },
+      "fidelityNotes": {
+        "accessibleOpening": "Algebraic start is approachable; real extension is technical.",
+        "promptability": "Good checkpoints, but later steps depend on density/regularity.",
+        "reasoningEvidence": "Abstraction, proof, assumption precision.",
+        "transfer": "Weaker regularity becomes advanced quickly.",
+        "ceiling": "High but technical.",
+        "prerequisiteBurden": "Meaningful real-analysis burden."
+      },
+      "requiredChanges": [
+        "Scaffold/reduce prerequisite burden for Oxford-style use.",
+        "Record classical provenance."
+      ],
+      "bankDisposition": [
+        "potentially fidelity-suitable but not original",
+        "retain pending fidelity revision"
+      ],
+      "wouldRejectIfClaimedOriginal": true,
+      "handoff": {
+        "canProgressAfterGI": false,
+        "note": "Needs fidelity/prerequisite revision and provenance correction before G/I."
+      }
+    },
+    {
+      "familyId": "oxford-even-odd-degrees",
+      "sourceRef": "packages/problems/src/curated/oxford-even-odd-degrees.ts",
+      "subjectKind": "current-bank",
+      "reviewedAt": "2026-09-04",
+      "reviewer": {
+        "agent": "H",
+        "name": "Hilbert"
+      },
+      "fingerprint": {
+        "surfaceObjects": [
+          "party attendees",
+          "undirected handshakes"
+        ],
+        "constraints": [
+          "simple undirected graph"
+        ],
+        "targetType": "prove number of odd-degree vertices is even",
+        "centralMechanism": "sum of degrees is twice edge count, forcing even parity of odd summands",
+        "secondaryMechanisms": [
+          "edge-toggle invariant"
+        ],
+        "criticalRepresentationChange": "party -> graph degrees",
+        "diagramTopology": "finite simple graph",
+        "smallCaseSignature": "adding one edge flips parity at two endpoints",
+        "progressionSignature": {
+          "opening": "model graph",
+          "firstDeepening": "sum degrees",
+          "core": "apply parity",
+          "transfer": "compare toggle proof",
+          "stretch": "connect to Euler trails"
+        },
+        "solutionDependencyGraphSummary": "graph model -> degree-sum identity -> even sum -> even number odd terms",
+        "distinctiveFeatures": [
+          "party handshakes",
+          "handshaking lemma",
+          "odd degrees"
+        ],
+        "knownClassicOverlap": "Exact handshaking-lemma corollary.",
+        "authorProvenance": "Legacy fixture; adaptive provenance is provisional-legacy."
+      },
+      "originalityDecision": "REVISE",
+      "fidelityDecision": "REVISE",
+      "retrieval": {
+        "A": {
+          "completed": true,
+          "note": "Deep benchmark corpus checked; no exact match retained."
+        },
+        "B": {
+          "completed": true,
+          "note": "Broad reference inventory checked; no exact match retained."
+        },
+        "C": {
+          "completed": true,
+          "note": "Current bank includes six-people as another people-to-graph fixture; kernel differs but adjacent use would feel repetitive."
+        },
+        "D": {
+          "completed": true,
+          "note": "No Agent C/D/E proposal PR was available at this snapshot."
+        },
+        "E": {
+          "completed": true,
+          "note": "External search found the exact theorem/corollary."
+        }
+      },
+      "externalSearchQueries": [
+        "handshaking lemma odd degree vertices even party"
+      ],
+      "nearestMatches": [
+        {
+          "pool": "C",
+          "source": "oxford-six-people",
+          "matchedFingerprintFeatures": [
+            "people-to-graph representation",
+            "elementary graph structure"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 2,
+            "target": 0,
+            "kernel": 0,
+            "decisiveMechanism": 0,
+            "diagram": 1,
+            "progression": 0,
+            "transferStretch": 0
+          },
+          "explanation": "Potential adjacent-session repetition at the surface/representation level; mathematical kernel and target differ."
+        },
+        {
+          "pool": "E",
+          "source": "Wikipedia — Handshaking lemma",
+          "url": "https://en.wikipedia.org/wiki/Handshaking_lemma",
+          "matchedFingerprintFeatures": [
+            "degree sum",
+            "even odd-degree count",
+            "party graph"
+          ],
+          "similarity": {
+            "wording": 1,
+            "setup": 3,
+            "target": 3,
+            "kernel": 3,
+            "decisiveMechanism": 3,
+            "diagram": 1,
+            "progression": 2,
+            "transferStretch": 2
+          },
+          "explanation": "Exact standard theorem and mechanism."
+        }
+      ],
+      "classicProblemCheck": {
+        "result": "KNOWN_CLASSIC",
+        "notes": "Canonical graph-theory corollary."
+      },
+      "fidelityNotes": {
+        "accessibleOpening": "Very accessible.",
+        "promptability": "Graph/degree prompts are easy.",
+        "reasoningEvidence": "Modelling, parity, proof precision.",
+        "transfer": "Euler trails can deepen it.",
+        "ceiling": "Low as currently framed.",
+        "prerequisiteBurden": "Very low."
+      },
+      "requiredChanges": [
+        "Add a coherent higher-ceiling development if retained.",
+        "Record classic provenance."
+      ],
+      "bankDisposition": [
+        "potentially fidelity-suitable but not original",
+        "too routine as canonical family"
+      ],
+      "wouldRejectIfClaimedOriginal": true,
+      "handoff": {
+        "canProgressAfterGI": false,
+        "note": "Needs fidelity expansion and provenance correction before G/I."
+      }
+    },
+    {
+      "familyId": "oxford-divisibility-chain",
+      "sourceRef": "packages/problems/src/curated/oxford-divisibility-chain.ts",
+      "subjectKind": "current-bank",
+      "reviewedAt": "2026-09-04",
+      "reviewer": {
+        "agent": "H",
+        "name": "Hilbert"
+      },
+      "fingerprint": {
+        "surfaceObjects": [
+          "n+1 distinct integers from 1..2n"
+        ],
+        "constraints": [
+          "arbitrary distinct selection"
+        ],
+        "targetType": "prove one selected number divides another",
+        "centralMechanism": "factor powers of two and pigeonhole by odd part",
+        "secondaryMechanisms": [
+          "unique 2-adic decomposition"
+        ],
+        "criticalRepresentationChange": "integers -> chains indexed by odd part",
+        "diagramTopology": "none",
+        "smallCaseSignature": "small n reveals odd-part chains and sharpness",
+        "progressionSignature": {
+          "opening": "try small cases",
+          "firstDeepening": "strip powers of two",
+          "core": "pigeonhole odd parts",
+          "transfer": "derive divisibility",
+          "stretch": "test sharpness/range"
+        },
+        "solutionDependencyGraphSummary": "x=2^k m -> only n odd parts -> repeated m -> compare exponents -> divisibility",
+        "distinctiveFeatures": [
+          "n+1 from 1..2n",
+          "odd part",
+          "powers-of-two chains"
+        ],
+        "knownClassicOverlap": "Standard pigeonhole/divisibility problem.",
+        "authorProvenance": "Legacy fixture; adaptive provenance is provisional-legacy."
+      },
+      "originalityDecision": "REVISE",
+      "fidelityDecision": "PASS_WITH_NOTES",
+      "retrieval": {
+        "A": {
+          "completed": true,
+          "note": "OX-MATHCS-SQUARE-CUBE-CONSTRAINT is a selection/structure neighbour but not the same kernel."
+        },
+        "B": {
+          "completed": true,
+          "note": "Broad reference inventory checked; no exact match retained."
+        },
+        "C": {
+          "completed": true,
+          "note": "Other bank items use pigeonhole/number theory, but no odd-part-chain duplicate."
+        },
+        "D": {
+          "completed": true,
+          "note": "No Agent C/D/E proposal PR was available at this snapshot."
+        },
+        "E": {
+          "completed": true,
+          "note": "External search found the exact statement and odd-part proof."
+        }
+      },
+      "externalSearchQueries": [
+        "choose n+1 from 1 to 2n one divides another odd part powers of 2"
+      ],
+      "nearestMatches": [
+        {
+          "pool": "C",
+          "source": "oxford-prefix-sums-mod-n",
+          "matchedFingerprintFeatures": [
+            "pigeonhole principle",
+            "elementary number theory",
+            "n-versus-n+1 counting"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 1,
+            "target": 0,
+            "kernel": 1,
+            "decisiveMechanism": 1,
+            "diagram": 0,
+            "progression": 1,
+            "transferStretch": 0
+          },
+          "explanation": "Technique/cadence overlap only; odd-part chains and prefix residues are distinct kernels."
+        },
+        {
+          "pool": "A",
+          "source": "OX-MATHCS-SQUARE-CUBE-CONSTRAINT",
+          "url": "https://www.cs.ox.ac.uk/people/varun.kanade/website/post/2022/09/15/interview-question1-discussion.html",
+          "matchedFingerprintFeatures": [
+            "finite selection",
+            "class/pair structure",
+            "elementary number theory"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 1,
+            "target": 1,
+            "kernel": 1,
+            "decisiveMechanism": 1,
+            "diagram": 0,
+            "progression": 1,
+            "transferStretch": 1
+          },
+          "explanation": "Shares selection-and-structure pedagogy, but the classes, target, and decisive mechanism differ."
+        },
+        {
+          "pool": "E",
+          "source": "Mathematics Stack Exchange — choose n+1 numbers from 1 to 2n",
+          "url": "https://math.stackexchange.com/questions/4678725/choose-n1-numbers-from-1-to-2n-prove-that-among-the-chosen-numbers-there-is-a",
+          "matchedFingerprintFeatures": [
+            "exact range",
+            "divisibility target",
+            "odd-part pigeonhole"
+          ],
+          "similarity": {
+            "wording": 1,
+            "setup": 3,
+            "target": 3,
+            "kernel": 3,
+            "decisiveMechanism": 3,
+            "diagram": 0,
+            "progression": 2,
+            "transferStretch": 2
+          },
+          "explanation": "Exact standard problem and decisive mechanism."
+        }
+      ],
+      "classicProblemCheck": {
+        "result": "TEXTBOOK_CLASSIC",
+        "notes": "Well-known pigeonhole problem."
+      },
+      "fidelityNotes": {
+        "accessibleOpening": "Small n supports exploration.",
+        "promptability": "Classification prompts are natural.",
+        "reasoningEvidence": "Small cases, simplification, pigeonhole, proof.",
+        "transfer": "Sharpness/range changes are coherent.",
+        "ceiling": "Moderate.",
+        "prerequisiteBurden": "Low."
+      },
+      "requiredChanges": [
+        "Record classic provenance.",
+        "Use repetition control with other number-theory pigeonhole fixtures."
+      ],
+      "bankDisposition": [
+        "useful classic/legacy fixture",
+        "fidelity-suitable but not original"
+      ],
+      "wouldRejectIfClaimedOriginal": true,
+      "handoff": {
+        "canProgressAfterGI": false,
+        "note": "Potentially usable as a classic after provenance/H approval, then G/I."
+      }
+    },
+    {
+      "familyId": "oxford-continuous-fixed-point",
+      "sourceRef": "packages/problems/src/curated/oxford-continuous-fixed-point.ts",
+      "subjectKind": "current-bank",
+      "reviewedAt": "2026-09-04",
+      "reviewer": {
+        "agent": "H",
+        "name": "Hilbert"
+      },
+      "fingerprint": {
+        "surfaceObjects": [
+          "continuous self-map of [0,1]"
+        ],
+        "constraints": [
+          "continuous",
+          "range lies in [0,1]"
+        ],
+        "targetType": "prove a fixed point exists",
+        "centralMechanism": "g=f-id has opposite endpoint signs; IVT forces a zero",
+        "secondaryMechanisms": [
+          "endpoint cases"
+        ],
+        "criticalRepresentationChange": "f(x)=x -> zero of f(x)-x",
+        "diagramTopology": "optional graph of f and diagonal",
+        "smallCaseSignature": "endpoint equality gives an immediate fixed point",
+        "progressionSignature": {
+          "opening": "visualize f and diagonal",
+          "firstDeepening": "form difference",
+          "core": "use endpoint signs/IVT",
+          "transfer": "generalize interval",
+          "stretch": "test discontinuity"
+        },
+        "solutionDependencyGraphSummary": "self-map bounds -> endpoint signs -> continuity -> IVT -> fixed point",
+        "distinctiveFeatures": [
+          "interval self-map",
+          "difference function",
+          "IVT fixed point"
+        ],
+        "knownClassicOverlap": "Standard one-dimensional fixed-point theorem.",
+        "authorProvenance": "Legacy fixture; adaptive provenance is provisional-legacy."
+      },
+      "originalityDecision": "REVISE",
+      "fidelityDecision": "PASS_WITH_NOTES",
+      "retrieval": {
+        "A": {
+          "completed": true,
+          "note": "Deep benchmark corpus checked; no exact match retained."
+        },
+        "B": {
+          "completed": true,
+          "note": "REF-OX-2026-MOUNTAIN-CROSSING-CONTINUITY is a meaningful IVT/crossing neighbour with different setup."
+        },
+        "C": {
+          "completed": true,
+          "note": "Current bank checked with subject excluded; no exact duplicate retained."
+        },
+        "D": {
+          "completed": true,
+          "note": "No Agent C/D/E proposal PR was available at this snapshot."
+        },
+        "E": {
+          "completed": true,
+          "note": "External search found the exact theorem and g=f-id proof."
+        }
+      },
+      "externalSearchQueries": [
+        "continuous map [0,1] into itself fixed point f(x)-x IVT"
+      ],
+      "nearestMatches": [
+        {
+          "pool": "B",
+          "source": "REF-OX-2026-MOUNTAIN-CROSSING-CONTINUITY",
+          "url": "https://www.maths.ox.ac.uk/study-here/undergraduate-study/tmua/mat-livestream/visualisation",
+          "matchedFingerprintFeatures": [
+            "continuity",
+            "endpoint order/sign change",
+            "crossing existence"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 1,
+            "target": 1,
+            "kernel": 1,
+            "decisiveMechanism": 2,
+            "diagram": 1,
+            "progression": 1,
+            "transferStretch": 1
+          },
+          "explanation": "Meaningful IVT/crossing neighbour, but it has a different setup, target, and representation."
+        },
+        {
+          "pool": "E",
+          "source": "Mathematics Stack Exchange — closed interval self-map fixed point",
+          "url": "https://math.stackexchange.com/questions/1335778/every-continuous-map-of-a-closed-interval-into-itself-has-a-fixed-point",
+          "matchedFingerprintFeatures": [
+            "same hypotheses",
+            "fixed-point target",
+            "difference-function IVT"
+          ],
+          "similarity": {
+            "wording": 1,
+            "setup": 3,
+            "target": 3,
+            "kernel": 3,
+            "decisiveMechanism": 3,
+            "diagram": 1,
+            "progression": 2,
+            "transferStretch": 2
+          },
+          "explanation": "Exact standard theorem and decisive construction."
+        }
+      ],
+      "classicProblemCheck": {
+        "result": "TEXTBOOK_CLASSIC",
+        "notes": "Standard IVT corollary."
+      },
+      "fidelityNotes": {
+        "accessibleOpening": "Graph intuition is accessible.",
+        "promptability": "Diagonal/difference prompts are natural.",
+        "reasoningEvidence": "Visualization, representation switching, proof, counterexamples.",
+        "transfer": "General interval/discontinuity tests hypotheses.",
+        "ceiling": "Moderate.",
+        "prerequisiteBurden": "Requires IVT or tutor introduction."
+      },
+      "requiredChanges": [
+        "Record classic provenance and IVT prerequisite conservatively."
+      ],
+      "bankDisposition": [
+        "useful classic/legacy fixture",
+        "fidelity-suitable but not original"
+      ],
+      "wouldRejectIfClaimedOriginal": true,
+      "handoff": {
+        "canProgressAfterGI": false,
+        "note": "Potentially usable as a classic after authored provenance/H approval, then G/I."
+      }
+    },
+    {
+      "familyId": "oxford-prefix-sums-mod-n",
+      "sourceRef": "packages/problems/src/curated/oxford-prefix-sums-mod-n.ts",
+      "subjectKind": "current-bank",
+      "reviewedAt": "2026-09-04",
+      "reviewer": {
+        "agent": "H",
+        "name": "Hilbert"
+      },
+      "fingerprint": {
+        "surfaceObjects": [
+          "n integers",
+          "consecutive blocks",
+          "prefix sums mod n"
+        ],
+        "constraints": [
+          "block nonempty and consecutive"
+        ],
+        "targetType": "prove some consecutive block sum is divisible by n",
+        "centralMechanism": "n+1 prefix sums in n residue classes; equal residues subtract to a valid block",
+        "secondaryMechanisms": [
+          "pigeonhole",
+          "modular arithmetic"
+        ],
+        "criticalRepresentationChange": "block sums -> prefix-sum differences modulo n",
+        "diagramTopology": "none",
+        "smallCaseSignature": "including S0 exposes n+1 versus n",
+        "progressionSignature": {
+          "opening": "try block sums",
+          "firstDeepening": "introduce prefixes",
+          "core": "pigeonhole residues",
+          "transfer": "translate difference",
+          "stretch": "vary block constraints"
+        },
+        "solutionDependencyGraphSummary": "prefix residues -> collision -> divisible difference -> consecutive block",
+        "distinctiveFeatures": [
+          "n integers",
+          "consecutive sum",
+          "prefix residues"
+        ],
+        "knownClassicOverlap": "Standard prefix-sum pigeonhole problem.",
+        "authorProvenance": "Legacy fixture; adaptive provenance is provisional-legacy."
+      },
+      "originalityDecision": "REVISE",
+      "fidelityDecision": "PASS_WITH_NOTES",
+      "retrieval": {
+        "A": {
+          "completed": true,
+          "note": "Deep benchmark corpus checked; no exact match retained."
+        },
+        "B": {
+          "completed": true,
+          "note": "Broad reference inventory checked; no exact match retained."
+        },
+        "C": {
+          "completed": true,
+          "note": "Divisibility-chain shares pigeonhole/number-theory technique but not the prefix-difference kernel."
+        },
+        "D": {
+          "completed": true,
+          "note": "No Agent C/D/E proposal PR was available at this snapshot."
+        },
+        "E": {
+          "completed": true,
+          "note": "External search found the exact statement in math-circle/contest material."
+        }
+      },
+      "externalSearchQueries": [
+        "n integers consecutive subsequence sum divisible by n prefix sums pigeonhole"
+      ],
+      "nearestMatches": [
+        {
+          "pool": "C",
+          "source": "oxford-divisibility-chain",
+          "matchedFingerprintFeatures": [
+            "pigeonhole principle",
+            "elementary number theory",
+            "n-versus-n+1 counting"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 1,
+            "target": 0,
+            "kernel": 1,
+            "decisiveMechanism": 1,
+            "diagram": 0,
+            "progression": 1,
+            "transferStretch": 0
+          },
+          "explanation": "Technique/cadence overlap only; representations and solution dependency graphs differ."
+        },
+        {
+          "pool": "E",
+          "source": "Berkeley Math Circle handout",
+          "url": "https://mathcircle.berkeley.edu/sites/default/files/handouts/2017/BMChandout.pdf",
+          "matchedFingerprintFeatures": [
+            "n integers",
+            "consecutive subsequence",
+            "divisible by n",
+            "prefix sums"
+          ],
+          "similarity": {
+            "wording": 1,
+            "setup": 3,
+            "target": 3,
+            "kernel": 3,
+            "decisiveMechanism": 3,
+            "diagram": 0,
+            "progression": 3,
+            "transferStretch": 1
+          },
+          "explanation": "Exact standard problem and proof mechanism."
+        }
+      ],
+      "classicProblemCheck": {
+        "result": "TEXTBOOK_CLASSIC",
+        "notes": "Common prefix-sum/pigeonhole lemma."
+      },
+      "fidelityNotes": {
+        "accessibleOpening": "Small n supports exploration.",
+        "promptability": "Cumulative-sum hint preserves discovery.",
+        "reasoningEvidence": "Representation switching, pigeonhole, modular proof.",
+        "transfer": "Cyclic/altered constraints are coherent.",
+        "ceiling": "Moderate.",
+        "prerequisiteBurden": "Low-to-moderate."
+      },
+      "requiredChanges": [
+        "Record classic provenance.",
+        "Avoid adjacent selection with other pigeonhole-heavy fixtures."
+      ],
+      "bankDisposition": [
+        "useful classic/legacy fixture",
+        "fidelity-suitable but not original"
+      ],
+      "wouldRejectIfClaimedOriginal": true,
+      "handoff": {
+        "canProgressAfterGI": false,
+        "note": "Potentially usable as a classic after provenance/H approval, then G/I."
+      }
+    },
+    {
+      "familyId": "oxford-triangle-medians",
+      "sourceRef": "packages/problems/src/curated/oxford-triangle-medians.ts",
+      "subjectKind": "current-bank",
+      "reviewedAt": "2026-09-04",
+      "reviewer": {
+        "agent": "H",
+        "name": "Hilbert"
+      },
+      "fingerprint": {
+        "surfaceObjects": [
+          "triangle",
+          "side midpoints",
+          "medians"
+        ],
+        "constraints": [
+          "each median joins vertex to opposite midpoint"
+        ],
+        "targetType": "prove concurrency and 2:1 division",
+        "centralMechanism": "position-vector average lies two-thirds along every median",
+        "secondaryMechanisms": [
+          "affine symmetry",
+          "mass-points alternative"
+        ],
+        "criticalRepresentationChange": "geometry -> vectors/barycentric averages",
+        "diagramTopology": "triangle with three medians",
+        "smallCaseSignature": "one median calculation suggests cyclic symmetry",
+        "progressionSignature": {
+          "opening": "draw medians",
+          "firstDeepening": "choose representation",
+          "core": "test symmetric average",
+          "transfer": "prove ratio/concurrency",
+          "stretch": "generalize affine/tetrahedron"
+        },
+        "solutionDependencyGraphSummary": "midpoint average -> centroid average -> same point on each median -> concurrency/ratio",
+        "distinctiveFeatures": [
+          "triangle medians",
+          "centroid",
+          "2:1 ratio"
+        ],
+        "knownClassicOverlap": "Classical centroid theorem.",
+        "authorProvenance": "Legacy fixture; adaptive provenance is provisional-legacy."
+      },
+      "originalityDecision": "REVISE",
+      "fidelityDecision": "REVISE",
+      "retrieval": {
+        "A": {
+          "completed": true,
+          "note": "Deep benchmark corpus checked; no exact match retained."
+        },
+        "B": {
+          "completed": true,
+          "note": "REF-OX-2026-GEOMETRY-CENTRE-BISECTION is only a broad centre/symmetry neighbour."
+        },
+        "C": {
+          "completed": true,
+          "note": "Current bank checked with subject excluded; no exact duplicate retained."
+        },
+        "D": {
+          "completed": true,
+          "note": "No Agent C/D/E proposal PR was available at this snapshot."
+        },
+        "E": {
+          "completed": true,
+          "note": "External search found the exact centroid theorem."
+        }
+      },
+      "externalSearchQueries": [
+        "triangle medians concurrent centroid 2:1 vector proof"
+      ],
+      "nearestMatches": [
+        {
+          "pool": "E",
+          "source": "Wolfram MathWorld — Triangle Median",
+          "url": "https://mathworld.wolfram.com/TriangleMedian.html",
+          "matchedFingerprintFeatures": [
+            "triangle medians",
+            "centroid concurrency",
+            "2:1 ratio"
+          ],
+          "similarity": {
+            "wording": 1,
+            "setup": 3,
+            "target": 3,
+            "kernel": 3,
+            "decisiveMechanism": 2,
+            "diagram": 2,
+            "progression": 2,
+            "transferStretch": 1
+          },
+          "explanation": "Exact classical theorem; vector proof is standard."
+        }
+      ],
+      "classicProblemCheck": {
+        "result": "KNOWN_CLASSIC",
+        "notes": "Classical centroid result."
+      },
+      "fidelityNotes": {
+        "accessibleOpening": "Familiar diagram, but result often known.",
+        "promptability": "Vector prompts are natural but shorten the core sharply.",
+        "reasoningEvidence": "Visualization, representation switching, proof.",
+        "transfer": "Affine/tetrahedron extensions are coherent.",
+        "ceiling": "Current core is routine.",
+        "prerequisiteBurden": "Vectors may not be universal."
+      },
+      "requiredChanges": [
+        "Use a more exploratory opening or let representation emerge naturally.",
+        "Record classic provenance/prerequisites."
+      ],
+      "bankDisposition": [
+        "potentially fidelity-suitable but not original",
+        "retain pending fidelity revision"
+      ],
+      "wouldRejectIfClaimedOriginal": true,
+      "handoff": {
+        "canProgressAfterGI": false,
+        "note": "Needs fidelity revision and provenance migration before G/I."
+      }
+    },
+    {
+      "familyId": "oxford-catalan-paths",
+      "sourceRef": "packages/problems/src/curated/oxford-catalan-paths.ts",
+      "subjectKind": "expert-review",
+      "reviewedAt": "2026-09-04",
+      "reviewer": {
+        "agent": "H",
+        "name": "Hilbert"
+      },
+      "fingerprint": {
+        "surfaceObjects": [
+          "monotone lattice paths",
+          "diagonal barrier"
+        ],
+        "constraints": [
+          "right/up unit steps",
+          "never strictly above diagonal"
+        ],
+        "targetType": "derive admissible path count",
+        "centralMechanism": "reflect bad paths at first crossing and subtract from all paths",
+        "secondaryMechanisms": [
+          "Catalan recurrence",
+          "binomial counting"
+        ],
+        "criticalRepresentationChange": "constrained paths -> unrestricted reflected paths",
+        "diagramTopology": "square lattice with diagonal barrier",
+        "smallCaseSignature": "small n reveals Catalan pattern",
+        "progressionSignature": {
+          "opening": "enumerate small paths",
+          "firstDeepening": "count all paths",
+          "core": "reflect first crossing",
+          "transfer": "subtract",
+          "stretch": "derive recurrence/variants"
+        },
+        "solutionDependencyGraphSummary": "all paths -> bad first crossing -> reversible reflection -> bad count -> Catalan count",
+        "distinctiveFeatures": [
+          "paths below diagonal",
+          "reflection principle",
+          "Catalan"
+        ],
+        "knownClassicOverlap": "Canonical Catalan lattice-path interpretation.",
+        "authorProvenance": "Legacy fixture; adaptive provenance is provisional-legacy."
+      },
+      "originalityDecision": "REVISE",
+      "fidelityDecision": "REVISE",
+      "retrieval": {
+        "A": {
+          "completed": true,
+          "note": "OX-SAMPLE-TILING-RECURRENCE shares small-case→recurrence pedagogy, but not the same mathematical kernel."
+        },
+        "B": {
+          "completed": true,
+          "note": "Broad reference inventory checked; no exact match retained."
+        },
+        "C": {
+          "completed": true,
+          "note": "Current bank checked with subject excluded; no exact duplicate retained."
+        },
+        "D": {
+          "completed": true,
+          "note": "No Agent C/D/E proposal PR was available at this snapshot."
+        },
+        "E": {
+          "completed": true,
+          "note": "External search found the standard Catalan path interpretation and reflection proof."
+        }
+      },
+      "externalSearchQueries": [
+        "Catalan paths below diagonal reflection principle"
+      ],
+      "nearestMatches": [
+        {
+          "pool": "A",
+          "source": "OX-SAMPLE-TILING-RECURRENCE",
+          "url": "https://www.ox.ac.uk/admissions/undergraduate/applying/guide-for-applicants/interviews/sample_questions",
+          "matchedFingerprintFeatures": [
+            "small cases",
+            "recurrence",
+            "structural combinatorial proof"
+          ],
+          "similarity": {
+            "wording": 0,
+            "setup": 1,
+            "target": 1,
+            "kernel": 1,
+            "decisiveMechanism": 1,
+            "diagram": 1,
+            "progression": 2,
+            "transferStretch": 1
+          },
+          "explanation": "Materially similar interview progression, but different objects and decisive mechanism."
+        },
+        {
+          "pool": "E",
+          "source": "Wikipedia — Catalan number",
+          "url": "https://en.wikipedia.org/wiki/Catalan_number",
+          "matchedFingerprintFeatures": [
+            "lattice paths under diagonal",
+            "Catalan count",
+            "reflection"
+          ],
+          "similarity": {
+            "wording": 1,
+            "setup": 3,
+            "target": 3,
+            "kernel": 3,
+            "decisiveMechanism": 3,
+            "diagram": 2,
+            "progression": 3,
+            "transferStretch": 2
+          },
+          "explanation": "Exact canonical Catalan family and standard mechanism."
+        }
+      ],
+      "classicProblemCheck": {
+        "result": "KNOWN_CLASSIC",
+        "notes": "Canonical Catalan interpretation; expert-review isolation is appropriate."
+      },
+      "fidelityNotes": {
+        "accessibleOpening": "Small n is visual and accessible.",
+        "promptability": "Enumeration/crossing prompts are natural.",
+        "reasoningEvidence": "Visualization, counting, bijection, proof.",
+        "transfer": "First-return recurrence/barriers are coherent.",
+        "ceiling": "High enough.",
+        "prerequisiteBurden": "Moderate combinatorial maturity; reflection may become a supplied trick."
+      },
+      "requiredChanges": [
+        "Reshape contest-style formula target into a more conversational discovery progression.",
+        "Keep truthful classic provenance."
+      ],
+      "bankDisposition": [
+        "potentially fidelity-suitable but not original",
+        "retain in expert review pending fidelity revision"
+      ],
+      "wouldRejectIfClaimedOriginal": true,
+      "handoff": {
+        "canProgressAfterGI": false,
+        "note": "Hilbert fidelity/provenance remain unresolved before G/I."
+      }
+    }
+  ]
+}

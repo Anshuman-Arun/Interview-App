@@ -70,13 +70,13 @@ const EXPERT_REVIEW_IDS = new Set([
 ]);
 
 describe("curated problem bank", () => {
-  it("admits 24 reviewed problems while keeping two expert-review fixtures isolated", () => {
-    expect(problemCatalog).toHaveLength(24);
-    expect(ALL_PROBLEMS).toHaveLength(24);
+  it("admits 65 reviewed problems while keeping two expert-review fixtures isolated", () => {
+    expect(problemCatalog).toHaveLength(65);
+    expect(ALL_PROBLEMS).toHaveLength(65);
     expect(Object.isFrozen(problemCatalog)).toBe(true);
 
     const ids = new Set(problemCatalog.map((problem) => problem.id));
-    expect(ids.size).toBe(24);
+    expect(ids.size).toBe(65);
     for (const id of NEW_PROBLEM_IDS) {
       expect(ids.has(id)).toBe(!EXPERT_REVIEW_IDS.has(id));
     }
@@ -119,7 +119,7 @@ describe("curated problem bank", () => {
   it("has the intended Oxford and Quant distribution", () => {
     const oxford = getProblemsByMode("OXFORD_MATHEMATICS");
     const quant = getProblemsByMode("QUANT");
-    expect(oxford).toHaveLength(13);
+    expect(oxford).toHaveLength(54);
     expect(quant).toHaveLength(11);
     expect(oxford.every((problem) => problem.id.startsWith("oxford-"))).toBe(true);
     expect(quant.every((problem) => problem.id.startsWith("quant-"))).toBe(true);
@@ -153,14 +153,14 @@ describe("curated problem bank", () => {
     expect(getProblemsByCategory("   ")).toEqual([]);
   });
 
-  it("compiles all 21 authored fixtures to five protected disclosures without assuming stage equals severity", () => {
+  it("compiles all 62 authored fixtures to five protected disclosures without assuming stage equals severity", () => {
     const curatedEntries = [
       ...oxfordCuratedEntries,
       ...quantCuratedEntries,
       ...oxfordCuratedReviewEntries,
       ...quantCuratedReviewEntries
     ];
-    expect(curatedEntries).toHaveLength(21);
+    expect(curatedEntries).toHaveLength(62);
 
     for (const entry of curatedEntries) {
       const disclosures = entry.problem.interviewer.protectedDisclosures;
