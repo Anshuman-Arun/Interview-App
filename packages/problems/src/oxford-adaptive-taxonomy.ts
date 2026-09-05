@@ -41,9 +41,179 @@ export const OXFORD_REASONING_SKILLS = [
   "representation-switching",
   "error-recovery",
   "case-analysis",
-  "strategic-simplification"
+  "strategic-simplification",
+  "guided-adaptation",
+  "precision-checking"
 ] as const;
 export type OxfordReasoningSkill = (typeof OXFORD_REASONING_SKILLS)[number];
+
+
+export type OxfordSkillEvidenceBasis = "milestone-grounded" | "process-grounded";
+
+/**
+ * Canonical evidence semantics for reasoning skills.
+ *
+ * Milestone-grounded skills may receive competency evidence from grounded
+ * achievement/support on an explicitly tagged reasoning milestone.
+ * Process-grounded skills require relationships across authoritative events;
+ * milestone completion alone is never sufficient evidence.
+ */
+export const OXFORD_SKILL_EVIDENCE_BASIS: Readonly<
+  Record<OxfordReasoningSkill, OxfordSkillEvidenceBasis>
+> = Object.freeze({
+  "technique": "milestone-grounded",
+  "visualization": "milestone-grounded",
+  "graph-sketching": "milestone-grounded",
+  "small-case-exploration": "milestone-grounded",
+  "pattern-recognition": "milestone-grounded",
+  "conjecture-formation": "milestone-grounded",
+  "proof-construction": "milestone-grounded",
+  "counterexample-construction": "milestone-grounded",
+  "invariants": "milestone-grounded",
+  "abstraction": "milestone-grounded",
+  "modelling": "milestone-grounded",
+  "definition-exploration": "milestone-grounded",
+  "generalization": "milestone-grounded",
+  "transfer": "milestone-grounded",
+  "representation-switching": "milestone-grounded",
+  "error-recovery": "process-grounded",
+  "case-analysis": "milestone-grounded",
+  "strategic-simplification": "milestone-grounded",
+  "guided-adaptation": "process-grounded",
+  "precision-checking": "milestone-grounded"
+});
+
+export const OXFORD_CONTENT_CONCEPTS = [
+  "algebraic-identities",
+  "equations-inequalities",
+  "polynomial-structure",
+  "parameter-dependent-algebra",
+  "function-transformations",
+  "composition-iteration",
+  "inverse-functions",
+  "roots-intersections",
+  "qualitative-function-behavior",
+  "asymptotic-behavior",
+  "turning-points-extrema",
+  "symmetry-periodicity",
+  "parameter-dependent-curves",
+  "recurrence-structure",
+  "monotonicity-boundedness",
+  "sequence-convergence",
+  "telescoping-structure",
+  "trigonometric-structure",
+  "periodicity-phase",
+  "loci-coordinate-constraints",
+  "analytic-curve-geometry",
+  "similarity-ratio",
+  "angle-distance-structure",
+  "geometric-constructions",
+  "spatial-configuration",
+  "derivative-structure",
+  "integral-accumulation",
+  "optimization-extrema",
+  "rate-change",
+  "continuity-fixed-points",
+  "limiting-arguments",
+  "inequalities-bounds",
+  "conditional-structure",
+  "expectation-structure",
+  "independence-symmetry",
+  "random-processes",
+  "counting-structure",
+  "bijections",
+  "recurrence-decomposition",
+  "pigeonhole-structure",
+  "extremal-configuration",
+  "tilings-coverings",
+  "divisibility",
+  "modular-reasoning",
+  "parity",
+  "prime-structure",
+  "diophantine-structure",
+  "degree-structure",
+  "paths-cycles-connectivity",
+  "graph-coloring",
+  "graph-traversal-structure",
+  "logical-structure",
+  "set-relations",
+  "substitution-symmetry",
+  "composition-constraints",
+  "fixed-point-constraints",
+  "countability",
+  "set-maps",
+  "relations-operations"
+] as const;
+export type OxfordContentConcept = (typeof OXFORD_CONTENT_CONCEPTS)[number];
+
+/**
+ * Bounded parent-domain relation for the fine mathematical-content taxonomy.
+ * A content concept is valid at a problem/stage only when at least one of its
+ * parent domains is declared at that same level.
+ */
+export const OXFORD_CONTENT_CONCEPT_DOMAINS: Readonly<
+  Record<OxfordContentConcept, readonly OxfordMathDomain[]>
+> = Object.freeze({
+  "algebraic-identities": ["algebra"],
+  "equations-inequalities": ["algebra"],
+  "polynomial-structure": ["algebra"],
+  "parameter-dependent-algebra": ["algebra"],
+  "function-transformations": ["functions", "graph-sketching"],
+  "composition-iteration": ["functions", "functional-equations"],
+  "inverse-functions": ["functions"],
+  "roots-intersections": ["functions", "graph-sketching"],
+  "qualitative-function-behavior": ["functions", "graph-sketching"],
+  "asymptotic-behavior": ["graph-sketching", "elementary-analysis"],
+  "turning-points-extrema": ["graph-sketching", "calculus"],
+  "symmetry-periodicity": ["graph-sketching", "functions", "trigonometry"],
+  "parameter-dependent-curves": ["graph-sketching", "functions", "coordinate-geometry"],
+  "recurrence-structure": ["sequences-recurrences"],
+  "monotonicity-boundedness": ["sequences-recurrences", "elementary-analysis"],
+  "sequence-convergence": ["sequences-recurrences", "elementary-analysis"],
+  "telescoping-structure": ["sequences-recurrences", "algebra"],
+  "trigonometric-structure": ["trigonometry"],
+  "periodicity-phase": ["trigonometry", "functions"],
+  "loci-coordinate-constraints": ["coordinate-geometry"],
+  "analytic-curve-geometry": ["coordinate-geometry", "graph-sketching"],
+  "similarity-ratio": ["euclidean-geometry"],
+  "angle-distance-structure": ["euclidean-geometry"],
+  "geometric-constructions": ["euclidean-geometry"],
+  "spatial-configuration": ["euclidean-geometry"],
+  "derivative-structure": ["calculus"],
+  "integral-accumulation": ["calculus"],
+  "optimization-extrema": ["calculus"],
+  "rate-change": ["calculus"],
+  "continuity-fixed-points": ["elementary-analysis", "functions"],
+  "limiting-arguments": ["elementary-analysis"],
+  "inequalities-bounds": ["elementary-analysis", "algebra"],
+  "conditional-structure": ["probability"],
+  "expectation-structure": ["probability"],
+  "independence-symmetry": ["probability"],
+  "random-processes": ["probability"],
+  "counting-structure": ["combinatorics"],
+  "bijections": ["combinatorics"],
+  "recurrence-decomposition": ["combinatorics", "sequences-recurrences"],
+  "pigeonhole-structure": ["combinatorics"],
+  "extremal-configuration": ["combinatorics", "graph-theory"],
+  "tilings-coverings": ["combinatorics", "euclidean-geometry"],
+  "divisibility": ["number-theory"],
+  "modular-reasoning": ["number-theory"],
+  "parity": ["number-theory", "combinatorics"],
+  "prime-structure": ["number-theory"],
+  "diophantine-structure": ["number-theory", "algebra"],
+  "degree-structure": ["graph-theory"],
+  "paths-cycles-connectivity": ["graph-theory"],
+  "graph-coloring": ["graph-theory"],
+  "graph-traversal-structure": ["graph-theory"],
+  "logical-structure": ["logic-proof"],
+  "set-relations": ["logic-proof", "set-theory"],
+  "substitution-symmetry": ["functional-equations"],
+  "composition-constraints": ["functional-equations", "functions"],
+  "fixed-point-constraints": ["functional-equations", "functions"],
+  "countability": ["set-theory"],
+  "set-maps": ["set-theory"],
+  "relations-operations": ["set-theory", "logic-proof"]
+});
 
 export const OXFORD_PREREQUISITE_CONCEPTS = [
   "arithmetic",
