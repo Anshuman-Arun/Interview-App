@@ -31,6 +31,26 @@
         "oxford-cantor-line-envelope",
         "oxford-cantor-mobius-involution"
       ]
+    },
+    {
+      "agent": "D — Dirichlet",
+      "prNumber": 133,
+      "headSha": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "survivingFamilyCount": 12,
+      "familiesReviewed": [
+        "oxford-d-gcd-descent-network",
+        "oxford-d-thirds-closed-integers",
+        "oxford-d-balancing-transfers",
+        "oxford-d-cube-twist-equivalence",
+        "oxford-d-sliding-window-parity",
+        "oxford-d-weighted-cycle-readings",
+        "oxford-d-midpoint-closed-residues",
+        "oxford-d-mirror-orbits",
+        "oxford-d-odd-symmetric-difference",
+        "oxford-d-three-reversal-permutations",
+        "oxford-d-divisor-step-geometry",
+        "oxford-d-triple-flip-circle"
+      ]
     }
   ],
   "systemicVerification": {
@@ -40,6 +60,13 @@
       "cubicDividedDifferenceCeilingCorrected": false,
       "prerequisiteWording": "approved-with-G-note",
       "note": "Current C head has not applied first-round cutoff/ceiling changes. Reciprocal-increment correctly does not silently require harmonic/log comparison; supply/develop it if unfamiliar."
+    },
+    "dirichlet": {
+      "headSha": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "genericTimingTemplateRemoved": true,
+      "tripleFlipRecurrenceTaxonomyCorrected": true,
+      "knownDifficultyChangesApplied": true,
+      "note": "All 12 survivors now use family-specific author timings. GCD descent and Triple Flip first-round difficulty/taxonomy changes are present."
     }
   },
   "records": [
@@ -5301,6 +5328,2548 @@
           "independentCompletionMinutes": {
             "min": 17,
             "max": 27
+          },
+          "promptedCompletionMinutes": {
+            "min": 13,
+            "max": 22
+          },
+          "optionalExtensionMinutes": {
+            "min": 5,
+            "max": 9
+          },
+          "softCutoffMinutes": 25,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [
+        "Use the G family-specific timing estimate."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "D — Dirichlet",
+      "prNumber": 133,
+      "familyId": "oxford-d-gcd-descent-network",
+      "authorHeadReviewed": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "number-theory",
+            "graph-theory"
+          ],
+          "contentConcepts": [
+            "divisibility",
+            "paths-cycles-connectivity"
+          ],
+          "prerequisiteConcepts": [
+            "arithmetic",
+            "divisibility",
+            "graph-basics"
+          ],
+          "reasoningSkills": [
+            "small-case-exploration",
+            "invariants",
+            "proof-construction",
+            "precision-checking",
+            "generalization"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "number-theory",
+            "graph-theory"
+          ],
+          "contentConcepts": [
+            "divisibility",
+            "paths-cycles-connectivity"
+          ],
+          "prerequisiteConcepts": [
+            "arithmetic",
+            "divisibility",
+            "graph-basics"
+          ],
+          "reasoningSkills": [
+            "small-case-exploration",
+            "invariants",
+            "proof-construction",
+            "precision-checking",
+            "generalization"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "network-opening",
+            "authorRole": "warm-up",
+            "recommendedRole": "warm-up",
+            "decision": "approved"
+          },
+          {
+            "stageId": "network-core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "network-transfer",
+            "authorRole": "transfer",
+            "recommendedRole": "transfer",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "test-small-networks",
+            "skills": [
+              "small-case-exploration"
+            ],
+            "contentConcepts": [
+              "divisibility"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "find-decreasing-sum",
+            "skills": [
+              "invariants"
+            ],
+            "contentConcepts": [],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "prove-gcd-invariant",
+            "skills": [
+              "invariants",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "divisibility"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "classify-terminal-state",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "paths-cycles-connectivity"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "identify-terminal-gcd",
+            "skills": [
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "divisibility"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "No process-grounded skill is accepted from milestone completion."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "approved",
+        "author": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "standard"
+        },
+        "recommended": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "standard"
+        },
+        "stageBands": [
+          {
+            "stageId": "network-opening",
+            "role": "warm-up",
+            "authorDifficulty": "introductory",
+            "recommendedDifficulty": "introductory",
+            "decision": "approved"
+          },
+          {
+            "stageId": "network-core",
+            "role": "core",
+            "authorDifficulty": "standard",
+            "recommendedDifficulty": "standard",
+            "decision": "approved"
+          },
+          {
+            "stageId": "network-transfer",
+            "role": "transfer",
+            "authorDifficulty": "standard",
+            "recommendedDifficulty": "standard",
+            "decision": "approved"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "approved",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 1,
+            "max": 3
+          },
+          "independentCompletionMinutes": {
+            "min": 10,
+            "max": 16
+          },
+          "promptedCompletionMinutes": {
+            "min": 7,
+            "max": 12
+          },
+          "optionalExtensionMinutes": {
+            "min": 3,
+            "max": 6
+          },
+          "softCutoffMinutes": 18,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "D — Dirichlet",
+      "prNumber": 133,
+      "familyId": "oxford-d-thirds-closed-integers",
+      "authorHeadReviewed": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "number-theory",
+            "logic-proof"
+          ],
+          "contentConcepts": [
+            "modular-reasoning",
+            "logical-structure"
+          ],
+          "prerequisiteConcepts": [
+            "arithmetic",
+            "modular-arithmetic",
+            "logical-quantifiers"
+          ],
+          "reasoningSkills": [
+            "small-case-exploration",
+            "case-analysis",
+            "pattern-recognition",
+            "proof-construction",
+            "generalization",
+            "precision-checking"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "number-theory",
+            "logic-proof"
+          ],
+          "contentConcepts": [
+            "modular-reasoning",
+            "logical-structure"
+          ],
+          "prerequisiteConcepts": [
+            "arithmetic",
+            "modular-arithmetic",
+            "logical-quantifiers"
+          ],
+          "reasoningSkills": [
+            "small-case-exploration",
+            "case-analysis",
+            "pattern-recognition",
+            "proof-construction",
+            "generalization",
+            "precision-checking"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "thirds-opening",
+            "authorRole": "warm-up",
+            "recommendedRole": "warm-up",
+            "decision": "approved"
+          },
+          {
+            "stageId": "thirds-core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "thirds-transfer",
+            "authorRole": "transfer",
+            "recommendedRole": "transfer",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "classify-tiny-sizes",
+            "skills": [
+              "small-case-exploration",
+              "case-analysis"
+            ],
+            "contentConcepts": [
+              "modular-reasoning"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "forbid-nearby-residue-repeat",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "modular-reasoning"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "force-three-residue-cycle",
+            "skills": [
+              "pattern-recognition"
+            ],
+            "contentConcepts": [
+              "modular-reasoning"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "force-equal-gaps",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "logical-structure"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "prove-classification-converse",
+            "skills": [
+              "precision-checking",
+              "generalization"
+            ],
+            "contentConcepts": [
+              "logical-structure",
+              "modular-reasoning"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "No process-grounded skill is accepted from milestone completion."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "changes-required",
+        "author": {
+          "entry": "introductory-plus",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "recommended": {
+          "entry": "introductory-plus",
+          "core": "strong",
+          "ceiling": "strong"
+        },
+        "stageBands": [
+          {
+            "stageId": "thirds-opening",
+            "role": "warm-up",
+            "authorDifficulty": "introductory-plus",
+            "recommendedDifficulty": "introductory-plus",
+            "decision": "approved"
+          },
+          {
+            "stageId": "thirds-core",
+            "role": "core",
+            "authorDifficulty": "standard",
+            "recommendedDifficulty": "strong",
+            "decision": "changes-required"
+          },
+          {
+            "stageId": "thirds-transfer",
+            "role": "transfer",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "strong",
+            "decision": "approved"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "changes-required",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 3,
+            "max": 6
+          },
+          "independentCompletionMinutes": {
+            "min": 17,
+            "max": 28
+          },
+          "promptedCompletionMinutes": {
+            "min": 13,
+            "max": 22
+          },
+          "optionalExtensionMinutes": {
+            "min": 5,
+            "max": 9
+          },
+          "softCutoffMinutes": 25,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [
+        "Use G difficulty introductory-plus / strong / strong.",
+        "Use the G family-specific timing estimate."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "D — Dirichlet",
+      "prNumber": 133,
+      "familyId": "oxford-d-balancing-transfers",
+      "authorHeadReviewed": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "combinatorics",
+            "algebra"
+          ],
+          "contentConcepts": [
+            "extremal-configuration",
+            "inequalities-bounds"
+          ],
+          "prerequisiteConcepts": [
+            "arithmetic",
+            "algebraic-manipulation"
+          ],
+          "reasoningSkills": [
+            "small-case-exploration",
+            "invariants",
+            "proof-construction",
+            "counterexample-construction",
+            "precision-checking"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "combinatorics",
+            "algebra"
+          ],
+          "contentConcepts": [
+            "extremal-configuration",
+            "inequalities-bounds"
+          ],
+          "prerequisiteConcepts": [
+            "arithmetic",
+            "algebraic-manipulation"
+          ],
+          "reasoningSkills": [
+            "small-case-exploration",
+            "invariants",
+            "proof-construction",
+            "counterexample-construction",
+            "precision-checking"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "balancing-opening",
+            "authorRole": "warm-up",
+            "recommendedRole": "warm-up",
+            "decision": "approved"
+          },
+          {
+            "stageId": "balancing-core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "balancing-transfer",
+            "authorRole": "transfer",
+            "recommendedRole": "transfer",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "experiment-balancing",
+            "skills": [
+              "small-case-exploration"
+            ],
+            "contentConcepts": [
+              "extremal-configuration"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "preserve-total",
+            "skills": [
+              "invariants"
+            ],
+            "contentConcepts": [],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "decrease-squares",
+            "skills": [
+              "invariants",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "inequalities-bounds"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "classify-terminal-multiset",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "extremal-configuration"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "test-local-move-variant",
+            "skills": [
+              "counterexample-construction"
+            ],
+            "contentConcepts": [
+              "extremal-configuration"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "No process-grounded skill is accepted from milestone completion."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "approved",
+        "author": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "recommended": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "stageBands": [
+          {
+            "stageId": "balancing-opening",
+            "role": "warm-up",
+            "authorDifficulty": "introductory",
+            "recommendedDifficulty": "introductory",
+            "decision": "approved"
+          },
+          {
+            "stageId": "balancing-core",
+            "role": "core",
+            "authorDifficulty": "standard",
+            "recommendedDifficulty": "standard",
+            "decision": "approved"
+          },
+          {
+            "stageId": "balancing-transfer",
+            "role": "transfer",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "strong",
+            "decision": "approved"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "approved",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 5
+          },
+          "independentCompletionMinutes": {
+            "min": 14,
+            "max": 22
+          },
+          "promptedCompletionMinutes": {
+            "min": 10,
+            "max": 17
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 8
+          },
+          "softCutoffMinutes": 25,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "D — Dirichlet",
+      "prNumber": 133,
+      "familyId": "oxford-d-cube-twist-equivalence",
+      "authorHeadReviewed": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "number-theory",
+            "set-theory",
+            "logic-proof"
+          ],
+          "contentConcepts": [
+            "prime-structure",
+            "divisibility",
+            "relations-operations",
+            "logical-structure"
+          ],
+          "prerequisiteConcepts": [
+            "prime-factorization",
+            "divisibility",
+            "modular-arithmetic",
+            "logical-quantifiers"
+          ],
+          "reasoningSkills": [
+            "definition-exploration",
+            "representation-switching",
+            "proof-construction",
+            "generalization",
+            "pattern-recognition",
+            "precision-checking"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "number-theory",
+            "set-theory",
+            "logic-proof"
+          ],
+          "contentConcepts": [
+            "prime-structure",
+            "divisibility",
+            "relations-operations",
+            "logical-structure"
+          ],
+          "prerequisiteConcepts": [
+            "prime-factorization",
+            "divisibility",
+            "modular-arithmetic",
+            "logical-quantifiers"
+          ],
+          "reasoningSkills": [
+            "definition-exploration",
+            "representation-switching",
+            "proof-construction",
+            "generalization",
+            "pattern-recognition",
+            "precision-checking"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "cube-opening",
+            "authorRole": "warm-up",
+            "recommendedRole": "warm-up",
+            "decision": "approved"
+          },
+          {
+            "stageId": "cube-core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "cube-transfer",
+            "authorRole": "transfer",
+            "recommendedRole": "transfer",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "test-relation-examples",
+            "skills": [
+              "definition-exploration"
+            ],
+            "contentConcepts": [
+              "relations-operations"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "translate-prime-exponents",
+            "skills": [
+              "representation-switching"
+            ],
+            "contentConcepts": [
+              "prime-structure"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "discover-equal-residue-vectors",
+            "skills": [
+              "pattern-recognition"
+            ],
+            "contentConcepts": [
+              "divisibility"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "prove-equivalence-and-classes",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "relations-operations",
+              "logical-structure"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "generalize-rth-power",
+            "skills": [
+              "generalization"
+            ],
+            "contentConcepts": [
+              "prime-structure",
+              "relations-operations"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "No process-grounded skill is accepted from milestone completion."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "approved",
+        "author": {
+          "entry": "introductory-plus",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "recommended": {
+          "entry": "introductory-plus",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "stageBands": [
+          {
+            "stageId": "cube-opening",
+            "role": "warm-up",
+            "authorDifficulty": "introductory-plus",
+            "recommendedDifficulty": "introductory-plus",
+            "decision": "approved"
+          },
+          {
+            "stageId": "cube-core",
+            "role": "core",
+            "authorDifficulty": "standard",
+            "recommendedDifficulty": "standard",
+            "decision": "approved"
+          },
+          {
+            "stageId": "cube-transfer",
+            "role": "transfer",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "strong",
+            "decision": "approved"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "changes-required",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 5
+          },
+          "independentCompletionMinutes": {
+            "min": 14,
+            "max": 23
+          },
+          "promptedCompletionMinutes": {
+            "min": 10,
+            "max": 18
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 7
+          },
+          "softCutoffMinutes": 22,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [
+        "Use the G family-specific timing estimate."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "D — Dirichlet",
+      "prNumber": 133,
+      "familyId": "oxford-d-sliding-window-parity",
+      "authorHeadReviewed": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "combinatorics",
+            "number-theory"
+          ],
+          "contentConcepts": [
+            "parity",
+            "modular-reasoning",
+            "counting-structure"
+          ],
+          "prerequisiteConcepts": [
+            "arithmetic",
+            "modular-arithmetic",
+            "counting-principles"
+          ],
+          "reasoningSkills": [
+            "representation-switching",
+            "pattern-recognition",
+            "proof-construction",
+            "generalization",
+            "precision-checking"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "combinatorics",
+            "number-theory"
+          ],
+          "contentConcepts": [
+            "parity",
+            "modular-reasoning",
+            "counting-structure"
+          ],
+          "prerequisiteConcepts": [
+            "arithmetic",
+            "modular-arithmetic",
+            "counting-principles"
+          ],
+          "reasoningSkills": [
+            "representation-switching",
+            "pattern-recognition",
+            "proof-construction",
+            "generalization",
+            "precision-checking"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "window-opening",
+            "authorRole": "warm-up",
+            "recommendedRole": "warm-up",
+            "decision": "approved"
+          },
+          {
+            "stageId": "window-core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "window-transfer",
+            "authorRole": "transfer",
+            "recommendedRole": "transfer",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "compare-neighboring-windows",
+            "skills": [
+              "representation-switching"
+            ],
+            "contentConcepts": [
+              "parity"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "derive-step-k-equality",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "parity"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "analyze-step-k-orbits",
+            "skills": [
+              "pattern-recognition"
+            ],
+            "contentConcepts": [
+              "modular-reasoning"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "count-and-prove-converse",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "counting-structure"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "classify-odd-common-parity",
+            "skills": [
+              "generalization"
+            ],
+            "contentConcepts": [
+              "parity",
+              "counting-structure"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "No process-grounded skill is accepted from milestone completion."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "approved",
+        "author": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "recommended": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "stageBands": [
+          {
+            "stageId": "window-opening",
+            "role": "warm-up",
+            "authorDifficulty": "introductory",
+            "recommendedDifficulty": "introductory",
+            "decision": "approved"
+          },
+          {
+            "stageId": "window-core",
+            "role": "core",
+            "authorDifficulty": "standard",
+            "recommendedDifficulty": "standard",
+            "decision": "approved"
+          },
+          {
+            "stageId": "window-transfer",
+            "role": "transfer",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "strong",
+            "decision": "approved"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "changes-required",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 1,
+            "max": 4
+          },
+          "independentCompletionMinutes": {
+            "min": 12,
+            "max": 20
+          },
+          "promptedCompletionMinutes": {
+            "min": 9,
+            "max": 16
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 7
+          },
+          "softCutoffMinutes": 20,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [
+        "Use the G family-specific timing estimate."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "D — Dirichlet",
+      "prNumber": 133,
+      "familyId": "oxford-d-weighted-cycle-readings",
+      "authorHeadReviewed": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "taxonomy": {
+        "decision": "changes-required",
+        "author": {
+          "domains": [
+            "graph-theory",
+            "algebra"
+          ],
+          "contentConcepts": [
+            "paths-cycles-connectivity",
+            "parameter-dependent-algebra"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "equations-inequalities",
+            "graph-basics"
+          ],
+          "reasoningSkills": [
+            "small-case-exploration",
+            "representation-switching",
+            "case-analysis",
+            "proof-construction",
+            "precision-checking"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "graph-theory",
+            "algebra",
+            "sequences-recurrences"
+          ],
+          "contentConcepts": [
+            "paths-cycles-connectivity",
+            "parameter-dependent-algebra",
+            "recurrence-structure"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "equations-inequalities",
+            "graph-basics"
+          ],
+          "reasoningSkills": [
+            "small-case-exploration",
+            "representation-switching",
+            "case-analysis",
+            "proof-construction",
+            "precision-checking"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "weighted-cycle-opening",
+            "authorRole": "warm-up",
+            "recommendedRole": "warm-up",
+            "decision": "approved"
+          },
+          {
+            "stageId": "weighted-cycle-core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "weighted-cycle-transfer",
+            "authorRole": "transfer",
+            "recommendedRole": "transfer",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "solve-small-cycles",
+            "skills": [
+              "small-case-exploration"
+            ],
+            "contentConcepts": [
+              "paths-cycles-connectivity"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "derive-one-step-recurrence",
+            "skills": [
+              "representation-switching"
+            ],
+            "contentConcepts": [
+              "parameter-dependent-algebra"
+            ],
+            "decision": "changes-required",
+            "requestedChanges": [
+              "Add recurrence-structure to the family/core and derive-one-step-recurrence / close-after-n-steps milestone content."
+            ]
+          },
+          {
+            "milestoneId": "close-after-n-steps",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "paths-cycles-connectivity",
+              "parameter-dependent-algebra"
+            ],
+            "decision": "changes-required",
+            "requestedChanges": [
+              "Add recurrence-structure to the family/core and derive-one-step-recurrence / close-after-n-steps milestone content."
+            ]
+          },
+          {
+            "milestoneId": "classify-singular-parameters",
+            "skills": [
+              "case-analysis"
+            ],
+            "contentConcepts": [
+              "parameter-dependent-algebra"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "analyze-exception-consistency",
+            "skills": [
+              "precision-checking",
+              "case-analysis"
+            ],
+            "contentConcepts": [
+              "parameter-dependent-algebra"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "No process-grounded skill is accepted from milestone completion."
+        },
+        "requestedChanges": [
+          "Add recurrence-structure to the family/core and derive-one-step-recurrence / close-after-n-steps milestone content."
+        ]
+      },
+      "difficulty": {
+        "decision": "changes-required",
+        "author": {
+          "entry": "introductory-plus",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "recommended": {
+          "entry": "introductory-plus",
+          "core": "strong",
+          "ceiling": "strong"
+        },
+        "stageBands": [
+          {
+            "stageId": "weighted-cycle-opening",
+            "role": "warm-up",
+            "authorDifficulty": "introductory-plus",
+            "recommendedDifficulty": "introductory-plus",
+            "decision": "approved"
+          },
+          {
+            "stageId": "weighted-cycle-core",
+            "role": "core",
+            "authorDifficulty": "standard",
+            "recommendedDifficulty": "strong",
+            "decision": "changes-required"
+          },
+          {
+            "stageId": "weighted-cycle-transfer",
+            "role": "transfer",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "strong",
+            "decision": "approved"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "changes-required",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 5
+          },
+          "independentCompletionMinutes": {
+            "min": 15,
+            "max": 24
+          },
+          "promptedCompletionMinutes": {
+            "min": 11,
+            "max": 20
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 8
+          },
+          "softCutoffMinutes": 23,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [
+        "Add recurrence-structure to the family/core and derive-one-step-recurrence / close-after-n-steps milestone content.",
+        "Use G difficulty introductory-plus / strong / strong.",
+        "Use the G family-specific timing estimate."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "D — Dirichlet",
+      "prNumber": 133,
+      "familyId": "oxford-d-midpoint-closed-residues",
+      "authorHeadReviewed": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "number-theory",
+            "set-theory"
+          ],
+          "contentConcepts": [
+            "modular-reasoning",
+            "relations-operations"
+          ],
+          "prerequisiteConcepts": [
+            "modular-arithmetic",
+            "set-notation"
+          ],
+          "reasoningSkills": [
+            "small-case-exploration",
+            "abstraction",
+            "proof-construction",
+            "generalization",
+            "precision-checking"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "number-theory",
+            "set-theory"
+          ],
+          "contentConcepts": [
+            "modular-reasoning",
+            "relations-operations"
+          ],
+          "prerequisiteConcepts": [
+            "modular-arithmetic",
+            "set-notation"
+          ],
+          "reasoningSkills": [
+            "small-case-exploration",
+            "abstraction",
+            "proof-construction",
+            "generalization",
+            "precision-checking"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "midpoint-opening",
+            "authorRole": "warm-up",
+            "recommendedRole": "warm-up",
+            "decision": "approved"
+          },
+          {
+            "stageId": "midpoint-core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "midpoint-transfer",
+            "authorRole": "transfer",
+            "recommendedRole": "transfer",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "test-small-residue-sets",
+            "skills": [
+              "small-case-exploration"
+            ],
+            "contentConcepts": [
+              "modular-reasoning"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "translate-to-zero",
+            "skills": [
+              "abstraction"
+            ],
+            "contentConcepts": [
+              "relations-operations"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "recover-doubling",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "modular-reasoning"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "prove-additive-subgroup",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "relations-operations"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "classify-prime-and-composite",
+            "skills": [
+              "generalization"
+            ],
+            "contentConcepts": [
+              "modular-reasoning",
+              "relations-operations"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "No process-grounded skill is accepted from milestone completion."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "changes-required",
+        "author": {
+          "entry": "introductory-plus",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "recommended": {
+          "entry": "introductory-plus",
+          "core": "strong",
+          "ceiling": "stretch"
+        },
+        "stageBands": [
+          {
+            "stageId": "midpoint-opening",
+            "role": "warm-up",
+            "authorDifficulty": "introductory-plus",
+            "recommendedDifficulty": "introductory-plus",
+            "decision": "approved"
+          },
+          {
+            "stageId": "midpoint-core",
+            "role": "core",
+            "authorDifficulty": "standard",
+            "recommendedDifficulty": "strong",
+            "decision": "changes-required"
+          },
+          {
+            "stageId": "midpoint-transfer",
+            "role": "transfer",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "stretch",
+            "decision": "changes-required"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "changes-required",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 3,
+            "max": 6
+          },
+          "independentCompletionMinutes": {
+            "min": 17,
+            "max": 28
+          },
+          "promptedCompletionMinutes": {
+            "min": 13,
+            "max": 22
+          },
+          "optionalExtensionMinutes": {
+            "min": 5,
+            "max": 9
+          },
+          "softCutoffMinutes": 25,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [
+        "Use G difficulty introductory-plus / strong / stretch.",
+        "Use the G family-specific timing estimate."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "D — Dirichlet",
+      "prNumber": 133,
+      "familyId": "oxford-d-mirror-orbits",
+      "authorHeadReviewed": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "taxonomy": {
+        "decision": "changes-required",
+        "author": {
+          "domains": [
+            "number-theory",
+            "functions"
+          ],
+          "contentConcepts": [
+            "modular-reasoning",
+            "composition-iteration"
+          ],
+          "prerequisiteConcepts": [
+            "modular-arithmetic",
+            "functions-graphs",
+            "divisibility"
+          ],
+          "reasoningSkills": [
+            "small-case-exploration",
+            "representation-switching",
+            "proof-construction",
+            "generalization",
+            "precision-checking"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "number-theory",
+            "functions"
+          ],
+          "contentConcepts": [
+            "modular-reasoning",
+            "composition-iteration",
+            "divisibility"
+          ],
+          "prerequisiteConcepts": [
+            "modular-arithmetic",
+            "functions-graphs",
+            "divisibility"
+          ],
+          "reasoningSkills": [
+            "small-case-exploration",
+            "representation-switching",
+            "proof-construction",
+            "generalization",
+            "precision-checking"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "mirror-opening",
+            "authorRole": "warm-up",
+            "recommendedRole": "warm-up",
+            "decision": "approved"
+          },
+          {
+            "stageId": "mirror-core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "mirror-transfer",
+            "authorRole": "transfer",
+            "recommendedRole": "transfer",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "experiment-small-clocks",
+            "skills": [
+              "small-case-exploration"
+            ],
+            "contentConcepts": [
+              "modular-reasoning"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "compose-to-translation",
+            "skills": [
+              "representation-switching"
+            ],
+            "contentConcepts": [
+              "composition-iteration"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "construct-all-multiples",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "modular-reasoning"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "prove-gcd-obstruction",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "modular-reasoning"
+            ],
+            "decision": "changes-required",
+            "requestedChanges": [
+              "Add divisibility to the family/core and prove-gcd-obstruction milestone content."
+            ]
+          },
+          {
+            "milestoneId": "general-starting-orbit",
+            "skills": [
+              "generalization"
+            ],
+            "contentConcepts": [
+              "composition-iteration",
+              "modular-reasoning"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "No process-grounded skill is accepted from milestone completion."
+        },
+        "requestedChanges": [
+          "Add divisibility to the family/core and prove-gcd-obstruction milestone content."
+        ]
+      },
+      "difficulty": {
+        "decision": "approved",
+        "author": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "recommended": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "stageBands": [
+          {
+            "stageId": "mirror-opening",
+            "role": "warm-up",
+            "authorDifficulty": "introductory",
+            "recommendedDifficulty": "introductory",
+            "decision": "approved"
+          },
+          {
+            "stageId": "mirror-core",
+            "role": "core",
+            "authorDifficulty": "standard",
+            "recommendedDifficulty": "standard",
+            "decision": "approved"
+          },
+          {
+            "stageId": "mirror-transfer",
+            "role": "transfer",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "strong",
+            "decision": "approved"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "approved",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 5
+          },
+          "independentCompletionMinutes": {
+            "min": 13,
+            "max": 21
+          },
+          "promptedCompletionMinutes": {
+            "min": 9,
+            "max": 16
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 8
+          },
+          "softCutoffMinutes": 24,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [
+        "Add divisibility to the family/core and prove-gcd-obstruction milestone content."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "D — Dirichlet",
+      "prNumber": 133,
+      "familyId": "oxford-d-odd-symmetric-difference",
+      "authorHeadReviewed": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "set-theory",
+            "combinatorics"
+          ],
+          "contentConcepts": [
+            "set-relations",
+            "parity",
+            "counting-structure"
+          ],
+          "prerequisiteConcepts": [
+            "set-notation",
+            "counting-principles",
+            "modular-arithmetic"
+          ],
+          "reasoningSkills": [
+            "small-case-exploration",
+            "representation-switching",
+            "proof-construction",
+            "case-analysis",
+            "generalization"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "set-theory",
+            "combinatorics"
+          ],
+          "contentConcepts": [
+            "set-relations",
+            "parity",
+            "counting-structure"
+          ],
+          "prerequisiteConcepts": [
+            "set-notation",
+            "counting-principles",
+            "modular-arithmetic"
+          ],
+          "reasoningSkills": [
+            "small-case-exploration",
+            "representation-switching",
+            "proof-construction",
+            "case-analysis",
+            "generalization"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "symdiff-opening",
+            "authorRole": "warm-up",
+            "recommendedRole": "warm-up",
+            "decision": "approved"
+          },
+          {
+            "stageId": "symdiff-core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "symdiff-transfer",
+            "authorRole": "transfer",
+            "recommendedRole": "transfer",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "test-set-pairs",
+            "skills": [
+              "small-case-exploration"
+            ],
+            "contentConcepts": [
+              "set-relations"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "prove-parity-identity",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "parity",
+              "set-relations"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "identify-complete-bipartite-graph",
+            "skills": [
+              "representation-switching"
+            ],
+            "contentConcepts": [
+              "set-relations"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "bound-pairwise-odd-family",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "parity"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "bound-pairwise-even-family",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "counting-structure"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "No process-grounded skill is accepted from milestone completion."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "approved",
+        "author": {
+          "entry": "introductory",
+          "core": "introductory-plus",
+          "ceiling": "standard"
+        },
+        "recommended": {
+          "entry": "introductory",
+          "core": "introductory-plus",
+          "ceiling": "standard"
+        },
+        "stageBands": [
+          {
+            "stageId": "symdiff-opening",
+            "role": "warm-up",
+            "authorDifficulty": "introductory",
+            "recommendedDifficulty": "introductory",
+            "decision": "approved"
+          },
+          {
+            "stageId": "symdiff-core",
+            "role": "core",
+            "authorDifficulty": "introductory-plus",
+            "recommendedDifficulty": "introductory-plus",
+            "decision": "approved"
+          },
+          {
+            "stageId": "symdiff-transfer",
+            "role": "transfer",
+            "authorDifficulty": "standard",
+            "recommendedDifficulty": "standard",
+            "decision": "approved"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "approved",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 1,
+            "max": 4
+          },
+          "independentCompletionMinutes": {
+            "min": 10,
+            "max": 17
+          },
+          "promptedCompletionMinutes": {
+            "min": 7,
+            "max": 13
+          },
+          "optionalExtensionMinutes": {
+            "min": 3,
+            "max": 6
+          },
+          "softCutoffMinutes": 20,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "D — Dirichlet",
+      "prNumber": 133,
+      "familyId": "oxford-d-three-reversal-permutations",
+      "authorHeadReviewed": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "combinatorics"
+          ],
+          "contentConcepts": [
+            "parity",
+            "counting-structure"
+          ],
+          "prerequisiteConcepts": [
+            "counting-principles",
+            "arithmetic"
+          ],
+          "reasoningSkills": [
+            "small-case-exploration",
+            "invariants",
+            "representation-switching",
+            "proof-construction",
+            "technique",
+            "precision-checking"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "combinatorics"
+          ],
+          "contentConcepts": [
+            "parity",
+            "counting-structure"
+          ],
+          "prerequisiteConcepts": [
+            "counting-principles",
+            "arithmetic"
+          ],
+          "reasoningSkills": [
+            "small-case-exploration",
+            "invariants",
+            "representation-switching",
+            "proof-construction",
+            "technique",
+            "precision-checking"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "three-reversal-opening",
+            "authorRole": "warm-up",
+            "recommendedRole": "warm-up",
+            "decision": "approved"
+          },
+          {
+            "stageId": "three-reversal-core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "three-reversal-transfer",
+            "authorRole": "transfer",
+            "recommendedRole": "transfer",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "inspect-single-reversal",
+            "skills": [
+              "small-case-exploration"
+            ],
+            "contentConcepts": [
+              "parity"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "state-parity-obstruction",
+            "skills": [
+              "invariants"
+            ],
+            "contentConcepts": [
+              "parity"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "reinterpret-as-adjacent-swaps",
+            "skills": [
+              "representation-switching"
+            ],
+            "contentConcepts": [
+              "parity"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "construct-all-parity-preserving-targets",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "counting-structure"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "count-and-minimize-moves",
+            "skills": [
+              "technique",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "counting-structure"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "No process-grounded skill is accepted from milestone completion."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "approved",
+        "author": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "recommended": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "stageBands": [
+          {
+            "stageId": "three-reversal-opening",
+            "role": "warm-up",
+            "authorDifficulty": "introductory",
+            "recommendedDifficulty": "introductory",
+            "decision": "approved"
+          },
+          {
+            "stageId": "three-reversal-core",
+            "role": "core",
+            "authorDifficulty": "standard",
+            "recommendedDifficulty": "standard",
+            "decision": "approved"
+          },
+          {
+            "stageId": "three-reversal-transfer",
+            "role": "transfer",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "strong",
+            "decision": "approved"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "changes-required",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 5
+          },
+          "independentCompletionMinutes": {
+            "min": 14,
+            "max": 23
+          },
+          "promptedCompletionMinutes": {
+            "min": 10,
+            "max": 19
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 8
+          },
+          "softCutoffMinutes": 22,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [
+        "Use the G family-specific timing estimate."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "D — Dirichlet",
+      "prNumber": 133,
+      "familyId": "oxford-d-divisor-step-geometry",
+      "authorHeadReviewed": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "number-theory",
+            "graph-theory",
+            "combinatorics"
+          ],
+          "contentConcepts": [
+            "prime-structure",
+            "divisibility",
+            "paths-cycles-connectivity",
+            "counting-structure"
+          ],
+          "prerequisiteConcepts": [
+            "prime-factorization",
+            "divisibility",
+            "graph-basics",
+            "counting-principles"
+          ],
+          "reasoningSkills": [
+            "visualization",
+            "representation-switching",
+            "proof-construction",
+            "technique",
+            "generalization",
+            "small-case-exploration",
+            "precision-checking"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "number-theory",
+            "graph-theory",
+            "combinatorics"
+          ],
+          "contentConcepts": [
+            "prime-structure",
+            "divisibility",
+            "paths-cycles-connectivity",
+            "counting-structure"
+          ],
+          "prerequisiteConcepts": [
+            "prime-factorization",
+            "divisibility",
+            "graph-basics",
+            "counting-principles"
+          ],
+          "reasoningSkills": [
+            "visualization",
+            "representation-switching",
+            "proof-construction",
+            "technique",
+            "generalization",
+            "small-case-exploration",
+            "precision-checking"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "divisor-geometry-opening",
+            "authorRole": "warm-up",
+            "recommendedRole": "warm-up",
+            "decision": "approved"
+          },
+          {
+            "stageId": "divisor-geometry-core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "divisor-geometry-transfer",
+            "authorRole": "transfer",
+            "recommendedRole": "transfer",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "draw-small-divisor-graphs",
+            "skills": [
+              "visualization",
+              "small-case-exploration"
+            ],
+            "contentConcepts": [
+              "divisibility",
+              "paths-cycles-connectivity"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "encode-exponent-vectors",
+            "skills": [
+              "representation-switching"
+            ],
+            "contentConcepts": [
+              "prime-structure",
+              "divisibility"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "identify-edge-coordinate-change",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "paths-cycles-connectivity"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "derive-distance-and-path-count",
+            "skills": [
+              "proof-construction",
+              "technique"
+            ],
+            "contentConcepts": [
+              "counting-structure",
+              "paths-cycles-connectivity"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "find-diameter-and-bipartition",
+            "skills": [
+              "generalization",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "paths-cycles-connectivity",
+              "prime-structure"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "No process-grounded skill is accepted from milestone completion."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "approved",
+        "author": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "recommended": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "stageBands": [
+          {
+            "stageId": "divisor-geometry-opening",
+            "role": "warm-up",
+            "authorDifficulty": "introductory",
+            "recommendedDifficulty": "introductory",
+            "decision": "approved"
+          },
+          {
+            "stageId": "divisor-geometry-core",
+            "role": "core",
+            "authorDifficulty": "standard",
+            "recommendedDifficulty": "standard",
+            "decision": "approved"
+          },
+          {
+            "stageId": "divisor-geometry-transfer",
+            "role": "transfer",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "strong",
+            "decision": "approved"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "changes-required",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 5
+          },
+          "independentCompletionMinutes": {
+            "min": 15,
+            "max": 25
+          },
+          "promptedCompletionMinutes": {
+            "min": 11,
+            "max": 20
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 8
+          },
+          "softCutoffMinutes": 23,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [
+        "Use the G family-specific timing estimate."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "D — Dirichlet",
+      "prNumber": 133,
+      "familyId": "oxford-d-triple-flip-circle",
+      "authorHeadReviewed": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "combinatorics",
+            "number-theory",
+            "sequences-recurrences"
+          ],
+          "contentConcepts": [
+            "parity",
+            "modular-reasoning",
+            "counting-structure",
+            "recurrence-structure"
+          ],
+          "prerequisiteConcepts": [
+            "modular-arithmetic",
+            "counting-principles"
+          ],
+          "reasoningSkills": [
+            "small-case-exploration",
+            "representation-switching",
+            "invariants",
+            "proof-construction",
+            "precision-checking",
+            "generalization"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "combinatorics",
+            "number-theory",
+            "sequences-recurrences"
+          ],
+          "contentConcepts": [
+            "parity",
+            "modular-reasoning",
+            "counting-structure",
+            "recurrence-structure"
+          ],
+          "prerequisiteConcepts": [
+            "modular-arithmetic",
+            "counting-principles"
+          ],
+          "reasoningSkills": [
+            "small-case-exploration",
+            "representation-switching",
+            "invariants",
+            "proof-construction",
+            "precision-checking",
+            "generalization"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "triple-flip-opening",
+            "authorRole": "warm-up",
+            "recommendedRole": "warm-up",
+            "decision": "approved"
+          },
+          {
+            "stageId": "triple-flip-core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "triple-flip-transfer",
+            "authorRole": "transfer",
+            "recommendedRole": "transfer",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "explore-small-circles",
+            "skills": [
+              "small-case-exploration"
+            ],
+            "contentConcepts": [
+              "parity"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "encode-move-equations",
+            "skills": [
+              "representation-switching"
+            ],
+            "contentConcepts": [
+              "parity"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "analyze-zero-effect-moves",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "modular-reasoning"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "classify-reachability",
+            "skills": [
+              "invariants",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "parity"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "prove-sufficiency-by-counting",
+            "skills": [
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "counting-structure",
+              "parity"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "No process-grounded skill is accepted from milestone completion."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "approved",
+        "author": {
+          "entry": "introductory",
+          "core": "strong",
+          "ceiling": "strong"
+        },
+        "recommended": {
+          "entry": "introductory",
+          "core": "strong",
+          "ceiling": "strong"
+        },
+        "stageBands": [
+          {
+            "stageId": "triple-flip-opening",
+            "role": "warm-up",
+            "authorDifficulty": "introductory",
+            "recommendedDifficulty": "introductory",
+            "decision": "approved"
+          },
+          {
+            "stageId": "triple-flip-core",
+            "role": "core",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "strong",
+            "decision": "approved"
+          },
+          {
+            "stageId": "triple-flip-transfer",
+            "role": "transfer",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "strong",
+            "decision": "approved"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "changes-required",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 3,
+            "max": 6
+          },
+          "independentCompletionMinutes": {
+            "min": 17,
+            "max": 28
           },
           "promptedCompletionMinutes": {
             "min": 13,
