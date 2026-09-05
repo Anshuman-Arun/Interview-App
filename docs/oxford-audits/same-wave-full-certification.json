@@ -82,10 +82,11 @@
         "id": "mobius-iteration",
         "action": "refine",
         "families": [
+          "oxford-cantor-mobius-recurrence",
           "oxford-cantor-three-cycle-map",
           "oxford-cantor-mobius-involution"
         ],
-        "note": "Exclude rejected mobius-recurrence from the passing-family cluster."
+        "note": "All three clear H only with truthful/qualified provenance; keep them separated in scheduling because fractional-linear iteration/involution structure is highly correlated."
       },
       {
         "id": "cyclic-binary-parity-dynamics",
