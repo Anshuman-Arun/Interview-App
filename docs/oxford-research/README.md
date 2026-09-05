@@ -581,7 +581,7 @@ Empirical calibration should later use distributions conditioned on candidate st
 
 ## 10. Reconciliation with Agent A PR #126
 
-Re-checked against **Agent A PR #126** through latest reviewed head `c065fe6e9c874ea06a5733b2e594751f1ab06400`.
+Re-checked against **Agent A PR #126** through latest reviewed head `ed95b0fc54da8d5a1ee77d65e6f39493be49b05c`.
 
 ### Strong alignment
 
