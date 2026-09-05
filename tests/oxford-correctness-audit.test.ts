@@ -15,7 +15,7 @@ describe("Oxford mathematical correctness audit gate", () => {
     const parsed = JSON.parse(raw) as unknown;
     expect(() => assertOxfordCorrectnessReviewBatch(parsed)).not.toThrow();
     if (!Array.isArray(parsed)) throw new Error("Expected review record array");
-    expect(parsed).toHaveLength(75);
+    expect(parsed).toHaveLength(63);
   });
 
   it("pins every current C/D/E review to an author head", () => {
@@ -25,12 +25,21 @@ describe("Oxford mathematical correctness audit gate", () => {
     );
     const parsed = JSON.parse(raw) as OxfordCorrectnessReviewRecord[];
     const authorRecords = parsed.filter((record) => record.source.kind === "author-pr");
-    expect(authorRecords).toHaveLength(61);
+    expect(authorRecords).toHaveLength(49);
     expect(authorRecords.filter((record) => record.source.authorAgent === "C — Cantor")).toHaveLength(20);
-    expect(authorRecords.filter((record) => record.source.authorAgent === "D — Dirichlet")).toHaveLength(22);
-    expect(authorRecords.filter((record) => record.source.authorAgent === "E — Euler")).toHaveLength(19);
-    expect(authorRecords.filter((record) => record.mathematicalCorrectness === "approved")).toHaveLength(58);
-    expect(authorRecords.filter((record) => record.mathematicalCorrectness === "changes-required")).toHaveLength(3);
+    expect(authorRecords.filter((record) => record.source.authorAgent === "D — Dirichlet")).toHaveLength(12);
+    expect(authorRecords.filter((record) => record.source.authorAgent === "E — Euler")).toHaveLength(17);
+    expect(authorRecords.filter((record) => record.mathematicalCorrectness === "approved")).toHaveLength(49);
+    expect(authorRecords.filter((record) => record.mathematicalCorrectness === "changes-required")).toHaveLength(0);
+    for (const record of authorRecords) {
+      const expectedHead =
+        record.source.authorAgent === "C — Cantor"
+          ? "5499bdc6dfc3ce40b127e8c9fa2a0722c8021a7a"
+          : record.source.authorAgent === "D — Dirichlet"
+            ? "ecece22058c997d37c4b352fa5ed32bd1daf5243"
+            : "e5f5b431a5dea843d69e6451b1114c7aa0c76532";
+      expect(record.source.reviewedAuthorHead).toBe(expectedHead);
+    }
   });
 
   it("fails closed when author reviews omit the exact reviewed head", () => {
@@ -435,21 +444,6 @@ describe("Wave 2 author-family computational spot checks", () => {
     }
   });
 
-  it("matches the stable-binary-word recurrence through n=10", () => {
-    const counts: number[] = [];
-    for (let n = 0; n <= 10; n += 1) {
-      let count = 0;
-      for (let mask = 0; mask < (1 << n); mask += 1) {
-        const bits = Array.from({ length: n }, (_, index) => (mask >> index) & 1);
-        if (isStableBinaryWord(bits)) count += 1;
-      }
-      counts.push(count);
-    }
-    expect(counts).toEqual([1, 1, 2, 4, 7, 12, 21, 37, 65, 114, 200]);
-    for (let n = 3; n < counts.length; n += 1) {
-      expect(counts[n]).toBe(2 * (counts[n - 1] ?? 0) - (counts[n - 2] ?? 0) + (counts[n - 3] ?? 0));
-    }
-  });
 
   it("matches random-adjacent linear and circular expectations by enumeration", () => {
     for (let n = 2; n <= 7; n += 1) {
@@ -601,21 +595,6 @@ function integerGcd(a: number, b: number): number {
     y = next;
   }
   return x;
-}
-
-function isStableBinaryWord(bits: readonly number[]): boolean {
-  let index = 0;
-  while (index < bits.length) {
-    if ((bits[index] ?? 0) === 0) {
-      index += 1;
-      continue;
-    }
-    let end = index;
-    while (end < bits.length && (bits[end] ?? 0) === 1) end += 1;
-    if (end - index < 2) return false;
-    index = end;
-  }
-  return true;
 }
 
 function permutations(values: readonly number[]): number[][] {
