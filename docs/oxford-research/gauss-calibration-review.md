@@ -139,21 +139,33 @@ The framework hard-codes those ownership boundaries in review records so a Gauss
 
 ## Agent C/D/E cross-review
 
-Initial and final pre-PR snapshots on 4 September 2026 found **no open PR whose title begins with a required Agent C, Agent D, or Agent E marker**. The Gauss PR is independently useful without those author branches.
+The initial/pre-PR snapshots found no author PRs, but a later sweep after PR #130 opened found all three required author branches. Gauss therefore reviewed a representative **six-family batch** against the actual PR heads and recorded machine-readable findings in `gauss-cross-agent-review.json`:
 
-A concurrent correctness review, **Agent I — Itô PR #128**, did become available and handed prerequisite/solvability findings to Gauss in **issue #129**. Gauss incorporated only the calibration-relevant consequences:
+- **Agent C — Cantor, PR #132** at `c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9`
+  - `oxford-cantor-cubic-divided-difference`
+  - `oxford-cantor-reciprocal-increment-recurrence`
+- **Agent D — Dirichlet, PR #133** at `017759febfd7d49ea032d6474bcc9177a76b2c2b`
+  - `oxford-d-gcd-descent-network`
+  - `oxford-d-triple-flip-circle`
+- **Agent E — Euler, PR #134** at `a18db48700800c1987e2abd43726254ba25267dd`
+  - `oxford-euler-circle-sweep`
+  - `oxford-euler-self-averaging-sets`
 
-- `oxford-even-odd-degrees`: Euler-trail extension is undefined under current prerequisites;
-- `oxford-divisibility-chain`: poset extension assumes undeclared order-theory language;
-- `oxford-continuous-fixed-point`: Brouwer extension jumps outside the supplied prerequisite envelope;
-- `oxford-triangle-medians`: mass-points route assumes nonstandard undeclared machinery;
-- `oxford-monotone-cauchy`: Hamel-basis/pathology extension assumes undeclared machinery;
-- `oxford-catalan-paths`: statement/alternate recurrence route need repair;
-- `oxford-prefix-sums-mod-n`: PR #128 separately flags the cyclic-block extension as indeterminate.
+This is a representative batch rather than an attempt to rubber-stamp all 61 newly authored families.
 
-These are **authoring/prerequisite-envelope blockers, not reasons to expand the frozen taxonomy**. The affected extensions should be removed, reframed, or taught self-contained. Gauss does not inherit or restate Itô's correctness approvals as calibration decisions.
+### Cross-agent findings
 
-If C/D/E author PRs appear later, their actual families still need traceable review by family ID and PR number; their branches must not be modified by Gauss.
+**Cantor (#132).** The authoring structure is the closest of the three to calibratable as-is because timing is per-family rather than copied from a generic table. The two high-risk families reviewed still have soft cutoffs extending beyond the public whole-interview anchor. For `cubic-divided-difference`, Gauss keeps introductory-plus entry and strong core but lowers the ceiling from stretch to strong; the extensions deepen the same mechanism rather than introducing a new stretch-level barrier. For `reciprocal-increment-recurrence`, the authored difficulty profile is retained, but timing is shortened to a ~25-minute natural transition. In both families, `guided-adaptation` remains process-grounded only and is not accepted as milestone evidence.
+
+**Dirichlet (#133).** The shared authoring helper assigns the exact same `WHOLE_TIMING` and opening/core/transfer `STAGE_TIMING` objects to all 22 candidates. That is a planning default, not calibration; no Dirichlet family should receive `timingCalibration` approval from those values. The reviewed `gcd-descent-network` is materially faster/easier than the template and is calibrated introductory / standard / standard. The reviewed `triple-flip-circle` is materially harder than its authored standard core: the mod-2 encoding, period-three recurrence, cyclic closure, invariant and image-size sufficiency form a strong core. It also directly measures `recurrence-structure`, so Gauss adds the existing `sequences-recurrences` / `recurrence-structure` taxonomy rather than inventing a new tag.
+
+**Euler (#134).** All 19 candidates share one `FAMILY_TIMING` and one five-position `STAGE_TIMING` table, so those values likewise remain author planning estimates rather than calibratable family timing. The helper also derives the `core` role mechanically as the first interior stage whose difficulty equals the author family core. That can put the core on setup rather than the substantive mathematical development. For `circle-sweep`, the coordinate circle equation is a technique check; the parameter-existence test is the strong core. For `self-averaging-sets`, encoding the affine map is setup; the finite permutation plus strict-contraction argument is the strong core. The latter is also better classified with the frozen `set-theory` / `set-maps` concepts than with `combinatorics` / `counting-structure`; no taxonomy expansion is needed.
+
+All six reviewed author families are marked `needs-revision` in the Gauss cross-agent record before calibration approval. This does **not** mean the mathematical families should be rejected. It means their authored taxonomy/difficulty/timing fields do not yet match the independent Gauss review.
+
+A concurrent correctness review, **Agent I — Itô PR #128**, had previously handed prerequisite/solvability findings to Gauss in **issue #129**. Gauss incorporated only the calibration-relevant consequences from that handoff and did not inherit Itô's correctness statuses.
+
+Author branches were not modified and Gauss does not self-merge them.
 
 ## Future empirical-calibration plan
 
