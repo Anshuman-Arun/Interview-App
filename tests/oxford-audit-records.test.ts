@@ -58,6 +58,8 @@ describe("Oxford originality/fidelity audit records", () => {
         authorPr?: { number: number };
         retrieval: Record<string, { completed: boolean }>;
         nearestMatches: Array<{ pool: string }>;
+        originalityDecision: "PASS" | "PASS_WITH_NOTES" | "REVISE" | "REJECT_TOO_CLOSE";
+        fidelityDecision: "PASS" | "PASS_WITH_NOTES" | "REVISE" | "REJECT_NOT_OXFORD_LIKE";
       }>;
     };
 
@@ -125,6 +127,8 @@ describe("Oxford originality/fidelity audit records", () => {
       expect(Object.values(audit.retrieval).every((pool) => pool.completed)).toBe(true);
       expect(audit.externalSearchQueries.length).toBeGreaterThan(0);
       expect(audit.nearestMatches.some((match) => match.pool === "E")).toBe(true);
+      expect(["PASS", "PASS_WITH_NOTES"]).toContain(audit.originalityDecision);
+      expect(["PASS", "PASS_WITH_NOTES"]).toContain(audit.fidelityDecision);
     }
   });
 
