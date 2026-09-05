@@ -1,0 +1,5329 @@
+{
+  "schemaVersion": 1,
+  "agent": "G — Gauss",
+  "reviewedAt": "2026-09-05",
+  "purpose": "Complete current-version G taxonomy/difficulty/timing certification for every surviving C/D/E family; H/I decisions remain separate.",
+  "authorPullRequests": [
+    {
+      "agent": "C — Cantor",
+      "prNumber": 132,
+      "headSha": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "survivingFamilyCount": 20,
+      "familiesReviewed": [
+        "oxford-cantor-moving-v-envelope",
+        "oxford-cantor-reciprocal-root-parabolas",
+        "oxford-cantor-cubic-two-thresholds",
+        "oxford-cantor-cubic-divided-difference",
+        "oxford-cantor-integral-sign-landscape",
+        "oxford-cantor-absolute-quadratic-crossings",
+        "oxford-cantor-radical-asymptote",
+        "oxford-cantor-shifted-cubic-intersections",
+        "oxford-cantor-moving-integral-window",
+        "oxford-cantor-reciprocal-implicit-curve",
+        "oxford-cantor-reciprocal-paired-inputs",
+        "oxford-cantor-tangent-intersection-locus",
+        "oxford-cantor-exponential-rotating-line",
+        "oxford-cantor-mobius-recurrence",
+        "oxford-cantor-squared-error-recurrence",
+        "oxford-cantor-three-cycle-map",
+        "oxford-cantor-quartic-horizontal-levels",
+        "oxford-cantor-reciprocal-increment-recurrence",
+        "oxford-cantor-line-envelope",
+        "oxford-cantor-mobius-involution"
+      ]
+    }
+  ],
+  "systemicVerification": {
+    "cantor": {
+      "headSha": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "overlongCutoffsCorrected": false,
+      "cubicDividedDifferenceCeilingCorrected": false,
+      "prerequisiteWording": "approved-with-G-note",
+      "note": "Current C head has not applied first-round cutoff/ceiling changes. Reciprocal-increment correctly does not silently require harmonic/log comparison; supply/develop it if unfamiliar."
+    }
+  },
+  "records": [
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "C — Cantor",
+      "prNumber": 132,
+      "familyId": "oxford-cantor-moving-v-envelope",
+      "authorHeadReviewed": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "functions",
+            "graph-sketching",
+            "calculus",
+            "algebra"
+          ],
+          "contentConcepts": [
+            "parameter-dependent-curves",
+            "function-transformations",
+            "qualitative-function-behavior",
+            "optimization-extrema",
+            "equations-inequalities"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "equations-inequalities",
+            "functions-graphs"
+          ],
+          "reasoningSkills": [
+            "graph-sketching",
+            "visualization",
+            "parameter-dependent-curves",
+            "representation-switching",
+            "strategic-simplification",
+            "optimization-extrema",
+            "case-analysis",
+            "technique",
+            "equations-inequalities",
+            "precision-checking",
+            "proof-construction",
+            "generalization",
+            "qualitative-function-behavior",
+            "track each V-shape vertex",
+            "freeze x and vary t",
+            "split the absolute value according to t versus x",
+            "check branch feasibility of ±1/2",
+            "the central minimizer is t=x",
+            "functions",
+            "algebraic-manipulation",
+            "guided-adaptation"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "functions",
+            "graph-sketching",
+            "calculus",
+            "algebra"
+          ],
+          "contentConcepts": [
+            "parameter-dependent-curves",
+            "function-transformations",
+            "qualitative-function-behavior",
+            "optimization-extrema",
+            "equations-inequalities"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "equations-inequalities",
+            "functions-graphs"
+          ],
+          "reasoningSkills": [
+            "graph-sketching",
+            "visualization",
+            "parameter-dependent-curves",
+            "representation-switching",
+            "strategic-simplification",
+            "optimization-extrema",
+            "case-analysis",
+            "technique",
+            "equations-inequalities",
+            "precision-checking",
+            "proof-construction",
+            "generalization",
+            "qualitative-function-behavior",
+            "track each V-shape vertex",
+            "freeze x and vary t",
+            "split the absolute value according to t versus x",
+            "check branch feasibility of ±1/2",
+            "the central minimizer is t=x",
+            "functions",
+            "algebraic-manipulation",
+            "guided-adaptation"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "opening",
+            "authorRole": "warm-up",
+            "recommendedRole": "warm-up",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "authorRole": "transfer",
+            "recommendedRole": "transfer",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "sample-v-shapes",
+            "skills": [
+              "graph-sketching",
+              "visualization"
+            ],
+            "contentConcepts": [
+              "parameter-dependent-curves",
+              "function-transformations"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "fix-x-switch-variable",
+            "skills": [
+              "representation-switching",
+              "strategic-simplification"
+            ],
+            "contentConcepts": [
+              "optimization-extrema",
+              "parameter-dependent-curves"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "left-right-quadratics",
+            "skills": [
+              "case-analysis",
+              "technique"
+            ],
+            "contentConcepts": [
+              "equations-inequalities",
+              "optimization-extrema"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "validity-thresholds",
+            "skills": [
+              "precision-checking",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "optimization-extrema",
+              "qualitative-function-behavior"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "assemble-envelope",
+            "skills": [
+              "proof-construction",
+              "generalization",
+              "graph-sketching"
+            ],
+            "contentConcepts": [
+              "qualitative-function-behavior",
+              "function-transformations",
+              "optimization-extrema"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "guided-adaptation/error-recovery remain process-grounded and are not milestone-completion evidence."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "approved",
+        "author": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "recommended": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "stageBands": [
+          {
+            "stageId": "opening",
+            "role": "warm-up",
+            "authorDifficulty": "introductory",
+            "recommendedDifficulty": "introductory",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "role": "core",
+            "authorDifficulty": "standard",
+            "recommendedDifficulty": "standard",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "role": "transfer",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "strong",
+            "decision": "approved"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "changes-required",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 4
+          },
+          "independentCompletionMinutes": {
+            "min": 14,
+            "max": 23
+          },
+          "promptedCompletionMinutes": {
+            "min": 10,
+            "max": 18
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 7
+          },
+          "softCutoffMinutes": 22,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [
+        "Use the G family-specific timing estimate."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "C — Cantor",
+      "prNumber": 132,
+      "familyId": "oxford-cantor-reciprocal-root-parabolas",
+      "authorHeadReviewed": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "algebra",
+            "functions",
+            "graph-sketching"
+          ],
+          "contentConcepts": [
+            "polynomial-structure",
+            "parameter-dependent-algebra",
+            "parameter-dependent-curves",
+            "roots-intersections",
+            "turning-points-extrema",
+            "inequalities-bounds"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "polynomial-factorization",
+            "functions-graphs"
+          ],
+          "reasoningSkills": [
+            "graph-sketching",
+            "pattern-recognition",
+            "parameter-dependent-curves",
+            "strategic-simplification",
+            "representation-switching",
+            "polynomial-structure",
+            "proof-construction",
+            "precision-checking",
+            "inequalities-bounds",
+            "technique",
+            "turning-points-extrema",
+            "generalization",
+            "try reciprocal parameter values",
+            "compress the parameter into its reciprocal sum",
+            "derive the reciprocal-sum inequality from a square",
+            "write the quadratic using s",
+            "replace s/2 by the vertex x-coordinate",
+            "algebra",
+            "algebraic-manipulation",
+            "guided-adaptation"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "algebra",
+            "functions",
+            "graph-sketching"
+          ],
+          "contentConcepts": [
+            "polynomial-structure",
+            "parameter-dependent-algebra",
+            "parameter-dependent-curves",
+            "roots-intersections",
+            "turning-points-extrema",
+            "inequalities-bounds"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "polynomial-factorization",
+            "functions-graphs"
+          ],
+          "reasoningSkills": [
+            "graph-sketching",
+            "pattern-recognition",
+            "parameter-dependent-curves",
+            "strategic-simplification",
+            "representation-switching",
+            "polynomial-structure",
+            "proof-construction",
+            "precision-checking",
+            "inequalities-bounds",
+            "technique",
+            "turning-points-extrema",
+            "generalization",
+            "try reciprocal parameter values",
+            "compress the parameter into its reciprocal sum",
+            "derive the reciprocal-sum inequality from a square",
+            "write the quadratic using s",
+            "replace s/2 by the vertex x-coordinate",
+            "algebra",
+            "algebraic-manipulation",
+            "guided-adaptation"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "opening",
+            "authorRole": "warm-up",
+            "recommendedRole": "warm-up",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "authorRole": "transfer",
+            "recommendedRole": "transfer",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "sample-reciprocal-roots",
+            "skills": [
+              "graph-sketching",
+              "pattern-recognition"
+            ],
+            "contentConcepts": [
+              "parameter-dependent-curves",
+              "roots-intersections"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "effective-parameter",
+            "skills": [
+              "strategic-simplification",
+              "representation-switching"
+            ],
+            "contentConcepts": [
+              "polynomial-structure",
+              "parameter-dependent-algebra"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "range-of-sum",
+            "skills": [
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "inequalities-bounds",
+              "parameter-dependent-algebra"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "vertex-formula",
+            "skills": [
+              "representation-switching",
+              "technique"
+            ],
+            "contentConcepts": [
+              "turning-points-extrema",
+              "polynomial-structure"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "vertex-locus",
+            "skills": [
+              "generalization",
+              "proof-construction",
+              "graph-sketching"
+            ],
+            "contentConcepts": [
+              "parameter-dependent-curves",
+              "turning-points-extrema"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "guided-adaptation/error-recovery remain process-grounded and are not milestone-completion evidence."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "approved",
+        "author": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "recommended": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "stageBands": [
+          {
+            "stageId": "opening",
+            "role": "warm-up",
+            "authorDifficulty": "introductory",
+            "recommendedDifficulty": "introductory",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "role": "core",
+            "authorDifficulty": "standard",
+            "recommendedDifficulty": "standard",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "role": "transfer",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "strong",
+            "decision": "approved"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "changes-required",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 4
+          },
+          "independentCompletionMinutes": {
+            "min": 13,
+            "max": 21
+          },
+          "promptedCompletionMinutes": {
+            "min": 10,
+            "max": 17
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 7
+          },
+          "softCutoffMinutes": 21,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [
+        "Use the G family-specific timing estimate."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "C — Cantor",
+      "prNumber": 132,
+      "familyId": "oxford-cantor-cubic-two-thresholds",
+      "authorHeadReviewed": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "algebra",
+            "functions",
+            "graph-sketching",
+            "calculus"
+          ],
+          "contentConcepts": [
+            "polynomial-structure",
+            "parameter-dependent-algebra",
+            "roots-intersections",
+            "turning-points-extrema",
+            "derivative-structure",
+            "qualitative-function-behavior",
+            "parameter-dependent-curves"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "polynomial-factorization",
+            "functions-graphs",
+            "differentiation"
+          ],
+          "reasoningSkills": [
+            "pattern-recognition",
+            "strategic-simplification",
+            "qualitative-function-behavior",
+            "technique",
+            "case-analysis",
+            "roots-intersections",
+            "precision-checking",
+            "derivative-structure",
+            "graph-sketching",
+            "representation-switching",
+            "proof-construction",
+            "parameter-dependent-curves",
+            "look for parameter reflection symmetry",
+            "separate the permanent root x=0",
+            "differentiate and inspect a second discriminant",
+            "compare sqrt(3) with 2",
+            "one equality merges critical points, the other merges roots",
+            "algebra",
+            "algebraic-manipulation"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "algebra",
+            "functions",
+            "graph-sketching",
+            "calculus"
+          ],
+          "contentConcepts": [
+            "polynomial-structure",
+            "parameter-dependent-algebra",
+            "roots-intersections",
+            "turning-points-extrema",
+            "derivative-structure",
+            "qualitative-function-behavior",
+            "parameter-dependent-curves"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "polynomial-factorization",
+            "functions-graphs",
+            "differentiation"
+          ],
+          "reasoningSkills": [
+            "pattern-recognition",
+            "strategic-simplification",
+            "qualitative-function-behavior",
+            "technique",
+            "case-analysis",
+            "roots-intersections",
+            "precision-checking",
+            "derivative-structure",
+            "graph-sketching",
+            "representation-switching",
+            "proof-construction",
+            "parameter-dependent-curves",
+            "look for parameter reflection symmetry",
+            "separate the permanent root x=0",
+            "differentiate and inspect a second discriminant",
+            "compare sqrt(3) with 2",
+            "one equality merges critical points, the other merges roots",
+            "algebra",
+            "algebraic-manipulation"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "opening",
+            "authorRole": "technique-check",
+            "recommendedRole": "technique-check",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "authorRole": "stretch",
+            "recommendedRole": "stretch",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "parameter-reflection",
+            "skills": [
+              "pattern-recognition",
+              "strategic-simplification"
+            ],
+            "contentConcepts": [
+              "qualitative-function-behavior",
+              "parameter-dependent-algebra"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "root-threshold",
+            "skills": [
+              "technique",
+              "case-analysis"
+            ],
+            "contentConcepts": [
+              "roots-intersections",
+              "polynomial-structure",
+              "parameter-dependent-algebra"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "turning-threshold",
+            "skills": [
+              "technique",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "derivative-structure",
+              "turning-points-extrema"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "intermediate-regime",
+            "skills": [
+              "graph-sketching",
+              "representation-switching",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "qualitative-function-behavior",
+              "roots-intersections",
+              "turning-points-extrema"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "full-regime-sketches",
+            "skills": [
+              "case-analysis",
+              "graph-sketching",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "parameter-dependent-curves",
+              "qualitative-function-behavior"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "guided-adaptation/error-recovery remain process-grounded and are not milestone-completion evidence."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "changes-required",
+        "author": {
+          "entry": "introductory-plus",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "recommended": {
+          "entry": "introductory-plus",
+          "core": "strong",
+          "ceiling": "strong"
+        },
+        "stageBands": [
+          {
+            "stageId": "opening",
+            "role": "technique-check",
+            "authorDifficulty": "introductory-plus",
+            "recommendedDifficulty": "introductory-plus",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "role": "core",
+            "authorDifficulty": "standard",
+            "recommendedDifficulty": "strong",
+            "decision": "changes-required"
+          },
+          {
+            "stageId": "extension",
+            "role": "stretch",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "strong",
+            "decision": "approved"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "changes-required",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 3,
+            "max": 5
+          },
+          "independentCompletionMinutes": {
+            "min": 15,
+            "max": 24
+          },
+          "promptedCompletionMinutes": {
+            "min": 11,
+            "max": 19
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 8
+          },
+          "softCutoffMinutes": 23,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [
+        "Use G difficulty introductory-plus / strong / strong.",
+        "Use the G family-specific timing estimate."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "C — Cantor",
+      "prNumber": 132,
+      "familyId": "oxford-cantor-cubic-divided-difference",
+      "authorHeadReviewed": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "algebra",
+            "functions",
+            "calculus",
+            "graph-sketching"
+          ],
+          "contentConcepts": [
+            "polynomial-structure",
+            "parameter-dependent-algebra",
+            "roots-intersections",
+            "derivative-structure",
+            "turning-points-extrema",
+            "qualitative-function-behavior"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "polynomial-factorization",
+            "functions-graphs",
+            "differentiation"
+          ],
+          "reasoningSkills": [
+            "technique",
+            "strategic-simplification",
+            "polynomial-structure",
+            "representation-switching",
+            "precision-checking",
+            "derivative-structure",
+            "case-analysis",
+            "roots-intersections",
+            "proof-construction",
+            "turning-points-extrema",
+            "graph-sketching",
+            "generalization",
+            "qualitative-function-behavior",
+            "factor the cubic difference first",
+            "the hole has a natural polynomial value",
+            "turn equal heights into a quadratic root problem",
+            "check when the cancelled point reappears as a quotient root",
+            "interpret the discriminant-zero case geometrically",
+            "algebra",
+            "algebraic-manipulation",
+            "guided-adaptation"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "algebra",
+            "functions",
+            "calculus",
+            "graph-sketching"
+          ],
+          "contentConcepts": [
+            "polynomial-structure",
+            "parameter-dependent-algebra",
+            "roots-intersections",
+            "derivative-structure",
+            "turning-points-extrema",
+            "qualitative-function-behavior"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "polynomial-factorization",
+            "functions-graphs",
+            "differentiation"
+          ],
+          "reasoningSkills": [
+            "technique",
+            "strategic-simplification",
+            "polynomial-structure",
+            "representation-switching",
+            "precision-checking",
+            "derivative-structure",
+            "case-analysis",
+            "roots-intersections",
+            "proof-construction",
+            "turning-points-extrema",
+            "graph-sketching",
+            "generalization",
+            "qualitative-function-behavior",
+            "factor the cubic difference first",
+            "the hole has a natural polynomial value",
+            "turn equal heights into a quadratic root problem",
+            "check when the cancelled point reappears as a quotient root",
+            "interpret the discriminant-zero case geometrically",
+            "algebra",
+            "algebraic-manipulation",
+            "guided-adaptation"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "opening",
+            "authorRole": "technique-check",
+            "recommendedRole": "technique-check",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "authorRole": "stretch",
+            "recommendedRole": "stretch",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "factor-cubic-difference",
+            "skills": [
+              "technique",
+              "strategic-simplification"
+            ],
+            "contentConcepts": [
+              "polynomial-structure",
+              "parameter-dependent-algebra"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "fill-removable-hole",
+            "skills": [
+              "representation-switching",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "derivative-structure",
+              "qualitative-function-behavior"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "quotient-discriminant",
+            "skills": [
+              "case-analysis",
+              "technique"
+            ],
+            "contentConcepts": [
+              "roots-intersections",
+              "parameter-dependent-algebra"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "stationary-duplication",
+            "skills": [
+              "precision-checking",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "turning-points-extrema",
+              "roots-intersections"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "translate-to-cubic-geometry",
+            "skills": [
+              "graph-sketching",
+              "representation-switching",
+              "generalization"
+            ],
+            "contentConcepts": [
+              "qualitative-function-behavior",
+              "roots-intersections",
+              "turning-points-extrema"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "guided-adaptation/error-recovery remain process-grounded and are not milestone-completion evidence."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "changes-required",
+        "author": {
+          "entry": "introductory-plus",
+          "core": "strong",
+          "ceiling": "stretch"
+        },
+        "recommended": {
+          "entry": "introductory-plus",
+          "core": "strong",
+          "ceiling": "strong"
+        },
+        "stageBands": [
+          {
+            "stageId": "opening",
+            "role": "technique-check",
+            "authorDifficulty": "introductory-plus",
+            "recommendedDifficulty": "introductory-plus",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "role": "core",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "strong",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "role": "stretch",
+            "authorDifficulty": "stretch",
+            "recommendedDifficulty": "strong",
+            "decision": "changes-required"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "changes-required",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 5
+          },
+          "independentCompletionMinutes": {
+            "min": 14,
+            "max": 24
+          },
+          "promptedCompletionMinutes": {
+            "min": 10,
+            "max": 20
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 8
+          },
+          "softCutoffMinutes": 24,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [
+        "Use G difficulty introductory-plus / strong / strong.",
+        "Use the G family-specific timing estimate."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "C — Cantor",
+      "prNumber": 132,
+      "familyId": "oxford-cantor-integral-sign-landscape",
+      "authorHeadReviewed": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "calculus",
+            "functions",
+            "graph-sketching",
+            "algebra",
+            "elementary-analysis"
+          ],
+          "contentConcepts": [
+            "integral-accumulation",
+            "derivative-structure",
+            "turning-points-extrema",
+            "roots-intersections",
+            "qualitative-function-behavior",
+            "symmetry-periodicity",
+            "polynomial-structure"
+          ],
+          "prerequisiteConcepts": [
+            "functions-graphs",
+            "differentiation",
+            "integration",
+            "algebraic-manipulation"
+          ],
+          "reasoningSkills": [
+            "pattern-recognition",
+            "proof-construction",
+            "symmetry-periodicity",
+            "technique",
+            "graph-sketching",
+            "derivative-structure",
+            "strategic-simplification",
+            "precision-checking",
+            "integral-accumulation",
+            "case-analysis",
+            "roots-intersections",
+            "representation-switching",
+            "polynomial-structure",
+            "an even derivative gives an odd accumulation function from 0",
+            "make a sign chart for the integrand",
+            "turning-point heights matter",
+            "use monotone intervals to prove uniqueness of each crossing",
+            "the exact root equation is quadratic in x²",
+            "calculus",
+            "functions-graphs"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "calculus",
+            "functions",
+            "graph-sketching",
+            "algebra",
+            "elementary-analysis"
+          ],
+          "contentConcepts": [
+            "integral-accumulation",
+            "derivative-structure",
+            "turning-points-extrema",
+            "roots-intersections",
+            "qualitative-function-behavior",
+            "symmetry-periodicity",
+            "polynomial-structure"
+          ],
+          "prerequisiteConcepts": [
+            "functions-graphs",
+            "differentiation",
+            "integration",
+            "algebraic-manipulation"
+          ],
+          "reasoningSkills": [
+            "pattern-recognition",
+            "proof-construction",
+            "symmetry-periodicity",
+            "technique",
+            "graph-sketching",
+            "derivative-structure",
+            "strategic-simplification",
+            "precision-checking",
+            "integral-accumulation",
+            "case-analysis",
+            "roots-intersections",
+            "representation-switching",
+            "polynomial-structure",
+            "an even derivative gives an odd accumulation function from 0",
+            "make a sign chart for the integrand",
+            "turning-point heights matter",
+            "use monotone intervals to prove uniqueness of each crossing",
+            "the exact root equation is quadratic in x²",
+            "calculus",
+            "functions-graphs"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "opening",
+            "authorRole": "technique-check",
+            "recommendedRole": "technique-check",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "authorRole": "stretch",
+            "recommendedRole": "stretch",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "oddness",
+            "skills": [
+              "pattern-recognition",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "symmetry-periodicity",
+              "integral-accumulation"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "derivative-sign-chart",
+            "skills": [
+              "technique",
+              "graph-sketching"
+            ],
+            "contentConcepts": [
+              "derivative-structure",
+              "turning-points-extrema",
+              "qualitative-function-behavior"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "turning-point-heights",
+            "skills": [
+              "strategic-simplification",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "integral-accumulation",
+              "roots-intersections"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "zero-count",
+            "skills": [
+              "proof-construction",
+              "case-analysis"
+            ],
+            "contentConcepts": [
+              "roots-intersections",
+              "qualitative-function-behavior"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "exact-zero-locations",
+            "skills": [
+              "representation-switching",
+              "technique"
+            ],
+            "contentConcepts": [
+              "polynomial-structure",
+              "roots-intersections",
+              "integral-accumulation"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "guided-adaptation/error-recovery remain process-grounded and are not milestone-completion evidence."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "approved",
+        "author": {
+          "entry": "introductory-plus",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "recommended": {
+          "entry": "introductory-plus",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "stageBands": [
+          {
+            "stageId": "opening",
+            "role": "technique-check",
+            "authorDifficulty": "introductory-plus",
+            "recommendedDifficulty": "introductory-plus",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "role": "core",
+            "authorDifficulty": "standard",
+            "recommendedDifficulty": "standard",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "role": "stretch",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "strong",
+            "decision": "approved"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "changes-required",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 5
+          },
+          "independentCompletionMinutes": {
+            "min": 15,
+            "max": 24
+          },
+          "promptedCompletionMinutes": {
+            "min": 11,
+            "max": 20
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 8
+          },
+          "softCutoffMinutes": 23,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [
+        "Use the G family-specific timing estimate."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "C — Cantor",
+      "prNumber": 132,
+      "familyId": "oxford-cantor-absolute-quadratic-crossings",
+      "authorHeadReviewed": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "algebra",
+            "functions",
+            "graph-sketching"
+          ],
+          "contentConcepts": [
+            "roots-intersections",
+            "turning-points-extrema",
+            "function-transformations",
+            "qualitative-function-behavior",
+            "parameter-dependent-algebra"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "polynomial-factorization",
+            "functions-graphs"
+          ],
+          "reasoningSkills": [
+            "graph-sketching",
+            "technique",
+            "roots-intersections",
+            "visualization",
+            "representation-switching",
+            "function-transformations",
+            "strategic-simplification",
+            "precision-checking",
+            "turning-points-extrema",
+            "case-analysis",
+            "proof-construction",
+            "generalization",
+            "transfer",
+            "parameter-dependent-algebra",
+            "sketch the quadratic before applying absolute value",
+            "fold the negative arc upward",
+            "the inner arch has one maximum",
+            "count crossings by height regime",
+            "center the roots around their midpoint",
+            "algebra",
+            "algebraic-manipulation"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "algebra",
+            "functions",
+            "graph-sketching"
+          ],
+          "contentConcepts": [
+            "roots-intersections",
+            "turning-points-extrema",
+            "function-transformations",
+            "qualitative-function-behavior",
+            "parameter-dependent-algebra"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "polynomial-factorization",
+            "functions-graphs"
+          ],
+          "reasoningSkills": [
+            "graph-sketching",
+            "technique",
+            "roots-intersections",
+            "visualization",
+            "representation-switching",
+            "function-transformations",
+            "strategic-simplification",
+            "precision-checking",
+            "turning-points-extrema",
+            "case-analysis",
+            "proof-construction",
+            "generalization",
+            "transfer",
+            "parameter-dependent-algebra",
+            "sketch the quadratic before applying absolute value",
+            "fold the negative arc upward",
+            "the inner arch has one maximum",
+            "count crossings by height regime",
+            "center the roots around their midpoint",
+            "algebra",
+            "algebraic-manipulation"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "opening",
+            "authorRole": "warm-up",
+            "recommendedRole": "warm-up",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "authorRole": "transfer",
+            "recommendedRole": "transfer",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "base-quadratic",
+            "skills": [
+              "graph-sketching",
+              "technique"
+            ],
+            "contentConcepts": [
+              "roots-intersections",
+              "turning-points-extrema"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "fold-negative-arc",
+            "skills": [
+              "visualization",
+              "representation-switching"
+            ],
+            "contentConcepts": [
+              "function-transformations",
+              "qualitative-function-behavior"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "inner-cap-height",
+            "skills": [
+              "strategic-simplification",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "turning-points-extrema",
+              "roots-intersections"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "horizontal-level-count",
+            "skills": [
+              "case-analysis",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "roots-intersections",
+              "qualitative-function-behavior"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "general-root-gap",
+            "skills": [
+              "generalization",
+              "transfer"
+            ],
+            "contentConcepts": [
+              "parameter-dependent-algebra",
+              "turning-points-extrema",
+              "function-transformations"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "guided-adaptation/error-recovery remain process-grounded and are not milestone-completion evidence."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "approved",
+        "author": {
+          "entry": "warm-up",
+          "core": "introductory-plus",
+          "ceiling": "standard"
+        },
+        "recommended": {
+          "entry": "warm-up",
+          "core": "introductory-plus",
+          "ceiling": "standard"
+        },
+        "stageBands": [
+          {
+            "stageId": "opening",
+            "role": "warm-up",
+            "authorDifficulty": "warm-up",
+            "recommendedDifficulty": "warm-up",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "role": "core",
+            "authorDifficulty": "introductory-plus",
+            "recommendedDifficulty": "introductory-plus",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "role": "transfer",
+            "authorDifficulty": "standard",
+            "recommendedDifficulty": "standard",
+            "decision": "approved"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "approved",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 1,
+            "max": 4
+          },
+          "independentCompletionMinutes": {
+            "min": 15,
+            "max": 24
+          },
+          "promptedCompletionMinutes": {
+            "min": 12,
+            "max": 21
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 7
+          },
+          "softCutoffMinutes": 23,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "C — Cantor",
+      "prNumber": 132,
+      "familyId": "oxford-cantor-radical-asymptote",
+      "authorHeadReviewed": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "functions",
+            "graph-sketching",
+            "elementary-analysis",
+            "calculus",
+            "algebra"
+          ],
+          "contentConcepts": [
+            "asymptotic-behavior",
+            "limiting-arguments",
+            "qualitative-function-behavior",
+            "derivative-structure",
+            "parameter-dependent-curves",
+            "roots-intersections",
+            "equations-inequalities",
+            "parameter-dependent-algebra"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "equations-inequalities",
+            "functions-graphs",
+            "differentiation",
+            "limits-continuity"
+          ],
+          "reasoningSkills": [
+            "technique",
+            "precision-checking",
+            "equations-inequalities",
+            "strategic-simplification",
+            "representation-switching",
+            "asymptotic-behavior",
+            "proof-construction",
+            "derivative-structure",
+            "case-analysis",
+            "generalization",
+            "graph-sketching",
+            "parameter-dependent-curves",
+            "start with the radicand before sketching",
+            "rationalization reveals the finite limit",
+            "the two ends are not symmetric",
+            "split the derivative sign according to the numerator",
+            "the parameter boundary is a domain-topology change",
+            "functions",
+            "algebraic-manipulation",
+            "guided-adaptation"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "functions",
+            "graph-sketching",
+            "elementary-analysis",
+            "calculus",
+            "algebra"
+          ],
+          "contentConcepts": [
+            "asymptotic-behavior",
+            "limiting-arguments",
+            "qualitative-function-behavior",
+            "derivative-structure",
+            "parameter-dependent-curves",
+            "roots-intersections",
+            "equations-inequalities",
+            "parameter-dependent-algebra"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "equations-inequalities",
+            "functions-graphs",
+            "differentiation",
+            "limits-continuity"
+          ],
+          "reasoningSkills": [
+            "technique",
+            "precision-checking",
+            "equations-inequalities",
+            "strategic-simplification",
+            "representation-switching",
+            "asymptotic-behavior",
+            "proof-construction",
+            "derivative-structure",
+            "case-analysis",
+            "generalization",
+            "graph-sketching",
+            "parameter-dependent-curves",
+            "start with the radicand before sketching",
+            "rationalization reveals the finite limit",
+            "the two ends are not symmetric",
+            "split the derivative sign according to the numerator",
+            "the parameter boundary is a domain-topology change",
+            "functions",
+            "algebraic-manipulation",
+            "guided-adaptation"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "opening",
+            "authorRole": "technique-check",
+            "recommendedRole": "technique-check",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "authorRole": "stretch",
+            "recommendedRole": "stretch",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "positive-radicand",
+            "skills": [
+              "technique",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "equations-inequalities",
+              "parameter-dependent-algebra"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "right-end-limit",
+            "skills": [
+              "strategic-simplification",
+              "representation-switching"
+            ],
+            "contentConcepts": [
+              "asymptotic-behavior",
+              "limiting-arguments"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "left-end-growth",
+            "skills": [
+              "precision-checking",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "asymptotic-behavior",
+              "qualitative-function-behavior"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "strict-decrease",
+            "skills": [
+              "technique",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "derivative-structure",
+              "qualitative-function-behavior"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "range-and-boundaries",
+            "skills": [
+              "case-analysis",
+              "generalization",
+              "graph-sketching"
+            ],
+            "contentConcepts": [
+              "parameter-dependent-curves",
+              "roots-intersections",
+              "qualitative-function-behavior"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "guided-adaptation/error-recovery remain process-grounded and are not milestone-completion evidence."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "approved",
+        "author": {
+          "entry": "introductory-plus",
+          "core": "strong",
+          "ceiling": "stretch"
+        },
+        "recommended": {
+          "entry": "introductory-plus",
+          "core": "strong",
+          "ceiling": "stretch"
+        },
+        "stageBands": [
+          {
+            "stageId": "opening",
+            "role": "technique-check",
+            "authorDifficulty": "introductory-plus",
+            "recommendedDifficulty": "introductory-plus",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "role": "core",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "strong",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "role": "stretch",
+            "authorDifficulty": "stretch",
+            "recommendedDifficulty": "stretch",
+            "decision": "approved"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "changes-required",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 3,
+            "max": 6
+          },
+          "independentCompletionMinutes": {
+            "min": 17,
+            "max": 27
+          },
+          "promptedCompletionMinutes": {
+            "min": 13,
+            "max": 22
+          },
+          "optionalExtensionMinutes": {
+            "min": 5,
+            "max": 9
+          },
+          "softCutoffMinutes": 25,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [
+        "Use the G family-specific timing estimate."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "C — Cantor",
+      "prNumber": 132,
+      "familyId": "oxford-cantor-shifted-cubic-intersections",
+      "authorHeadReviewed": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "functions",
+            "graph-sketching",
+            "algebra",
+            "calculus",
+            "elementary-analysis"
+          ],
+          "contentConcepts": [
+            "function-transformations",
+            "roots-intersections",
+            "polynomial-structure",
+            "parameter-dependent-algebra",
+            "parameter-dependent-curves",
+            "turning-points-extrema",
+            "derivative-structure",
+            "limiting-arguments"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "polynomial-factorization",
+            "functions-graphs",
+            "differentiation"
+          ],
+          "reasoningSkills": [
+            "graph-sketching",
+            "conjecture-formation",
+            "function-transformations",
+            "technique",
+            "strategic-simplification",
+            "polynomial-structure",
+            "case-analysis",
+            "proof-construction",
+            "roots-intersections",
+            "representation-switching",
+            "visualization",
+            "turning-points-extrema",
+            "precision-checking",
+            "generalization",
+            "limiting-arguments",
+            "sketch a few translations first",
+            "two cubics reduce to a quadratic intersection equation",
+            "intersection count is controlled by one discriminant",
+            "double intersection means tangency here",
+            "a finite difference becomes a derivative",
+            "functions",
+            "algebraic-manipulation"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "functions",
+            "graph-sketching",
+            "algebra",
+            "calculus",
+            "elementary-analysis"
+          ],
+          "contentConcepts": [
+            "function-transformations",
+            "roots-intersections",
+            "polynomial-structure",
+            "parameter-dependent-algebra",
+            "parameter-dependent-curves",
+            "turning-points-extrema",
+            "derivative-structure",
+            "limiting-arguments"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "polynomial-factorization",
+            "functions-graphs",
+            "differentiation"
+          ],
+          "reasoningSkills": [
+            "graph-sketching",
+            "conjecture-formation",
+            "function-transformations",
+            "technique",
+            "strategic-simplification",
+            "polynomial-structure",
+            "case-analysis",
+            "proof-construction",
+            "roots-intersections",
+            "representation-switching",
+            "visualization",
+            "turning-points-extrema",
+            "precision-checking",
+            "generalization",
+            "limiting-arguments",
+            "sketch a few translations first",
+            "two cubics reduce to a quadratic intersection equation",
+            "intersection count is controlled by one discriminant",
+            "double intersection means tangency here",
+            "a finite difference becomes a derivative",
+            "functions",
+            "algebraic-manipulation"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "opening",
+            "authorRole": "warm-up",
+            "recommendedRole": "warm-up",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "authorRole": "stretch",
+            "recommendedRole": "stretch",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "translated-picture",
+            "skills": [
+              "graph-sketching",
+              "conjecture-formation"
+            ],
+            "contentConcepts": [
+              "function-transformations",
+              "roots-intersections"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "factor-difference",
+            "skills": [
+              "technique",
+              "strategic-simplification"
+            ],
+            "contentConcepts": [
+              "polynomial-structure",
+              "parameter-dependent-algebra"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "spacing-threshold",
+            "skills": [
+              "case-analysis",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "roots-intersections",
+              "parameter-dependent-curves"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "transition-geometry",
+            "skills": [
+              "representation-switching",
+              "visualization"
+            ],
+            "contentConcepts": [
+              "turning-points-extrema",
+              "roots-intersections"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "small-shift-limit",
+            "skills": [
+              "precision-checking",
+              "generalization"
+            ],
+            "contentConcepts": [
+              "limiting-arguments",
+              "derivative-structure",
+              "turning-points-extrema"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "guided-adaptation/error-recovery remain process-grounded and are not milestone-completion evidence."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "approved",
+        "author": {
+          "entry": "introductory-plus",
+          "core": "strong",
+          "ceiling": "stretch"
+        },
+        "recommended": {
+          "entry": "introductory-plus",
+          "core": "strong",
+          "ceiling": "stretch"
+        },
+        "stageBands": [
+          {
+            "stageId": "opening",
+            "role": "warm-up",
+            "authorDifficulty": "introductory-plus",
+            "recommendedDifficulty": "introductory-plus",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "role": "core",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "strong",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "role": "stretch",
+            "authorDifficulty": "stretch",
+            "recommendedDifficulty": "stretch",
+            "decision": "approved"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "changes-required",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 5
+          },
+          "independentCompletionMinutes": {
+            "min": 15,
+            "max": 24
+          },
+          "promptedCompletionMinutes": {
+            "min": 11,
+            "max": 20
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 8
+          },
+          "softCutoffMinutes": 23,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [
+        "Use the G family-specific timing estimate."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "C — Cantor",
+      "prNumber": 132,
+      "familyId": "oxford-cantor-moving-integral-window",
+      "authorHeadReviewed": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "calculus",
+            "functions",
+            "graph-sketching",
+            "elementary-analysis"
+          ],
+          "contentConcepts": [
+            "integral-accumulation",
+            "symmetry-periodicity",
+            "qualitative-function-behavior",
+            "derivative-structure",
+            "turning-points-extrema",
+            "limiting-arguments",
+            "parameter-dependent-curves",
+            "optimization-extrema"
+          ],
+          "prerequisiteConcepts": [
+            "integration",
+            "differentiation",
+            "functions-graphs",
+            "limits-continuity"
+          ],
+          "reasoningSkills": [
+            "pattern-recognition",
+            "proof-construction",
+            "symmetry-periodicity",
+            "visualization",
+            "precision-checking",
+            "integral-accumulation",
+            "technique",
+            "strategic-simplification",
+            "derivative-structure",
+            "limiting-arguments",
+            "generalization",
+            "transfer",
+            "graph-sketching",
+            "parameter-dependent-curves",
+            "the integration orientation matters",
+            "the sign is visible geometrically",
+            "remember the chain factor from 2x",
+            "compare with 1/t²",
+            "put the derivative over a common denominator",
+            "calculus",
+            "integration"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "calculus",
+            "functions",
+            "graph-sketching",
+            "elementary-analysis"
+          ],
+          "contentConcepts": [
+            "integral-accumulation",
+            "symmetry-periodicity",
+            "qualitative-function-behavior",
+            "derivative-structure",
+            "turning-points-extrema",
+            "limiting-arguments",
+            "parameter-dependent-curves",
+            "optimization-extrema"
+          ],
+          "prerequisiteConcepts": [
+            "integration",
+            "differentiation",
+            "functions-graphs",
+            "limits-continuity"
+          ],
+          "reasoningSkills": [
+            "pattern-recognition",
+            "proof-construction",
+            "symmetry-periodicity",
+            "visualization",
+            "precision-checking",
+            "integral-accumulation",
+            "technique",
+            "strategic-simplification",
+            "derivative-structure",
+            "limiting-arguments",
+            "generalization",
+            "transfer",
+            "graph-sketching",
+            "parameter-dependent-curves",
+            "the integration orientation matters",
+            "the sign is visible geometrically",
+            "remember the chain factor from 2x",
+            "compare with 1/t²",
+            "put the derivative over a common denominator",
+            "calculus",
+            "integration"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "opening",
+            "authorRole": "warm-up",
+            "recommendedRole": "warm-up",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "authorRole": "transfer",
+            "recommendedRole": "transfer",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "odd-symmetry",
+            "skills": [
+              "pattern-recognition",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "symmetry-periodicity",
+              "integral-accumulation"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "sign-from-window",
+            "skills": [
+              "visualization",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "integral-accumulation",
+              "qualitative-function-behavior"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "differentiate-window",
+            "skills": [
+              "technique",
+              "strategic-simplification"
+            ],
+            "contentConcepts": [
+              "derivative-structure",
+              "turning-points-extrema"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "end-limit-without-arctan",
+            "skills": [
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "limiting-arguments",
+              "integral-accumulation"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "parameter-k",
+            "skills": [
+              "generalization",
+              "transfer",
+              "graph-sketching"
+            ],
+            "contentConcepts": [
+              "parameter-dependent-curves",
+              "optimization-extrema",
+              "derivative-structure"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "guided-adaptation/error-recovery remain process-grounded and are not milestone-completion evidence."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "approved",
+        "author": {
+          "entry": "introductory-plus",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "recommended": {
+          "entry": "introductory-plus",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "stageBands": [
+          {
+            "stageId": "opening",
+            "role": "warm-up",
+            "authorDifficulty": "introductory-plus",
+            "recommendedDifficulty": "introductory-plus",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "role": "core",
+            "authorDifficulty": "standard",
+            "recommendedDifficulty": "standard",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "role": "transfer",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "strong",
+            "decision": "approved"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "changes-required",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 5
+          },
+          "independentCompletionMinutes": {
+            "min": 15,
+            "max": 23
+          },
+          "promptedCompletionMinutes": {
+            "min": 11,
+            "max": 19
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 7
+          },
+          "softCutoffMinutes": 22,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [
+        "Use the G family-specific timing estimate."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "C — Cantor",
+      "prNumber": 132,
+      "familyId": "oxford-cantor-reciprocal-implicit-curve",
+      "authorHeadReviewed": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "graph-sketching",
+            "coordinate-geometry",
+            "functions",
+            "algebra",
+            "elementary-analysis"
+          ],
+          "contentConcepts": [
+            "analytic-curve-geometry",
+            "symmetry-periodicity",
+            "loci-coordinate-constraints",
+            "roots-intersections",
+            "qualitative-function-behavior",
+            "asymptotic-behavior",
+            "inequalities-bounds"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "equations-inequalities",
+            "coordinate-geometry-basics",
+            "functions-graphs"
+          ],
+          "reasoningSkills": [
+            "precision-checking",
+            "visualization",
+            "analytic-curve-geometry",
+            "representation-switching",
+            "strategic-simplification",
+            "proof-construction",
+            "case-analysis",
+            "roots-intersections",
+            "graph-sketching",
+            "asymptotic-behavior",
+            "generalization",
+            "inequalities-bounds",
+            "justify division before using reciprocals",
+            "reciprocal squares simplify the product",
+            "the branches live only outside |x|=1",
+            "find horizontal and vertical asymptotes from the solved form",
+            "reduce closest-distance to a positive-variable inequality",
+            "algebraic-manipulation",
+            "error-recovery"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "graph-sketching",
+            "coordinate-geometry",
+            "functions",
+            "algebra",
+            "elementary-analysis"
+          ],
+          "contentConcepts": [
+            "analytic-curve-geometry",
+            "symmetry-periodicity",
+            "loci-coordinate-constraints",
+            "roots-intersections",
+            "qualitative-function-behavior",
+            "asymptotic-behavior",
+            "inequalities-bounds"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "equations-inequalities",
+            "coordinate-geometry-basics",
+            "functions-graphs"
+          ],
+          "reasoningSkills": [
+            "precision-checking",
+            "visualization",
+            "analytic-curve-geometry",
+            "representation-switching",
+            "strategic-simplification",
+            "proof-construction",
+            "case-analysis",
+            "roots-intersections",
+            "graph-sketching",
+            "asymptotic-behavior",
+            "generalization",
+            "inequalities-bounds",
+            "justify division before using reciprocals",
+            "reciprocal squares simplify the product",
+            "the branches live only outside |x|=1",
+            "find horizontal and vertical asymptotes from the solved form",
+            "reduce closest-distance to a positive-variable inequality",
+            "algebraic-manipulation",
+            "error-recovery"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "opening",
+            "authorRole": "warm-up",
+            "recommendedRole": "warm-up",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "authorRole": "stretch",
+            "recommendedRole": "stretch",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "exclude-axes-and-symmetry",
+            "skills": [
+              "precision-checking",
+              "visualization"
+            ],
+            "contentConcepts": [
+              "analytic-curve-geometry",
+              "symmetry-periodicity"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "reciprocal-circle",
+            "skills": [
+              "representation-switching",
+              "strategic-simplification"
+            ],
+            "contentConcepts": [
+              "analytic-curve-geometry",
+              "loci-coordinate-constraints"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "branch-domain",
+            "skills": [
+              "proof-construction",
+              "case-analysis"
+            ],
+            "contentConcepts": [
+              "roots-intersections",
+              "qualitative-function-behavior"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "asymptotes-and-branches",
+            "skills": [
+              "graph-sketching",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "asymptotic-behavior",
+              "qualitative-function-behavior"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "closest-points",
+            "skills": [
+              "strategic-simplification",
+              "proof-construction",
+              "generalization"
+            ],
+            "contentConcepts": [
+              "inequalities-bounds",
+              "analytic-curve-geometry"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "guided-adaptation/error-recovery remain process-grounded and are not milestone-completion evidence."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "approved",
+        "author": {
+          "entry": "introductory-plus",
+          "core": "strong",
+          "ceiling": "stretch"
+        },
+        "recommended": {
+          "entry": "introductory-plus",
+          "core": "strong",
+          "ceiling": "stretch"
+        },
+        "stageBands": [
+          {
+            "stageId": "opening",
+            "role": "warm-up",
+            "authorDifficulty": "introductory-plus",
+            "recommendedDifficulty": "introductory-plus",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "role": "core",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "strong",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "role": "stretch",
+            "authorDifficulty": "stretch",
+            "recommendedDifficulty": "stretch",
+            "decision": "approved"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "changes-required",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 3,
+            "max": 6
+          },
+          "independentCompletionMinutes": {
+            "min": 17,
+            "max": 27
+          },
+          "promptedCompletionMinutes": {
+            "min": 13,
+            "max": 22
+          },
+          "optionalExtensionMinutes": {
+            "min": 5,
+            "max": 9
+          },
+          "softCutoffMinutes": 25,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [
+        "Use the G family-specific timing estimate."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "C — Cantor",
+      "prNumber": 132,
+      "familyId": "oxford-cantor-reciprocal-paired-inputs",
+      "authorHeadReviewed": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "functions",
+            "graph-sketching",
+            "algebra",
+            "elementary-analysis"
+          ],
+          "contentConcepts": [
+            "qualitative-function-behavior",
+            "asymptotic-behavior",
+            "function-transformations",
+            "inverse-functions",
+            "turning-points-extrema",
+            "inequalities-bounds",
+            "equations-inequalities",
+            "parameter-dependent-curves"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "equations-inequalities",
+            "functions-graphs"
+          ],
+          "reasoningSkills": [
+            "graph-sketching",
+            "precision-checking",
+            "qualitative-function-behavior",
+            "pattern-recognition",
+            "representation-switching",
+            "function-transformations",
+            "proof-construction",
+            "strategic-simplification",
+            "inequalities-bounds",
+            "inverse-functions",
+            "generalization",
+            "transfer",
+            "parameter-dependent-curves",
+            "try reciprocal input substitution",
+            "reciprocal inputs have equal heights",
+            "use a square or AM-GM on the denominator",
+            "the equality simplifies to a product of two factors",
+            "the reciprocal map acquires a scale",
+            "functions",
+            "algebraic-manipulation"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "functions",
+            "graph-sketching",
+            "algebra",
+            "elementary-analysis"
+          ],
+          "contentConcepts": [
+            "qualitative-function-behavior",
+            "asymptotic-behavior",
+            "function-transformations",
+            "inverse-functions",
+            "turning-points-extrema",
+            "inequalities-bounds",
+            "equations-inequalities",
+            "parameter-dependent-curves"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "equations-inequalities",
+            "functions-graphs"
+          ],
+          "reasoningSkills": [
+            "graph-sketching",
+            "precision-checking",
+            "qualitative-function-behavior",
+            "pattern-recognition",
+            "representation-switching",
+            "function-transformations",
+            "proof-construction",
+            "strategic-simplification",
+            "inequalities-bounds",
+            "inverse-functions",
+            "generalization",
+            "transfer",
+            "parameter-dependent-curves",
+            "try reciprocal input substitution",
+            "reciprocal inputs have equal heights",
+            "use a square or AM-GM on the denominator",
+            "the equality simplifies to a product of two factors",
+            "the reciprocal map acquires a scale",
+            "functions",
+            "algebraic-manipulation"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "opening",
+            "authorRole": "warm-up",
+            "recommendedRole": "warm-up",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "authorRole": "transfer",
+            "recommendedRole": "transfer",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "endpoint-behavior",
+            "skills": [
+              "graph-sketching",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "qualitative-function-behavior",
+              "asymptotic-behavior"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "reciprocal-invariance",
+            "skills": [
+              "pattern-recognition",
+              "representation-switching"
+            ],
+            "contentConcepts": [
+              "function-transformations",
+              "inverse-functions"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "sharp-maximum",
+            "skills": [
+              "proof-construction",
+              "strategic-simplification"
+            ],
+            "contentConcepts": [
+              "inequalities-bounds",
+              "turning-points-extrema"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "equal-output-classification",
+            "skills": [
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "inverse-functions",
+              "equations-inequalities"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "scaled-family",
+            "skills": [
+              "generalization",
+              "transfer"
+            ],
+            "contentConcepts": [
+              "parameter-dependent-curves",
+              "function-transformations",
+              "turning-points-extrema"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "guided-adaptation/error-recovery remain process-grounded and are not milestone-completion evidence."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "approved",
+        "author": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "recommended": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "stageBands": [
+          {
+            "stageId": "opening",
+            "role": "warm-up",
+            "authorDifficulty": "introductory",
+            "recommendedDifficulty": "introductory",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "role": "core",
+            "authorDifficulty": "standard",
+            "recommendedDifficulty": "standard",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "role": "transfer",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "strong",
+            "decision": "approved"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "changes-required",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 4
+          },
+          "independentCompletionMinutes": {
+            "min": 12,
+            "max": 20
+          },
+          "promptedCompletionMinutes": {
+            "min": 9,
+            "max": 16
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 7
+          },
+          "softCutoffMinutes": 20,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [
+        "Use the G family-specific timing estimate."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "C — Cantor",
+      "prNumber": 132,
+      "familyId": "oxford-cantor-tangent-intersection-locus",
+      "authorHeadReviewed": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "calculus",
+            "coordinate-geometry",
+            "graph-sketching",
+            "functions",
+            "algebra"
+          ],
+          "contentConcepts": [
+            "derivative-structure",
+            "loci-coordinate-constraints",
+            "analytic-curve-geometry",
+            "parameter-dependent-curves",
+            "function-transformations",
+            "equations-inequalities"
+          ],
+          "prerequisiteConcepts": [
+            "differentiation",
+            "coordinate-geometry-basics",
+            "algebraic-manipulation",
+            "functions-graphs"
+          ],
+          "reasoningSkills": [
+            "technique",
+            "precision-checking",
+            "derivative-structure",
+            "strategic-simplification",
+            "representation-switching",
+            "loci-coordinate-constraints",
+            "pattern-recognition",
+            "parameter-dependent-curves",
+            "proof-construction",
+            "graph-sketching",
+            "analytic-curve-geometry",
+            "generalization",
+            "transfer",
+            "visualization",
+            "differentiate and use point-slope form",
+            "the intersection x-coordinate simplifies first",
+            "the coordinates have midpoint-product form",
+            "complete the square in the parameter",
+            "the gap creates a vertical shift of h²/4",
+            "calculus",
+            "differentiation"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "calculus",
+            "coordinate-geometry",
+            "graph-sketching",
+            "functions",
+            "algebra"
+          ],
+          "contentConcepts": [
+            "derivative-structure",
+            "loci-coordinate-constraints",
+            "analytic-curve-geometry",
+            "parameter-dependent-curves",
+            "function-transformations",
+            "equations-inequalities"
+          ],
+          "prerequisiteConcepts": [
+            "differentiation",
+            "coordinate-geometry-basics",
+            "algebraic-manipulation",
+            "functions-graphs"
+          ],
+          "reasoningSkills": [
+            "technique",
+            "precision-checking",
+            "derivative-structure",
+            "strategic-simplification",
+            "representation-switching",
+            "loci-coordinate-constraints",
+            "pattern-recognition",
+            "parameter-dependent-curves",
+            "proof-construction",
+            "graph-sketching",
+            "analytic-curve-geometry",
+            "generalization",
+            "transfer",
+            "visualization",
+            "differentiate and use point-slope form",
+            "the intersection x-coordinate simplifies first",
+            "the coordinates have midpoint-product form",
+            "complete the square in the parameter",
+            "the gap creates a vertical shift of h²/4",
+            "calculus",
+            "differentiation"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "opening",
+            "authorRole": "technique-check",
+            "recommendedRole": "technique-check",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "authorRole": "transfer",
+            "recommendedRole": "transfer",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "tangent-at-u",
+            "skills": [
+              "technique",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "derivative-structure",
+              "analytic-curve-geometry"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "intersect-two-tangents",
+            "skills": [
+              "strategic-simplification",
+              "representation-switching"
+            ],
+            "contentConcepts": [
+              "loci-coordinate-constraints",
+              "equations-inequalities"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "fixed-gap-coordinates",
+            "skills": [
+              "technique",
+              "pattern-recognition"
+            ],
+            "contentConcepts": [
+              "parameter-dependent-curves",
+              "loci-coordinate-constraints"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "eliminate-parameter",
+            "skills": [
+              "proof-construction",
+              "graph-sketching"
+            ],
+            "contentConcepts": [
+              "analytic-curve-geometry",
+              "parameter-dependent-curves"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "general-gap",
+            "skills": [
+              "generalization",
+              "transfer",
+              "visualization"
+            ],
+            "contentConcepts": [
+              "parameter-dependent-curves",
+              "function-transformations"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "guided-adaptation/error-recovery remain process-grounded and are not milestone-completion evidence."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "changes-required",
+        "author": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "recommended": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "standard"
+        },
+        "stageBands": [
+          {
+            "stageId": "opening",
+            "role": "technique-check",
+            "authorDifficulty": "introductory",
+            "recommendedDifficulty": "introductory",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "role": "core",
+            "authorDifficulty": "standard",
+            "recommendedDifficulty": "standard",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "role": "transfer",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "standard",
+            "decision": "changes-required"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "changes-required",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 4
+          },
+          "independentCompletionMinutes": {
+            "min": 11,
+            "max": 18
+          },
+          "promptedCompletionMinutes": {
+            "min": 8,
+            "max": 15
+          },
+          "optionalExtensionMinutes": {
+            "min": 3,
+            "max": 6
+          },
+          "softCutoffMinutes": 18,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [
+        "Use G difficulty introductory / standard / standard.",
+        "Use the G family-specific timing estimate."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "C — Cantor",
+      "prNumber": 132,
+      "familyId": "oxford-cantor-exponential-rotating-line",
+      "authorHeadReviewed": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "functions",
+            "graph-sketching",
+            "calculus",
+            "elementary-analysis",
+            "algebra"
+          ],
+          "contentConcepts": [
+            "parameter-dependent-curves",
+            "roots-intersections",
+            "optimization-extrema",
+            "derivative-structure",
+            "turning-points-extrema",
+            "qualitative-function-behavior",
+            "parameter-dependent-algebra",
+            "function-transformations"
+          ],
+          "prerequisiteConcepts": [
+            "functions-graphs",
+            "exponentials-logarithms",
+            "differentiation",
+            "algebraic-manipulation"
+          ],
+          "reasoningSkills": [
+            "precision-checking",
+            "strategic-simplification",
+            "roots-intersections",
+            "graph-sketching",
+            "visualization",
+            "parameter-dependent-curves",
+            "representation-switching",
+            "technique",
+            "optimization-extrema",
+            "proof-construction",
+            "case-analysis",
+            "generalization",
+            "transfer",
+            "parameter-dependent-algebra",
+            "restrict the domain before optimizing",
+            "rotate a line through the origin",
+            "turn the parameter into the output of one function",
+            "the ratio falls then rises",
+            "rescale the critical point by b",
+            "functions",
+            "functions-graphs"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "functions",
+            "graph-sketching",
+            "calculus",
+            "elementary-analysis",
+            "algebra"
+          ],
+          "contentConcepts": [
+            "parameter-dependent-curves",
+            "roots-intersections",
+            "optimization-extrema",
+            "derivative-structure",
+            "turning-points-extrema",
+            "qualitative-function-behavior",
+            "parameter-dependent-algebra",
+            "function-transformations"
+          ],
+          "prerequisiteConcepts": [
+            "functions-graphs",
+            "exponentials-logarithms",
+            "differentiation",
+            "algebraic-manipulation"
+          ],
+          "reasoningSkills": [
+            "precision-checking",
+            "strategic-simplification",
+            "roots-intersections",
+            "graph-sketching",
+            "visualization",
+            "parameter-dependent-curves",
+            "representation-switching",
+            "technique",
+            "optimization-extrema",
+            "proof-construction",
+            "case-analysis",
+            "generalization",
+            "transfer",
+            "parameter-dependent-algebra",
+            "restrict the domain before optimizing",
+            "rotate a line through the origin",
+            "turn the parameter into the output of one function",
+            "the ratio falls then rises",
+            "rescale the critical point by b",
+            "functions",
+            "functions-graphs"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "opening",
+            "authorRole": "warm-up",
+            "recommendedRole": "warm-up",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "authorRole": "transfer",
+            "recommendedRole": "transfer",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "exclude-negative-x",
+            "skills": [
+              "precision-checking",
+              "strategic-simplification"
+            ],
+            "contentConcepts": [
+              "roots-intersections",
+              "qualitative-function-behavior"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "graphical-regimes",
+            "skills": [
+              "graph-sketching",
+              "visualization"
+            ],
+            "contentConcepts": [
+              "parameter-dependent-curves",
+              "roots-intersections"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "minimize-ratio",
+            "skills": [
+              "representation-switching",
+              "technique"
+            ],
+            "contentConcepts": [
+              "optimization-extrema",
+              "derivative-structure"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "classify-a",
+            "skills": [
+              "proof-construction",
+              "case-analysis"
+            ],
+            "contentConcepts": [
+              "roots-intersections",
+              "turning-points-extrema",
+              "qualitative-function-behavior"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "scale-exponent",
+            "skills": [
+              "generalization",
+              "transfer"
+            ],
+            "contentConcepts": [
+              "parameter-dependent-algebra",
+              "function-transformations"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "guided-adaptation/error-recovery remain process-grounded and are not milestone-completion evidence."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "approved",
+        "author": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "recommended": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "stageBands": [
+          {
+            "stageId": "opening",
+            "role": "warm-up",
+            "authorDifficulty": "introductory",
+            "recommendedDifficulty": "introductory",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "role": "core",
+            "authorDifficulty": "standard",
+            "recommendedDifficulty": "standard",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "role": "transfer",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "strong",
+            "decision": "approved"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "approved",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 5
+          },
+          "independentCompletionMinutes": {
+            "min": 17,
+            "max": 27
+          },
+          "promptedCompletionMinutes": {
+            "min": 13,
+            "max": 24
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 8
+          },
+          "softCutoffMinutes": 25,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "C — Cantor",
+      "prNumber": 132,
+      "familyId": "oxford-cantor-mobius-recurrence",
+      "authorHeadReviewed": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "sequences-recurrences",
+            "functions",
+            "elementary-analysis"
+          ],
+          "contentConcepts": [
+            "recurrence-structure",
+            "sequence-convergence",
+            "monotonicity-boundedness",
+            "composition-iteration",
+            "continuity-fixed-points"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "sequences-series",
+            "functions-graphs"
+          ],
+          "reasoningSkills": [
+            "small-case-exploration",
+            "conjecture-formation",
+            "recurrence-structure",
+            "pattern-recognition",
+            "strategic-simplification",
+            "continuity-fixed-points",
+            "representation-switching",
+            "technique",
+            "proof-construction",
+            "precision-checking",
+            "generalization",
+            "monotonicity-boundedness",
+            "compute a few low-complexity starts",
+            "track error from 1",
+            "set y_n=1/(1-x_n)",
+            "solve the arithmetic progression",
+            "positivity makes the domain and monotonicity transparent",
+            "sequences-recurrences",
+            "algebraic-manipulation",
+            "guided-adaptation"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "sequences-recurrences",
+            "functions",
+            "elementary-analysis"
+          ],
+          "contentConcepts": [
+            "recurrence-structure",
+            "sequence-convergence",
+            "monotonicity-boundedness",
+            "composition-iteration",
+            "continuity-fixed-points"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "sequences-series",
+            "functions-graphs"
+          ],
+          "reasoningSkills": [
+            "small-case-exploration",
+            "conjecture-formation",
+            "recurrence-structure",
+            "pattern-recognition",
+            "strategic-simplification",
+            "continuity-fixed-points",
+            "representation-switching",
+            "technique",
+            "proof-construction",
+            "precision-checking",
+            "generalization",
+            "monotonicity-boundedness",
+            "compute a few low-complexity starts",
+            "track error from 1",
+            "set y_n=1/(1-x_n)",
+            "solve the arithmetic progression",
+            "positivity makes the domain and monotonicity transparent",
+            "sequences-recurrences",
+            "algebraic-manipulation",
+            "guided-adaptation"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "opening",
+            "authorRole": "warm-up",
+            "recommendedRole": "warm-up",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "authorRole": "stretch",
+            "recommendedRole": "stretch",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "small-starts",
+            "skills": [
+              "small-case-exploration",
+              "conjecture-formation"
+            ],
+            "contentConcepts": [
+              "recurrence-structure",
+              "sequence-convergence"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "fixed-point-view",
+            "skills": [
+              "pattern-recognition",
+              "strategic-simplification"
+            ],
+            "contentConcepts": [
+              "continuity-fixed-points",
+              "recurrence-structure"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "reciprocal-error",
+            "skills": [
+              "representation-switching",
+              "technique"
+            ],
+            "contentConcepts": [
+              "recurrence-structure",
+              "composition-iteration"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "explicit-form",
+            "skills": [
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "recurrence-structure",
+              "sequence-convergence"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "monotone-limit",
+            "skills": [
+              "proof-construction",
+              "generalization"
+            ],
+            "contentConcepts": [
+              "monotonicity-boundedness",
+              "sequence-convergence"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "guided-adaptation/error-recovery remain process-grounded and are not milestone-completion evidence."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "approved",
+        "author": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "recommended": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "stageBands": [
+          {
+            "stageId": "opening",
+            "role": "warm-up",
+            "authorDifficulty": "introductory",
+            "recommendedDifficulty": "introductory",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "role": "core",
+            "authorDifficulty": "standard",
+            "recommendedDifficulty": "standard",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "role": "stretch",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "strong",
+            "decision": "approved"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "changes-required",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 5
+          },
+          "independentCompletionMinutes": {
+            "min": 13,
+            "max": 22
+          },
+          "promptedCompletionMinutes": {
+            "min": 10,
+            "max": 18
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 8
+          },
+          "softCutoffMinutes": 21,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [
+        "Use the G family-specific timing estimate."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "C — Cantor",
+      "prNumber": 132,
+      "familyId": "oxford-cantor-squared-error-recurrence",
+      "authorHeadReviewed": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "sequences-recurrences",
+            "functions",
+            "elementary-analysis",
+            "algebra"
+          ],
+          "contentConcepts": [
+            "recurrence-structure",
+            "sequence-convergence",
+            "monotonicity-boundedness",
+            "continuity-fixed-points",
+            "composition-iteration"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "sequences-series"
+          ],
+          "reasoningSkills": [
+            "small-case-exploration",
+            "conjecture-formation",
+            "recurrence-structure",
+            "proof-construction",
+            "precision-checking",
+            "monotonicity-boundedness",
+            "technique",
+            "continuity-fixed-points",
+            "pattern-recognition",
+            "strategic-simplification",
+            "representation-switching",
+            "generalization",
+            "sequence-convergence",
+            "prove the numerical trend before seeking a formula",
+            "there are two useful difference identities",
+            "use the fixed-point equation only after convergence is justified",
+            "the error is a perfect square",
+            "the error after n steps is the initial error to power 2^n",
+            "sequences-recurrences",
+            "algebraic-manipulation"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "sequences-recurrences",
+            "functions",
+            "elementary-analysis",
+            "algebra"
+          ],
+          "contentConcepts": [
+            "recurrence-structure",
+            "sequence-convergence",
+            "monotonicity-boundedness",
+            "continuity-fixed-points",
+            "composition-iteration"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "sequences-series"
+          ],
+          "reasoningSkills": [
+            "small-case-exploration",
+            "conjecture-formation",
+            "recurrence-structure",
+            "proof-construction",
+            "precision-checking",
+            "monotonicity-boundedness",
+            "technique",
+            "continuity-fixed-points",
+            "pattern-recognition",
+            "strategic-simplification",
+            "representation-switching",
+            "generalization",
+            "sequence-convergence",
+            "prove the numerical trend before seeking a formula",
+            "there are two useful difference identities",
+            "use the fixed-point equation only after convergence is justified",
+            "the error is a perfect square",
+            "the error after n steps is the initial error to power 2^n",
+            "sequences-recurrences",
+            "algebraic-manipulation"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "opening",
+            "authorRole": "warm-up",
+            "recommendedRole": "warm-up",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "authorRole": "transfer",
+            "recommendedRole": "transfer",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "numerical-conjecture",
+            "skills": [
+              "small-case-exploration",
+              "conjecture-formation"
+            ],
+            "contentConcepts": [
+              "recurrence-structure",
+              "sequence-convergence"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "monotone-bounded",
+            "skills": [
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "monotonicity-boundedness",
+              "recurrence-structure"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "fixed-point-limit",
+            "skills": [
+              "proof-construction",
+              "technique"
+            ],
+            "contentConcepts": [
+              "continuity-fixed-points",
+              "sequence-convergence"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "square-the-error",
+            "skills": [
+              "pattern-recognition",
+              "strategic-simplification"
+            ],
+            "contentConcepts": [
+              "recurrence-structure",
+              "composition-iteration"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "exact-rate",
+            "skills": [
+              "representation-switching",
+              "generalization"
+            ],
+            "contentConcepts": [
+              "sequence-convergence",
+              "recurrence-structure"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "guided-adaptation/error-recovery remain process-grounded and are not milestone-completion evidence."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "approved",
+        "author": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "recommended": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "stageBands": [
+          {
+            "stageId": "opening",
+            "role": "warm-up",
+            "authorDifficulty": "introductory",
+            "recommendedDifficulty": "introductory",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "role": "core",
+            "authorDifficulty": "standard",
+            "recommendedDifficulty": "standard",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "role": "transfer",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "strong",
+            "decision": "approved"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "approved",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 5
+          },
+          "independentCompletionMinutes": {
+            "min": 17,
+            "max": 27
+          },
+          "promptedCompletionMinutes": {
+            "min": 13,
+            "max": 23
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 8
+          },
+          "softCutoffMinutes": 25,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "C — Cantor",
+      "prNumber": 132,
+      "familyId": "oxford-cantor-three-cycle-map",
+      "authorHeadReviewed": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "functions",
+            "functional-equations",
+            "algebra"
+          ],
+          "contentConcepts": [
+            "composition-iteration",
+            "qualitative-function-behavior",
+            "function-transformations",
+            "fixed-point-constraints",
+            "composition-constraints"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "functions-graphs",
+            "equations-inequalities"
+          ],
+          "reasoningSkills": [
+            "precision-checking",
+            "definition-exploration",
+            "composition-iteration",
+            "small-case-exploration",
+            "conjecture-formation",
+            "technique",
+            "representation-switching",
+            "proof-construction",
+            "generalization",
+            "transfer",
+            "fixed-point-constraints",
+            "iteration needs more than the one-step domain",
+            "compute three consecutive values",
+            "the second iterate is another simple fractional-linear map",
+            "the third composition collapses completely",
+            "rule out period one after proving period divides three",
+            "functions",
+            "algebraic-manipulation",
+            "guided-adaptation"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "functions",
+            "functional-equations",
+            "algebra"
+          ],
+          "contentConcepts": [
+            "composition-iteration",
+            "qualitative-function-behavior",
+            "function-transformations",
+            "fixed-point-constraints",
+            "composition-constraints"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "functions-graphs",
+            "equations-inequalities"
+          ],
+          "reasoningSkills": [
+            "precision-checking",
+            "definition-exploration",
+            "composition-iteration",
+            "small-case-exploration",
+            "conjecture-formation",
+            "technique",
+            "representation-switching",
+            "proof-construction",
+            "generalization",
+            "transfer",
+            "fixed-point-constraints",
+            "iteration needs more than the one-step domain",
+            "compute three consecutive values",
+            "the second iterate is another simple fractional-linear map",
+            "the third composition collapses completely",
+            "rule out period one after proving period divides three",
+            "functions",
+            "algebraic-manipulation",
+            "guided-adaptation"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "opening",
+            "authorRole": "warm-up",
+            "recommendedRole": "warm-up",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "authorRole": "transfer",
+            "recommendedRole": "transfer",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "safe-iteration-domain",
+            "skills": [
+              "precision-checking",
+              "definition-exploration"
+            ],
+            "contentConcepts": [
+              "composition-iteration",
+              "qualitative-function-behavior"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "sample-orbits",
+            "skills": [
+              "small-case-exploration",
+              "conjecture-formation"
+            ],
+            "contentConcepts": [
+              "composition-iteration",
+              "qualitative-function-behavior"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "second-iterate",
+            "skills": [
+              "technique",
+              "representation-switching"
+            ],
+            "contentConcepts": [
+              "composition-iteration",
+              "function-transformations"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "third-iterate",
+            "skills": [
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "composition-iteration",
+              "fixed-point-constraints"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "exact-period-three",
+            "skills": [
+              "proof-construction",
+              "generalization",
+              "transfer"
+            ],
+            "contentConcepts": [
+              "fixed-point-constraints",
+              "composition-iteration",
+              "function-transformations"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "guided-adaptation/error-recovery remain process-grounded and are not milestone-completion evidence."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "approved",
+        "author": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "recommended": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "stageBands": [
+          {
+            "stageId": "opening",
+            "role": "warm-up",
+            "authorDifficulty": "introductory",
+            "recommendedDifficulty": "introductory",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "role": "core",
+            "authorDifficulty": "standard",
+            "recommendedDifficulty": "standard",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "role": "transfer",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "strong",
+            "decision": "approved"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "approved",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 5
+          },
+          "independentCompletionMinutes": {
+            "min": 17,
+            "max": 27
+          },
+          "promptedCompletionMinutes": {
+            "min": 13,
+            "max": 23
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 8
+          },
+          "softCutoffMinutes": 25,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "C — Cantor",
+      "prNumber": 132,
+      "familyId": "oxford-cantor-quartic-horizontal-levels",
+      "authorHeadReviewed": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "functions",
+            "graph-sketching",
+            "calculus",
+            "algebra"
+          ],
+          "contentConcepts": [
+            "symmetry-periodicity",
+            "roots-intersections",
+            "polynomial-structure",
+            "derivative-structure",
+            "turning-points-extrema",
+            "qualitative-function-behavior",
+            "equations-inequalities",
+            "function-transformations",
+            "parameter-dependent-curves"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "polynomial-factorization",
+            "functions-graphs",
+            "differentiation"
+          ],
+          "reasoningSkills": [
+            "graph-sketching",
+            "technique",
+            "symmetry-periodicity",
+            "precision-checking",
+            "derivative-structure",
+            "visualization",
+            "case-analysis",
+            "roots-intersections",
+            "representation-switching",
+            "proof-construction",
+            "equations-inequalities",
+            "generalization",
+            "function-transformations",
+            "start with symmetry and roots",
+            "differentiate after exploiting symmetry",
+            "slide a horizontal line through those two special levels",
+            "turn the quartic into a quadratic with a sign constraint",
+            "normalize the parameter by rescaling x",
+            "functions",
+            "algebraic-manipulation"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "functions",
+            "graph-sketching",
+            "calculus",
+            "algebra"
+          ],
+          "contentConcepts": [
+            "symmetry-periodicity",
+            "roots-intersections",
+            "polynomial-structure",
+            "derivative-structure",
+            "turning-points-extrema",
+            "qualitative-function-behavior",
+            "equations-inequalities",
+            "function-transformations",
+            "parameter-dependent-curves"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "polynomial-factorization",
+            "functions-graphs",
+            "differentiation"
+          ],
+          "reasoningSkills": [
+            "graph-sketching",
+            "technique",
+            "symmetry-periodicity",
+            "precision-checking",
+            "derivative-structure",
+            "visualization",
+            "case-analysis",
+            "roots-intersections",
+            "representation-switching",
+            "proof-construction",
+            "equations-inequalities",
+            "generalization",
+            "function-transformations",
+            "start with symmetry and roots",
+            "differentiate after exploiting symmetry",
+            "slide a horizontal line through those two special levels",
+            "turn the quartic into a quadratic with a sign constraint",
+            "normalize the parameter by rescaling x",
+            "functions",
+            "algebraic-manipulation"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "opening",
+            "authorRole": "technique-check",
+            "recommendedRole": "technique-check",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "authorRole": "transfer",
+            "recommendedRole": "transfer",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "even-symmetry",
+            "skills": [
+              "graph-sketching",
+              "technique"
+            ],
+            "contentConcepts": [
+              "symmetry-periodicity",
+              "roots-intersections",
+              "polynomial-structure"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "critical-points",
+            "skills": [
+              "technique",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "derivative-structure",
+              "turning-points-extrema"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "level-count-picture",
+            "skills": [
+              "visualization",
+              "case-analysis"
+            ],
+            "contentConcepts": [
+              "roots-intersections",
+              "qualitative-function-behavior"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "algebraic-count-proof",
+            "skills": [
+              "representation-switching",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "equations-inequalities",
+              "roots-intersections"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "master-scaling",
+            "skills": [
+              "generalization",
+              "representation-switching"
+            ],
+            "contentConcepts": [
+              "function-transformations",
+              "parameter-dependent-curves"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "guided-adaptation/error-recovery remain process-grounded and are not milestone-completion evidence."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "approved",
+        "author": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "recommended": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "stageBands": [
+          {
+            "stageId": "opening",
+            "role": "technique-check",
+            "authorDifficulty": "introductory",
+            "recommendedDifficulty": "introductory",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "role": "core",
+            "authorDifficulty": "standard",
+            "recommendedDifficulty": "standard",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "role": "transfer",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "strong",
+            "decision": "approved"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "approved",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 5
+          },
+          "independentCompletionMinutes": {
+            "min": 17,
+            "max": 27
+          },
+          "promptedCompletionMinutes": {
+            "min": 13,
+            "max": 24
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 8
+          },
+          "softCutoffMinutes": 25,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "C — Cantor",
+      "prNumber": 132,
+      "familyId": "oxford-cantor-reciprocal-increment-recurrence",
+      "authorHeadReviewed": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "sequences-recurrences",
+            "elementary-analysis",
+            "algebra"
+          ],
+          "contentConcepts": [
+            "recurrence-structure",
+            "monotonicity-boundedness",
+            "telescoping-structure",
+            "inequalities-bounds",
+            "limiting-arguments",
+            "sequence-convergence"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "sequences-series",
+            "limits-continuity"
+          ],
+          "reasoningSkills": [
+            "proof-construction",
+            "precision-checking",
+            "monotonicity-boundedness",
+            "strategic-simplification",
+            "technique",
+            "recurrence-structure",
+            "invariants",
+            "inequalities-bounds",
+            "representation-switching",
+            "telescoping-structure",
+            "generalization",
+            "transfer",
+            "limiting-arguments",
+            "the sequence can never hit zero",
+            "squaring reveals a constant increment plus a small error",
+            "discard only the positive error term for a lower bound",
+            "the leftover error is bounded by a reciprocal-linear sum",
+            "normalize the squared sequence first",
+            "sequences-recurrences",
+            "algebraic-manipulation",
+            "guided-adaptation"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "sequences-recurrences",
+            "elementary-analysis",
+            "algebra"
+          ],
+          "contentConcepts": [
+            "recurrence-structure",
+            "monotonicity-boundedness",
+            "telescoping-structure",
+            "inequalities-bounds",
+            "limiting-arguments",
+            "sequence-convergence"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "sequences-series",
+            "limits-continuity"
+          ],
+          "reasoningSkills": [
+            "proof-construction",
+            "precision-checking",
+            "monotonicity-boundedness",
+            "strategic-simplification",
+            "technique",
+            "recurrence-structure",
+            "invariants",
+            "inequalities-bounds",
+            "representation-switching",
+            "telescoping-structure",
+            "generalization",
+            "transfer",
+            "limiting-arguments",
+            "the sequence can never hit zero",
+            "squaring reveals a constant increment plus a small error",
+            "discard only the positive error term for a lower bound",
+            "the leftover error is bounded by a reciprocal-linear sum",
+            "normalize the squared sequence first",
+            "sequences-recurrences",
+            "algebraic-manipulation",
+            "guided-adaptation"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "opening",
+            "authorRole": "warm-up",
+            "recommendedRole": "warm-up",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "authorRole": "stretch",
+            "recommendedRole": "stretch",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "monotone-growth",
+            "skills": [
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "monotonicity-boundedness",
+              "recurrence-structure"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "square-identity",
+            "skills": [
+              "strategic-simplification",
+              "technique"
+            ],
+            "contentConcepts": [
+              "recurrence-structure",
+              "telescoping-structure"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "linear-lower-bound",
+            "skills": [
+              "proof-construction",
+              "invariants"
+            ],
+            "contentConcepts": [
+              "inequalities-bounds",
+              "recurrence-structure"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "error-sum-bound",
+            "skills": [
+              "representation-switching",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "telescoping-structure",
+              "inequalities-bounds",
+              "limiting-arguments"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "normalized-limit",
+            "skills": [
+              "proof-construction",
+              "generalization",
+              "transfer"
+            ],
+            "contentConcepts": [
+              "limiting-arguments",
+              "sequence-convergence",
+              "recurrence-structure"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "guided-adaptation/error-recovery remain process-grounded and are not milestone-completion evidence."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "approved",
+        "author": {
+          "entry": "introductory-plus",
+          "core": "strong",
+          "ceiling": "stretch"
+        },
+        "recommended": {
+          "entry": "introductory-plus",
+          "core": "strong",
+          "ceiling": "stretch"
+        },
+        "stageBands": [
+          {
+            "stageId": "opening",
+            "role": "warm-up",
+            "authorDifficulty": "introductory-plus",
+            "recommendedDifficulty": "introductory-plus",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "role": "core",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "strong",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "role": "stretch",
+            "authorDifficulty": "stretch",
+            "recommendedDifficulty": "stretch",
+            "decision": "approved"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "changes-required",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 5
+          },
+          "independentCompletionMinutes": {
+            "min": 17,
+            "max": 28
+          },
+          "promptedCompletionMinutes": {
+            "min": 13,
+            "max": 23
+          },
+          "optionalExtensionMinutes": {
+            "min": 5,
+            "max": 10
+          },
+          "softCutoffMinutes": 25,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [
+        "Use the G family-specific timing estimate."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "C — Cantor",
+      "prNumber": 132,
+      "familyId": "oxford-cantor-line-envelope",
+      "authorHeadReviewed": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "functions",
+            "graph-sketching",
+            "calculus",
+            "algebra",
+            "elementary-analysis"
+          ],
+          "contentConcepts": [
+            "parameter-dependent-curves",
+            "qualitative-function-behavior",
+            "optimization-extrema",
+            "parameter-dependent-algebra",
+            "function-transformations",
+            "inequalities-bounds",
+            "roots-intersections",
+            "turning-points-extrema"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "functions-graphs",
+            "equations-inequalities"
+          ],
+          "reasoningSkills": [
+            "graph-sketching",
+            "conjecture-formation",
+            "parameter-dependent-curves",
+            "representation-switching",
+            "strategic-simplification",
+            "optimization-extrema",
+            "technique",
+            "proof-construction",
+            "precision-checking",
+            "inequalities-bounds",
+            "generalization",
+            "transfer",
+            "switch the variable you are optimizing",
+            "the maximizing t is (x-1)/2",
+            "the envelope candidate is a parabola",
+            "prove all lines lie below the curve globally",
+            "the contact point certifies tangency",
+            "functions",
+            "algebraic-manipulation"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "functions",
+            "graph-sketching",
+            "calculus",
+            "algebra",
+            "elementary-analysis"
+          ],
+          "contentConcepts": [
+            "parameter-dependent-curves",
+            "qualitative-function-behavior",
+            "optimization-extrema",
+            "parameter-dependent-algebra",
+            "function-transformations",
+            "inequalities-bounds",
+            "roots-intersections",
+            "turning-points-extrema"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "functions-graphs",
+            "equations-inequalities"
+          ],
+          "reasoningSkills": [
+            "graph-sketching",
+            "conjecture-formation",
+            "parameter-dependent-curves",
+            "representation-switching",
+            "strategic-simplification",
+            "optimization-extrema",
+            "technique",
+            "proof-construction",
+            "precision-checking",
+            "inequalities-bounds",
+            "generalization",
+            "transfer",
+            "switch the variable you are optimizing",
+            "the maximizing t is (x-1)/2",
+            "the envelope candidate is a parabola",
+            "prove all lines lie below the curve globally",
+            "the contact point certifies tangency",
+            "functions",
+            "algebraic-manipulation"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "opening",
+            "authorRole": "warm-up",
+            "recommendedRole": "warm-up",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "authorRole": "transfer",
+            "recommendedRole": "transfer",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "sample-lines",
+            "skills": [
+              "graph-sketching",
+              "conjecture-formation"
+            ],
+            "contentConcepts": [
+              "parameter-dependent-curves",
+              "qualitative-function-behavior"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "fix-x-optimize-t",
+            "skills": [
+              "representation-switching",
+              "strategic-simplification"
+            ],
+            "contentConcepts": [
+              "optimization-extrema",
+              "parameter-dependent-algebra"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "complete-square-envelope",
+            "skills": [
+              "technique",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "optimization-extrema",
+              "function-transformations"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "global-side-proof",
+            "skills": [
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "inequalities-bounds",
+              "roots-intersections"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "tangency-and-general-family",
+            "skills": [
+              "generalization",
+              "transfer",
+              "graph-sketching"
+            ],
+            "contentConcepts": [
+              "parameter-dependent-curves",
+              "turning-points-extrema",
+              "function-transformations"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "guided-adaptation/error-recovery remain process-grounded and are not milestone-completion evidence."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "changes-required",
+        "author": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "strong"
+        },
+        "recommended": {
+          "entry": "introductory",
+          "core": "standard",
+          "ceiling": "standard"
+        },
+        "stageBands": [
+          {
+            "stageId": "opening",
+            "role": "warm-up",
+            "authorDifficulty": "introductory",
+            "recommendedDifficulty": "introductory",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "role": "core",
+            "authorDifficulty": "standard",
+            "recommendedDifficulty": "standard",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "role": "transfer",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "standard",
+            "decision": "changes-required"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "changes-required",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 4
+          },
+          "independentCompletionMinutes": {
+            "min": 11,
+            "max": 18
+          },
+          "promptedCompletionMinutes": {
+            "min": 8,
+            "max": 15
+          },
+          "optionalExtensionMinutes": {
+            "min": 3,
+            "max": 6
+          },
+          "softCutoffMinutes": 18,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [
+        "Use G difficulty introductory / standard / standard.",
+        "Use the G family-specific timing estimate."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    },
+    {
+      "agent": "G — Gauss",
+      "authorAgent": "C — Cantor",
+      "prNumber": 132,
+      "familyId": "oxford-cantor-mobius-involution",
+      "authorHeadReviewed": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
+      "taxonomy": {
+        "decision": "approved",
+        "author": {
+          "domains": [
+            "functions",
+            "functional-equations",
+            "graph-sketching",
+            "coordinate-geometry",
+            "algebra"
+          ],
+          "contentConcepts": [
+            "analytic-curve-geometry",
+            "function-transformations",
+            "asymptotic-behavior",
+            "symmetry-periodicity",
+            "qualitative-function-behavior",
+            "composition-iteration",
+            "composition-constraints",
+            "fixed-point-constraints",
+            "roots-intersections",
+            "parameter-dependent-algebra",
+            "parameter-dependent-curves"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "equations-inequalities",
+            "functions-graphs",
+            "coordinate-geometry-basics"
+          ],
+          "reasoningSkills": [
+            "representation-switching",
+            "strategic-simplification",
+            "analytic-curve-geometry",
+            "graph-sketching",
+            "visualization",
+            "asymptotic-behavior",
+            "proof-construction",
+            "precision-checking",
+            "composition-iteration",
+            "case-analysis",
+            "technique",
+            "fixed-point-constraints",
+            "parameter-dependent-curves",
+            "seek a symmetric equation in x and y",
+            "read asymptotes and inverse symmetry from the implicit form",
+            "the exceptional parameter should remain visible",
+            "intersect with y=x in the implicit hyperbola",
+            "T_{-1} is constant on its domain",
+            "functions",
+            "algebraic-manipulation",
+            "error-recovery"
+          ]
+        },
+        "recommended": {
+          "domains": [
+            "functions",
+            "functional-equations",
+            "graph-sketching",
+            "coordinate-geometry",
+            "algebra"
+          ],
+          "contentConcepts": [
+            "analytic-curve-geometry",
+            "function-transformations",
+            "asymptotic-behavior",
+            "symmetry-periodicity",
+            "qualitative-function-behavior",
+            "composition-iteration",
+            "composition-constraints",
+            "fixed-point-constraints",
+            "roots-intersections",
+            "parameter-dependent-algebra",
+            "parameter-dependent-curves"
+          ],
+          "prerequisiteConcepts": [
+            "algebraic-manipulation",
+            "equations-inequalities",
+            "functions-graphs",
+            "coordinate-geometry-basics"
+          ],
+          "reasoningSkills": [
+            "representation-switching",
+            "strategic-simplification",
+            "analytic-curve-geometry",
+            "graph-sketching",
+            "visualization",
+            "asymptotic-behavior",
+            "proof-construction",
+            "precision-checking",
+            "composition-iteration",
+            "case-analysis",
+            "technique",
+            "fixed-point-constraints",
+            "parameter-dependent-curves",
+            "seek a symmetric equation in x and y",
+            "read asymptotes and inverse symmetry from the implicit form",
+            "the exceptional parameter should remain visible",
+            "intersect with y=x in the implicit hyperbola",
+            "T_{-1} is constant on its domain",
+            "functions",
+            "algebraic-manipulation",
+            "error-recovery"
+          ]
+        },
+        "stageRoles": [
+          {
+            "stageId": "opening",
+            "authorRole": "technique-check",
+            "recommendedRole": "technique-check",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "authorRole": "core",
+            "recommendedRole": "core",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "authorRole": "stretch",
+            "recommendedRole": "stretch",
+            "decision": "approved"
+          }
+        ],
+        "milestoneContentSkillAttribution": [
+          {
+            "milestoneId": "implicit-form",
+            "skills": [
+              "representation-switching",
+              "strategic-simplification"
+            ],
+            "contentConcepts": [
+              "analytic-curve-geometry",
+              "function-transformations"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "graph-symmetry",
+            "skills": [
+              "graph-sketching",
+              "visualization"
+            ],
+            "contentConcepts": [
+              "asymptotic-behavior",
+              "symmetry-periodicity",
+              "qualitative-function-behavior"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "involution",
+            "skills": [
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "composition-iteration",
+              "composition-constraints"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "fixed-point-count",
+            "skills": [
+              "case-analysis",
+              "technique"
+            ],
+            "contentConcepts": [
+              "fixed-point-constraints",
+              "roots-intersections",
+              "parameter-dependent-algebra"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          },
+          {
+            "milestoneId": "exceptional-degeneration",
+            "skills": [
+              "precision-checking",
+              "case-analysis"
+            ],
+            "contentConcepts": [
+              "parameter-dependent-curves",
+              "qualitative-function-behavior",
+              "fixed-point-constraints"
+            ],
+            "decision": "approved",
+            "requestedChanges": []
+          }
+        ],
+        "processGroundedSemantics": {
+          "decision": "approved",
+          "note": "guided-adaptation/error-recovery remain process-grounded and are not milestone-completion evidence."
+        },
+        "requestedChanges": []
+      },
+      "difficulty": {
+        "decision": "approved",
+        "author": {
+          "entry": "introductory-plus",
+          "core": "strong",
+          "ceiling": "stretch"
+        },
+        "recommended": {
+          "entry": "introductory-plus",
+          "core": "strong",
+          "ceiling": "stretch"
+        },
+        "stageBands": [
+          {
+            "stageId": "opening",
+            "role": "technique-check",
+            "authorDifficulty": "introductory-plus",
+            "recommendedDifficulty": "introductory-plus",
+            "decision": "approved"
+          },
+          {
+            "stageId": "core",
+            "role": "core",
+            "authorDifficulty": "strong",
+            "recommendedDifficulty": "strong",
+            "decision": "approved"
+          },
+          {
+            "stageId": "extension",
+            "role": "stretch",
+            "authorDifficulty": "stretch",
+            "recommendedDifficulty": "stretch",
+            "decision": "approved"
+          }
+        ],
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "timing": {
+        "decision": "changes-required",
+        "recommended": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 3,
+            "max": 6
+          },
+          "independentCompletionMinutes": {
+            "min": 17,
+            "max": 27
+          },
+          "promptedCompletionMinutes": {
+            "min": 13,
+            "max": 22
+          },
+          "optionalExtensionMinutes": {
+            "min": 5,
+            "max": 9
+          },
+          "softCutoffMinutes": 25,
+          "confidence": "low"
+        },
+        "confidence": "low",
+        "evidenceBasis": "expert-judgment"
+      },
+      "requestedChanges": [
+        "Use the G family-specific timing estimate."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      }
+    }
+  ]
+}
