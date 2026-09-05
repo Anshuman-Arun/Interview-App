@@ -211,6 +211,28 @@ describe("Oxford adaptive metadata contract", () => {
     );
   });
 
+  it("rejects inconsistent authored provenance and review states", () => {
+    const structural = cloneMetadata();
+    (
+      structural.provenance as unknown as {
+        originType: string;
+        sourceCategory: string;
+        referenceFamilyId?: string;
+      }
+    ).originType = "structural-adaptation";
+    expect(() => assertOxfordAdaptiveMetadataIntegrity(structural)).toThrow(
+      /requires a reference family id/
+    );
+
+    const invalidReview = cloneMetadata();
+    (
+      invalidReview.review as unknown as { originality: string }
+    ).originality = "probably-fine";
+    expect(() => assertOxfordAdaptiveMetadataIntegrity(invalidReview)).toThrow(
+      /Invalid Oxford originality review status/
+    );
+  });
+
   it("keeps provisional legacy metadata explicitly empty and unreviewed", () => {
     const provisional = createProvisionalLegacyOxfordMetadata("legacy-fixture");
     expect(() => assertOxfordAdaptiveMetadataIntegrity(provisional)).not.toThrow();
