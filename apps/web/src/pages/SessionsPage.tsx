@@ -21,7 +21,8 @@ export function SessionsPage({
   historyLoading,
   historyError,
   sessionEntryPending = false,
-  sessionAuthorityChecking = false
+  sessionAuthorityChecking = false,
+  sessionAuthorityUnavailable = false
 }: {
   readonly sessions: readonly StoredSessionSummary[];
   readonly currentSessionId: SessionId | null;
@@ -34,6 +35,7 @@ export function SessionsPage({
   readonly historyError: string | null;
   readonly sessionEntryPending?: boolean;
   readonly sessionAuthorityChecking?: boolean;
+  readonly sessionAuthorityUnavailable?: boolean;
 }) {
   const [filter, setFilter] = useState<Filter>("ALL");
   const [query, setQuery] = useState("");
@@ -130,6 +132,12 @@ export function SessionsPage({
           </>
         ) : null}
       </section>
+
+      {sessionAuthorityUnavailable && (
+        <p className="expressive-sessions__authority-error" role="alert">
+          Stored session list could not be verified. This ledger may be stale; use Refresh to retry before relying on session authority.
+        </p>
+      )}
 
       <section className="expressive-sessions__toolbar">
         <div className="expressive-sessions__filters">
