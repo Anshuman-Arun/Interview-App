@@ -330,6 +330,14 @@ describe("Oxford adaptive metadata contract", () => {
       /content concept "graph-coloring" requires one of parent domains/
     );
 
+    const stageOutsideProblem = cloneMetadata();
+    (
+      requireStage(stageOutsideProblem, 0).contentConcepts as unknown as string[]
+    ).push("prime-structure");
+    expect(() => assertOxfordAdaptiveMetadataIntegrity(stageOutsideProblem)).toThrow(
+      /content concept "prime-structure" is not declared at problem level/
+    );
+
     const missingAtStage = cloneMetadata();
     (
       requireMilestone(requireStage(missingAtStage, 0), 0).contentConcepts as unknown as string[]
