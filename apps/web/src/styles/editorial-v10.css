@@ -155,7 +155,7 @@ summary:focus-visible,
   letter-spacing: -.015em;
 }
 
-.product-frame__brand:hover {
+.product-frame__brand:hover:not(:disabled) {
   background: color-mix(in srgb, var(--paper-hi) 82%, transparent);
   color: var(--accent);
 }
@@ -186,8 +186,14 @@ summary:focus-visible,
   font: 500 10.5px/1 var(--font-ui);
 }
 
-.product-frame__new:hover {
+.product-frame__new:hover:not(:disabled) {
   transform: translateY(-1px);
+}
+
+.product-frame__brand:disabled,
+.product-frame__new:disabled {
+  cursor: default;
+  opacity: .5;
 }
 
 .product-frame__new span:last-child {
