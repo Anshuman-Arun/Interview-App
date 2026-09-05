@@ -156,10 +156,6 @@ export function recommendNextOxfordProblem(
   candidates: readonly OxfordRecommendationCandidate[],
   options: OxfordRecommendationOptions = {}
 ): OxfordRecommendationResult {
-  if (!Array.isArray(candidates)) {
-    throw new TypeError("Oxford recommendation candidates must be an array");
-  }
-
   const topK = boundedInteger(options.topK, DEFAULT_TOP_K, 1, 20, "topK");
   const exactCooldown = boundedInteger(
     options.cooldowns?.exactProblemSessions,
@@ -790,7 +786,7 @@ function boundedInteger(
 ): number {
   if (value === undefined) return fallback;
   if (!Number.isSafeInteger(value) || value < min || value > max) {
-    throw new RangeError(`Oxford recommendation ${label} must be an integer in [${min},${max}]`);
+    throw new RangeError(`Oxford recommendation ${label} must be an integer in [${String(min)},${String(max)}]`);
   }
   return value;
 }
