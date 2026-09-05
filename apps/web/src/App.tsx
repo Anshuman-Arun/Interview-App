@@ -1308,11 +1308,22 @@ export const App: React.FC = () => {
                   : session.whiteboardSync.status === "PENDING"
                     ? "Saving…"
                     : session.whiteboardSync.status === "UNSYNCHRONIZED"
-                      ? "Board unavailable"
+                      ? "Needs reconnect"
                       : "Preparing…"}
               </span>
             </div>
             <div className="board-appbar__actions">
+              {session.whiteboardSync.status === "UNSYNCHRONIZED" && (
+                <button
+                  type="button"
+                  className="board-appbar__reconnect-action"
+                  onClick={() => {
+                    void session.synchronizeWhiteboard().catch(() => undefined);
+                  }}
+                >
+                  Reconnect board
+                </button>
+              )}
               {paneFocus !== "split" && (
                 <button
                   type="button"
