@@ -996,10 +996,10 @@ describe("editorial v10 adversarial UI states", () => {
       /\.appearance-dock__trigger-mark::after\s*\{[^}]*width:\s*14px;[^}]*height:\s*14px;[^}]*border-radius:\s*50%;/u
     );
     expect(desktopMain).toContain(
-      "OPTIONAL_LOCAL_RUNTIME_PREPARED_STARTUP_BUDGET_MS = 60_000"
+      "OPTIONAL_LOCAL_RUNTIME_PREPARED_STARTUP_BUDGET_MS = 4 * 60_000"
     );
-    expect(desktopMain).toContain(
-      'setSetupState(kind, "INSTALLED", kind !== "PYTHON")'
+    expect(desktopMain).toMatch(
+      /setSetupState\([\s\S]{0,160}kind === "PYTHON" \? "IDLE" : "INSTALLED",[\s\S]{0,80}kind !== "PYTHON"/u
     );
   });
 
