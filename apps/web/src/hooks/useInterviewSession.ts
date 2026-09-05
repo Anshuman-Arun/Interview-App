@@ -1705,7 +1705,7 @@ export function useInterviewSession(
       // student canvas (or already matches it). Conflicting edits still fail
       // closed.
       const adapter = options.whiteboardAdapter;
-      if (isCurrentCoordinator() && adapter?.getEditor() !== null) {
+      if (isCurrentCoordinator() && adapter !== undefined && adapter.getEditor() !== null) {
         try {
           const repaired = await coordinator.synchronize(
             targetSessionId,
