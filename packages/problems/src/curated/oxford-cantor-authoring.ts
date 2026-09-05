@@ -131,19 +131,29 @@ export function buildCantorEntry(family: CantorFamilyAuthoring): CuratedProblemE
         );
       }
     }
+    const previous = index === 0 ? undefined : family.milestones[index - 1];
+    if (index > 0 && previous === undefined) {
+      throw new Error(`Cantor family "${family.id}" is missing milestone ${String(index - 1)}`);
+    }
     return {
       id: milestone.id,
       description: milestone.description,
       approachIds,
-      ...(index === 0 ? {} : { prerequisiteIds: [family.milestones[index - 1]!.id] }),
+      ...(previous === undefined ? {} : { prerequisiteIds: [previous.id] }),
       hintLevels: [(index + 1) as 1 | 2 | 3 | 4 | 5]
     };
   });
 
-  const edges = family.milestones.slice(1).map((milestone, index) => ({
-    from: family.milestones[index]!.id,
-    to: milestone.id
-  }));
+  const edges = family.milestones.slice(1).map((milestone, index) => {
+    const previous = family.milestones[index];
+    if (previous === undefined) {
+      throw new Error(`Cantor family "${family.id}" is missing milestone ${String(index)}`);
+    }
+    return {
+      from: previous.id,
+      to: milestone.id
+    };
+  });
 
   const processSkills = family.skills.filter(
     (evidence) => getOxfordSkillEvidenceBasis(evidence.skill) === "process-grounded"
