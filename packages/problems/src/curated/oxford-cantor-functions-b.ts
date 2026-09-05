@@ -278,7 +278,7 @@ export const cantorFunctionFamiliesB: readonly CantorFamilyAuthoring[] = [
     prompt:
       "Let a_0>0 and define a_{n+1}=a_n+1/a_n. Prove that the sequence grows without bound, then determine its asymptotic size as precisely as you can. A useful target is to decide whether a_n/sqrt(2n) has a limit.",
     givenInformation: [
-      "If you need it for a reciprocal-sum bound: for a positive decreasing function h, sum_{k=1}^{n-1} h(k) ≤ h(1)+∫_1^n h(t)dt. You may prove this comparison from the graph rather than treat it as prior knowledge."
+      "If you need it for a reciprocal-sum bound, you may use this sum-integral comparison: for a positive decreasing function h, sum_{k=1}^{n-1} h(k) ≤ h(1)+∫_1^n h(t)dt. You may also prove the integral comparison directly from the graph rather than treat it as prior knowledge."
     ],
     approaches: [
       { id: "square-the-update", label: "Square the recurrence to expose a nearly telescoping relation" },
