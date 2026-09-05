@@ -541,7 +541,7 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
     category: "graph sketching and coordinate geometry",
     topics: ["implicit curves", "reciprocal substitution", "asymptotes", "optimization"],
     prompt:
-      "Sketch the real curve x²y²=x²+y² as completely as possible. Your sketch should include where the curve can exist, its symmetries, asymptotes, and the points on it closest to the origin. Find a representation that makes the geometry simpler.",
+      "Sketch the real curve x²y²=x²+y² as completely as possible. Account for every component, then determine the points on the nonzero branches closest to the origin. Your sketch should include the curve's symmetries and asymptotes. Find a representation that makes the geometry simpler.",
     givenInformation: [],
     approaches: [
       { id: "reciprocal-coordinates", label: "Use u=1/x and v=1/y to reveal a unit circle" },
@@ -574,7 +574,7 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
       },
       {
         id: "closest-points",
-        description: "Minimize x²+y² subject to 1/x²+1/y²=1 and find the four closest points (±sqrt(2),±sqrt(2)).",
+        description: "Minimize x²+y² on the nonzero branches subject to 1/x²+1/y²=1 and find their four closest points (±sqrt(2),±sqrt(2)).",
         skills: cantorSkills(["strategic-simplification", "supporting"], ["proof-construction", "primary"], ["generalization", "supporting"]),
         concepts: ["inequalities-bounds", "analytic-curve-geometry"]
       }
@@ -582,7 +582,7 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
     commonErrors: [
       {
         id: "include-axis-points",
-        description: "Divides by x²y² without first checking that x=0 or y=0 cannot satisfy the original equation."
+        description: "Divides by x²y² before checking the axes, thereby deleting the isolated solution (0,0)."
       },
       {
         id: "circle-in-original-plane",
@@ -596,7 +596,7 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
     extensions: [
       {
         id: "scaled-implicit-family",
-        prompt: "For c>0, analyze x²y²=c(x²+y²), including asymptotes and closest points."
+        prompt: "For c>0, analyze x²y²=c(x²+y²), including every component, asymptotes, and the closest points on the nonzero branches."
       },
       {
         id: "reciprocal-circle-parametrization",
@@ -628,7 +628,7 @@ export const cantorGraphFamiliesB: readonly CantorFamilyAuthoring[] = [
     canonicalSolution:
       "If x=0 then the equation forces y=0, but (0,0) satisfies both sides; however dividing by x²y² would lose it. Thus the original curve consists of the isolated origin together with nonzero branches. For nonzero points, divide to get 1/x²+1/y²=1. Solving gives y²=x²/(x²-1), so |x|>1 and similarly |y|>1. The equation is invariant under independent sign changes and swapping x,y, giving four symmetric branches. As |x|→1+ we have |y|→∞, so x=±1 are vertical asymptotes; as |x|→∞, |y|→1, so y=±1 are horizontal asymptotes. For nonzero points let A=x²,B=y²; then 1/A+1/B=1, so A+B=AB and by (A+B)²≥4AB=4(A+B), A+B≥4. Equality gives A=B=2, hence four closest nonzero branch points (±sqrt(2),±sqrt(2)) at distance 2 from the origin. But globally the isolated origin itself is of course the closest point. For c>0, the nonzero reciprocal equation becomes c/x²+c/y²=1, giving asymptotes ±sqrt(c) and branch closest points with x²=y²=2c.",
     verificationNotes:
-      "Important correction to the tempting reciprocal-only analysis: (0,0) DOES satisfy the original equation and is an isolated component. The prompt asks points closest to the origin; therefore the absolute closest point is the origin itself. The four sqrt(2) points are the closest points on the nonzero branches. Preserve this distinction in review and candidate prompting.",
+      "Important correction to the tempting reciprocal-only analysis: (0,0) DOES satisfy the original equation and is an isolated component. The four sqrt(2) points are the closest points on the nonzero branches. Preserve the origin before division and keep the global component sketch separate from the branch-distance question.",
     domains: ["graph-sketching", "coordinate-geometry", "functions", "algebra", "elementary-analysis"],
     contentConcepts: [
       "analytic-curve-geometry",
