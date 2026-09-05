@@ -55,20 +55,20 @@ This audit does not infer either process-grounded skill from milestone completio
 
 `current-bank-baseline.json` covers all 13 default Oxford fixtures plus the isolated Catalan expert-review fixture at main commit `454a2fe993c8fd70676d04e5d262a1780161f0d6`.
 
-`same-wave-full-certification.json` is the authoritative Wave 2 C/D/E Hilbert snapshot. It certifies **every 47 surviving author family** at these exact heads:
+`same-wave-full-certification.json` is the authoritative Wave 2 C/D/E Hilbert snapshot. It certifies **every 41 final surviving author family** at these exact heads:
 
-- Agent C — Cantor PR #132: `f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1` — 18 survivors;
-- Agent D — Dirichlet PR #133: `ecece22058c997d37c4b352fa5ed32bd1daf5243` — 12 survivors;
-- Agent E — Euler PR #134: `b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6` — 17 survivors.
+- Agent C — Cantor PR #132: `8b22dc5df99111fb95e27a2c006d5e74544dd385` — 17 survivors;
+- Agent D — Dirichlet PR #133: `65d570a1f6dad3773edb7eea4568d9399f3164c8` — 11 survivors;
+- Agent E — Euler PR #134: `1ce96b5b89be971399cab5080d4487a908ea294d` — 13 survivors.
 
-The author completion passes introduced **no replacement families**. Cantor removed 2 prior hard rejects, Dirichlet pruned 10 classic/standard kernels, and Euler removed 2 prior hard rejects. Material provenance/staging changes were re-audited at the heads above.
+The final author synchronization introduced **no replacement families**. Cantor finishes with 17 survivors, Dirichlet with 11, and Euler with 13. Final pruning and provenance repairs were diff-checked against the prior full five-pool audit; unchanged kernels retain their complete evidence, while provenance-only REVISE cases were re-reviewed at the heads above.
 
 `same-wave-high-risk-batch.json` is retained only as an archival record of the earlier 12-family risk-prioritized pass. It does not drive completion or the default validator.
 
 Current same-wave certification counts:
 
-- originality: `PASS 0 / PASS_WITH_NOTES 35 / REVISE 6 / REJECT_TOO_CLOSE 6`;
-- fidelity: `PASS 40 / PASS_WITH_NOTES 7 / REVISE 0 / REJECT_NOT_OXFORD_LIKE 0`.
+- originality: `PASS 0 / PASS_WITH_NOTES 41 / REVISE 0 / REJECT_TOO_CLOSE 0`;
+- fidelity: `PASS 36 / PASS_WITH_NOTES 5 / REVISE 0 / REJECT_NOT_OXFORD_LIKE 0`.
 
 ## Validation
 
