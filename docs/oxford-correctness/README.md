@@ -53,7 +53,7 @@ The retained record contains:
 - findings keyed by stable finding ID;
 - unresolved mathematical uncertainties.
 
-The existing-bank records are in `existing-bank-review-records.json`.
+The retained review records are in `existing-bank-review-records.json`; despite the historical filename, the batch now contains the existing-bank baseline plus keyed author-PR reviews.
 
 ## Existing-bank baseline
 
@@ -83,6 +83,28 @@ Audited against `main` at commit `454a2fe993c8fd70676d04e5d262a1780161f0d6` (PR 
 | `oxford-catalan-paths` | changes-required | keep expert-review/manual | Reflection proof is correct; `n` lacks an explicit domain and the recurrence route does not independently reach the requested closed form. |
 
 These decisions are **mathematical-correctness decisions only**. They do not approve taxonomy classification, difficulty/timing, originality, or Oxford fidelity.
+
+## Agent C — Cantor PR #132 audit
+
+Agent I — Itô independently reviewed the six correctness-sensitive families explicitly prioritized by Agent C — Cantor in PR #132. The review used the actual family source at Cantor head `aba246a26a28a115af59ce145491776de7d4553a`, not the PR summary.
+
+- Families independently solved/reviewed from PR #132: **6**
+- Correctness approvals: **5**
+- Changes required: **1**
+- Formal GitHub REQUEST_CHANGES could not be used because both agent PRs are authored through the same connected GitHub account; Agent I instead left a review COMMENT with inline findings and retained the fail-closed `changes-required` record here.
+
+| Family | Correctness | Independent result |
+| --- | --- | --- |
+| `oxford-cantor-cubic-divided-difference` | approved | Factorization, both distinct-root thresholds, stationary duplication, scaled-cubic extension, and secant-slope extension verified. |
+| `oxford-cantor-mobius-recurrence` | approved | Reciprocal-error translation and exact pole classification for `x_0>1` verified. |
+| `oxford-cantor-radical-asymptote` | approved | Domain, unequal end behavior, derivative sign, range, `a=±2` boundaries, and disconnected-domain extension verified. |
+| `oxford-cantor-reciprocal-implicit-curve` | changes-required | The isolated origin is correctly preserved in the opening/solution but contradicted by the closest-points milestone and by a false common-error description. |
+| `oxford-cantor-reciprocal-increment-recurrence` | approved | Squared recurrence, logarithmic cumulative-error bound, normalized limit, and `c/a_n` transfer verified. |
+| `oxford-cantor-mobius-involution` | approved with warning | Generic and `a=-1` cases are correct; the stretch prompt should define “involution” as `T(T(x))=x` rather than assume the term. |
+
+### Blocking Cantor repair
+
+For `oxford-cantor-reciprocal-implicit-curve`, the full curve contains `(0,0)`. Therefore the global closest point to the origin is `(0,0)`; the four `(±sqrt(2),±sqrt(2))` points are only closest on the nonzero branches. In addition, the authored `include-axis-points` common-error description says that `x=0` or `y=0` cannot satisfy the equation, which is false at the origin. This can make interviewer guidance reject a correct candidate observation, so it is an error-level correctness blocker rather than editorial polish.
 
 ## Computational regression checks retained
 
