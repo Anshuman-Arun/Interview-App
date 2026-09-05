@@ -58,8 +58,8 @@ This audit does not infer either process-grounded skill from milestone completio
 `same-wave-full-certification.json` is the authoritative Wave 2 C/D/E Hilbert snapshot. It certifies **every 41 final surviving author family** at these exact heads:
 
 - Agent C — Cantor PR #132: `8b22dc5df99111fb95e27a2c006d5e74544dd385` — 17 survivors;
-- Agent D — Dirichlet PR #133: `65d570a1f6dad3773edb7eea4568d9399f3164c8` — 11 survivors;
-- Agent E — Euler PR #134: `1ce96b5b89be971399cab5080d4487a908ea294d` — 13 survivors.
+- Agent D — Dirichlet PR #133: `1d9222ed89895f643b4f25429b0a5dbe1dac0a4c` — 11 survivors;
+- Agent E — Euler PR #134: `8846c612825d2b8ae53a81f6f8861fd851f452c6` — 13 survivors.
 
 The final author synchronization introduced **no replacement families**. Cantor finishes with 17 survivors, Dirichlet with 11, and Euler with 13. Final pruning and provenance repairs were diff-checked against the prior full five-pool audit; unchanged kernels retain their complete evidence, while provenance-only REVISE cases were re-reviewed at the heads above.
 
