@@ -3,44 +3,44 @@
   "agent": "H — Hilbert",
   "basedOnMainCommit": "454a2fe993c8fd70676d04e5d262a1780161f0d6",
   "reviewedAt": "2026-09-05",
-  "scopeNote": "Full post-pruning certification of every surviving Agent C/D/E family at the exact author heads listed in summary. No replacement families were introduced in the completion passes; removed hard rejects are not counted as survivors.",
+  "scopeNote": "Final authoritative Wave 2 Hilbert certification for exactly the 41 surviving C/D/E families at the final author heads. Prior five-pool evidence is retained for unchanged kernels; final pruning/provenance diffs were independently synchronized and all final survivors clear originality/fidelity.",
   "summary": {
-    "totalFamilies": 47,
-    "survivingTotal": 47,
+    "totalFamilies": 41,
+    "survivingTotal": 41,
     "authorPrs": [
       {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
-        "surviving": 18,
-        "prunedSinceInitial": 2
+        "head": "8b22dc5df99111fb95e27a2c006d5e74544dd385",
+        "surviving": 17,
+        "prunedSinceInitial": 3
       },
       {
         "agent": "D — Dirichlet",
         "number": 133,
-        "head": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
-        "surviving": 12,
-        "prunedSinceInitial": 10
+        "head": "65d570a1f6dad3773edb7eea4568d9399f3164c8",
+        "surviving": 11,
+        "prunedSinceInitial": 11
       },
       {
         "agent": "E — Euler",
         "number": 134,
-        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
-        "surviving": 17,
-        "prunedSinceInitial": 2
+        "head": "1ce96b5b89be971399cab5080d4487a908ea294d",
+        "surviving": 13,
+        "prunedSinceInitial": 6
       }
     ],
     "replacementsReaudited": [],
     "replacementCount": 0,
     "originality": {
       "PASS": 0,
-      "PASS_WITH_NOTES": 35,
-      "REVISE": 6,
-      "REJECT_TOO_CLOSE": 6
+      "PASS_WITH_NOTES": 41,
+      "REVISE": 0,
+      "REJECT_TOO_CLOSE": 0
     },
     "fidelity": {
-      "PASS": 40,
-      "PASS_WITH_NOTES": 7,
+      "PASS": 36,
+      "PASS_WITH_NOTES": 5,
       "REVISE": 0,
       "REJECT_NOT_OXFORD_LIKE": 0
     },
@@ -109,12 +109,12 @@
   "audits": [
     {
       "familyId": "oxford-cantor-moving-v-envelope",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
+      "sourceRef": "PR #132 final survivor @ 8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1"
+        "head": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -158,7 +158,7 @@
       },
       "originalityDecision": "PASS_WITH_NOTES",
       "fidelityDecision": "PASS",
-      "provenanceDisposition": "structural-adaptation-classic-mathematics",
+      "provenanceDisposition": "classic-problem-classic-mathematics",
       "retrieval": {
         "A": {
           "completed": true,
@@ -174,7 +174,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -242,8 +242,8 @@
         }
       ],
       "classicProblemCheck": {
-        "result": "TRUTHFUL_STRUCTURAL_ADAPTATION",
-        "notes": "Current author provenance now truthfully presents the Moreau/Huber construction as structural adaptation rather than independent-original."
+        "result": "TRUTHFUL_CLASSIC_PROVENANCE",
+        "notes": "Final schema-compatible author metadata uses classic-problem / classic-mathematics for the established Moreau/Huber construction. The retained interview progression is authored, but the kernel is not claimed independent-original."
       },
       "fidelityNotes": {
         "accessibleOpening": "The opening is candidate-accessible: sketch moving V-shapes.",
@@ -254,26 +254,26 @@
         "prerequisiteBurden": "Prerequisites are controlled by the authored setup and do not require obscure external facts."
       },
       "requiredChanges": [
-        "Retain structural-adaptation / classic-mathematics provenance; do not relabel the Moreau/Huber kernel independent-original."
+        "Retain classic-problem / classic-mathematics provenance for the Huber/Moreau kernel; do not relabel it independent-original."
       ],
       "bankDisposition": [
-        "Hilbert originality gate cleared with truthful provenance",
+        "Hilbert originality gate cleared with truthful classic provenance",
         "Oxford-fidelity gate cleared"
       ],
       "wouldRejectIfClaimedOriginal": true,
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-cantor-reciprocal-root-parabolas",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
+      "sourceRef": "PR #132 final survivor @ 8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1"
+        "head": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -333,7 +333,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -426,17 +426,17 @@
       },
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-cantor-cubic-two-thresholds",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
+      "sourceRef": "PR #132 final survivor @ 8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1"
+        "head": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -495,7 +495,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -588,17 +588,17 @@
       },
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-cantor-cubic-divided-difference",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
+      "sourceRef": "PR #132 final survivor @ 8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1"
+        "head": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -657,7 +657,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -751,17 +751,17 @@
       },
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-cantor-integral-sign-landscape",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
+      "sourceRef": "PR #132 final survivor @ 8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1"
+        "head": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -817,7 +817,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -905,17 +905,17 @@
       "wouldRejectIfClaimedOriginal": false,
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-cantor-reciprocal-paired-inputs",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
+      "sourceRef": "PR #132 final survivor @ 8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1"
+        "head": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -972,7 +972,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -1065,17 +1065,17 @@
       },
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-cantor-exponential-rotating-line",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
+      "sourceRef": "PR #132 final survivor @ 8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1"
+        "head": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -1134,7 +1134,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -1223,17 +1223,17 @@
       "wouldRejectIfClaimedOriginal": true,
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-cantor-mobius-recurrence",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
+      "sourceRef": "PR #132 final survivor @ 8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1"
+        "head": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -1292,7 +1292,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -1381,17 +1381,17 @@
       "wouldRejectIfClaimedOriginal": true,
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-cantor-squared-error-recurrence",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
+      "sourceRef": "PR #132 final survivor @ 8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1"
+        "head": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -1449,7 +1449,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -1538,17 +1538,17 @@
       "wouldRejectIfClaimedOriginal": true,
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-cantor-absolute-quadratic-crossings",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
+      "sourceRef": "PR #132 final survivor @ 8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1"
+        "head": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -1605,7 +1605,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -1693,17 +1693,17 @@
       "wouldRejectIfClaimedOriginal": false,
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-cantor-radical-asymptote",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
+      "sourceRef": "PR #132 final survivor @ 8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1"
+        "head": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -1761,7 +1761,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -1849,17 +1849,17 @@
       "wouldRejectIfClaimedOriginal": false,
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-cantor-shifted-cubic-intersections",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
+      "sourceRef": "PR #132 final survivor @ 8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1"
+        "head": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -1919,7 +1919,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -2012,17 +2012,17 @@
       },
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-cantor-moving-integral-window",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
+      "sourceRef": "PR #132 final survivor @ 8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1"
+        "head": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -2080,7 +2080,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -2168,174 +2168,17 @@
       "wouldRejectIfClaimedOriginal": false,
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
-      }
-    },
-    {
-      "familyId": "oxford-cantor-reciprocal-implicit-curve",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
-      "subjectKind": "same-wave-proposal",
-      "authorPr": {
-        "agent": "C — Cantor",
-        "number": 132,
-        "head": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1"
-      },
-      "reviewedAt": "2026-09-05",
-      "reviewer": {
-        "agent": "H",
-        "name": "Hilbert"
-      },
-      "fingerprint": {
-        "surfaceObjects": [
-          "implicit quartic curve",
-          "isolated origin",
-          "reciprocal-coordinate circle"
-        ],
-        "constraints": [
-          "x^2 y^2=x^2+y^2"
-        ],
-        "targetType": "fully sketch components/asymptotes and locate closest nonzero branch points",
-        "centralMechanism": "separate origin, then divide nonzero branch equation to 1/x^2+1/y^2=1",
-        "secondaryMechanisms": [
-          "solve y^2 for branch domain",
-          "symmetries",
-          "positive-variable inequality for branch distance"
-        ],
-        "criticalRepresentationChange": "original (x,y) plane -> reciprocal coordinates (1/x,1/y) on a circle",
-        "diagramTopology": "isolated origin plus four outer hyperbola-like branches with asymptotes x=±1,y=±1",
-        "smallCaseSignature": "(0,0); diagonal points with |x|=|y|; large |x|",
-        "progressionSignature": {
-          "opening": "test axes and symmetries",
-          "firstDeepening": "reciprocal circle",
-          "core": "domain/asymptotes and complete sketch",
-          "transfer": "scaled c",
-          "stretch": "circle parametrization/branch closest points"
-        },
-        "solutionDependencyGraphSummary": "origin check -> legal division -> reciprocal circle -> solved branch equation -> asymptotes -> branch-distance inequality",
-        "distinctiveFeatures": [
-          "tempting division deletes an isolated component, making precision/error recovery mathematically substantive"
-        ],
-        "knownClassicOverlap": "Reciprocal-coordinate implicit-curve transformation is a general technique; exact equation not identified.",
-        "authorProvenance": "Independently designed; correctness/calibration flagged because of isolated-component trap."
-      },
-      "originalityDecision": "REJECT_TOO_CLOSE",
-      "fidelityDecision": "PASS",
-      "provenanceDisposition": "reject-as-new-original",
-      "retrieval": {
-        "A": {
-          "completed": true,
-          "note": "Deep official benchmark corpus checked. Strongest structural retrieval: OX-2026-RADIAL-GRAPH-EXTENSION; treated as pedagogy/structure evidence, not originality proof."
-        },
-        "B": {
-          "completed": true,
-          "note": "Broader Oxford reference inventory checked. Strongest structural retrieval: REF-OX-2026-GRAPH-IMPLICIT-PRODUCT; no absence claim is used as evidence of originality."
-        },
-        "C": {
-          "completed": true,
-          "note": "Current Interview App bank checked against the retained Hilbert baseline. Strongest structural retrieval: oxford-euclid-primes."
-        },
-        "D": {
-          "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
-        },
-        "E": {
-          "completed": true,
-          "note": "Independent external/classic search completed with query \"x^2 y^2 = x^2 + y^2 curve asymptotes\". Nearest retained external evidence: Published algebraic-curve exercise with the same implicit equation."
-        }
-      },
-      "externalSearchQueries": [
-        "x^2 y^2 = x^2 + y^2 curve asymptotes"
-      ],
-      "nearestMatches": [
-        {
-          "pool": "A",
-          "source": "OX-2026-RADIAL-GRAPH-EXTENSION",
-          "matchedFingerprintFeatures": [
-            "broad-area or progression neighbour"
-          ],
-          "similarity": {
-            "wording": 0,
-            "setup": 0,
-            "target": 0,
-            "kernel": 0,
-            "decisiveMechanism": 0,
-            "diagram": 0,
-            "progression": 1,
-            "transferStretch": 1
-          },
-          "explanation": "Official benchmark retrieval is used to compare interview shape and progression; it is not treated as an originality match unless mathematics also aligns."
-        },
-        {
-          "pool": "D",
-          "source": "oxford-cantor-mobius-involution",
-          "matchedFingerprintFeatures": [
-            "same-wave structural neighbour"
-          ],
-          "similarity": {
-            "wording": 0,
-            "setup": 0,
-            "target": 0,
-            "kernel": 1,
-            "decisiveMechanism": 0,
-            "diagram": 0,
-            "progression": 1,
-            "transferStretch": 1
-          },
-          "explanation": "Nearest same-wave retrieval is retained for global repetition review; broad technique overlap alone does not trigger rejection."
-        },
-        {
-          "pool": "E",
-          "source": "Published algebraic-curve exercise with the same implicit equation",
-          "url": "https://ramsadaycollege.com/upload/eclassroom/Mathematics/Sem1%20Gen%20Maths%20BP.pdf",
-          "matchedFingerprintFeatures": [
-            "same or near-exact mathematical kernel"
-          ],
-          "similarity": {
-            "wording": 0,
-            "setup": 3,
-            "target": 3,
-            "kernel": 3,
-            "decisiveMechanism": 3,
-            "diagram": 2,
-            "progression": 2,
-            "transferStretch": 1
-          },
-          "explanation": "External retrieval preserves the same or near-same kernel/decisive mechanism strongly enough to control the originality decision."
-        }
-      ],
-      "classicProblemCheck": {
-        "result": "TOO_CLOSE_TO_ESTABLISHED_KERNEL",
-        "notes": "The external match preserves enough of the mathematical fingerprint to fail the independent-original gate."
-      },
-      "fidelityNotes": {
-        "accessibleOpening": "The opening is candidate-accessible: test axes and symmetries.",
-        "promptability": "The progression exposes intermediate tutor checkpoints before the core: reciprocal circle.",
-        "reasoningEvidence": "The family elicits observable representation change and proof structure rather than recall alone: original (x,y) plane -> reciprocal coordinates (1/x,1/y) on a circle.",
-        "transfer": "The retained transfer/stretch remains inside the same mathematical family: scaled c; circle parametrization/branch closest points.",
-        "ceiling": "The core-to-extension progression supplies a credible standard-to-strong ceiling.",
-        "prerequisiteBurden": "Prerequisites are controlled by the authored setup and do not require obscure external facts."
-      },
-      "requiredChanges": [
-        "Do not keep this as a new independent-original family; replace the mathematical kernel or retain only with truthful classic provenance where product policy permits."
-      ],
-      "bankDisposition": [
-        "originality gate blocks current authored family",
-        "Oxford-fidelity gate cleared"
-      ],
-      "wouldRejectIfClaimedOriginal": true,
-      "handoff": {
-        "canProgressAfterGI": false,
-        "note": "Hilbert originality revision/replacement is required before recommendation readiness."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-cantor-three-cycle-map",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
+      "sourceRef": "PR #132 final survivor @ 8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1"
+        "head": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -2394,7 +2237,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -2488,17 +2331,17 @@
       },
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-cantor-quartic-horizontal-levels",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
+      "sourceRef": "PR #132 final survivor @ 8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1"
+        "head": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -2556,7 +2399,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -2644,17 +2487,17 @@
       "wouldRejectIfClaimedOriginal": false,
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-cantor-reciprocal-increment-recurrence",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
+      "sourceRef": "PR #132 final survivor @ 8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1"
+        "head": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -2712,7 +2555,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -2801,17 +2644,17 @@
       "wouldRejectIfClaimedOriginal": true,
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-cantor-mobius-involution",
-      "sourceRef": "PR #132 docs/oxford-research/cantor-wave2-fingerprints.json @ f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
+      "sourceRef": "PR #132 final survivor @ 8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "C — Cantor",
         "number": 132,
-        "head": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1"
+        "head": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -2869,7 +2712,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -2962,17 +2805,17 @@
       },
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-d-gcd-descent-network",
-      "sourceRef": "PR #133 docs/oxford-research/agent-d-dirichlet-candidate-audit.md @ ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "sourceRef": "PR #133 final survivor @ 65d570a1f6dad3773edb7eea4568d9399f3164c8",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "D — Dirichlet",
         "number": 133,
-        "head": "ecece22058c997d37c4b352fa5ed32bd1daf5243"
+        "head": "65d570a1f6dad3773edb7eea4568d9399f3164c8"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -3026,7 +2869,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -3114,17 +2957,17 @@
       "wouldRejectIfClaimedOriginal": false,
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-d-thirds-closed-integers",
-      "sourceRef": "PR #133 docs/oxford-research/agent-d-dirichlet-candidate-audit.md @ ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "sourceRef": "PR #133 final survivor @ 65d570a1f6dad3773edb7eea4568d9399f3164c8",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "D — Dirichlet",
         "number": 133,
-        "head": "ecece22058c997d37c4b352fa5ed32bd1daf5243"
+        "head": "65d570a1f6dad3773edb7eea4568d9399f3164c8"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -3178,7 +3021,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -3272,17 +3115,17 @@
       },
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-d-balancing-transfers",
-      "sourceRef": "PR #133 docs/oxford-research/agent-d-dirichlet-candidate-audit.md @ ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "sourceRef": "PR #133 final survivor @ 65d570a1f6dad3773edb7eea4568d9399f3164c8",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "D — Dirichlet",
         "number": 133,
-        "head": "ecece22058c997d37c4b352fa5ed32bd1daf5243"
+        "head": "65d570a1f6dad3773edb7eea4568d9399f3164c8"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -3336,7 +3179,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -3424,17 +3267,17 @@
       "wouldRejectIfClaimedOriginal": false,
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-d-cube-twist-equivalence",
-      "sourceRef": "PR #133 docs/oxford-research/agent-d-dirichlet-candidate-audit.md @ ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "sourceRef": "PR #133 final survivor @ 65d570a1f6dad3773edb7eea4568d9399f3164c8",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "D — Dirichlet",
         "number": 133,
-        "head": "ecece22058c997d37c4b352fa5ed32bd1daf5243"
+        "head": "65d570a1f6dad3773edb7eea4568d9399f3164c8"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -3488,7 +3331,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -3576,17 +3419,17 @@
       "wouldRejectIfClaimedOriginal": false,
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-d-sliding-window-parity",
-      "sourceRef": "PR #133 docs/oxford-research/agent-d-dirichlet-candidate-audit.md @ ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "sourceRef": "PR #133 final survivor @ 65d570a1f6dad3773edb7eea4568d9399f3164c8",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "D — Dirichlet",
         "number": 133,
-        "head": "ecece22058c997d37c4b352fa5ed32bd1daf5243"
+        "head": "65d570a1f6dad3773edb7eea4568d9399f3164c8"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -3640,7 +3483,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -3733,17 +3576,17 @@
       },
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-d-weighted-cycle-readings",
-      "sourceRef": "PR #133 docs/oxford-research/agent-d-dirichlet-candidate-audit.md @ ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "sourceRef": "PR #133 final survivor @ 65d570a1f6dad3773edb7eea4568d9399f3164c8",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "D — Dirichlet",
         "number": 133,
-        "head": "ecece22058c997d37c4b352fa5ed32bd1daf5243"
+        "head": "65d570a1f6dad3773edb7eea4568d9399f3164c8"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -3797,7 +3640,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -3885,17 +3728,17 @@
       "wouldRejectIfClaimedOriginal": false,
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-d-midpoint-closed-residues",
-      "sourceRef": "PR #133 docs/oxford-research/agent-d-dirichlet-candidate-audit.md @ ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "sourceRef": "PR #133 final survivor @ 65d570a1f6dad3773edb7eea4568d9399f3164c8",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "D — Dirichlet",
         "number": 133,
-        "head": "ecece22058c997d37c4b352fa5ed32bd1daf5243"
+        "head": "65d570a1f6dad3773edb7eea4568d9399f3164c8"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -3949,7 +3792,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -4042,169 +3885,17 @@
       },
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
-      }
-    },
-    {
-      "familyId": "oxford-d-mirror-orbits",
-      "sourceRef": "PR #133 docs/oxford-research/agent-d-dirichlet-candidate-audit.md @ ecece22058c997d37c4b352fa5ed32bd1daf5243",
-      "subjectKind": "same-wave-proposal",
-      "authorPr": {
-        "agent": "D — Dirichlet",
-        "number": 133,
-        "head": "ecece22058c997d37c4b352fa5ed32bd1daf5243"
-      },
-      "reviewedAt": "2026-09-05",
-      "reviewer": {
-        "agent": "H",
-        "name": "Hilbert"
-      },
-      "fingerprint": {
-        "surfaceObjects": [
-          "residues modulo m with reflections R(x)=-x and S(x)=c-x"
-        ],
-        "constraints": [
-          "start at 0, then arbitrary compositions"
-        ],
-        "targetType": "characterize reachable orbit; determine when all residues are reachable",
-        "centralMechanism": "composition of two involutions is translation by c",
-        "secondaryMechanisms": [
-          "subgroup generated by c; arbitrary-start double-coset-style orbit description"
-        ],
-        "criticalRepresentationChange": "two mirror moves -> translations plus one reflection",
-        "diagramTopology": "cycle of residues",
-        "smallCaseSignature": "gcd(c,m) visually partitions residues",
-        "progressionSignature": {
-          "opening": "compose short words",
-          "firstDeepening": "find translation",
-          "core": "generate multiples of c",
-          "transfer": "gcd criterion",
-          "stretch": "arbitrary starting residue"
-        },
-        "solutionDependencyGraphSummary": "S∘R/R∘S -> ±c translations -> subgroup H=<c> -> orbit of 0=H -> all iff gcd=1 -> arbitrary orbit (a+H)∪(-a+H)",
-        "distinctiveFeatures": [
-          "geometric-looking involutions collapse to arithmetic subgroup motion"
-        ],
-        "knownClassicOverlap": "dihedral-group mechanism is classical; exact interview wording not found preliminarily",
-        "authorProvenance": "independently authored; requires Agent H"
-      },
-      "originalityDecision": "REJECT_TOO_CLOSE",
-      "fidelityDecision": "PASS",
-      "provenanceDisposition": "reject-as-new-original",
-      "retrieval": {
-        "A": {
-          "completed": true,
-          "note": "Deep official benchmark corpus checked. Strongest structural retrieval: OX-MATHCS-SQUARE-CUBE-CONSTRAINT; treated as pedagogy/structure evidence, not originality proof."
-        },
-        "B": {
-          "completed": true,
-          "note": "Broader Oxford reference inventory checked. Strongest structural retrieval: REF-OX-SAMPLE-LADDER-TRACE; no absence claim is used as evidence of originality."
-        },
-        "C": {
-          "completed": true,
-          "note": "Current Interview App bank checked against the retained Hilbert baseline. Strongest structural retrieval: oxford-prefix-sums-mod-n."
-        },
-        "D": {
-          "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
-        },
-        "E": {
-          "completed": true,
-          "note": "Independent external/classic search completed with query \"two reflections composition rotation translation gcd orbit cyclic group\". Nearest retained external evidence: Classical dihedral-group fact: product of two reflections is a rotation/translation analogue."
-        }
-      },
-      "externalSearchQueries": [
-        "two reflections composition rotation translation gcd orbit cyclic group"
-      ],
-      "nearestMatches": [
-        {
-          "pool": "A",
-          "source": "OX-MATHCS-SQUARE-CUBE-CONSTRAINT",
-          "matchedFingerprintFeatures": [
-            "broad-area or progression neighbour"
-          ],
-          "similarity": {
-            "wording": 0,
-            "setup": 0,
-            "target": 0,
-            "kernel": 0,
-            "decisiveMechanism": 0,
-            "diagram": 0,
-            "progression": 1,
-            "transferStretch": 1
-          },
-          "explanation": "Official benchmark retrieval is used to compare interview shape and progression; it is not treated as an originality match unless mathematics also aligns."
-        },
-        {
-          "pool": "D",
-          "source": "oxford-d-odd-symmetric-difference",
-          "matchedFingerprintFeatures": [
-            "same-wave structural neighbour"
-          ],
-          "similarity": {
-            "wording": 0,
-            "setup": 0,
-            "target": 0,
-            "kernel": 1,
-            "decisiveMechanism": 0,
-            "diagram": 0,
-            "progression": 1,
-            "transferStretch": 1
-          },
-          "explanation": "Nearest same-wave retrieval is retained for global repetition review; broad technique overlap alone does not trigger rejection."
-        },
-        {
-          "pool": "E",
-          "source": "Classical dihedral-group fact: product of two reflections is a rotation/translation analogue",
-          "matchedFingerprintFeatures": [
-            "same or near-exact mathematical kernel"
-          ],
-          "similarity": {
-            "wording": 0,
-            "setup": 3,
-            "target": 3,
-            "kernel": 3,
-            "decisiveMechanism": 3,
-            "diagram": 2,
-            "progression": 2,
-            "transferStretch": 1
-          },
-          "explanation": "External retrieval preserves the same or near-same kernel/decisive mechanism strongly enough to control the originality decision."
-        }
-      ],
-      "classicProblemCheck": {
-        "result": "TOO_CLOSE_TO_ESTABLISHED_KERNEL",
-        "notes": "The external match preserves enough of the mathematical fingerprint to fail the independent-original gate."
-      },
-      "fidelityNotes": {
-        "accessibleOpening": "The opening is candidate-accessible: compose short words.",
-        "promptability": "The progression exposes intermediate tutor checkpoints before the core: find translation.",
-        "reasoningEvidence": "The family elicits observable representation change and proof structure rather than recall alone: two mirror moves -> translations plus one reflection.",
-        "transfer": "The retained transfer/stretch remains inside the same mathematical family: gcd criterion; arbitrary starting residue.",
-        "ceiling": "The core-to-extension progression supplies a credible standard-to-strong ceiling.",
-        "prerequisiteBurden": "Prerequisites are controlled by the authored setup and do not require obscure external facts."
-      },
-      "requiredChanges": [
-        "Do not keep this as a new independent-original family; replace the mathematical kernel or retain only with truthful classic provenance where product policy permits."
-      ],
-      "bankDisposition": [
-        "originality gate blocks current authored family",
-        "Oxford-fidelity gate cleared"
-      ],
-      "wouldRejectIfClaimedOriginal": true,
-      "handoff": {
-        "canProgressAfterGI": false,
-        "note": "Hilbert originality revision/replacement is required before recommendation readiness."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-d-odd-symmetric-difference",
-      "sourceRef": "PR #133 docs/oxford-research/agent-d-dirichlet-candidate-audit.md @ ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "sourceRef": "PR #133 final survivor @ 65d570a1f6dad3773edb7eea4568d9399f3164c8",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "D — Dirichlet",
         "number": 133,
-        "head": "ecece22058c997d37c4b352fa5ed32bd1daf5243"
+        "head": "65d570a1f6dad3773edb7eea4568d9399f3164c8"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -4258,7 +3949,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -4346,17 +4037,17 @@
       "wouldRejectIfClaimedOriginal": false,
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-d-three-reversal-permutations",
-      "sourceRef": "PR #133 docs/oxford-research/agent-d-dirichlet-candidate-audit.md @ ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "sourceRef": "PR #133 final survivor @ 65d570a1f6dad3773edb7eea4568d9399f3164c8",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "D — Dirichlet",
         "number": 133,
-        "head": "ecece22058c997d37c4b352fa5ed32bd1daf5243"
+        "head": "65d570a1f6dad3773edb7eea4568d9399f3164c8"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -4392,9 +4083,9 @@
         "knownClassicOverlap": "adjacent-transposition machinery is standard; exact three-reversal package not found preliminarily",
         "authorProvenance": "independently authored; requires Agent H"
       },
-      "originalityDecision": "REVISE",
+      "originalityDecision": "PASS_WITH_NOTES",
       "fidelityDecision": "PASS",
-      "provenanceDisposition": "change-to-structural-adaptation-or-classic-adjacent",
+      "provenanceDisposition": "truthful-classic",
       "retrieval": {
         "A": {
           "completed": true,
@@ -4410,7 +4101,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -4477,8 +4168,8 @@
         }
       ],
       "classicProblemCheck": {
-        "result": "CLASSIC_ADJACENT_OR_PROVENANCE_OVERSTATED",
-        "notes": "The family adds material structure, but the established kernel is central enough that provenance or core design needs revision."
+        "result": "TRUTHFUL_CLASSIC_PROVENANCE",
+        "notes": "Final author head preserves the reviewed mathematical kernel and truthfully labels it classic-problem / classic-mathematics, resolving the prior provenance-only REVISE."
       },
       "fidelityNotes": {
         "accessibleOpening": "The opening is candidate-accessible: inspect one move.",
@@ -4489,26 +4180,26 @@
         "prerequisiteBurden": "Prerequisites are controlled by the authored setup and do not require obscure external facts."
       },
       "requiredChanges": [
-        "Revise provenance and/or the mathematically central kernel so the retained record truthfully distinguishes established structure from the authored extension."
+        "Retain final classic-problem / classic-mathematics provenance; do not relabel the established kernel independent-original."
       ],
       "bankDisposition": [
-        "Hilbert re-review required after revision",
+        "Hilbert originality gate cleared with truthful classic provenance",
         "Oxford-fidelity gate cleared"
       ],
       "wouldRejectIfClaimedOriginal": true,
       "handoff": {
-        "canProgressAfterGI": false,
-        "note": "Hilbert originality revision/replacement is required before recommendation readiness."
+        "canProgressAfterGI": true,
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-d-divisor-step-geometry",
-      "sourceRef": "PR #133 docs/oxford-research/agent-d-dirichlet-candidate-audit.md @ ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "sourceRef": "PR #133 final survivor @ 65d570a1f6dad3773edb7eea4568d9399f3164c8",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "D — Dirichlet",
         "number": 133,
-        "head": "ecece22058c997d37c4b352fa5ed32bd1daf5243"
+        "head": "65d570a1f6dad3773edb7eea4568d9399f3164c8"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -4544,9 +4235,9 @@
         "knownClassicOverlap": "divisor graphs/exponent grids are known objects; MEDIUM RISK",
         "authorProvenance": "independently authored bundle; requires Agent H"
       },
-      "originalityDecision": "REVISE",
+      "originalityDecision": "PASS_WITH_NOTES",
       "fidelityDecision": "PASS",
-      "provenanceDisposition": "change-to-structural-adaptation-or-classic-adjacent",
+      "provenanceDisposition": "truthful-classic",
       "retrieval": {
         "A": {
           "completed": true,
@@ -4562,7 +4253,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -4629,8 +4320,8 @@
         }
       ],
       "classicProblemCheck": {
-        "result": "CLASSIC_ADJACENT_OR_PROVENANCE_OVERSTATED",
-        "notes": "The family adds material structure, but the established kernel is central enough that provenance or core design needs revision."
+        "result": "TRUTHFUL_CLASSIC_PROVENANCE",
+        "notes": "Final author head preserves the reviewed mathematical kernel and truthfully labels it classic-problem / classic-mathematics, resolving the prior provenance-only REVISE."
       },
       "fidelityNotes": {
         "accessibleOpening": "The opening is candidate-accessible: draw divisor graphs.",
@@ -4641,26 +4332,26 @@
         "prerequisiteBurden": "Prerequisites are controlled by the authored setup and do not require obscure external facts."
       },
       "requiredChanges": [
-        "Revise provenance and/or the mathematically central kernel so the retained record truthfully distinguishes established structure from the authored extension."
+        "Retain final classic-problem / classic-mathematics provenance; do not relabel the established kernel independent-original."
       ],
       "bankDisposition": [
-        "Hilbert re-review required after revision",
+        "Hilbert originality gate cleared with truthful classic provenance",
         "Oxford-fidelity gate cleared"
       ],
       "wouldRejectIfClaimedOriginal": true,
       "handoff": {
-        "canProgressAfterGI": false,
-        "note": "Hilbert originality revision/replacement is required before recommendation readiness."
+        "canProgressAfterGI": true,
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-d-triple-flip-circle",
-      "sourceRef": "PR #133 docs/oxford-research/agent-d-dirichlet-candidate-audit.md @ ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "sourceRef": "PR #133 final survivor @ 65d570a1f6dad3773edb7eea4568d9399f3164c8",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "D — Dirichlet",
         "number": 133,
-        "head": "ecece22058c997d37c4b352fa5ed32bd1daf5243"
+        "head": "65d570a1f6dad3773edb7eea4568d9399f3164c8"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -4714,7 +4405,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -4807,17 +4498,17 @@
       },
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-euler-box-diagonal-bisector",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-box-diagonal-bisector.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
+      "sourceRef": "PR #134 final survivor @ 1ce96b5b89be971399cab5080d4487a908ea294d",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
+        "head": "1ce96b5b89be971399cab5080d4487a908ea294d"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -4877,7 +4568,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -4966,17 +4657,17 @@
       "wouldRejectIfClaimedOriginal": false,
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-euler-circle-sweep",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-circle-sweep.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
+      "sourceRef": "PR #134 final survivor @ 1ce96b5b89be971399cab5080d4487a908ea294d",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
+        "head": "1ce96b5b89be971399cab5080d4487a908ea294d"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -5036,7 +4727,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -5129,17 +4820,17 @@
       },
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-euler-cooling-data-model",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-cooling-data-model.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
+      "sourceRef": "PR #134 final survivor @ 1ce96b5b89be971399cab5080d4487a908ea294d",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
+        "head": "1ce96b5b89be971399cab5080d4487a908ea294d"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -5181,9 +4872,9 @@
         "knownClassicOverlap": "Cooling models are common. The intended novelty is model comparison/revision, not claiming the recurrence itself is novel.",
         "authorProvenance": "author candidate provenance pending independent H review"
       },
-      "originalityDecision": "REVISE",
+      "originalityDecision": "PASS_WITH_NOTES",
       "fidelityDecision": "PASS",
-      "provenanceDisposition": "change-to-structural-adaptation-or-classic-adjacent",
+      "provenanceDisposition": "structural-adaptation-classic-mathematics",
       "retrieval": {
         "A": {
           "completed": true,
@@ -5199,7 +4890,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -5267,8 +4958,8 @@
         }
       ],
       "classicProblemCheck": {
-        "result": "CLASSIC_ADJACENT_OR_PROVENANCE_OVERSTATED",
-        "notes": "The family adds material structure, but the established kernel is central enough that provenance or core design needs revision."
+        "result": "TRUTHFUL_STRUCTURAL_ADAPTATION",
+        "notes": "Final author provenance explicitly anchors the retained authored progression to the established newton-cooling-gap-decay structure, resolving the prior provenance-only REVISE without changing the mathematical kernel."
       },
       "fidelityNotes": {
         "accessibleOpening": "The opening is candidate-accessible: Compute raw temperature drops and temperature gaps above room temperature..",
@@ -5279,26 +4970,26 @@
         "prerequisiteBurden": "Prerequisites are controlled by the authored setup and do not require obscure external facts."
       },
       "requiredChanges": [
-        "Revise provenance and/or the mathematically central kernel so the retained record truthfully distinguishes established structure from the authored extension."
+        "Retain structural-adaptation / classic-mathematics provenance with referenceFamilyId \"newton-cooling-gap-decay\"; do not claim the established kernel independent-original."
       ],
       "bankDisposition": [
-        "Hilbert re-review required after revision",
+        "Hilbert originality gate cleared with truthful structural-adaptation provenance",
         "Oxford-fidelity gate cleared"
       ],
       "wouldRejectIfClaimedOriginal": true,
       "handoff": {
-        "canProgressAfterGI": false,
-        "note": "Hilbert originality revision/replacement is required before recommendation readiness."
+        "canProgressAfterGI": true,
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-euler-corner-balanced-tables",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-corner-balanced-tables.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
+      "sourceRef": "PR #134 final survivor @ 1ce96b5b89be971399cab5080d4487a908ea294d",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
+        "head": "1ce96b5b89be971399cab5080d4487a908ea294d"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -5341,9 +5032,9 @@
         "knownClassicOverlap": "Additive matrices / vanishing mixed differences are standard; external search should test whether the exact interview ladder is too close to classics.",
         "authorProvenance": "author candidate provenance pending independent H review"
       },
-      "originalityDecision": "REVISE",
+      "originalityDecision": "PASS_WITH_NOTES",
       "fidelityDecision": "PASS",
-      "provenanceDisposition": "change-to-structural-adaptation-or-classic-adjacent",
+      "provenanceDisposition": "structural-adaptation-classic-mathematics",
       "retrieval": {
         "A": {
           "completed": true,
@@ -5359,7 +5050,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -5426,8 +5117,8 @@
         }
       ],
       "classicProblemCheck": {
-        "result": "CLASSIC_ADJACENT_OR_PROVENANCE_OVERSTATED",
-        "notes": "The family adds material structure, but the established kernel is central enough that provenance or core design needs revision."
+        "result": "TRUTHFUL_STRUCTURAL_ADAPTATION",
+        "notes": "Final author provenance explicitly anchors the retained authored progression to the established additive-matrix-row-column-decomposition structure, resolving the prior provenance-only REVISE without changing the mathematical kernel."
       },
       "fidelityNotes": {
         "accessibleOpening": "The opening is candidate-accessible: Fill small 2 by 3 and 3 by 3 examples and look for a rule in row-to-row or column-to-column differences..",
@@ -5438,26 +5129,26 @@
         "prerequisiteBurden": "Prerequisites are controlled by the authored setup and do not require obscure external facts."
       },
       "requiredChanges": [
-        "Revise provenance and/or the mathematically central kernel so the retained record truthfully distinguishes established structure from the authored extension."
+        "Retain structural-adaptation / classic-mathematics provenance with referenceFamilyId \"additive-matrix-row-column-decomposition\"; do not claim the established kernel independent-original."
       ],
       "bankDisposition": [
-        "Hilbert re-review required after revision",
+        "Hilbert originality gate cleared with truthful structural-adaptation provenance",
         "Oxford-fidelity gate cleared"
       ],
       "wouldRejectIfClaimedOriginal": true,
       "handoff": {
-        "canProgressAfterGI": false,
-        "note": "Hilbert originality revision/replacement is required before recommendation readiness."
+        "canProgressAfterGI": true,
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-euler-diagonal-blend-transform",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-diagonal-blend-transform.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
+      "sourceRef": "PR #134 final survivor @ 1ce96b5b89be971399cab5080d4487a908ea294d",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
+        "head": "1ce96b5b89be971399cab5080d4487a908ea294d"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -5518,7 +5209,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -5611,17 +5302,17 @@
       },
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-euler-kiosk-grid-model",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-kiosk-grid-model.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
+      "sourceRef": "PR #134 final survivor @ 1ce96b5b89be971399cab5080d4487a908ea294d",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
+        "head": "1ce96b5b89be971399cab5080d4487a908ea294d"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -5682,7 +5373,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -5770,176 +5461,17 @@
       "wouldRejectIfClaimedOriginal": false,
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
-      }
-    },
-    {
-      "familyId": "oxford-euler-locally-balanced-labels",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-locally-balanced-labels.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
-      "subjectKind": "same-wave-proposal",
-      "authorPr": {
-        "agent": "E — Euler",
-        "number": 134,
-        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
-      },
-      "reviewedAt": "2026-09-05",
-      "reviewer": {
-        "agent": "H",
-        "name": "Hilbert"
-      },
-      "fingerprint": {
-        "surfaceObjects": [
-          "paths and cycles",
-          "local averaging",
-          "recurrences",
-          "maximum principle"
-        ],
-        "constraints": [
-          "For the path version, use a finite path with at least two vertices.",
-          "For a path, the two endpoint labels are not constrained by the averaging rule.",
-          "For the cycle version, use a simple cycle with at least three vertices; every vertex has exactly two cyclic neighbors."
-        ],
-        "targetType": "local neighbor-average definition -> path first-difference propagation -> cycle maximum principle -> topology transfer",
-        "centralMechanism": "path first-difference propagation  ->  cycle maximum principle",
-        "secondaryMechanisms": [
-          "graph-boundary",
-          "weighted-neighbors"
-        ],
-        "criticalRepresentationChange": "Rewrite the averaging rule as equality of consecutive differences along a path.",
-        "diagramTopology": "Path graph followed by simple cycle; labels are written at vertices.",
-        "smallCaseSignature": "Build small path and cycle examples and identify what the local averaging rule forces.",
-        "progressionSignature": {
-          "opening": "Build small path and cycle examples and identify what the local averaging rule forces.",
-          "firstDeepening": "Rewrite the averaging rule as equality of consecutive differences along a path.",
-          "core": "Prove that fixed endpoint values determine one arithmetic progression and no other path labeling.",
-          "transfer": "Extend the local-average viewpoint to a graph with designated boundary vertices and formulate a uniqueness conjecture.",
-          "stretch": "On a finite connected graph, some vertices are declared boundary and the rest must equal the average of all neighbors. Investigate whether boundary values determine the interior uniquely."
-        },
-        "solutionDependencyGraphSummary": "opening -> structure -> path-proof -> cycle-proof -> transfer",
-        "distinctiveFeatures": [
-          "local neighbor-average definition -> path first-difference propagation -> cycle maximum principle -> topology transfer",
-          "Path graph followed by simple cycle; labels are written at vertices."
-        ],
-        "knownClassicOverlap": "Discrete harmonic functions are established mathematics; H should distinguish pedagogical self-contained definition from a standard exercise.",
-        "authorProvenance": "author candidate provenance pending independent H review"
-      },
-      "originalityDecision": "REJECT_TOO_CLOSE",
-      "fidelityDecision": "PASS",
-      "provenanceDisposition": "reject-as-new-original",
-      "retrieval": {
-        "A": {
-          "completed": true,
-          "note": "Deep official benchmark corpus checked. Strongest structural retrieval: OX-MATHCS-SQUARE-CUBE-CONSTRAINT; treated as pedagogy/structure evidence, not originality proof."
-        },
-        "B": {
-          "completed": true,
-          "note": "Broader Oxford reference inventory checked. Strongest structural retrieval: REF-OX-SAMPLE-TILING-RECURRENCE; no absence claim is used as evidence of originality."
-        },
-        "C": {
-          "completed": true,
-          "note": "Current Interview App bank checked against the retained Hilbert baseline. Strongest structural retrieval: oxford-continuous-fixed-point."
-        },
-        "D": {
-          "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
-        },
-        "E": {
-          "completed": true,
-          "note": "Independent external/classic search completed with query \"path sequence each term average of neighbors arithmetic progression cycle maximum principle\". Nearest retained external evidence: Classical discrete harmonic maximum principle plus second-difference-zero path characterization."
-        }
-      },
-      "externalSearchQueries": [
-        "path sequence each term average of neighbors arithmetic progression cycle maximum principle"
-      ],
-      "nearestMatches": [
-        {
-          "pool": "A",
-          "source": "OX-MATHCS-SQUARE-CUBE-CONSTRAINT",
-          "matchedFingerprintFeatures": [
-            "broad-area or progression neighbour"
-          ],
-          "similarity": {
-            "wording": 0,
-            "setup": 0,
-            "target": 0,
-            "kernel": 0,
-            "decisiveMechanism": 0,
-            "diagram": 0,
-            "progression": 1,
-            "transferStretch": 1
-          },
-          "explanation": "Official benchmark retrieval is used to compare interview shape and progression; it is not treated as an originality match unless mathematics also aligns."
-        },
-        {
-          "pool": "D",
-          "source": "oxford-euler-random-adjacent-consecutives",
-          "matchedFingerprintFeatures": [
-            "same-wave structural neighbour"
-          ],
-          "similarity": {
-            "wording": 0,
-            "setup": 0,
-            "target": 0,
-            "kernel": 1,
-            "decisiveMechanism": 0,
-            "diagram": 0,
-            "progression": 1,
-            "transferStretch": 1
-          },
-          "explanation": "Nearest same-wave retrieval is retained for global repetition review; broad technique overlap alone does not trigger rejection."
-        },
-        {
-          "pool": "E",
-          "source": "Classical discrete harmonic maximum principle plus second-difference-zero path characterization",
-          "matchedFingerprintFeatures": [
-            "same or near-exact mathematical kernel"
-          ],
-          "similarity": {
-            "wording": 0,
-            "setup": 3,
-            "target": 3,
-            "kernel": 3,
-            "decisiveMechanism": 3,
-            "diagram": 2,
-            "progression": 2,
-            "transferStretch": 1
-          },
-          "explanation": "External retrieval preserves the same or near-same kernel/decisive mechanism strongly enough to control the originality decision."
-        }
-      ],
-      "classicProblemCheck": {
-        "result": "TOO_CLOSE_TO_ESTABLISHED_KERNEL",
-        "notes": "The external match preserves enough of the mathematical fingerprint to fail the independent-original gate."
-      },
-      "fidelityNotes": {
-        "accessibleOpening": "The opening is candidate-accessible: Build small path and cycle examples and identify what the local averaging rule forces..",
-        "promptability": "The progression exposes intermediate tutor checkpoints before the core: Rewrite the averaging rule as equality of consecutive differences along a path..",
-        "reasoningEvidence": "The family elicits observable representation change and proof structure rather than recall alone: Rewrite the averaging rule as equality of consecutive differences along a path..",
-        "transfer": "The retained transfer/stretch remains inside the same mathematical family: Extend the local-average viewpoint to a graph with designated boundary vertices and formulate a uniqueness conjecture.; On a finite connected graph, some vertices are declared boundary and the rest must equal the average of all neighbors. Investigate whether boundary values determine the interior uniquely..",
-        "ceiling": "The core-to-extension progression supplies a credible standard-to-strong ceiling.",
-        "prerequisiteBurden": "Prerequisites are controlled by the authored setup and do not require obscure external facts."
-      },
-      "requiredChanges": [
-        "Do not keep this as a new independent-original family; replace the mathematical kernel or retain only with truthful classic provenance where product policy permits."
-      ],
-      "bankDisposition": [
-        "originality gate blocks current authored family",
-        "Oxford-fidelity gate cleared"
-      ],
-      "wouldRejectIfClaimedOriginal": true,
-      "handoff": {
-        "canProgressAfterGI": false,
-        "note": "Hilbert originality revision/replacement is required before recommendation readiness."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-euler-periodic-queue-model",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-periodic-queue-model.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
+      "sourceRef": "PR #134 final survivor @ 1ce96b5b89be971399cab5080d4487a908ea294d",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
+        "head": "1ce96b5b89be971399cab5080d4487a908ea294d"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -5983,9 +5515,9 @@
         "knownClassicOverlap": "Queue recurrences are standard modelling material; fidelity depends on keeping model-building—not formula application—central.",
         "authorProvenance": "author candidate provenance pending independent H review"
       },
-      "originalityDecision": "REVISE",
+      "originalityDecision": "PASS_WITH_NOTES",
       "fidelityDecision": "PASS",
-      "provenanceDisposition": "change-to-structural-adaptation-or-classic-adjacent",
+      "provenanceDisposition": "structural-adaptation-classic-mathematics",
       "retrieval": {
         "A": {
           "completed": true,
@@ -6001,7 +5533,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -6069,8 +5601,8 @@
         }
       ],
       "classicProblemCheck": {
-        "result": "CLASSIC_ADJACENT_OR_PROVENANCE_OVERSTATED",
-        "notes": "The family adds material structure, but the established kernel is central enough that provenance or core design needs revision."
+        "result": "TRUTHFUL_STRUCTURAL_ADAPTATION",
+        "notes": "Final author provenance explicitly anchors the retained authored progression to the established lindley-reflected-queue structure, resolving the prior provenance-only REVISE without changing the mathematical kernel."
       },
       "fidelityNotes": {
         "accessibleOpening": "The opening is candidate-accessible: Translate the fixed arrivals-then-service convention into q_{n+1}=max(0,q_n+a_n-s), with a_n=a on odd minutes and b on even minutes..",
@@ -6081,26 +5613,26 @@
         "prerequisiteBurden": "Prerequisites are controlled by the authored setup and do not require obscure external facts."
       },
       "requiredChanges": [
-        "Revise provenance and/or the mathematically central kernel so the retained record truthfully distinguishes established structure from the authored extension."
+        "Retain structural-adaptation / classic-mathematics provenance with referenceFamilyId \"lindley-reflected-queue\"; do not claim the established kernel independent-original."
       ],
       "bankDisposition": [
-        "Hilbert re-review required after revision",
+        "Hilbert originality gate cleared with truthful structural-adaptation provenance",
         "Oxford-fidelity gate cleared"
       ],
       "wouldRejectIfClaimedOriginal": true,
       "handoff": {
-        "canProgressAfterGI": false,
-        "note": "Hilbert originality revision/replacement is required before recommendation readiness."
+        "canProgressAfterGI": true,
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-euler-quadrilateral-balance",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-quadrilateral-balance.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
+      "sourceRef": "PR #134 final survivor @ 1ce96b5b89be971399cab5080d4487a908ea294d",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
+        "head": "1ce96b5b89be971399cab5080d4487a908ea294d"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -6161,7 +5693,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -6255,176 +5787,17 @@
       },
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
-      }
-    },
-    {
-      "familyId": "oxford-euler-random-adjacent-consecutives",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-random-adjacent-consecutives.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
-      "subjectKind": "same-wave-proposal",
-      "authorPr": {
-        "agent": "E — Euler",
-        "number": 134,
-        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
-      },
-      "reviewedAt": "2026-09-05",
-      "reviewer": {
-        "agent": "H",
-        "name": "Hilbert"
-      },
-      "fingerprint": {
-        "surfaceObjects": [
-          "random permutations",
-          "expectation",
-          "indicator variables",
-          "symmetry"
-        ],
-        "constraints": [
-          "Assume n>=2 for the line version and n>=3 for the circular version.",
-          "Different consecutive-value pairs can overlap and are not independent.",
-          "You may derive any expectation identity you use from sums of indicator variables."
-        ],
-        "targetType": "random permutation -> local adjacency indicators -> linearity of expectation -> boundary/circle transfer",
-        "centralMechanism": "local adjacency indicators  ->  linearity of expectation",
-        "secondaryMechanisms": [
-          "difference-d",
-          "weighted-adjacency"
-        ],
-        "criticalRepresentationChange": "For one fixed pair {k,k+1}, compute the probability that its two values are adjacent by treating them as a block.",
-        "diagramTopology": "n positions on a line, then optionally around a circle.",
-        "smallCaseSignature": "Compute n=3 or n=4 examples and identify the natural events indexed by value-pairs {k,k+1}.",
-        "progressionSignature": {
-          "opening": "Compute n=3 or n=4 examples and identify the natural events indexed by value-pairs {k,k+1}.",
-          "firstDeepening": "For one fixed pair {k,k+1}, compute the probability that its two values are adjacent by treating them as a block.",
-          "core": "Write X as a sum of indicators and sum their expectations without assuming independence.",
-          "transfer": "Replace difference 1 by difference d and determine how many value-pairs contribute.",
-          "stretch": "Let X_d count neighboring values differing by exactly d. Find E[X_d]."
-        },
-        "solutionDependencyGraphSummary": "opening -> structure -> expectation -> circle -> transfer",
-        "distinctiveFeatures": [
-          "random permutation -> local adjacency indicators -> linearity of expectation -> boundary/circle transfer",
-          "n positions on a line, then optionally around a circle."
-        ],
-        "knownClassicOverlap": "Indicator-expectation adjacency problems are common classics; high H-search priority.",
-        "authorProvenance": "author candidate provenance pending independent H review"
-      },
-      "originalityDecision": "REJECT_TOO_CLOSE",
-      "fidelityDecision": "PASS_WITH_NOTES",
-      "provenanceDisposition": "reject-as-new-original",
-      "retrieval": {
-        "A": {
-          "completed": true,
-          "note": "Deep official benchmark corpus checked. Strongest structural retrieval: OX-MATHCS-SQUARE-CUBE-CONSTRAINT; treated as pedagogy/structure evidence, not originality proof."
-        },
-        "B": {
-          "completed": true,
-          "note": "Broader Oxford reference inventory checked. Strongest structural retrieval: REF-OX-CRAWFORD-DIGIT-COUNT; no absence claim is used as evidence of originality."
-        },
-        "C": {
-          "completed": true,
-          "note": "Current Interview App bank checked against the retained Hilbert baseline. Strongest structural retrieval: oxford-divisors-square-parity."
-        },
-        "D": {
-          "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
-        },
-        "E": {
-          "completed": true,
-          "note": "Independent external/classic search completed with query \"random permutation expected adjacent consecutive values indicator\". Nearest retained external evidence: External random-permutation consecutive-adjacency literature/exercises — same statistic and indicator method are standard."
-        }
-      },
-      "externalSearchQueries": [
-        "random permutation expected adjacent consecutive values indicator"
-      ],
-      "nearestMatches": [
-        {
-          "pool": "A",
-          "source": "OX-MATHCS-SQUARE-CUBE-CONSTRAINT",
-          "matchedFingerprintFeatures": [
-            "broad-area or progression neighbour"
-          ],
-          "similarity": {
-            "wording": 0,
-            "setup": 0,
-            "target": 0,
-            "kernel": 0,
-            "decisiveMechanism": 0,
-            "diagram": 0,
-            "progression": 1,
-            "transferStretch": 1
-          },
-          "explanation": "Official benchmark retrieval is used to compare interview shape and progression; it is not treated as an originality match unless mathematics also aligns."
-        },
-        {
-          "pool": "D",
-          "source": "oxford-euler-random-subset-blocks",
-          "matchedFingerprintFeatures": [
-            "same-wave structural neighbour"
-          ],
-          "similarity": {
-            "wording": 0,
-            "setup": 0,
-            "target": 0,
-            "kernel": 1,
-            "decisiveMechanism": 0,
-            "diagram": 0,
-            "progression": 1,
-            "transferStretch": 1
-          },
-          "explanation": "Nearest same-wave retrieval is retained for global repetition review; broad technique overlap alone does not trigger rejection."
-        },
-        {
-          "pool": "E",
-          "source": "External random-permutation consecutive-adjacency literature/exercises — same statistic and indicator method are standard",
-          "matchedFingerprintFeatures": [
-            "same or near-exact mathematical kernel"
-          ],
-          "similarity": {
-            "wording": 0,
-            "setup": 3,
-            "target": 3,
-            "kernel": 3,
-            "decisiveMechanism": 3,
-            "diagram": 2,
-            "progression": 2,
-            "transferStretch": 1
-          },
-          "explanation": "External retrieval preserves the same or near-same kernel/decisive mechanism strongly enough to control the originality decision."
-        }
-      ],
-      "classicProblemCheck": {
-        "result": "TOO_CLOSE_TO_ESTABLISHED_KERNEL",
-        "notes": "The external match preserves enough of the mathematical fingerprint to fail the independent-original gate."
-      },
-      "fidelityNotes": {
-        "accessibleOpening": "The opening is candidate-accessible: Compute n=3 or n=4 examples and identify the natural events indexed by value-pairs {k,k+1}..",
-        "promptability": "The progression exposes intermediate tutor checkpoints before the core: For one fixed pair {k,k+1}, compute the probability that its two values are adjacent by treating them as a block..",
-        "reasoningEvidence": "The family elicits observable representation change and proof structure rather than recall alone: For one fixed pair {k,k+1}, compute the probability that its two values are adjacent by treating them as a block..",
-        "transfer": "The retained transfer/stretch remains inside the same mathematical family: Replace difference 1 by difference d and determine how many value-pairs contribute.; Let X_d count neighboring values differing by exactly d. Find E[X_d]..",
-        "ceiling": "There is usable ceiling, but prior exposure or familiar process structure can compress the interview for some candidates.",
-        "prerequisiteBurden": "Prerequisites are controlled by the authored setup and do not require obscure external facts."
-      },
-      "requiredChanges": [
-        "Do not keep this as a new independent-original family; replace the mathematical kernel or retain only with truthful classic provenance where product policy permits."
-      ],
-      "bankDisposition": [
-        "originality gate blocks current authored family",
-        "Oxford-fidelity gate cleared"
-      ],
-      "wouldRejectIfClaimedOriginal": true,
-      "handoff": {
-        "canProgressAfterGI": false,
-        "note": "Hilbert originality revision/replacement is required before recommendation readiness."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-euler-random-chord-midpoint",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-random-chord-midpoint.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
+      "sourceRef": "PR #134 final survivor @ 1ce96b5b89be971399cab5080d4487a908ea294d",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
+        "head": "1ce96b5b89be971399cab5080d4487a908ea294d"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -6484,7 +5857,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -6572,17 +5945,17 @@
       "wouldRejectIfClaimedOriginal": false,
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-euler-random-halving-interval",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-random-halving-interval.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
+      "sourceRef": "PR #134 final survivor @ 1ce96b5b89be971399cab5080d4487a908ea294d",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
+        "head": "1ce96b5b89be971399cab5080d4487a908ea294d"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -6626,9 +5999,9 @@
         "knownClassicOverlap": "Binary-expansion / dyadic-process neighbors exist; H should search exact midpoint-distribution progression.",
         "authorProvenance": "author candidate provenance pending independent H review"
       },
-      "originalityDecision": "REVISE",
+      "originalityDecision": "PASS_WITH_NOTES",
       "fidelityDecision": "PASS",
-      "provenanceDisposition": "change-to-structural-adaptation-or-classic-adjacent",
+      "provenanceDisposition": "structural-adaptation-classic-mathematics",
       "retrieval": {
         "A": {
           "completed": true,
@@ -6644,7 +6017,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -6711,8 +6084,8 @@
         }
       ],
       "classicProblemCheck": {
-        "result": "CLASSIC_ADJACENT_OR_PROVENANCE_OVERSTATED",
-        "notes": "The family adds material structure, but the established kernel is central enough that provenance or core design needs revision."
+        "result": "TRUTHFUL_STRUCTURAL_ADAPTATION",
+        "notes": "Final author provenance explicitly anchors the retained authored progression to the established dyadic-binary-coin-encoding structure, resolving the prior provenance-only REVISE without changing the mathematical kernel."
       },
       "fidelityNotes": {
         "accessibleOpening": "The opening is candidate-accessible: Draw the binary tree of surviving intervals for n=1,2,3 and conjecture uniformity across dyadic cells..",
@@ -6723,185 +6096,26 @@
         "prerequisiteBurden": "Prerequisites are controlled by the authored setup and do not require obscure external facts."
       },
       "requiredChanges": [
-        "Revise provenance and/or the mathematically central kernel so the retained record truthfully distinguishes established structure from the authored extension."
+        "Retain structural-adaptation / classic-mathematics provenance with referenceFamilyId \"dyadic-binary-coin-encoding\"; do not claim the established kernel independent-original."
       ],
       "bankDisposition": [
-        "Hilbert re-review required after revision",
+        "Hilbert originality gate cleared with truthful structural-adaptation provenance",
         "Oxford-fidelity gate cleared"
       ],
       "wouldRejectIfClaimedOriginal": true,
       "handoff": {
-        "canProgressAfterGI": false,
-        "note": "Hilbert originality revision/replacement is required before recommendation readiness."
-      }
-    },
-    {
-      "familyId": "oxford-euler-random-subset-blocks",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-random-subset-blocks.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
-      "subjectKind": "same-wave-proposal",
-      "authorPr": {
-        "agent": "E — Euler",
-        "number": 134,
-        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
-      },
-      "reviewedAt": "2026-09-05",
-      "reviewer": {
-        "agent": "H",
-        "name": "Hilbert"
-      },
-      "fingerprint": {
-        "surfaceObjects": [
-          "random subsets",
-          "runs",
-          "indicator variables",
-          "boundary cases"
-        ],
-        "constraints": [
-          "The empty subset has zero blocks.",
-          "For the circular version assume n>=2."
-        ],
-        "targetType": "random binary line -> count maximal blocks by starts -> boundary correction -> circular transition count + all-selected exception -> biased p",
-        "centralMechanism": "count maximal blocks by starts  ->  boundary correction  ->  circular transition count + all-selected exception",
-        "secondaryMechanisms": [
-          "biased-inclusion",
-          "conditional-nonempty"
-        ],
-        "criticalRepresentationChange": "Define a block-start indicator at position 1 and at each later 0-to-1 transition.",
-        "diagramTopology": "Selected/unselected positions on a line, then a cycle.",
-        "smallCaseSignature": "Draw small subsets and recognize that each block can be counted by its first chosen position.",
-        "progressionSignature": {
-          "opening": "Draw small subsets and recognize that each block can be counted by its first chosen position.",
-          "firstDeepening": "Define a block-start indicator at position 1 and at each later 0-to-1 transition.",
-          "core": "Use probabilities 1/2 and 1/4 to obtain E[X]=(n+1)/4 without any independence claim between indicators.",
-          "transfer": "Change inclusion probability to p and derive both line and circular formulas.",
-          "stretch": "If each position is chosen with probability p, show the line expectation is p+(n-1)p(1-p) and find the circular analogue."
-        },
-        "solutionDependencyGraphSummary": "opening -> line-indicators -> line-mean -> circle -> transfer",
-        "distinctiveFeatures": [
-          "random binary line -> count maximal blocks by starts -> boundary correction -> circular transition count + all-selected exception -> biased p",
-          "Selected/unselected positions on a line, then a cycle."
-        ],
-        "knownClassicOverlap": "Expected run-count is a known probability motif; correctness risk centers on line boundary and all-selected circular exception.",
-        "authorProvenance": "author candidate provenance pending independent H review"
-      },
-      "originalityDecision": "REJECT_TOO_CLOSE",
-      "fidelityDecision": "PASS",
-      "provenanceDisposition": "reject-as-new-original",
-      "retrieval": {
-        "A": {
-          "completed": true,
-          "note": "Deep official benchmark corpus checked. Strongest structural retrieval: OX-SAMPLE-TILING-RECURRENCE; treated as pedagogy/structure evidence, not originality proof."
-        },
-        "B": {
-          "completed": true,
-          "note": "Broader Oxford reference inventory checked. Strongest structural retrieval: REF-OX-CRAWFORD-DIGIT-COUNT; no absence claim is used as evidence of originality."
-        },
-        "C": {
-          "completed": true,
-          "note": "Current Interview App bank checked against the retained Hilbert baseline. Strongest structural retrieval: oxford-catalan-paths."
-        },
-        "D": {
-          "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
-        },
-        "E": {
-          "completed": true,
-          "note": "Independent external/classic search completed with query \"expected number runs of 1s Bernoulli p+(n-1)p(1-p)\". Nearest retained external evidence: Cross Validated — expected number of runs in coin tosses."
-        }
-      },
-      "externalSearchQueries": [
-        "expected number runs of 1s Bernoulli p+(n-1)p(1-p)"
-      ],
-      "nearestMatches": [
-        {
-          "pool": "A",
-          "source": "OX-SAMPLE-TILING-RECURRENCE",
-          "matchedFingerprintFeatures": [
-            "broad-area or progression neighbour"
-          ],
-          "similarity": {
-            "wording": 0,
-            "setup": 0,
-            "target": 0,
-            "kernel": 0,
-            "decisiveMechanism": 0,
-            "diagram": 0,
-            "progression": 1,
-            "transferStretch": 1
-          },
-          "explanation": "Official benchmark retrieval is used to compare interview shape and progression; it is not treated as an originality match unless mathematics also aligns."
-        },
-        {
-          "pool": "D",
-          "source": "oxford-euler-random-adjacent-consecutives",
-          "matchedFingerprintFeatures": [
-            "same-wave structural neighbour"
-          ],
-          "similarity": {
-            "wording": 0,
-            "setup": 0,
-            "target": 0,
-            "kernel": 1,
-            "decisiveMechanism": 0,
-            "diagram": 0,
-            "progression": 1,
-            "transferStretch": 1
-          },
-          "explanation": "Nearest same-wave retrieval is retained for global repetition review; broad technique overlap alone does not trigger rejection."
-        },
-        {
-          "pool": "E",
-          "source": "Cross Validated — expected number of runs in coin tosses",
-          "url": "https://stats.stackexchange.com/questions/6770/expected-number-of-runs-of-length-n-in-coin-toss",
-          "matchedFingerprintFeatures": [
-            "same or near-exact mathematical kernel"
-          ],
-          "similarity": {
-            "wording": 0,
-            "setup": 3,
-            "target": 3,
-            "kernel": 3,
-            "decisiveMechanism": 3,
-            "diagram": 2,
-            "progression": 2,
-            "transferStretch": 1
-          },
-          "explanation": "External retrieval preserves the same or near-same kernel/decisive mechanism strongly enough to control the originality decision."
-        }
-      ],
-      "classicProblemCheck": {
-        "result": "TOO_CLOSE_TO_ESTABLISHED_KERNEL",
-        "notes": "The external match preserves enough of the mathematical fingerprint to fail the independent-original gate."
-      },
-      "fidelityNotes": {
-        "accessibleOpening": "The opening is candidate-accessible: Draw small subsets and recognize that each block can be counted by its first chosen position..",
-        "promptability": "The progression exposes intermediate tutor checkpoints before the core: Define a block-start indicator at position 1 and at each later 0-to-1 transition..",
-        "reasoningEvidence": "The family elicits observable representation change and proof structure rather than recall alone: Define a block-start indicator at position 1 and at each later 0-to-1 transition..",
-        "transfer": "The retained transfer/stretch remains inside the same mathematical family: Change inclusion probability to p and derive both line and circular formulas.; If each position is chosen with probability p, show the line expectation is p+(n-1)p(1-p) and find the circular analogue..",
-        "ceiling": "The core-to-extension progression supplies a credible standard-to-strong ceiling.",
-        "prerequisiteBurden": "Prerequisites are controlled by the authored setup and do not require obscure external facts."
-      },
-      "requiredChanges": [
-        "Do not keep this as a new independent-original family; replace the mathematical kernel or retain only with truthful classic provenance where product policy permits."
-      ],
-      "bankDisposition": [
-        "originality gate blocks current authored family",
-        "Oxford-fidelity gate cleared"
-      ],
-      "wouldRejectIfClaimedOriginal": true,
-      "handoff": {
-        "canProgressAfterGI": false,
-        "note": "Hilbert originality revision/replacement is required before recommendation readiness."
+        "canProgressAfterGI": true,
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-euler-self-averaging-sets",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-self-averaging-sets.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
+      "sourceRef": "PR #134 final survivor @ 1ce96b5b89be971399cab5080d4487a908ea294d",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
+        "head": "1ce96b5b89be971399cab5080d4487a908ea294d"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -6961,7 +6175,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -7049,177 +6263,17 @@
       "wouldRejectIfClaimedOriginal": false,
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
-      }
-    },
-    {
-      "familyId": "oxford-euler-stop-on-change",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-stop-on-change.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
-      "subjectKind": "same-wave-proposal",
-      "authorPr": {
-        "agent": "E — Euler",
-        "number": 134,
-        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
-      },
-      "reviewedAt": "2026-09-05",
-      "reviewer": {
-        "agent": "H",
-        "name": "Hilbert"
-      },
-      "fingerprint": {
-        "surfaceObjects": [
-          "coin process",
-          "conditional expectation",
-          "geometric waiting",
-          "bias"
-        ],
-        "constraints": [
-          "All flips are independent with the same coin bias.",
-          "Assume 0<p<1 in the biased extension.",
-          "Conditioning on the first flip is encouraged; no geometric-distribution formula needs to be memorized."
-        ],
-        "targetType": "condition on first coin result -> initial-run stopping distribution -> expectation by recursion -> biased conditional mixture -> endpoint behavior",
-        "centralMechanism": "initial-run stopping distribution  ->  expectation by recursion  ->  biased conditional mixture",
-        "secondaryMechanisms": [
-          "run-length",
-          "three-symbols"
-        ],
-        "criticalRepresentationChange": "Derive P(N=k) directly for k>=2 and check the probabilities sum to 1.",
-        "diagramTopology": "Small state/process tree optional.",
-        "smallCaseSignature": "List the events N=2,3,4 for a fair coin and recognize the repeated same-then-change structure.",
-        "progressionSignature": {
-          "opening": "List the events N=2,3,4 for a fair coin and recognize the repeated same-then-change structure.",
-          "firstDeepening": "Derive P(N=k) directly for k>=2 and check the probabilities sum to 1.",
-          "core": "Compute E[N] by a one-step recursion or summing the tail, rather than quoting a memorized formula.",
-          "transfer": "Analyze the minimum over p and explain the divergence as p approaches 0 or 1.",
-          "stretch": "Find the distribution of the initial run length before the first change."
-        },
-        "solutionDependencyGraphSummary": "opening -> distribution -> expectation -> bias -> transfer",
-        "distinctiveFeatures": [
-          "condition on first coin result -> initial-run stopping distribution -> expectation by recursion -> biased conditional mixture -> endpoint behavior",
-          "Small state/process tree optional."
-        ],
-        "knownClassicOverlap": "Geometric-waiting processes are standard; H should decide whether the staged conditional/bias treatment is sufficiently independent.",
-        "authorProvenance": "author candidate provenance pending independent H review"
-      },
-      "originalityDecision": "REJECT_TOO_CLOSE",
-      "fidelityDecision": "PASS_WITH_NOTES",
-      "provenanceDisposition": "reject-as-new-original",
-      "retrieval": {
-        "A": {
-          "completed": true,
-          "note": "Deep official benchmark corpus checked. Strongest structural retrieval: OX-MATHCS-SQUARE-CUBE-CONSTRAINT; treated as pedagogy/structure evidence, not originality proof."
-        },
-        "B": {
-          "completed": true,
-          "note": "Broader Oxford reference inventory checked. Strongest structural retrieval: REF-OX-2026-FLOOR-LOG-INTEGRAL; no absence claim is used as evidence of originality."
-        },
-        "C": {
-          "completed": true,
-          "note": "Current Interview App bank checked against the retained Hilbert baseline. Strongest structural retrieval: oxford-divisibility-chain."
-        },
-        "D": {
-          "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
-        },
-        "E": {
-          "completed": true,
-          "note": "Independent external/classic search completed with query \"coin flip until result changes expected 3 first run\". Nearest retained external evidence: Quant interview probability question — flip until two consecutive results differ, expected flips 3."
-        }
-      },
-      "externalSearchQueries": [
-        "coin flip until result changes expected 3 first run"
-      ],
-      "nearestMatches": [
-        {
-          "pool": "A",
-          "source": "OX-MATHCS-SQUARE-CUBE-CONSTRAINT",
-          "matchedFingerprintFeatures": [
-            "broad-area or progression neighbour"
-          ],
-          "similarity": {
-            "wording": 0,
-            "setup": 0,
-            "target": 0,
-            "kernel": 0,
-            "decisiveMechanism": 0,
-            "diagram": 0,
-            "progression": 1,
-            "transferStretch": 1
-          },
-          "explanation": "Official benchmark retrieval is used to compare interview shape and progression; it is not treated as an originality match unless mathematics also aligns."
-        },
-        {
-          "pool": "D",
-          "source": "oxford-euler-random-halving-interval",
-          "matchedFingerprintFeatures": [
-            "same-wave structural neighbour"
-          ],
-          "similarity": {
-            "wording": 0,
-            "setup": 0,
-            "target": 0,
-            "kernel": 1,
-            "decisiveMechanism": 0,
-            "diagram": 0,
-            "progression": 1,
-            "transferStretch": 1
-          },
-          "explanation": "Nearest same-wave retrieval is retained for global repetition review; broad technique overlap alone does not trigger rejection."
-        },
-        {
-          "pool": "E",
-          "source": "Quant interview probability question — flip until two consecutive results differ, expected flips 3",
-          "url": "https://www.quantt.co.uk/resources/quant-probability-interview-questions",
-          "matchedFingerprintFeatures": [
-            "same or near-exact mathematical kernel"
-          ],
-          "similarity": {
-            "wording": 0,
-            "setup": 3,
-            "target": 3,
-            "kernel": 3,
-            "decisiveMechanism": 3,
-            "diagram": 2,
-            "progression": 2,
-            "transferStretch": 1
-          },
-          "explanation": "External retrieval preserves the same or near-same kernel/decisive mechanism strongly enough to control the originality decision."
-        }
-      ],
-      "classicProblemCheck": {
-        "result": "TOO_CLOSE_TO_ESTABLISHED_KERNEL",
-        "notes": "The external match preserves enough of the mathematical fingerprint to fail the independent-original gate."
-      },
-      "fidelityNotes": {
-        "accessibleOpening": "The opening is candidate-accessible: List the events N=2,3,4 for a fair coin and recognize the repeated same-then-change structure..",
-        "promptability": "The progression exposes intermediate tutor checkpoints before the core: Derive P(N=k) directly for k>=2 and check the probabilities sum to 1..",
-        "reasoningEvidence": "The family elicits observable representation change and proof structure rather than recall alone: Derive P(N=k) directly for k>=2 and check the probabilities sum to 1..",
-        "transfer": "The retained transfer/stretch remains inside the same mathematical family: Analyze the minimum over p and explain the divergence as p approaches 0 or 1.; Find the distribution of the initial run length before the first change..",
-        "ceiling": "There is usable ceiling, but prior exposure or familiar process structure can compress the interview for some candidates.",
-        "prerequisiteBurden": "Prerequisites are controlled by the authored setup and do not require obscure external facts."
-      },
-      "requiredChanges": [
-        "Do not keep this as a new independent-original family; replace the mathematical kernel or retain only with truthful classic provenance where product policy permits."
-      ],
-      "bankDisposition": [
-        "originality gate blocks current authored family",
-        "Oxford-fidelity gate cleared"
-      ],
-      "wouldRejectIfClaimedOriginal": true,
-      "handoff": {
-        "canProgressAfterGI": false,
-        "note": "Hilbert originality revision/replacement is required before recommendation readiness."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-euler-tank-gauge-model",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-tank-gauge-model.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
+      "sourceRef": "PR #134 final survivor @ 1ce96b5b89be971399cab5080d4487a908ea294d",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
+        "head": "1ce96b5b89be971399cab5080d4487a908ea294d"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -7279,7 +6333,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -7367,17 +6421,17 @@
       "wouldRejectIfClaimedOriginal": false,
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     },
     {
       "familyId": "oxford-euler-triangle-midpoint-cycle",
-      "sourceRef": "PR #134 packages/problems/src/curated/oxford-euler-triangle-midpoint-cycle.ts @ b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
+      "sourceRef": "PR #134 final survivor @ 1ce96b5b89be971399cab5080d4487a908ea294d",
       "subjectKind": "same-wave-proposal",
       "authorPr": {
         "agent": "E — Euler",
         "number": 134,
-        "head": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6"
+        "head": "1ce96b5b89be971399cab5080d4487a908ea294d"
       },
       "reviewedAt": "2026-09-05",
       "reviewer": {
@@ -7437,7 +6491,7 @@
         },
         "D": {
           "completed": true,
-          "note": "All 47 post-pruning C/D/E survivors compared at heads C=f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1, D=ecece22058c997d37c4b352fa5ed32bd1daf5243, E=b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6. Final collision judgments are manual and mechanism-based."
+          "note": "Original five-pool same-wave comparison is retained; final-author diff synchronization at C=8b22dc5df99111fb95e27a2c006d5e74544dd385, D=65d570a1f6dad3773edb7eea4568d9399f3164c8, E=1ce96b5b89be971399cab5080d4487a908ea294d found no material kernel/progression change for this survivor. Pruning/provenance-only changes were rechecked against the prior mechanism-based decision."
         },
         "E": {
           "completed": true,
@@ -7530,7 +6584,7 @@
       },
       "handoff": {
         "canProgressAfterGI": true,
-        "note": "Hilbert gates are complete at this reviewed head; recommendation readiness still requires all remaining G/I gates."
+        "note": "Hilbert final Wave 2 originality/fidelity gate cleared at the exact final author head; G/I remain separately owned."
       }
     }
   ]
