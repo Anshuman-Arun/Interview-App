@@ -113,20 +113,20 @@ describe("Agent G full C/D/E certification", () => {
   it("covers every current survivor exactly once at the reviewed author heads", () => {
     expect(artifact.agent).toBe("G — Gauss");
     expect(artifact.summary).toEqual({
-      reviewed: 49,
-      surviving: 49,
-      byAuthor: { cantor: 20, dirichlet: 12, euler: 17 },
-      taxonomy: { approved: 47, changesRequired: 2 },
-      difficulty: { approved: 42, changesRequired: 7 },
-      timing: { approved: 22, changesRequired: 27 }
+      reviewed: 47,
+      surviving: 47,
+      byAuthor: { cantor: 18, dirichlet: 12, euler: 17 },
+      taxonomy: { approved: 45, changesRequired: 2 },
+      difficulty: { approved: 43, changesRequired: 4 },
+      timing: { approved: 35, changesRequired: 12 }
     });
 
     expect(artifact.authorPullRequests).toEqual([
       expect.objectContaining({
         agent: "C — Cantor",
         prNumber: 132,
-        headSha: "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9",
-        survivingFamilyCount: 20
+        headSha: "0d4941ab3197b2297ab389d7438df39f599b2ad5",
+        survivingFamilyCount: 18
       }),
       expect.objectContaining({
         agent: "D — Dirichlet",
@@ -137,13 +137,13 @@ describe("Agent G full C/D/E certification", () => {
       expect.objectContaining({
         agent: "E — Euler",
         prNumber: 134,
-        headSha: "e5f5b431a5dea843d69e6451b1114c7aa0c76532",
+        headSha: "165bb3100fb894158969abb808caad5bc9150807",
         survivingFamilyCount: 17
       })
     ]);
 
     const ids = artifact.records.map((record) => record.familyId);
-    expect(new Set(ids).size).toBe(49);
+    expect(new Set(ids).size).toBe(47);
     const listedIds = artifact.authorPullRequests.flatMap((entry) => entry.familiesReviewed);
     expect(new Set(listedIds)).toEqual(new Set(ids));
 
@@ -158,12 +158,12 @@ describe("Agent G full C/D/E certification", () => {
   });
 
   it("keeps decision summary counts derived from the records", () => {
-    expect(countDecision("taxonomy", "approved")).toBe(47);
+    expect(countDecision("taxonomy", "approved")).toBe(45);
     expect(countDecision("taxonomy", "changes-required")).toBe(2);
-    expect(countDecision("difficulty", "approved")).toBe(42);
-    expect(countDecision("difficulty", "changes-required")).toBe(7);
-    expect(countDecision("timing", "approved")).toBe(22);
-    expect(countDecision("timing", "changes-required")).toBe(27);
+    expect(countDecision("difficulty", "approved")).toBe(43);
+    expect(countDecision("difficulty", "changes-required")).toBe(4);
+    expect(countDecision("timing", "approved")).toBe(35);
+    expect(countDecision("timing", "changes-required")).toBe(12);
   });
 
   it("requires coherent family and stage difficulty for every survivor", () => {
@@ -238,8 +238,9 @@ describe("Agent G full C/D/E certification", () => {
 
   it("locks the requested systemic fixes and remaining Cantor blockers", () => {
     expect(artifact.systemicVerification.cantor).toMatchObject({
-      overlongCutoffsCorrected: false,
-      cubicDividedDifferenceCeilingCorrected: false
+      overlongCutoffsCorrected: true,
+      cubicDividedDifferenceCeilingCorrected: true,
+      prerequisiteWordingImproved: true
     });
     expect(artifact.systemicVerification.dirichlet).toMatchObject({
       genericTimingTemplateRemoved: true,
