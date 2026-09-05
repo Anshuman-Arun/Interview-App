@@ -114,7 +114,6 @@ describe("Agent C — Cantor Wave 2 Oxford candidates", () => {
     expect(graphHeavy.length).toBeLessThanOrEqual(18);
 
     const concepts = new Set(adaptive.flatMap((metadata) => metadata.contentConcepts));
-    expect(concepts).toEqual(expect.objectContaining({ size: expect.any(Number) }));
     for (const required of [
       "qualitative-function-behavior",
       "function-transformations",
