@@ -15,6 +15,7 @@ import {
 import { HomePage } from "../apps/web/src/pages/HomePage.js";
 import { NewInterviewPage } from "../apps/web/src/pages/NewInterviewPage.js";
 import { SettingsPage } from "../apps/web/src/pages/SettingsPage.js";
+import { SessionsPage } from "../apps/web/src/pages/SessionsPage.js";
 import { ReviewReadPanel } from "../apps/web/src/pages/ReviewReadPanel.js";
 
 const ACT_ENVIRONMENT_KEY = "IS_REACT_ACT_ENVIRONMENT";
@@ -1089,6 +1090,23 @@ describe("editorial v10 adversarial UI states", () => {
     expect(settings).toMatch(
       /<button[^>]*disabled=""[^>]*>Start interview<\/button>/u
     );
+
+    const sessions = renderToStaticMarkup(
+      <SessionsPage
+        sessions={[]}
+        currentSessionId={null}
+        canReview={() => false}
+        onResume={vi.fn()}
+        onReview={vi.fn()}
+        onRefresh={vi.fn()}
+        history={null}
+        historyLoading={false}
+        historyError={null}
+        sessionAuthorityUnavailable
+      />
+    );
+    expect(sessions).toContain("Stored session list could not be verified.");
+    expect(sessions).toContain("Refresh");
 
     const hook = fs.readFileSync(
       path.resolve(process.cwd(), "apps/web/src/hooks/useInterviewSession.ts"),
