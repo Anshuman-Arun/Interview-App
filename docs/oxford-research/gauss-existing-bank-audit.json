@@ -1,0 +1,2263 @@
+{
+  "schemaVersion": 1,
+  "agent": "G — Gauss",
+  "baseCommit": "454a2fe993c8fd70676d04e5d262a1780161f0d6",
+  "generatedDate": "2026-09-04",
+  "contractVersion": {
+    "adaptiveSchema": 1,
+    "taxonomy": "1.0.0"
+  },
+  "scopeNote": "Independent taxonomy/difficulty/timing review proposals for the existing Oxford bank. These records do not mutate problem metadata, do not make a family recommendation-ready, and do not claim Agent H originality/fidelity or Agent I mathematical-correctness approval.",
+  "crossAgentSnapshot": {
+    "checkedAt": "2026-09-05T10:00-07:00",
+    "openAgentCDEPullRequests": [
+      {
+        "agent": "C — Cantor",
+        "prNumber": 132,
+        "headSha": "c0140b480ca3d40e7bdc9e9ee6fdddbb18b201c9"
+      },
+      {
+        "agent": "D — Dirichlet",
+        "prNumber": 133,
+        "headSha": "017759febfd7d49ea032d6474bcc9177a76b2c2b"
+      },
+      {
+        "agent": "E — Euler",
+        "prNumber": 134,
+        "headSha": "a18db48700800c1987e2abd43726254ba25267dd"
+      }
+    ],
+    "note": "These PRs appeared after the initial Gauss pre-PR snapshot. A representative six-family late review is retained separately in docs/oxford-research/gauss-cross-agent-review.json. Author branches were not modified."
+  },
+  "summary": {
+    "reviewedFamilies": 14,
+    "safeForLaterCalibration": [
+      "oxford-divisors-square-parity",
+      "oxford-nested-radical-sequence"
+    ],
+    "needsRevision": [
+      "oxford-monotone-cauchy",
+      "oxford-even-odd-degrees",
+      "oxford-divisibility-chain",
+      "oxford-continuous-fixed-point",
+      "oxford-prefix-sums-mod-n",
+      "oxford-triangle-medians",
+      "oxford-catalan-paths"
+    ],
+    "retainLegacy": [
+      "oxford-domino-chessboard",
+      "oxford-euclid-primes",
+      "oxford-six-people",
+      "oxford-hilbert-hotel",
+      "oxford-prisoner-hats"
+    ]
+  },
+  "majorDifficultyDisagreements": [
+    {
+      "familyId": "oxford-continuous-fixed-point",
+      "legacy": "standard-oxford",
+      "gauss": "entry introductory / core introductory-plus / ceiling standard",
+      "reason": "IVT is explicitly allowed; the auxiliary-function connection is the main conceptual step."
+    },
+    {
+      "familyId": "oxford-monotone-cauchy",
+      "legacy": "stretch-oxford",
+      "gauss": "entry introductory-plus / core strong / ceiling stretch",
+      "reason": "Early integer/rational work is accessible even though the rational-to-real bridge and extensions are much harder."
+    },
+    {
+      "familyId": "oxford-catalan-paths",
+      "legacy": "stretch-oxford",
+      "gauss": "entry standard / core strong / ceiling stretch",
+      "reason": "Stretch describes the complete two-route ceiling better than the opening."
+    },
+    {
+      "familyId": "oxford-six-people",
+      "legacy": "introductory-oxford",
+      "gauss": "entry introductory / core standard / ceiling strong",
+      "reason": "The statement is accessible but the Ramsey/pigeonhole reduction is a genuine structural insight."
+    },
+    {
+      "familyId": "oxford-prisoner-hats",
+      "legacy": "standard-oxford",
+      "gauss": "entry standard / core strong / ceiling stretch",
+      "reason": "The parity communication encoding is a substantial insight and the rigorous/generalized protocol has a higher ceiling."
+    }
+  ],
+  "records": [
+    {
+      "schemaVersion": 1,
+      "familyId": "oxford-domino-chessboard",
+      "source": "existing-bank",
+      "reviewedMetadataStatus": "provisional-legacy",
+      "taxonomy": {
+        "domains": [
+          "combinatorics",
+          "euclidean-geometry"
+        ],
+        "contentConcepts": [
+          "tilings-coverings",
+          "parity"
+        ],
+        "prerequisiteConcepts": [
+          "arithmetic"
+        ],
+        "reasoningSkills": [
+          "visualization",
+          "invariants",
+          "representation-switching",
+          "strategic-simplification",
+          "proof-construction",
+          "precision-checking"
+        ],
+        "milestoneSkillClaims": [
+          {
+            "milestoneId": "identify-invariant",
+            "skills": [
+              "invariants",
+              "strategic-simplification"
+            ],
+            "contentConcepts": [
+              "tilings-coverings"
+            ]
+          },
+          {
+            "milestoneId": "color-board",
+            "skills": [
+              "visualization",
+              "representation-switching"
+            ],
+            "contentConcepts": [
+              "tilings-coverings"
+            ]
+          },
+          {
+            "milestoneId": "inspect-removed-corners",
+            "skills": [
+              "visualization",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "parity"
+            ]
+          },
+          {
+            "milestoneId": "compare-color-counts",
+            "skills": [
+              "invariants",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "tilings-coverings",
+              "parity"
+            ]
+          },
+          {
+            "milestoneId": "conclude-impossibility",
+            "skills": [
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "tilings-coverings",
+              "parity"
+            ]
+          }
+        ],
+        "rationale": {
+          "domains": "The mathematical object is a Euclidean grid region, but the measured mechanism is combinatorial tiling and coloring.",
+          "contentConcepts": "The family measures tiling feasibility and a two-color parity obstruction rather than merely assuming either idea.",
+          "prerequisiteConcepts": "Only elementary arithmetic is assumed without teaching; the coloring invariant is the assessed insight.",
+          "reasoningSkills": "The useful evidence is seeing a representation, identifying an invariant, and turning it into a rigorous impossibility proof."
+        }
+      },
+      "difficulty": {
+        "recommendedStatus": "expert-estimate",
+        "entry": "introductory",
+        "core": "standard",
+        "ceiling": "strong",
+        "confidence": "low",
+        "factors": {
+          "prerequisite-burden": 0,
+          "initial-insight-barrier": 2,
+          "conceptual-jumps": 1,
+          "abstraction": 1,
+          "proof-rigor-burden": 1,
+          "representation-changes": 2,
+          "productive-prompt-dependency": 1,
+          "extension-ceiling": 2
+        },
+        "stageAssessments": [],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Independent Agent G — Gauss review against the frozen Agent A taxonomy and Agent B calibration guidance. No usage distribution was available; confidence remains conservative."
+        },
+        "rationale": "The opening is concrete and drawable, but the core requires the non-obvious coloring invariant. Optional generalization raises the ceiling without changing the entry."
+      },
+      "timing": {
+        "recommendedStatus": "expert-estimate",
+        "estimate": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 1,
+            "max": 5
+          },
+          "independentCompletionMinutes": {
+            "min": 8,
+            "max": 15
+          },
+          "promptedCompletionMinutes": {
+            "min": 6,
+            "max": 12
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 8
+          },
+          "softCutoffMinutes": 18,
+          "confidence": "low"
+        },
+        "stageAssessments": [],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Independent Agent G — Gauss review against the frozen Agent A taxonomy and Agent B calibration guidance. No usage distribution was available; confidence remains conservative."
+        },
+        "rationale": "A candidate can experiment quickly, while the invariant and formal obstruction can occupy a substantial core discussion. The cutoff is a transition aid, never a timer trigger."
+      },
+      "disposition": "retain-legacy",
+      "migration": {
+        "worthMigrating": false,
+        "recommendation": "retain-legacy",
+        "rationale": "Useful as a classic invariant benchmark, but it is exceptionally famous and should remain a legacy/classic training fixture unless H/I later judge a production adaptive migration valuable."
+      },
+      "blockers": [],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      },
+      "reviewNotes": [
+        "Legacy single label standard is reasonable for the core, but should not be read as entry difficulty."
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "familyId": "oxford-divisors-square-parity",
+      "source": "existing-bank",
+      "reviewedMetadataStatus": "provisional-legacy",
+      "taxonomy": {
+        "domains": [
+          "number-theory"
+        ],
+        "contentConcepts": [
+          "divisibility",
+          "parity"
+        ],
+        "prerequisiteConcepts": [
+          "arithmetic",
+          "divisibility"
+        ],
+        "reasoningSkills": [
+          "small-case-exploration",
+          "pattern-recognition",
+          "case-analysis",
+          "proof-construction",
+          "precision-checking"
+        ],
+        "milestoneSkillClaims": [
+          {
+            "milestoneId": "test-pairing",
+            "skills": [
+              "small-case-exploration",
+              "pattern-recognition"
+            ],
+            "contentConcepts": [
+              "divisibility"
+            ]
+          },
+          {
+            "milestoneId": "identify-fixed-point",
+            "skills": [
+              "case-analysis",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "divisibility"
+            ]
+          },
+          {
+            "milestoneId": "pairing-conclusion",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "divisibility",
+              "parity"
+            ]
+          },
+          {
+            "milestoneId": "factorization-route",
+            "skills": [
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "divisibility",
+              "parity"
+            ]
+          },
+          {
+            "milestoneId": "iff-finish",
+            "skills": [
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "divisibility",
+              "parity"
+            ]
+          }
+        ],
+        "rationale": {
+          "domains": "The family is directly about the divisor structure of integers.",
+          "contentConcepts": "Divisor pairing and the parity of the divisor count are both explicitly exercised.",
+          "prerequisiteConcepts": "Elementary divisibility is assumed, while the self-pairing characterization is what the interview develops.",
+          "reasoningSkills": "Small examples can expose the pairing, but the evidence comes from organizing both directions and checking the square-root exception."
+        }
+      },
+      "difficulty": {
+        "recommendedStatus": "expert-estimate",
+        "entry": "introductory",
+        "core": "introductory-plus",
+        "ceiling": "standard",
+        "confidence": "low",
+        "factors": {
+          "prerequisite-burden": 1,
+          "initial-insight-barrier": 1,
+          "conceptual-jumps": 1,
+          "abstraction": 1,
+          "proof-rigor-burden": 2,
+          "representation-changes": 1,
+          "productive-prompt-dependency": 1,
+          "extension-ceiling": 1
+        },
+        "stageAssessments": [],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Independent Agent G — Gauss review against the frozen Agent A taxonomy and Agent B calibration guidance. No usage distribution was available; confidence remains conservative."
+        },
+        "rationale": "The divisor-pairing entry is accessible; the iff proof has one organizing idea rather than the multi-jump burden of a full standard core."
+      },
+      "timing": {
+        "recommendedStatus": "expert-estimate",
+        "estimate": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 1,
+            "max": 4
+          },
+          "independentCompletionMinutes": {
+            "min": 6,
+            "max": 12
+          },
+          "promptedCompletionMinutes": {
+            "min": 5,
+            "max": 10
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 7
+          },
+          "softCutoffMinutes": 15,
+          "confidence": "low"
+        },
+        "stageAssessments": [],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Independent Agent G — Gauss review against the frozen Agent A taxonomy and Agent B calibration guidance. No usage distribution was available; confidence remains conservative."
+        },
+        "rationale": "The main pairing proof should fit well inside one interview segment; the prime-factorization route or exactly-three-divisors extension supplies optional depth."
+      },
+      "disposition": "safe-for-later-calibration",
+      "migration": {
+        "worthMigrating": true,
+        "recommendation": "migrate",
+        "rationale": "A coherent low-prerequisite proof family worth staged migration after H/I review."
+      },
+      "blockers": [],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      },
+      "reviewNotes": [
+        "Gauss calibrates the core one band below the legacy whole-problem label standard-oxford."
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "familyId": "oxford-euclid-primes",
+      "source": "existing-bank",
+      "reviewedMetadataStatus": "provisional-legacy",
+      "taxonomy": {
+        "domains": [
+          "number-theory"
+        ],
+        "contentConcepts": [
+          "prime-structure",
+          "divisibility"
+        ],
+        "prerequisiteConcepts": [
+          "arithmetic",
+          "divisibility"
+        ],
+        "reasoningSkills": [
+          "proof-construction",
+          "counterexample-construction",
+          "precision-checking"
+        ],
+        "milestoneSkillClaims": [
+          {
+            "milestoneId": "assume-finite",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "prime-structure"
+            ]
+          },
+          {
+            "milestoneId": "construct-number",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "prime-structure",
+              "divisibility"
+            ]
+          },
+          {
+            "milestoneId": "mod-listed-primes",
+            "skills": [
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "divisibility"
+            ]
+          },
+          {
+            "milestoneId": "prime-divisor",
+            "skills": [
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "prime-structure",
+              "divisibility"
+            ]
+          },
+          {
+            "milestoneId": "contradiction",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "prime-structure"
+            ]
+          }
+        ],
+        "rationale": {
+          "domains": "The target and decisive mechanism are elementary prime/divisibility structure.",
+          "contentConcepts": "The proof exercises prime divisors and divisibility remainders, including the product-plus-one subtlety.",
+          "prerequisiteConcepts": "The family assumes elementary divisibility and the supplied existence of a prime divisor; it does not require advanced number theory.",
+          "reasoningSkills": "The main evidence is rigorous contradiction and precision about why the constructed number need not itself be prime; the extension can elicit a counterexample."
+        }
+      },
+      "difficulty": {
+        "recommendedStatus": "expert-estimate",
+        "entry": "introductory",
+        "core": "introductory-plus",
+        "ceiling": "standard",
+        "confidence": "low",
+        "factors": {
+          "prerequisite-burden": 1,
+          "initial-insight-barrier": 1,
+          "conceptual-jumps": 1,
+          "abstraction": 1,
+          "proof-rigor-burden": 2,
+          "representation-changes": 0,
+          "productive-prompt-dependency": 1,
+          "extension-ceiling": 1
+        },
+        "stageAssessments": [],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Independent Agent G — Gauss review against the frozen Agent A taxonomy and Agent B calibration guidance. No usage distribution was available; confidence remains conservative."
+        },
+        "rationale": "Once the classic construction is known the proof is short; without recall there is one central insight. The explicit subtlety adds rigor but not a stretch ceiling."
+      },
+      "timing": {
+        "recommendedStatus": "expert-estimate",
+        "estimate": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 1,
+            "max": 3
+          },
+          "independentCompletionMinutes": {
+            "min": 5,
+            "max": 10
+          },
+          "promptedCompletionMinutes": {
+            "min": 4,
+            "max": 8
+          },
+          "optionalExtensionMinutes": {
+            "min": 3,
+            "max": 6
+          },
+          "softCutoffMinutes": 13,
+          "confidence": "low"
+        },
+        "stageAssessments": [],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Independent Agent G — Gauss review against the frozen Agent A taxonomy and Agent B calibration guidance. No usage distribution was available; confidence remains conservative."
+        },
+        "rationale": "The core argument is compact; most useful interview time would be spent testing the prime-divisor distinction and extension."
+      },
+      "disposition": "retain-legacy",
+      "migration": {
+        "worthMigrating": false,
+        "recommendation": "retain-legacy",
+        "rationale": "A valuable precision fixture but too canonical to prioritize for the adaptive production pool without a specific H/I rationale."
+      },
+      "blockers": [],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      },
+      "reviewNotes": [
+        "Legacy introductory-plus is a good core anchor; the family entry is still introductory."
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "familyId": "oxford-nested-radical-sequence",
+      "source": "existing-bank",
+      "reviewedMetadataStatus": "provisional-legacy",
+      "taxonomy": {
+        "domains": [
+          "sequences-recurrences",
+          "elementary-analysis"
+        ],
+        "contentConcepts": [
+          "recurrence-structure",
+          "monotonicity-boundedness",
+          "sequence-convergence"
+        ],
+        "prerequisiteConcepts": [
+          "algebraic-manipulation",
+          "sequences-series",
+          "limits-continuity"
+        ],
+        "reasoningSkills": [
+          "conjecture-formation",
+          "strategic-simplification",
+          "proof-construction",
+          "precision-checking",
+          "generalization"
+        ],
+        "milestoneSkillClaims": [
+          {
+            "milestoneId": "guess-limit",
+            "skills": [
+              "conjecture-formation",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "recurrence-structure"
+            ]
+          },
+          {
+            "milestoneId": "establish-bound",
+            "skills": [
+              "proof-construction",
+              "strategic-simplification"
+            ],
+            "contentConcepts": [
+              "monotonicity-boundedness"
+            ]
+          },
+          {
+            "milestoneId": "prove-monotone",
+            "skills": [
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "monotonicity-boundedness"
+            ]
+          },
+          {
+            "milestoneId": "convergence-or-error",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "sequence-convergence"
+            ]
+          },
+          {
+            "milestoneId": "identify-limit",
+            "skills": [
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "recurrence-structure",
+              "sequence-convergence"
+            ]
+          }
+        ],
+        "rationale": {
+          "domains": "The family combines recurrence dynamics with elementary convergence arguments.",
+          "contentConcepts": "It genuinely measures recurrence structure, invariant bounds/monotonicity, and the justification of convergence.",
+          "prerequisiteConcepts": "Basic algebra, sequence notation, and the idea that a convergent sequence may be passed through a continuous square-root expression are assumed.",
+          "reasoningSkills": "A strong interview separates guessing the fixed point from proving convergence, then tests whether the candidate can organize the proof and generalize it."
+        }
+      },
+      "difficulty": {
+        "recommendedStatus": "expert-estimate",
+        "entry": "introductory-plus",
+        "core": "standard",
+        "ceiling": "strong",
+        "confidence": "low",
+        "factors": {
+          "prerequisite-burden": 2,
+          "initial-insight-barrier": 1,
+          "conceptual-jumps": 2,
+          "abstraction": 1,
+          "proof-rigor-burden": 2,
+          "representation-changes": 1,
+          "productive-prompt-dependency": 1,
+          "extension-ceiling": 2
+        },
+        "stageAssessments": [],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Independent Agent G — Gauss review against the frozen Agent A taxonomy and Agent B calibration guidance. No usage distribution was available; confidence remains conservative."
+        },
+        "rationale": "The likely limit is easy to guess, but a complete solution requires distinct boundedness, monotonicity, convergence, and admissible-root steps. The parameterized/rate extensions lift the ceiling."
+      },
+      "timing": {
+        "recommendedStatus": "expert-estimate",
+        "estimate": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 5
+          },
+          "independentCompletionMinutes": {
+            "min": 10,
+            "max": 18
+          },
+          "promptedCompletionMinutes": {
+            "min": 7,
+            "max": 14
+          },
+          "optionalExtensionMinutes": {
+            "min": 5,
+            "max": 9
+          },
+          "softCutoffMinutes": 20,
+          "confidence": "low"
+        },
+        "stageAssessments": [],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Independent Agent G — Gauss review against the frozen Agent A taxonomy and Agent B calibration guidance. No usage distribution was available; confidence remains conservative."
+        },
+        "rationale": "A natural interview may spend most of the time converting the fixed-point guess into a complete convergence proof, then use a rate or parameter extension if time remains."
+      },
+      "disposition": "safe-for-later-calibration",
+      "migration": {
+        "worthMigrating": true,
+        "recommendation": "migrate",
+        "rationale": "Strong staged interview structure with a clear accessible conjecture and deeper proof burden; worth migration after independent gates."
+      },
+      "blockers": [],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      },
+      "reviewNotes": []
+    },
+    {
+      "schemaVersion": 1,
+      "familyId": "oxford-monotone-cauchy",
+      "source": "existing-bank",
+      "reviewedMetadataStatus": "provisional-legacy",
+      "taxonomy": {
+        "domains": [
+          "functional-equations",
+          "elementary-analysis"
+        ],
+        "contentConcepts": [
+          "substitution-symmetry",
+          "limiting-arguments",
+          "inequalities-bounds"
+        ],
+        "prerequisiteConcepts": [
+          "algebraic-manipulation",
+          "functions-graphs",
+          "limits-continuity"
+        ],
+        "reasoningSkills": [
+          "abstraction",
+          "strategic-simplification",
+          "representation-switching",
+          "proof-construction",
+          "precision-checking",
+          "generalization"
+        ],
+        "milestoneSkillClaims": [
+          {
+            "milestoneId": "integer-structure",
+            "skills": [
+              "strategic-simplification",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "substitution-symmetry"
+            ]
+          },
+          {
+            "milestoneId": "rational-values",
+            "skills": [
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "substitution-symmetry"
+            ]
+          },
+          {
+            "milestoneId": "use-monotonicity",
+            "skills": [
+              "representation-switching",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "inequalities-bounds"
+            ]
+          },
+          {
+            "milestoneId": "continuity-route",
+            "skills": [
+              "abstraction",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "limiting-arguments",
+              "inequalities-bounds"
+            ]
+          },
+          {
+            "milestoneId": "squeeze-real",
+            "skills": [
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "limiting-arguments",
+              "inequalities-bounds"
+            ]
+          }
+        ],
+        "rationale": {
+          "domains": "The core starts from a functional equation and uses elementary analysis to extend rational control to all reals.",
+          "contentConcepts": "Substitution consequences, order bounds, and a limiting/squeeze argument are all measured rather than incidental.",
+          "prerequisiteConcepts": "Algebraic manipulation, function language, and basic real-limit reasoning are assumed; the rational-to-real bridge is assessed.",
+          "reasoningSkills": "The family tests abstraction from an equation, a representation change from algebraic identities to order/limit arguments, and proof precision."
+        }
+      },
+      "difficulty": {
+        "recommendedStatus": "expert-estimate",
+        "entry": "introductory-plus",
+        "core": "strong",
+        "ceiling": "stretch",
+        "confidence": "low",
+        "factors": {
+          "prerequisite-burden": 2,
+          "initial-insight-barrier": 2,
+          "conceptual-jumps": 3,
+          "abstraction": 3,
+          "proof-rigor-burden": 3,
+          "representation-changes": 2,
+          "productive-prompt-dependency": 2,
+          "extension-ceiling": 3
+        },
+        "stageAssessments": [],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Independent Agent G — Gauss review against the frozen Agent A taxonomy and Agent B calibration guidance. No usage distribution was available; confidence remains conservative."
+        },
+        "rationale": "Early integer/rational consequences are accessible, but the real extension has several conceptual jumps and a substantial rigor burden. The pathology/regularity extensions justify a stretch ceiling."
+      },
+      "timing": {
+        "recommendedStatus": "expert-estimate",
+        "estimate": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 6
+          },
+          "independentCompletionMinutes": {
+            "min": 16,
+            "max": 28
+          },
+          "promptedCompletionMinutes": {
+            "min": 12,
+            "max": 23
+          },
+          "optionalExtensionMinutes": {
+            "min": 6,
+            "max": 12
+          },
+          "softCutoffMinutes": 25,
+          "confidence": "low"
+        },
+        "stageAssessments": [],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Independent Agent G — Gauss review against the frozen Agent A taxonomy and Agent B calibration guidance. No usage distribution was available; confidence remains conservative."
+        },
+        "rationale": "The main proof can legitimately consume almost the entire ~25-minute interview. Completion is not required; a natural stopping point after the rational case or monotonicity squeeze remains informative."
+      },
+      "disposition": "needs-revision",
+      "migration": {
+        "worthMigrating": true,
+        "recommendation": "revise-before-migration",
+        "rationale": "The rational-squeeze core remains high-value, but the Hamel-basis/pathology extension is outside the stated prerequisite envelope and should be removed or reframed."
+      },
+      "blockers": [
+        "Agent I issue #129: the pathological-note extension assumes a basis of R over Q / Hamel-basis machinery. Treat that as an authoring repair, not as extra candidate prerequisite burden."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      },
+      "reviewNotes": [
+        "Legacy stretch-oxford is appropriate for the ceiling, not for the entry or necessarily the core.",
+        "Gauss incorporated the concurrent Agent I solvability handoff without adopting Agent I's correctness decision as a calibration decision."
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "familyId": "oxford-even-odd-degrees",
+      "source": "existing-bank",
+      "reviewedMetadataStatus": "provisional-legacy",
+      "taxonomy": {
+        "domains": [
+          "graph-theory",
+          "combinatorics"
+        ],
+        "contentConcepts": [
+          "degree-structure",
+          "parity"
+        ],
+        "prerequisiteConcepts": [
+          "arithmetic",
+          "graph-basics"
+        ],
+        "reasoningSkills": [
+          "modelling",
+          "invariants",
+          "representation-switching",
+          "proof-construction",
+          "precision-checking"
+        ],
+        "milestoneSkillClaims": [
+          {
+            "milestoneId": "model-graph",
+            "skills": [
+              "modelling",
+              "representation-switching"
+            ],
+            "contentConcepts": [
+              "degree-structure"
+            ]
+          },
+          {
+            "milestoneId": "sum-degrees",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "degree-structure"
+            ]
+          },
+          {
+            "milestoneId": "parity-sum",
+            "skills": [
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "degree-structure",
+              "parity"
+            ]
+          },
+          {
+            "milestoneId": "toggle-route",
+            "skills": [
+              "invariants",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "degree-structure",
+              "parity"
+            ]
+          },
+          {
+            "milestoneId": "finish-parity",
+            "skills": [
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "parity"
+            ]
+          }
+        ],
+        "rationale": {
+          "domains": "The statement is naturally a graph-degree theorem with a combinatorial parity proof.",
+          "contentConcepts": "Vertex degree structure and parity are the measured mathematical content.",
+          "prerequisiteConcepts": "Only elementary graph vocabulary and arithmetic are assumed; the degree-sum invariant is developed in the problem.",
+          "reasoningSkills": "Useful evidence comes from modelling the party as a graph, switching to degree sums or an edge-toggle invariant, and closing the parity argument."
+        }
+      },
+      "difficulty": {
+        "recommendedStatus": "expert-estimate",
+        "entry": "introductory",
+        "core": "introductory-plus",
+        "ceiling": "standard",
+        "confidence": "low",
+        "factors": {
+          "prerequisite-burden": 1,
+          "initial-insight-barrier": 1,
+          "conceptual-jumps": 1,
+          "abstraction": 1,
+          "proof-rigor-burden": 2,
+          "representation-changes": 1,
+          "productive-prompt-dependency": 1,
+          "extension-ceiling": 1
+        },
+        "stageAssessments": [],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Independent Agent G — Gauss review against the frozen Agent A taxonomy and Agent B calibration guidance. No usage distribution was available; confidence remains conservative."
+        },
+        "rationale": "The supplied graph model makes the opening straightforward; the key parity observation is a single clean idea with a modest proof burden."
+      },
+      "timing": {
+        "recommendedStatus": "expert-estimate",
+        "estimate": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 1,
+            "max": 4
+          },
+          "independentCompletionMinutes": {
+            "min": 6,
+            "max": 12
+          },
+          "promptedCompletionMinutes": {
+            "min": 4,
+            "max": 9
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 8
+          },
+          "softCutoffMinutes": 15,
+          "confidence": "low"
+        },
+        "stageAssessments": [],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Independent Agent G — Gauss review against the frozen Agent A taxonomy and Agent B calibration guidance. No usage distribution was available; confidence remains conservative."
+        },
+        "rationale": "The theorem is compact; alternative invariant proof and Euler-trail discussion are where extra interview time becomes useful."
+      },
+      "disposition": "needs-revision",
+      "migration": {
+        "worthMigrating": false,
+        "recommendation": "revise-before-migration",
+        "rationale": "The core calibration remains usable, but Agent I issue #129 flags the Euler-trail extension as undefined under current prerequisites. Remove or self-contain that extension before any adaptive migration."
+      },
+      "blockers": [
+        "Agent I issue #129: the Euler-trail extension is not candidate-solvable under the stated prerequisites; do not calibrate it as a viable extension until repaired."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      },
+      "reviewNotes": [
+        "Legacy introductory-plus is a good core calibration.",
+        "Gauss incorporated the concurrent Agent I solvability handoff without adopting Agent I's correctness decision as a calibration decision."
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "familyId": "oxford-divisibility-chain",
+      "source": "existing-bank",
+      "reviewedMetadataStatus": "provisional-legacy",
+      "taxonomy": {
+        "domains": [
+          "number-theory",
+          "combinatorics"
+        ],
+        "contentConcepts": [
+          "divisibility",
+          "pigeonhole-structure"
+        ],
+        "prerequisiteConcepts": [
+          "arithmetic",
+          "divisibility"
+        ],
+        "reasoningSkills": [
+          "pattern-recognition",
+          "strategic-simplification",
+          "representation-switching",
+          "proof-construction",
+          "precision-checking"
+        ],
+        "milestoneSkillClaims": [
+          {
+            "milestoneId": "factor-two-powers",
+            "skills": [
+              "representation-switching",
+              "strategic-simplification"
+            ],
+            "contentConcepts": [
+              "divisibility"
+            ]
+          },
+          {
+            "milestoneId": "count-odd-parts",
+            "skills": [
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "pigeonhole-structure"
+            ]
+          },
+          {
+            "milestoneId": "pigeonhole",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "pigeonhole-structure"
+            ]
+          },
+          {
+            "milestoneId": "compare-two-powers",
+            "skills": [
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "divisibility"
+            ]
+          },
+          {
+            "milestoneId": "divisibility-finish",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "divisibility"
+            ]
+          }
+        ],
+        "rationale": {
+          "domains": "The proof combines number-theoretic factor structure with a combinatorial pigeonhole step.",
+          "contentConcepts": "Divisibility is not merely assumed; the odd-part decomposition and pigeonhole classification are central measured content.",
+          "prerequisiteConcepts": "Elementary divisibility is assumed, while the power-of-two classification is part of the intended insight rather than a prerequisite tag.",
+          "reasoningSkills": "The main difficulty is finding the right representation/classes and then executing a short proof precisely."
+        }
+      },
+      "difficulty": {
+        "recommendedStatus": "expert-estimate",
+        "entry": "introductory-plus",
+        "core": "standard",
+        "ceiling": "strong",
+        "confidence": "low",
+        "factors": {
+          "prerequisite-burden": 1,
+          "initial-insight-barrier": 2,
+          "conceptual-jumps": 2,
+          "abstraction": 2,
+          "proof-rigor-burden": 2,
+          "representation-changes": 2,
+          "productive-prompt-dependency": 2,
+          "extension-ceiling": 2
+        },
+        "stageAssessments": [],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Independent Agent G — Gauss review against the frozen Agent A taxonomy and Agent B calibration guidance. No usage distribution was available; confidence remains conservative."
+        },
+        "rationale": "The odd-part representation is a genuine insight barrier followed by a clean pigeonhole proof. The sharpness/poset extension adds a meaningful ceiling."
+      },
+      "timing": {
+        "recommendedStatus": "expert-estimate",
+        "estimate": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 6
+          },
+          "independentCompletionMinutes": {
+            "min": 10,
+            "max": 18
+          },
+          "promptedCompletionMinutes": {
+            "min": 7,
+            "max": 14
+          },
+          "optionalExtensionMinutes": {
+            "min": 5,
+            "max": 9
+          },
+          "softCutoffMinutes": 20,
+          "confidence": "low"
+        },
+        "stageAssessments": [],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Independent Agent G — Gauss review against the frozen Agent A taxonomy and Agent B calibration guidance. No usage distribution was available; confidence remains conservative."
+        },
+        "rationale": "Time is dominated by discovery of the power-of-two decomposition; prompting can naturally expose the classification without forcing a topic switch."
+      },
+      "disposition": "needs-revision",
+      "migration": {
+        "worthMigrating": true,
+        "recommendation": "revise-before-migration",
+        "rationale": "The core family remains a strong migration candidate, but the poset extension must be removed or made self-contained before migration."
+      },
+      "blockers": [
+        "Agent I issue #129: the poset extension assumes undefined partially ordered set language. This is an authoring/prerequisite repair, not a reason to add a frozen taxonomy tag."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      },
+      "reviewNotes": [
+        "Gauss incorporated the concurrent Agent I solvability handoff without adopting Agent I's correctness decision as a calibration decision."
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "familyId": "oxford-continuous-fixed-point",
+      "source": "existing-bank",
+      "reviewedMetadataStatus": "provisional-legacy",
+      "taxonomy": {
+        "domains": [
+          "elementary-analysis",
+          "functions"
+        ],
+        "contentConcepts": [
+          "continuity-fixed-points"
+        ],
+        "prerequisiteConcepts": [
+          "functions-graphs",
+          "limits-continuity"
+        ],
+        "reasoningSkills": [
+          "strategic-simplification",
+          "representation-switching",
+          "proof-construction",
+          "precision-checking",
+          "generalization"
+        ],
+        "milestoneSkillClaims": [
+          {
+            "milestoneId": "rephrase-zero",
+            "skills": [
+              "strategic-simplification",
+              "representation-switching"
+            ],
+            "contentConcepts": [
+              "continuity-fixed-points"
+            ]
+          },
+          {
+            "milestoneId": "endpoint-signs",
+            "skills": [
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "continuity-fixed-points"
+            ]
+          },
+          {
+            "milestoneId": "define-g",
+            "skills": [
+              "representation-switching"
+            ],
+            "contentConcepts": [
+              "continuity-fixed-points"
+            ]
+          },
+          {
+            "milestoneId": "apply-ivt",
+            "skills": [
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "continuity-fixed-points"
+            ]
+          },
+          {
+            "milestoneId": "translate-back",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "continuity-fixed-points"
+            ]
+          }
+        ],
+        "rationale": {
+          "domains": "The central theorem is an elementary-analysis fixed-point result expressed through a function transformation.",
+          "contentConcepts": "Continuity and fixed-point/zero structure are directly exercised throughout the proof.",
+          "prerequisiteConcepts": "Function notation and continuity/IVT concepts are assumed; the auxiliary-function construction and endpoint use are what the family assesses.",
+          "reasoningSkills": "The key evidence is reframing the target as a zero problem, checking endpoints, and applying a known theorem with all hypotheses accounted for."
+        }
+      },
+      "difficulty": {
+        "recommendedStatus": "expert-estimate",
+        "entry": "introductory",
+        "core": "introductory-plus",
+        "ceiling": "standard",
+        "confidence": "low",
+        "factors": {
+          "prerequisite-burden": 2,
+          "initial-insight-barrier": 1,
+          "conceptual-jumps": 1,
+          "abstraction": 1,
+          "proof-rigor-burden": 2,
+          "representation-changes": 1,
+          "productive-prompt-dependency": 1,
+          "extension-ceiling": 1
+        },
+        "stageAssessments": [],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Independent Agent G — Gauss review against the frozen Agent A taxonomy and Agent B calibration guidance. No usage distribution was available; confidence remains conservative."
+        },
+        "rationale": "With IVT explicitly allowed, the problem has one central auxiliary-function connection and a short rigorous finish. Its current single standard label overstates the calibrated core."
+      },
+      "timing": {
+        "recommendedStatus": "expert-estimate",
+        "estimate": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 1,
+            "max": 4
+          },
+          "independentCompletionMinutes": {
+            "min": 6,
+            "max": 11
+          },
+          "promptedCompletionMinutes": {
+            "min": 4,
+            "max": 9
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 7
+          },
+          "softCutoffMinutes": 14,
+          "confidence": "low"
+        },
+        "stageAssessments": [],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Independent Agent G — Gauss review against the frozen Agent A taxonomy and Agent B calibration guidance. No usage distribution was available; confidence remains conservative."
+        },
+        "rationale": "The proof is short enough that a realistic interview should reserve time for why the codomain matters, endpoint equality, and the interval generalization."
+      },
+      "disposition": "needs-revision",
+      "migration": {
+        "worthMigrating": true,
+        "recommendation": "revise-before-migration",
+        "rationale": "The IVT core is a good migration candidate, but the higher-dimensional Brouwer extension is outside the supplied prerequisite envelope and must be removed or reframed."
+      },
+      "blockers": [
+        "Agent I issue #129: the Brouwer/higher-dimensional extension depends on machinery outside the stated prerequisites. Do not inflate core difficulty to compensate; repair the extension instead."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      },
+      "reviewNotes": [
+        "Major disagreement: Gauss recommends an introductory-plus core rather than treating standard-oxford as the family-wide level.",
+        "Gauss incorporated the concurrent Agent I solvability handoff without adopting Agent I's correctness decision as a calibration decision."
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "familyId": "oxford-prefix-sums-mod-n",
+      "source": "existing-bank",
+      "reviewedMetadataStatus": "provisional-legacy",
+      "taxonomy": {
+        "domains": [
+          "number-theory",
+          "combinatorics"
+        ],
+        "contentConcepts": [
+          "modular-reasoning",
+          "pigeonhole-structure"
+        ],
+        "prerequisiteConcepts": [
+          "algebraic-manipulation",
+          "modular-arithmetic"
+        ],
+        "reasoningSkills": [
+          "representation-switching",
+          "strategic-simplification",
+          "case-analysis",
+          "proof-construction",
+          "precision-checking"
+        ],
+        "milestoneSkillClaims": [
+          {
+            "milestoneId": "define-prefix",
+            "skills": [
+              "representation-switching",
+              "strategic-simplification"
+            ],
+            "contentConcepts": [
+              "modular-reasoning"
+            ]
+          },
+          {
+            "milestoneId": "easy-zero-residue",
+            "skills": [
+              "case-analysis",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "modular-reasoning"
+            ]
+          },
+          {
+            "milestoneId": "pigeonhole-residues",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "modular-reasoning",
+              "pigeonhole-structure"
+            ]
+          },
+          {
+            "milestoneId": "subtract-equal",
+            "skills": [
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "modular-reasoning"
+            ]
+          },
+          {
+            "milestoneId": "identify-block",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "modular-reasoning"
+            ]
+          }
+        ],
+        "rationale": {
+          "domains": "The representation is modular arithmetic, while the collision argument is combinatorial pigeonhole reasoning.",
+          "contentConcepts": "Both prefix-residue structure and the pigeonhole collision are essential measured content.",
+          "prerequisiteConcepts": "Basic modular arithmetic and algebraic subtraction are assumed; inventing prefix sums for consecutiveness is assessed.",
+          "reasoningSkills": "The family strongly tests representation switching and careful case handling before a concise proof."
+        }
+      },
+      "difficulty": {
+        "recommendedStatus": "expert-estimate",
+        "entry": "introductory-plus",
+        "core": "standard",
+        "ceiling": "strong",
+        "confidence": "low",
+        "factors": {
+          "prerequisite-burden": 2,
+          "initial-insight-barrier": 2,
+          "conceptual-jumps": 2,
+          "abstraction": 2,
+          "proof-rigor-burden": 2,
+          "representation-changes": 2,
+          "productive-prompt-dependency": 2,
+          "extension-ceiling": 2
+        },
+        "stageAssessments": [],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Independent Agent G — Gauss review against the frozen Agent A taxonomy and Agent B calibration guidance. No usage distribution was available; confidence remains conservative."
+        },
+        "rationale": "The prefix-sum representation is the main nontrivial connection. Once found, the zero-residue split and collision proof are standard; cyclic/shorter-proof extensions add depth."
+      },
+      "timing": {
+        "recommendedStatus": "expert-estimate",
+        "estimate": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 5
+          },
+          "independentCompletionMinutes": {
+            "min": 9,
+            "max": 16
+          },
+          "promptedCompletionMinutes": {
+            "min": 6,
+            "max": 12
+          },
+          "optionalExtensionMinutes": {
+            "min": 4,
+            "max": 8
+          },
+          "softCutoffMinutes": 18,
+          "confidence": "low"
+        },
+        "stageAssessments": [],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Independent Agent G — Gauss review against the frozen Agent A taxonomy and Agent B calibration guidance. No usage distribution was available; confidence remains conservative."
+        },
+        "rationale": "Discovery of prefix sums is the main pacing uncertainty. A productive prompt can make the rest of the proof unfold naturally without timer-driven stage changes."
+      },
+      "disposition": "needs-revision",
+      "migration": {
+        "worthMigrating": true,
+        "recommendation": "revise-before-migration",
+        "rationale": "The core prefix-sum proof remains a strong migration candidate, but Agent I PR #128 found the cyclic-block extension is not a determinate theorem/task and should be repaired or removed first."
+      },
+      "blockers": [
+        "Agent I PR #128: the cyclic-block stretch prompt is not a determinate candidate-solvable task as authored."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      },
+      "reviewNotes": [
+        "Gauss incorporated the concurrent Agent I solvability handoff without adopting Agent I's correctness decision as a calibration decision."
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "familyId": "oxford-triangle-medians",
+      "source": "existing-bank",
+      "reviewedMetadataStatus": "provisional-legacy",
+      "taxonomy": {
+        "domains": [
+          "euclidean-geometry",
+          "coordinate-geometry"
+        ],
+        "contentConcepts": [
+          "geometric-constructions",
+          "similarity-ratio"
+        ],
+        "prerequisiteConcepts": [
+          "euclidean-geometry-basics",
+          "coordinate-geometry-basics"
+        ],
+        "reasoningSkills": [
+          "visualization",
+          "modelling",
+          "representation-switching",
+          "proof-construction",
+          "precision-checking",
+          "generalization"
+        ],
+        "milestoneSkillClaims": [
+          {
+            "milestoneId": "choose-representation",
+            "skills": [
+              "visualization",
+              "representation-switching"
+            ],
+            "contentConcepts": [
+              "geometric-constructions"
+            ]
+          },
+          {
+            "milestoneId": "candidate-centroid",
+            "skills": [
+              "modelling",
+              "representation-switching"
+            ],
+            "contentConcepts": [
+              "geometric-constructions"
+            ]
+          },
+          {
+            "milestoneId": "place-on-median",
+            "skills": [
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "geometric-constructions",
+              "similarity-ratio"
+            ]
+          },
+          {
+            "milestoneId": "mass-route",
+            "skills": [
+              "modelling",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "geometric-constructions"
+            ]
+          },
+          {
+            "milestoneId": "ratio-and-concurrency",
+            "skills": [
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "geometric-constructions",
+              "similarity-ratio"
+            ]
+          }
+        ],
+        "rationale": {
+          "domains": "The object is Euclidean geometry, with coordinates/vectors providing a natural analytic representation.",
+          "contentConcepts": "Constructing/identifying the centroid and proving the 2:1 median ratio are both directly exercised.",
+          "prerequisiteConcepts": "Basic triangle and coordinate geometry are assumed; the symmetric centroid representation and ratio proof are assessed.",
+          "reasoningSkills": "The family tests choosing a useful representation, visualizing symmetry, and verifying all three medians rather than only two."
+        }
+      },
+      "difficulty": {
+        "recommendedStatus": "expert-estimate",
+        "entry": "introductory",
+        "core": "standard",
+        "ceiling": "strong",
+        "confidence": "low",
+        "factors": {
+          "prerequisite-burden": 1,
+          "initial-insight-barrier": 1,
+          "conceptual-jumps": 2,
+          "abstraction": 2,
+          "proof-rigor-burden": 2,
+          "representation-changes": 2,
+          "productive-prompt-dependency": 1,
+          "extension-ceiling": 2
+        },
+        "stageAssessments": [],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Independent Agent G — Gauss review against the frozen Agent A taxonomy and Agent B calibration guidance. No usage distribution was available; confidence remains conservative."
+        },
+        "rationale": "The diagram is accessible, but a clean proof requires a representation choice and a complete concurrency/ratio argument. Area/tetrahedron extensions raise the ceiling."
+      },
+      "timing": {
+        "recommendedStatus": "expert-estimate",
+        "estimate": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 1,
+            "max": 4
+          },
+          "independentCompletionMinutes": {
+            "min": 9,
+            "max": 16
+          },
+          "promptedCompletionMinutes": {
+            "min": 6,
+            "max": 12
+          },
+          "optionalExtensionMinutes": {
+            "min": 5,
+            "max": 9
+          },
+          "softCutoffMinutes": 18,
+          "confidence": "low"
+        },
+        "stageAssessments": [],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Independent Agent G — Gauss review against the frozen Agent A taxonomy and Agent B calibration guidance. No usage distribution was available; confidence remains conservative."
+        },
+        "rationale": "A candidate can enter visually, then spend most time choosing and executing coordinates/vectors; the extension should be optional."
+      },
+      "disposition": "needs-revision",
+      "migration": {
+        "worthMigrating": true,
+        "recommendation": "revise-before-migration",
+        "rationale": "The coordinate/vector route remains a good geometry migration candidate, but the declared mass-points route assumes nonstandard undeclared machinery."
+      },
+      "blockers": [
+        "Agent I issue #129: the mass-points approach is not self-contained. Prefer the vector/coordinate route or explicitly teach the idea within the family; do not invent a new prerequisite tag."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      },
+      "reviewNotes": [
+        "No frozen-taxonomy blocker found; affine/vector structure fits the existing geometry/content vocabulary without adding tags.",
+        "Gauss incorporated the concurrent Agent I solvability handoff without adopting Agent I's correctness decision as a calibration decision."
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "familyId": "oxford-catalan-paths",
+      "source": "existing-bank",
+      "reviewedMetadataStatus": "provisional-legacy",
+      "taxonomy": {
+        "domains": [
+          "combinatorics",
+          "sequences-recurrences"
+        ],
+        "contentConcepts": [
+          "counting-structure",
+          "bijections",
+          "recurrence-decomposition"
+        ],
+        "prerequisiteConcepts": [
+          "counting-principles",
+          "binomial-coefficients"
+        ],
+        "reasoningSkills": [
+          "small-case-exploration",
+          "case-analysis",
+          "representation-switching",
+          "proof-construction",
+          "precision-checking",
+          "transfer"
+        ],
+        "milestoneSkillClaims": [
+          {
+            "milestoneId": "count-all",
+            "skills": [
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "counting-structure"
+            ]
+          },
+          {
+            "milestoneId": "characterize-bad",
+            "skills": [
+              "case-analysis",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "counting-structure"
+            ]
+          },
+          {
+            "milestoneId": "reflect-prefix",
+            "skills": [
+              "representation-switching",
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "bijections"
+            ]
+          },
+          {
+            "milestoneId": "recurrence-route",
+            "skills": [
+              "case-analysis",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "recurrence-decomposition"
+            ]
+          },
+          {
+            "milestoneId": "subtract-and-simplify",
+            "skills": [
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "counting-structure",
+              "bijections"
+            ]
+          }
+        ],
+        "rationale": {
+          "domains": "The family is combinatorial counting with both a bijective reflection route and a recurrence route.",
+          "contentConcepts": "Unrestricted counting, a reflection bijection, and first-return recurrence are all explicitly present.",
+          "prerequisiteConcepts": "Basic lattice-path counting and binomial coefficients are assumed; the reflection/first-return structures are assessed.",
+          "reasoningSkills": "The strongest evidence is constructing a correct bijection or recurrence, keeping boundary cases precise, and transferring between representations."
+        }
+      },
+      "difficulty": {
+        "recommendedStatus": "expert-estimate",
+        "entry": "standard",
+        "core": "strong",
+        "ceiling": "stretch",
+        "confidence": "low",
+        "factors": {
+          "prerequisite-burden": 2,
+          "initial-insight-barrier": 3,
+          "conceptual-jumps": 3,
+          "abstraction": 2,
+          "proof-rigor-burden": 3,
+          "representation-changes": 3,
+          "productive-prompt-dependency": 2,
+          "extension-ceiling": 3
+        },
+        "stageAssessments": [],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Independent Agent G — Gauss review against the frozen Agent A taxonomy and Agent B calibration guidance. No usage distribution was available; confidence remains conservative."
+        },
+        "rationale": "Even the entry requires nontrivial combinatorial counting fluency; the reflection inverse or recurrence proof is strong, and deriving/relating both routes supports a stretch ceiling."
+      },
+      "timing": {
+        "recommendedStatus": "expert-estimate",
+        "estimate": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 3,
+            "max": 7
+          },
+          "independentCompletionMinutes": {
+            "min": 16,
+            "max": 28
+          },
+          "promptedCompletionMinutes": {
+            "min": 12,
+            "max": 22
+          },
+          "optionalExtensionMinutes": {
+            "min": 6,
+            "max": 12
+          },
+          "softCutoffMinutes": 25,
+          "confidence": "low"
+        },
+        "stageAssessments": [],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Independent Agent G — Gauss review against the frozen Agent A taxonomy and Agent B calibration guidance. No usage distribution was available; confidence remains conservative."
+        },
+        "rationale": "A full two-route derivation can exceed one interview; one route should be the coherent core and the other optional/transfer. The natural 25-minute cutoff may occur before all extensions."
+      },
+      "disposition": "needs-revision",
+      "migration": {
+        "worthMigrating": true,
+        "recommendation": "revise-before-migration",
+        "rationale": "Rich family, but the candidate statement and alternate route need repair before migration. One coherent proof route should be the core and the alternative only used once complete/self-contained."
+      },
+      "blockers": [
+        "Agent I should resolve the existing reflection-bijection exposition/correctness review before production migration.",
+        "Agent I issue #129: n's domain is omitted and the recurrence route is incomplete as an independent route; the existing expert-review reflection concern also remains."
+      ],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      },
+      "reviewNotes": [
+        "Major disagreement: legacy stretch-oxford is best interpreted as the ceiling; Gauss recommends a standard entry and strong core.",
+        "No H originality/fidelity or I correctness approval is claimed.",
+        "Gauss incorporated the concurrent Agent I solvability handoff without adopting Agent I's correctness decision as a calibration decision."
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "familyId": "oxford-six-people",
+      "source": "existing-bank",
+      "reviewedMetadataStatus": "provisional-legacy",
+      "taxonomy": {
+        "domains": [
+          "combinatorics",
+          "graph-theory"
+        ],
+        "contentConcepts": [
+          "pigeonhole-structure",
+          "graph-coloring"
+        ],
+        "prerequisiteConcepts": [
+          "arithmetic"
+        ],
+        "reasoningSkills": [
+          "strategic-simplification",
+          "case-analysis",
+          "representation-switching",
+          "proof-construction",
+          "precision-checking"
+        ],
+        "milestoneSkillClaims": [
+          {
+            "milestoneId": "model-relations",
+            "skills": [
+              "representation-switching"
+            ],
+            "contentConcepts": [
+              "graph-coloring"
+            ]
+          },
+          {
+            "milestoneId": "choose-vertex",
+            "skills": [
+              "strategic-simplification"
+            ],
+            "contentConcepts": [
+              "pigeonhole-structure",
+              "graph-coloring"
+            ]
+          },
+          {
+            "milestoneId": "close-triangle",
+            "skills": [
+              "case-analysis",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "graph-coloring"
+            ]
+          },
+          {
+            "milestoneId": "complement-case",
+            "skills": [
+              "case-analysis",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "graph-coloring"
+            ]
+          },
+          {
+            "milestoneId": "verify",
+            "skills": [
+              "precision-checking",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "pigeonhole-structure",
+              "graph-coloring"
+            ]
+          }
+        ],
+        "rationale": {
+          "domains": "This is a finite combinatorics argument naturally represented as a two-color complete graph.",
+          "contentConcepts": "The six-vertex pigeonhole step and monochromatic-triangle coloring structure are the core measured content.",
+          "prerequisiteConcepts": "No graph theorem is assumed; only elementary counting/arithmetic is needed before the problem develops the graph representation.",
+          "reasoningSkills": "The family tests selecting one vertex, compressing cases by symmetry/complement, and producing a complete dichotomy proof."
+        }
+      },
+      "difficulty": {
+        "recommendedStatus": "expert-estimate",
+        "entry": "introductory",
+        "core": "standard",
+        "ceiling": "strong",
+        "confidence": "low",
+        "factors": {
+          "prerequisite-burden": 0,
+          "initial-insight-barrier": 2,
+          "conceptual-jumps": 2,
+          "abstraction": 2,
+          "proof-rigor-burden": 2,
+          "representation-changes": 2,
+          "productive-prompt-dependency": 2,
+          "extension-ceiling": 2
+        },
+        "stageAssessments": [],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Independent Agent G — Gauss review against the frozen Agent A taxonomy and Agent B calibration guidance. No usage distribution was available; confidence remains conservative."
+        },
+        "rationale": "The statement is easy to understand, but the R(3,3) proof has a genuine structural insight. The five-person sharpness extension materially raises the ceiling."
+      },
+      "timing": {
+        "recommendedStatus": "expert-estimate",
+        "estimate": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 2,
+            "max": 5
+          },
+          "independentCompletionMinutes": {
+            "min": 9,
+            "max": 16
+          },
+          "promptedCompletionMinutes": {
+            "min": 6,
+            "max": 12
+          },
+          "optionalExtensionMinutes": {
+            "min": 5,
+            "max": 9
+          },
+          "softCutoffMinutes": 18,
+          "confidence": "low"
+        },
+        "stageAssessments": [],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Independent Agent G — Gauss review against the frozen Agent A taxonomy and Agent B calibration guidance. No usage distribution was available; confidence remains conservative."
+        },
+        "rationale": "The main uncertainty is reaching the one-vertex pigeonhole reduction; once there, the case split is compact and leaves time for sharpness."
+      },
+      "disposition": "retain-legacy",
+      "migration": {
+        "worthMigrating": false,
+        "recommendation": "retain-legacy",
+        "rationale": "A famous Ramsey classic that remains useful for practice, but its legacy introductory label substantially understates the core and it is not a priority adaptive migration."
+      },
+      "blockers": [],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      },
+      "reviewNotes": [
+        "Major disagreement: Gauss recommends standard core rather than reading introductory-oxford as the family-wide difficulty."
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "familyId": "oxford-hilbert-hotel",
+      "source": "existing-bank",
+      "reviewedMetadataStatus": "provisional-legacy",
+      "taxonomy": {
+        "domains": [
+          "set-theory"
+        ],
+        "contentConcepts": [
+          "countability",
+          "set-maps"
+        ],
+        "prerequisiteConcepts": [
+          "arithmetic",
+          "set-notation"
+        ],
+        "reasoningSkills": [
+          "abstraction",
+          "definition-exploration",
+          "modelling",
+          "proof-construction",
+          "precision-checking",
+          "generalization"
+        ],
+        "milestoneSkillClaims": [
+          {
+            "milestoneId": "infinite-set-concept",
+            "skills": [
+              "abstraction",
+              "definition-exploration"
+            ],
+            "contentConcepts": [
+              "countability"
+            ]
+          },
+          {
+            "milestoneId": "single-guest-shift",
+            "skills": [
+              "modelling",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "set-maps",
+              "countability"
+            ]
+          },
+          {
+            "milestoneId": "infinite-bus-mapping",
+            "skills": [
+              "modelling",
+              "generalization",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "set-maps",
+              "countability"
+            ]
+          },
+          {
+            "milestoneId": "bijection-rigor",
+            "skills": [
+              "precision-checking",
+              "proof-construction"
+            ],
+            "contentConcepts": [
+              "set-maps",
+              "countability"
+            ]
+          }
+        ],
+        "rationale": {
+          "domains": "The family is directly about countably infinite sets and explicit maps.",
+          "contentConcepts": "Countability and construction/verification of injective/bijective assignments are the mathematical content.",
+          "prerequisiteConcepts": "Only positive-integer indexing and elementary set notation are assumed; counterintuitive infinite cardinality behavior is developed in the interview.",
+          "reasoningSkills": "Evidence comes from accepting a new infinite-set behavior, proposing explicit maps, and checking collisions/coverage rigorously."
+        }
+      },
+      "difficulty": {
+        "recommendedStatus": "expert-estimate",
+        "entry": "warm-up",
+        "core": "introductory",
+        "ceiling": "strong",
+        "confidence": "low",
+        "factors": {
+          "prerequisite-burden": 1,
+          "initial-insight-barrier": 1,
+          "conceptual-jumps": 1,
+          "abstraction": 2,
+          "proof-rigor-burden": 1,
+          "representation-changes": 1,
+          "productive-prompt-dependency": 1,
+          "extension-ceiling": 3
+        },
+        "stageAssessments": [],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Independent Agent G — Gauss review against the frozen Agent A taxonomy and Agent B calibration guidance. No usage distribution was available; confidence remains conservative."
+        },
+        "rationale": "One-guest shifting is nearly a warm-up once the setup is accepted; the infinite bus is introductory. Countably many buses can supply a much higher ceiling."
+      },
+      "timing": {
+        "recommendedStatus": "expert-estimate",
+        "estimate": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 1,
+            "max": 3
+          },
+          "independentCompletionMinutes": {
+            "min": 5,
+            "max": 10
+          },
+          "promptedCompletionMinutes": {
+            "min": 3,
+            "max": 8
+          },
+          "optionalExtensionMinutes": {
+            "min": 5,
+            "max": 10
+          },
+          "softCutoffMinutes": 14,
+          "confidence": "low"
+        },
+        "stageAssessments": [],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Independent Agent G — Gauss review against the frozen Agent A taxonomy and Agent B calibration guidance. No usage distribution was available; confidence remains conservative."
+        },
+        "rationale": "The first two mappings are short; useful time should go to exact mapping verification and a higher-ceiling many-bus extension."
+      },
+      "disposition": "retain-legacy",
+      "migration": {
+        "worthMigrating": false,
+        "recommendation": "retain-legacy",
+        "rationale": "Extremely well-known conceptual classic; retain as a truthful legacy/classic fixture unless H/I later identify a production need."
+      },
+      "blockers": [],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      },
+      "reviewNotes": [
+        "Legacy introductory-oxford describes the core reasonably but hides a warm-up entry and stronger optional ceiling."
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "familyId": "oxford-prisoner-hats",
+      "source": "existing-bank",
+      "reviewedMetadataStatus": "provisional-legacy",
+      "taxonomy": {
+        "domains": [
+          "combinatorics",
+          "number-theory"
+        ],
+        "contentConcepts": [
+          "parity",
+          "modular-reasoning"
+        ],
+        "prerequisiteConcepts": [
+          "arithmetic"
+        ],
+        "reasoningSkills": [
+          "modelling",
+          "invariants",
+          "strategic-simplification",
+          "proof-construction",
+          "precision-checking",
+          "generalization"
+        ],
+        "milestoneSkillClaims": [
+          {
+            "milestoneId": "communication-constraint",
+            "skills": [
+              "modelling",
+              "strategic-simplification"
+            ],
+            "contentConcepts": [
+              "parity"
+            ]
+          },
+          {
+            "milestoneId": "define-parity-sum",
+            "skills": [
+              "modelling",
+              "invariants"
+            ],
+            "contentConcepts": [
+              "parity",
+              "modular-reasoning"
+            ]
+          },
+          {
+            "milestoneId": "subsequent-deduction",
+            "skills": [
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "parity",
+              "modular-reasoning"
+            ]
+          },
+          {
+            "milestoneId": "induction-guarantee",
+            "skills": [
+              "proof-construction",
+              "precision-checking"
+            ],
+            "contentConcepts": [
+              "parity",
+              "modular-reasoning"
+            ]
+          }
+        ],
+        "rationale": {
+          "domains": "The strategy is a combinatorial information protocol whose mathematical invariant is parity/modular arithmetic.",
+          "contentConcepts": "Parity encoding and modulo-two deduction are central measured content rather than incidental technique.",
+          "prerequisiteConcepts": "Only elementary arithmetic is assumed; the parity communication invariant is the intended insight.",
+          "reasoningSkills": "The family requires modelling the communication channel, finding an invariant, and proving the guarantee rather than merely stating the trick."
+        }
+      },
+      "difficulty": {
+        "recommendedStatus": "expert-estimate",
+        "entry": "standard",
+        "core": "strong",
+        "ceiling": "stretch",
+        "confidence": "low",
+        "factors": {
+          "prerequisite-burden": 0,
+          "initial-insight-barrier": 3,
+          "conceptual-jumps": 3,
+          "abstraction": 3,
+          "proof-rigor-burden": 3,
+          "representation-changes": 2,
+          "productive-prompt-dependency": 3,
+          "extension-ceiling": 3
+        },
+        "stageAssessments": [],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Independent Agent G — Gauss review against the frozen Agent A taxonomy and Agent B calibration guidance. No usage distribution was available; confidence remains conservative."
+        },
+        "rationale": "The story is accessible but the parity-encoding insight is substantial, and a rigorous decoding guarantee adds another jump. Generalizing to more colors supports a stretch ceiling."
+      },
+      "timing": {
+        "recommendedStatus": "expert-estimate",
+        "estimate": {
+          "firstMeaningfulInsightMinutes": {
+            "min": 3,
+            "max": 7
+          },
+          "independentCompletionMinutes": {
+            "min": 14,
+            "max": 24
+          },
+          "promptedCompletionMinutes": {
+            "min": 10,
+            "max": 19
+          },
+          "optionalExtensionMinutes": {
+            "min": 6,
+            "max": 12
+          },
+          "softCutoffMinutes": 24,
+          "confidence": "low"
+        },
+        "stageAssessments": [],
+        "evidence": {
+          "basis": "expert-judgment",
+          "reviewerCount": 1,
+          "notes": "Independent Agent G — Gauss review against the frozen Agent A taxonomy and Agent B calibration guidance. No usage distribution was available; confidence remains conservative."
+        },
+        "rationale": "The insight may take much of an interview unaided; productive prompting should simplify the communication constraint rather than reveal parity immediately."
+      },
+      "disposition": "retain-legacy",
+      "migration": {
+        "worthMigrating": false,
+        "recommendation": "retain-legacy",
+        "rationale": "Highly circulated puzzle family with a brittle central trick; keep truthful legacy provenance unless H/I later decide its diagnostic value justifies migration."
+      },
+      "blockers": [],
+      "ownershipBoundaries": {
+        "originality": "pending-agent-h",
+        "fidelity": "pending-agent-h",
+        "mathematicalCorrectness": "pending-agent-i"
+      },
+      "reviewNotes": [
+        "Major disagreement: the legacy standard-oxford label understates Gauss's strong core calibration."
+      ]
+    }
+  ],
+  "concurrentHandoffs": [
+    {
+      "source": "Agent I — Itô",
+      "prNumber": 128,
+      "issueNumber": 129,
+      "scope": "Prerequisite/solvability findings only; Gauss retains ownership of taxonomy/difficulty/timing decisions.",
+      "schemaBlockerConclusion": "No frozen-taxonomy expansion is warranted. Undefined Euler-trail, poset, Brouwer, mass-points, and Hamel-basis material should be removed, reframed, or taught self-contained rather than silently encoded as new prerequisite tags."
+    }
+  ]
+}

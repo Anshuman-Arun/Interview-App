@@ -1,0 +1,1207 @@
+{
+  "schemaVersion": 1,
+  "agent": "I — Itô",
+  "reviewedAt": "2026-09-05",
+  "scopeNote": "Final Wave 2 mathematical-correctness snapshot for exactly the surviving C/D/E families. Prior independent solves are re-pinned when the final diff is metadata/pruning-only; materially changed mathematical payload is independently rechecked before approval.",
+  "summary": {
+    "totalFamilies": 41,
+    "approved": 41,
+    "changesRequired": 0,
+    "authorPrs": [
+      {
+        "agent": "C — Cantor",
+        "number": 132,
+        "head": "8b22dc5df99111fb95e27a2c006d5e74544dd385",
+        "surviving": 17,
+        "approved": 17
+      },
+      {
+        "agent": "D — Dirichlet",
+        "number": 133,
+        "head": "44b13bab28e315d3c76a177904bec47c884ef470",
+        "surviving": 11,
+        "approved": 11
+      },
+      {
+        "agent": "E — Euler",
+        "number": 134,
+        "head": "8846c612825d2b8ae53a81f6f8861fd851f452c6",
+        "surviving": 13,
+        "approved": 13
+      }
+    ]
+  },
+  "diffSynchronization": {
+    "cantor": {
+      "priorReviewedHead": "794fe2282c2c8ef265869ccf84bb955695fbaa7f",
+      "finalHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385",
+      "removed": [
+        "oxford-cantor-reciprocal-implicit-curve"
+      ],
+      "materialPayloadChanges": [
+        {
+          "familyId": "oxford-cantor-reciprocal-increment-recurrence",
+          "fields": [
+            "givenInformation"
+          ],
+          "action": "independently-rechecked",
+          "result": "approved",
+          "note": "The final given explicitly supplies the decreasing-sum/integral comparison. The inequality is valid for positive decreasing h by comparing h(k) with the integral over [k-1,k] for k>=2, so the logarithmic reciprocal-square error bound remains correct and self-contained."
+        }
+      ],
+      "otherSurvivors": "re-pinned; no statement/givens/solution/hints/approaches/extensions changes"
+    },
+    "dirichlet": {
+      "priorReviewedHead": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
+      "finalHead": "44b13bab28e315d3c76a177904bec47c884ef470",
+      "removed": [
+        "oxford-d-mirror-orbits"
+      ],
+      "materialPayloadChanges": [],
+      "otherSurvivors": "re-pinned; final author increment after mathematical certification changes tests only"
+    },
+    "euler": {
+      "priorReviewedHead": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
+      "finalHead": "8846c612825d2b8ae53a81f6f8861fd851f452c6",
+      "removed": [
+        "oxford-euler-locally-balanced-labels",
+        "oxford-euler-random-adjacent-consecutives",
+        "oxford-euler-stop-on-change",
+        "oxford-euler-random-subset-blocks"
+      ],
+      "materialPayloadChanges": [],
+      "otherSurvivors": "re-pinned; final changes are pruning/provenance/timing/similarity metadata only"
+    }
+  },
+  "independentlyResolvedOrRechecked": [
+    "oxford-cantor-reciprocal-increment-recurrence"
+  ],
+  "records": [
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "C — Cantor",
+        "prNumber": 132,
+        "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-cantor-cubic-divided-difference",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "Factor f(x)-f(a)=(x-a)(x²+ax+a²-1). Other equal-height inputs are roots of q_a(x)=x²+ax+a²-1 other than a. Its discriminant 4-3a² gives zero, one-double, or two quotient roots, while q_a(a)=3a²-1 isolates the separate stationary duplication at |a|=1/sqrt(3). For x³-cx the corresponding thresholds are |a|=2sqrt(c/3) and |a|=sqrt(c/3).",
+      "computationalChecks": [
+        "Representative substitutions at a=0, ±1/sqrt(3), ±2/sqrt(3), and 2 matched the authored distinct-input classification."
+      ],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "C — Cantor",
+        "prNumber": 132,
+        "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-cantor-mobius-recurrence",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "With y_n=1/(1-x_n), direct algebra gives y_{n+1}=y_n+1, hence x_n=1-1/(n+y_0). For x_0<1, y_0>0, so x_n increases to 1. For x_0>1 the orbit becomes undefined exactly when y_0 is a negative integer, equivalently when an iterate reaches x=2; otherwise the translated orbit remains defined and ultimately approaches 1.",
+      "computationalChecks": [
+        "Representative starts x_0=0, 1/2, 6/5, 3/2, 17/10, and 3 matched the explicit transformed recurrence and the predicted pole cases."
+      ],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "C — Cantor",
+        "prNumber": 132,
+        "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-cantor-radical-asymptote",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "For |a|<2 the radicand is positive on R. Rationalization gives the right limit a/2, while factoring |x| on the left gives R_a(x)=-2x-a/2+o(1). The derivative is negative: it is immediate when 2x+a<=0, and otherwise squaring the positive comparison reduces to a²<4. Thus the range is (a/2,∞). At a=±2 the radical is an absolute value, and for |a|>2 the radicand domain splits into two exterior intervals.",
+      "computationalChecks": [
+        "A numerical derivative sweep for a=-1.9,-1,0,1,1.9 over x in [-10,10] stayed negative, consistent with the independent analytic sign proof."
+      ],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "C — Cantor",
+        "prNumber": 132,
+        "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-cantor-reciprocal-increment-recurrence",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "Squaring gives a_{n+1}²=a_n²+2+1/a_n², hence a_n²>=a_0²+2n and divergence. Summation yields a_n²=a_0²+2n+sum 1/a_k²; the lower bound makes the error sum at most logarithmic, so a_n²/(2n)->1 and positivity gives a_n/sqrt(2n)->1. The same argument with c>0 gives the stated sqrt(2cn) scaling.",
+      "computationalChecks": [],
+      "findings": [
+        {
+          "id": "supplied-sum-integral-guidance",
+          "area": "prerequisite",
+          "severity": "note",
+          "status": "resolved",
+          "summary": "Final candidate-visible guidance supplies the decreasing-sum/integral comparison needed for the logarithmic reciprocal-square bound.",
+          "evidence": "For positive decreasing h, sum_{k=1}^{n-1} h(k) <= h(1)+integral_1^n h(t)dt follows by bounding h(k) with the area on [k-1,k] for k>=2. Applied to h(t)=1/(a_0^2+2t), it yields the required O(log n) error without assuming hidden harmonic-sum knowledge."
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "C — Cantor",
+        "prNumber": 132,
+        "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-cantor-mobius-involution",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "The graph equation is (x+1)(y+1)=a+1. For a≠-1 it is symmetric in x,y and direct composition gives T_a(T_a(x))=x; moreover T_a(x) never equals -1, so the second application is defined. Fixed points satisfy (x+1)²=a+1. At a=-1 the original formula instead collapses to the constant -1 on R\\{-1}, so it has no valid fixed point and cannot be iterated twice.",
+      "computationalChecks": [],
+      "findings": [
+        {
+          "id": "involution-term-undefined",
+          "area": "prerequisite",
+          "severity": "warning",
+          "status": "open",
+          "summary": "The stretch extension uses the term involution without defining it candidate-visibly.",
+          "evidence": "The core already establishes the property T(T(x))=x, so the extension is mathematically viable; rephrasing the extension in terms of that property would remove the vocabulary assumption."
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "D — Dirichlet",
+        "prNumber": 133,
+        "reviewedAuthorHead": "44b13bab28e315d3c76a177904bec47c884ef470"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-d-midpoint-closed-residues",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "Translate a chosen element to 0. Midpoint closure then gives closure under halving; on the finite translated set, halving is injective and hence bijective, so doubling is also closed. Averaging then doubling gives addition, and finiteness supplies inverses. Thus the translate is an additive subgroup. Modulo a prime the only possibilities are {0} and the full group; for odd composite moduli the solutions are exactly cosets of additive subgroups.",
+      "computationalChecks": [],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "D — Dirichlet",
+        "prNumber": 133,
+        "reviewedAuthorHead": "44b13bab28e315d3c76a177904bec47c884ef470"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-d-triple-flip-circle",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "Over F2, final lamps satisfy x_i=y_i+y_{i-1}+y_{i-2}. The zero-effect recurrence y_i=y_{i-1}+y_{i-2} has period three. Cyclic closure gives a trivial kernel when 3∤n and a four-element kernel when 3|n. Hence every target is uniquely reachable in the former case; in the latter, the image has size 2^(n-2), exactly matching the configurations whose three residue-class parities are equal, and every reachable target has four realizing move subsets.",
+      "computationalChecks": [
+        "Exhaustive enumeration of all move subsets for n=3,...,10 confirmed kernel size, image size, residue-class parity obstruction, and realizing-subset multiplicity."
+      ],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "E — Euler",
+        "prNumber": 134,
+        "reviewedAuthorHead": "8846c612825d2b8ae53a81f6f8861fd851f452c6"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-euler-box-diagonal-bisector",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "Equidistance gives ax+by+cz=0; after x=au,y=bv,z=cw this is αu+βv+γw=0 in the cube with α=a²≤β=b²≤γ=c². Direct edge-family tests show four distinct section vertices when γ≥α+β and six when γ<α+β, with equality causing multiple edge incidences to coalesce at cube vertices. For a=b=c the six vertices are the permutations of (1,-1,0), forming a regular hexagon.",
+      "computationalChecks": [
+        "Enumerated all cube-edge intersections for representative γ>α+β, γ=α+β, γ<α+β, and cube cases; distinct vertex counts were 4,4,6,6 respectively."
+      ],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "E — Euler",
+        "prNumber": 134,
+        "reviewedAuthorHead": "8846c612825d2b8ae53a81f6f8861fd851f452c6"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-euler-circle-sweep",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "A point X=(x,y) is on the diameter circle exactly when r²=ax+by. With b=1-a/2 and a∈[0,2], the right side ranges over the interval between y and 2x, so existence is equivalent to (r²-y)(r²-2x)≤0. This is precisely the closure of the symmetric difference of the two endpoint disks. The λ,L transfer replaces the endpoint values by Ly/λ and Lx.",
+      "computationalChecks": [
+        "Checked a rectangular grid of sample points against the exact solved parameter a and the sign-product criterion; the two membership tests agreed."
+      ],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "E — Euler",
+        "prNumber": 134,
+        "reviewedAuthorHead": "8846c612825d2b8ae53a81f6f8861fd851f452c6"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-euler-random-chord-midpoint",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "For unit endpoint vectors u,v, OM²=|(u+v)/2|²=(1+u·v)/2. The regular-polygon vertex sum is 0, so conditioned on a fixed endpoint and a distinct second endpoint, the average dot product is -1/(n-1), giving (n-2)/(2(n-1)). Independent draws with replacement have E[U·V]=E[U]·E[V]=0 and therefore mean 1/2.",
+      "computationalChecks": [
+        "Enumerated all unordered vertex pairs for regular n-gons with n=3,...,14; the empirical mean matched (n-2)/(2(n-1))."
+      ],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "E — Euler",
+        "prNumber": 134,
+        "reviewedAuthorHead": "8846c612825d2b8ae53a81f6f8861fd851f452c6"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-euler-random-halving-interval",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "After n fair halvings the left/right word is a uniformly distributed n-bit integer K, and M_n=(K+1/2)/2^n. This gives mean 1/2 and variance (1-4^-n)/12. With right-half probability p, digitwise expectation gives E[K]=p(2^n-1) and E[M_n]=p+(1/2-p)2^-n. Endpoint conventions matter only for containment questions, not the midpoint distribution.",
+      "computationalChecks": [],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "E — Euler",
+        "prNumber": 134,
+        "reviewedAuthorHead": "8846c612825d2b8ae53a81f6f8861fd851f452c6"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-euler-periodic-queue-model",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "With arrivals first, q_n=max(0,q_{n-1}+a_n-s), where q_0 is measured just before odd minute 1 and a_n alternates a,b. Let Delta=a+b-2s. If Delta<0, perpetual positivity would force q_{2k}=q_0+kDelta eventually negative, so zero is reached. If Delta>=0, compute q_1 and q_2: a zero there answers yes; if both are positive then q_2=q_0+Delta>=q_0, and monotonicity of the same two-step map prevents any later first zero. Delta>0 gives unbounded even-phase growth; Delta=0 gives a bounded two-phase repeat once positive. The current statement explicitly supplies integer domains, s>0, q_0, starting phase, and event order.",
+      "computationalChecks": [
+        "Exhaustive simulation for 0<=a,b<=6, 1<=s<=5, 0<=q_0<=7 matched the exact emptying criterion through 100 minutes; positive-drift even-phase queues increased by at least Delta each cycle."
+      ],
+      "findings": [
+        {
+          "id": "queue-parameter-domain-missing",
+          "area": "statement",
+          "severity": "error",
+          "status": "resolved",
+          "summary": "Current Euler revision supplies the missing queue parameter and initial-state domains.",
+          "evidence": "At head e5f5b431..., the candidate-visible prompt/givens explicitly state a,b,q_0 nonnegative integers, s positive integer, q_0 before odd minute 1, and arrivals-before-service order; the exact emptying target is now determinate."
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "C — Cantor",
+        "prNumber": 132,
+        "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-cantor-reciprocal-paired-inputs",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "For x>0, f(1/x)=f(x), while (1+x)^2>=4x gives range (0,1/4] with unique maximum at x=1. Cross-multiplication of f(x)=f(y) factors as (x-y)(1-xy)=0, so distinct equal-output inputs are reciprocal. For x/(a+x)^2 the same calculation pairs x with a^2/x, gives maximum 1/(4a), and distinct pairs satisfy xy=a^2.",
+      "computationalChecks": [],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "C — Cantor",
+        "prNumber": 132,
+        "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-cantor-exponential-rotating-line",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "Any solution of e^x=ax with a>0 has x>0, where a=e^x/x. This function decreases to e at x=1 and then increases to infinity, yielding 0/1/2 solutions for a<e,=e,>e. Replacing x by bx in the exponent moves the minimum to x=1/b with threshold a=be.",
+      "computationalChecks": [],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "C — Cantor",
+        "prNumber": 132,
+        "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-cantor-squared-error-recurrence",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "Writing e_n=1-x_n gives e_{n+1}=e_n^2 exactly. For 0<x_0<1 this proves monotone convergence to 1 and x_n=1-(1-x_0)^(2^n). More generally every 0<x_0<2 converges to 1, while x_0=0 and x_0=2 lead to 0; the epsilon bound follows by solving |e_0|^(2^n)<epsilon.",
+      "computationalChecks": [],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "C — Cantor",
+        "prNumber": 132,
+        "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-cantor-three-cycle-map",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "The maximal indefinitely iterable real domain is R\\{0,1}. It is invariant, f^2(x)=1/(1-x), and f^3(x)=x. Since x^2-x+1=0 has no real root, every real orbit on the safe domain has exact period 3. Translating by c gives the stated g_c domain R\\{c,c+1} and the same period.",
+      "computationalChecks": [],
+      "findings": [
+        {
+          "id": "three-cycle-exploratory-stretch",
+          "area": "extension",
+          "severity": "warning",
+          "status": "open",
+          "summary": "The orbit-relations stretch is exploratory rather than a unique target.",
+          "evidence": "The mathematics is sound (for example x*f(x)*f^2(x)=-1), but “find simple algebraic relations” admits many acceptable answers. This is non-blocking for correctness but could be made more determinate."
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "C — Cantor",
+        "prNumber": 132,
+        "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-cantor-quartic-horizontal-levels",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "Q_a is even with critical points 0 and +/-sqrt(a), heights 0 and -a^2. Equivalently u=x^2 solves u^2-2au-c=0 with u>=0. This yields distinct-real-solution counts 0,2,4,3,2 across c<-a^2, c=-a^2, -a^2<c<0, c=0, c>0. The scaling Q_a(sqrt(a)z)=a^2Q_1(z) is exact.",
+      "computationalChecks": [],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "C — Cantor",
+        "prNumber": 132,
+        "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-cantor-moving-v-envelope",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "For fixed x, split at t=x. The two branches are completed squares with unconstrained minimizers 1/2 and -1/2; feasibility produces m(x)=x^2 on |x|<=1/2 and |x|-1/4 outside. Values and first derivatives match at the switches. Replacing t^2 by lambda t^2 moves switches to +/-1/(2lambda) and gives central lambda x^2 and outer |x|-1/(4lambda).",
+      "computationalChecks": [],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "C — Cantor",
+        "prNumber": 132,
+        "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-cantor-reciprocal-root-parabolas",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "Expanding gives p_a(x)=x^2-sx+1 with s=a+1/a>=2, and every s>=2 occurs. Thus a and 1/a are the only positive-parameter duplication, axes satisfy X=s/2>=1, and vertices lie on Y=1-X^2. For roots a,c/a the same argument gives Y=c-X^2 with X>=sqrt(c).",
+      "computationalChecks": [],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "C — Cantor",
+        "prNumber": 132,
+        "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-cantor-cubic-two-thresholds",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "Nonzero roots are controlled by a^2-4, while turning points are controlled by the derivative discriminant 4(a^2-3). Hence turning points appear at |a|=sqrt(3) and additional real roots only at |a|=2. In the intermediate regime both extrema lie on the same side of the axis because the quadratic factor stays positive. Replacing 1 by c gives thresholds sqrt(3c) and 2sqrt(c).",
+      "computationalChecks": [],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "C — Cantor",
+        "prNumber": 132,
+        "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-cantor-integral-sign-landscape",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "F is odd because the integrand is even, and F'=(x^2-1)(x^2-9) fixes all monotonicity intervals. F(1)>0 and F(3)<0 force exactly two positive nonzero roots and hence five total by oddness. Integration gives the exact nonzero equation 3u^2-50u+135=0 in u=x^2, producing the stated roots. For the a,b extension, G(b)=2b^3(5a^2-b^2)/15.",
+      "computationalChecks": [],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "C — Cantor",
+        "prNumber": 132,
+        "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-cantor-absolute-quadratic-crossings",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "The underlying quadratic has roots -2,1 and minimum -9/4, so absolute value reflects the inner arc to height 9/4. Horizontal-line counts are therefore 0,2,4,3,2 for c<0,c=0,0<c<9/4,c=9/4,c>9/4. For roots a<b the transition height is (b-a)^2/4.",
+      "computationalChecks": [],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "C — Cantor",
+        "prNumber": 132,
+        "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-cantor-shifted-cubic-intersections",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "For h>0, f(x)-f(x-h)=h(3x^2-3hx+h^2-1). The quadratic discriminant is 3(4-h^2), giving two/one/zero intersections for h<2,=2,>2; at h=2 the translated curves are tangent. The roots tend to +/-1/sqrt(3) as h->0+, and x^3-cx changes the threshold to 2sqrt(c).",
+      "computationalChecks": [],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "C — Cantor",
+        "prNumber": 132,
+        "reviewedAuthorHead": "8b22dc5df99111fb95e27a2c006d5e74544dd385"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-cantor-moving-integral-window",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "Evenness of 1/(1+t^2) makes W odd. Differentiating moving endpoints gives W'=(1-2x^2)/((1+4x^2)(1+x^2)), hence the unique positive maximum at 1/sqrt(2); a direct tail bound gives W->0 at infinity. For k>1, W_k' has numerator (k-1)(1-kx^2), giving maximizer 1/sqrt(k) and the symmetric minimum.",
+      "computationalChecks": [],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "D — Dirichlet",
+        "prNumber": 133,
+        "reviewedAuthorHead": "44b13bab28e315d3c76a177904bec47c884ef470"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-d-gcd-descent-network",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "The total label sum is a positive-integer strict monovariant, while the gcd of all labels is invariant under x->x-y. Terminality forces equality across every edge, and connectedness makes the whole labeling constant; gcd invariance identifies that constant with the starting gcd. Disconnected components behave independently.",
+      "computationalChecks": [
+        "On a triangle starting from (1,2,3), legal choices give terminal sequences of lengths 2 and 3, verifying the choice-dependent-duration extension."
+      ],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "D — Dirichlet",
+        "prNumber": 133,
+        "reviewedAuthorHead": "44b13bab28e315d3c76a177904bec47c884ef470"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-d-thirds-closed-integers",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "For sizes 1,2,3 the exact possibilities are respectively arbitrary singleton, two distinct residue classes mod 3, and all three residue classes. From size 4 onward, three consecutive residues must be distinct, forcing period-3 residues; each four-term block then has its two interior entries equal to the required trisection points, forcing one common gap not divisible by 3. The converse arithmetic-progression argument is exact.",
+      "computationalChecks": [
+        "Exhaustive search over subsets of {-4,...,4} through size 6 found no mismatch with the stated classification."
+      ],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "D — Dirichlet",
+        "prNumber": 133,
+        "reviewedAuthorHead": "44b13bab28e315d3c76a177904bec47c884ef470"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-d-balancing-transfers",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "Total counters are invariant and sum of squares drops by 2(a-b)-2>=2 on every legal transfer, proving termination. A terminal unrestricted position has all counts within 1, so total T=qn+r forces exactly n-r copies of q and r copies of q+1. Restricting allowed edges preserves the monovariant but replaces global balance by edge-local balance and can destroy terminal uniqueness.",
+      "computationalChecks": [],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "D — Dirichlet",
+        "prNumber": 133,
+        "reviewedAuthorHead": "44b13bab28e315d3c76a177904bec47c884ef470"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-d-cube-twist-equivalence",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "Prime-by-prime, ab^2 being a cube is e_p(a)+2e_p(b)=0 mod 3, equivalently equality of exponent residues mod 3. This is an equivalence relation and its classes are exactly cubefree kernels. The r-th-power analogue similarly reduces to equality of exponent residues modulo r.",
+      "computationalChecks": [],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "D — Dirichlet",
+        "prNumber": 133,
+        "reviewedAuthorHead": "44b13bab28e315d3c76a177904bec47c884ef470"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-d-sliding-window-parity",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "Subtracting adjacent k-window parity equations gives x_i=x_{i+k}. Thus configurations are constant on the gcd(n,k) step-k orbits, giving exactly 2^d choices, and the converse is immediate. Each window contains k/d positions from every orbit class, yielding the stated odd-parity refinement.",
+      "computationalChecks": [
+        "Exhaustive enumeration for every 1<=k<=n<=8 matched the count 2^gcd(n,k) and the orbit characterization."
+      ],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "D — Dirichlet",
+        "prNumber": 133,
+        "reviewedAuthorHead": "44b13bab28e315d3c76a177904bec47c884ef470"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-d-weighted-cycle-readings",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "Propagating x_{i+1}=s_i/t-x_i/t around the cycle gives x_{n+1}=(-1/t)^n x_1+C. Uniqueness for all readings fails exactly when (-1/t)^n=1: t=-1 for odd n and t=+/-1 for even n. The singular consistency relations are sum s_i=0 for t=-1 and alternating sum 0 for t=1 with even n, after which one parameter remains free.",
+      "computationalChecks": [],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "D — Dirichlet",
+        "prNumber": 133,
+        "reviewedAuthorHead": "44b13bab28e315d3c76a177904bec47c884ef470"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-d-odd-symmetric-difference",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "|A triangle B| is congruent to |A|+|B| mod 2, so the graph is complete bipartite between even- and odd-cardinality subsets. Pairwise-odd families have size at most 2; pairwise-even families lie in one parity class of size 2^(|U|-1), with equality. The fixed-element symmetric-difference involution proves the parity classes are equal.",
+      "computationalChecks": [],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "D — Dirichlet",
+        "prNumber": 133,
+        "reviewedAuthorHead": "44b13bab28e315d3c76a177904bec47c884ef470"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-d-three-reversal-permutations",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "A reversal of three consecutive positions only swaps positions i and i+2, so card position parity is invariant. Compressing odd and even positions turns legal moves into arbitrary adjacent swaps in the two lists, proving parity preservation is also sufficient and giving the factorial count. Each move changes exactly one compressed inversion count by 1, so the minimum is I_odd+I_even.",
+      "computationalChecks": [
+        "Breadth-first search for n=3,...,7 matched both the reachable count ceil(n/2)! floor(n/2)! and the inversion-sum distance for every reachable permutation."
+      ],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "D — Dirichlet",
+        "prNumber": 133,
+        "reviewedAuthorHead": "44b13bab28e315d3c76a177904bec47c884ef470"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-d-divisor-step-geometry",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "Prime-exponent vectors identify the divisor graph with an integer box grid; each edge changes one coordinate by 1. Therefore distance is L1, shortest paths are the multinomial interleavings of required coordinate moves, and diameter is sum of the exponents. The graph is a tree exactly for N=1 or a prime power; two positive exponent coordinates create a 4-cycle.",
+      "computationalChecks": [],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "E — Euler",
+        "prNumber": 134,
+        "reviewedAuthorHead": "8846c612825d2b8ae53a81f6f8861fd851f452c6"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-euler-cooling-data-model",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "The raw drops are unequal, while temperature gaps above 20 are 60,45,33.75 with constant ratio 3/4. Thus T_n=20+60(3/4)^n and the next reading is 45.3125 C. Changing ambient temperature replaces the gap origin; unknown ambient and ratio can be fit from sufficiently many exact nondegenerate readings, while rounded readings support only approximate model comparison.",
+      "computationalChecks": [],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "E — Euler",
+        "prNumber": 134,
+        "reviewedAuthorHead": "8846c612825d2b8ae53a81f6f8861fd851f452c6"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-euler-corner-balanced-tables",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "The adjacent 2x2 condition says each horizontal difference is independent of row, so a_ij=r_i+c_j; the converse is immediate and one additive redundancy leaves m+n-1 degrees of freedom. The argument works modulo q without division. For positive multiplicative diagonal balance, logarithms reduce to the additive case, giving a positive rank-one factorization.",
+      "computationalChecks": [],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "E — Euler",
+        "prNumber": 134,
+        "reviewedAuthorHead": "8846c612825d2b8ae53a81f6f8861fd851f452c6"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-euler-diagonal-blend-transform",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "Direct composition gives T^2=5I and expansion of squared lengths gives |T(u,v)|^2=5(u^2+v^2), so distances scale by sqrt(5) and angles are preserved with orientation reversed. Invariant nonvertical slopes satisfy m^2+m-1=0; the vertical line is not invariant. T_a^2=(1+a^2)I and areas scale in magnitude by 1+a^2.",
+      "computationalChecks": [],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "E — Euler",
+        "prNumber": 134,
+        "reviewedAuthorHead": "8846c612825d2b8ae53a81f6f8861fd851f452c6"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-euler-kiosk-grid-model",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "A cell has side L/m; uniform Manhattan distance to its center has mean L/(2m), so mean time is L/(2vm). Adding staffing penalty tau m^2 gives J=A/m+tau m^2 and continuous optimum m^3=L/(4v tau), followed by integer comparison. Euclidean walking changes only the access constant, preserving 1/m and cube-root scaling; nonuniform demand breaks the equal-cell assumption.",
+      "computationalChecks": [],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "E — Euler",
+        "prNumber": 134,
+        "reviewedAuthorHead": "8846c612825d2b8ae53a81f6f8861fd851f452c6"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-euler-quadrilateral-balance",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "Expanding squared distances cancels |p|^2 and leaves an affine equation. If b+d-a-c is nonzero the balanced locus is one line. If a+c=b+d the quadrilateral is a parallelogram and the expression is constant; recentering gives all points exactly when the half-diagonals have equal length, equivalently the parallelogram is a rectangle, and otherwise no points.",
+      "computationalChecks": [],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "E — Euler",
+        "prNumber": 134,
+        "reviewedAuthorHead": "8846c612825d2b8ae53a81f6f8861fd851f452c6"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-euler-self-averaging-sets",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "For n distinct elements with sum sigma, the required map is T(x)=(sigma-x)/(n-1). It is injective and hence permutes a finite invariant set. Relative to the mean mu, T contracts distance by 1/(n-1) when n>2, impossible on a nontrivial finite cycle; thus only n=2 works, where T swaps the two values. If the average includes x, the property is exactly mu in S.",
+      "computationalChecks": [],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "E — Euler",
+        "prNumber": 134,
+        "reviewedAuthorHead": "8846c612825d2b8ae53a81f6f8861fd851f452c6"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-euler-tank-gauge-model",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "Under the explicitly chosen piecewise-constant band model and common minute volume V, the observations give V=2A1=A2=A3, so area ratio is 1:2:2 and absolute scale is unidentified without V. Without that structural model, the readings identify only equal volume integrals over height bands; variable pump volumes confound inflow with geometry. The 600 cm^3 extension gives 300,600,600 cm^2.",
+      "computationalChecks": [],
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "problemVersion": "1.0.0",
+      "reviewerAgent": "I — Itô",
+      "reviewedAt": "2026-09-05",
+      "source": {
+        "kind": "author-pr",
+        "authorAgent": "E — Euler",
+        "prNumber": 134,
+        "reviewedAuthorHead": "8846c612825d2b8ae53a81f6f8861fd851f452c6"
+      },
+      "independentlySolved": true,
+      "statementChecked": true,
+      "approachesChecked": true,
+      "canonicalSolutionChecked": true,
+      "hintsChecked": true,
+      "extensionsChecked": true,
+      "prerequisitesChecked": true,
+      "unresolvedUncertainties": [],
+      "familyId": "oxford-euler-triangle-midpoint-cycle",
+      "mathematicalCorrectness": "approved",
+      "recommendation": "approve",
+      "independentSolutionSummary": "Three midpoint moves give T(p)=p/8+a/8+b/4+c/2. The unique fixed point is q=(a+2b+4c)/7 and T(p)-q=(p-q)/8, proving geometric convergence from every start. Reordering A,B,C permutes weights 1,2,4. Moving a fixed fraction r toward each named vertex gives contraction (1-r)^3 and the corresponding normalized geometric weights.",
+      "computationalChecks": [],
+      "findings": []
+    }
+  ]
+}
