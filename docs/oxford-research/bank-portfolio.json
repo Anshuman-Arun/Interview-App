@@ -265,7 +265,7 @@
     "internal_stage_planning_minutes_semantics": "soft-default-authoring-heuristics-not-required-ranges"
   },
   "agent_a_mapping": {
-    "branch_commit_reviewed": "c065fe6e9c874ea06a5733b2e594751f1ab06400",
+    "branch_commit_reviewed": "ed95b0fc54da8d5a1ee77d65e6f39493be49b05c",
     "contract_fit": "strong",
     "requested_additions_only": [
       {
