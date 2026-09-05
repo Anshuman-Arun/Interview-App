@@ -1208,6 +1208,7 @@ export const App: React.FC = () => {
               }
             />
             <StudentInputArea
+              compact
               onSubmit={(text) => {
                 if (
                   sessionEntryPendingRef.current
