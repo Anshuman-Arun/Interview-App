@@ -1005,4 +1005,98 @@ describe("editorial v10 adversarial UI states", () => {
     expect(markup).toMatch(/data-testid="start-configured-session-btn"[^>]*disabled/u);
   });
 
+  it("fails closed when stored session authority cannot be verified", () => {
+    const home = renderToStaticMarkup(
+      <HomePage
+        activeSessionId={null}
+        activeSessionCount={0}
+        sessions={[]}
+        onStartInterview={vi.fn()}
+        onResumeInterview={vi.fn()}
+        onOpenSessions={vi.fn()}
+        onOpenSettings={vi.fn()}
+        canReview={() => false}
+        onReview={vi.fn()}
+        sessionEntryPending={false}
+        sessionAuthorityUnavailable
+      />
+    );
+    expect(home).toContain("Stored session authority is unavailable");
+    expect(home).toMatch(/data-testid="start-session-btn"[^>]*disabled=""/u);
+
+    const configure = renderToStaticMarkup(
+      <NewInterviewPage
+        catalog={[{
+          mode: "OXFORD_MATHEMATICS",
+          id: "authority-failure",
+          version: "1",
+          title: "Authority failure",
+          category: "proof",
+          difficulty: "standard"
+        }]}
+        catalogLoading={false}
+        catalogError={null}
+        providerOptions={[{
+          providerId: "test-provider",
+          providerDisplayName: "Test Provider",
+          providerKind: "MOCK",
+          modelId: "test-model",
+          modelDisplayName: "Test Model",
+          availability: "AVAILABLE"
+        }]}
+        providerOptionsLoading={false}
+        providerOptionsError={null}
+        activeSessionId={null}
+        activeSessionCount={0}
+        startPending={false}
+        sessionAuthorityUnavailable
+        onRefreshCatalog={async () => []}
+        onRefreshProviderOptions={async () => []}
+        onStart={async () => undefined}
+        onResumeActive={null}
+      />
+    );
+    expect(configure).toContain("Stored session authority unavailable");
+    expect(configure).toMatch(
+      /data-testid="start-configured-session-btn"[^>]*disabled/u
+    );
+
+    const settings = renderToStaticMarkup(
+      <AppearanceProvider>
+        <SettingsPage
+          providerOptions={[{
+            providerId: "ready-provider",
+            providerDisplayName: "Ready Provider",
+            providerKind: "REMOTE_API",
+            modelId: "ready-model",
+            modelDisplayName: "Ready Model",
+            availability: "AVAILABLE"
+          }]}
+          providerOptionsLoading={false}
+          providerOptionsError={null}
+          activeSessionCount={0}
+          sessionAuthorityUnavailable
+          onRefreshProviderOptions={async () => []}
+          onStartInterview={vi.fn()}
+        />
+      </AppearanceProvider>
+    );
+    expect(settings).toContain("Stored session authority could not be verified.");
+    expect(settings).toMatch(
+      /<button[^>]*disabled=""[^>]*>Start interview<\/button>/u
+    );
+
+    const hook = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/hooks/useInterviewSession.ts"),
+      "utf8"
+    );
+    const app = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+    expect(hook).toContain("verifyAvailableSessions");
+    expect(app).toContain("setSessionAuthorityUnavailable(true)");
+    expect(app).toContain("session.verifyAvailableSessions()");
+  });
+
 });
