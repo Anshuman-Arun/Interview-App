@@ -687,7 +687,7 @@ describe("editorial v10 adversarial UI states", () => {
     });
 
     expect(host?.textContent).toContain(
-      "The bounded evaluation read could not be loaded."
+      "The evaluation could not be loaded."
     );
     const retry = Array.from(document.querySelectorAll("button"))
       .find((button) => button.textContent.trim() === "Retry read");
@@ -701,7 +701,7 @@ describe("editorial v10 adversarial UI states", () => {
     });
 
     expect(readEvaluation).toHaveBeenCalledTimes(2);
-    expect(host?.textContent).toContain("Loading bounded evaluation…");
+    expect(host?.textContent).toContain("Loading evaluation…");
   });
 
   it("does not let a failed Replay read mask a cached Evaluation", async () => {
@@ -749,7 +749,7 @@ describe("editorial v10 adversarial UI states", () => {
       await Promise.resolve();
     });
     expect(host?.textContent).toContain(
-      "The bounded replay read could not be loaded."
+      "The replay could not be loaded."
     );
 
     await act(async () => {
@@ -766,7 +766,7 @@ describe("editorial v10 adversarial UI states", () => {
     });
 
     expect(host?.textContent).toContain("NOT SCORED");
-    expect(host?.textContent).not.toContain("bounded replay read could not be loaded");
+    expect(host?.textContent).not.toContain("replay could not be loaded");
     expect(readEvaluation).toHaveBeenCalledTimes(1);
   });
 
@@ -1015,6 +1015,43 @@ describe("editorial v10 adversarial UI states", () => {
     expect(quantShell).toContain("data-connected={String(connected)}");
     expect(quantShell).toContain('connected ? "Deterministic state" : "Disconnected"');
   });
+  it("states that duration is a planning reminder rather than a cutoff", () => {
+    const markup = renderToStaticMarkup(
+      <NewInterviewPage
+        catalog={[{
+          mode: "OXFORD_MATHEMATICS",
+          id: "duration-semantics",
+          version: "1",
+          title: "Duration semantics",
+          category: "proof",
+          difficulty: "standard"
+        }]}
+        catalogLoading={false}
+        catalogError={null}
+        providerOptions={[{
+          providerId: "test-provider",
+          providerDisplayName: "Test Provider",
+          providerKind: "MOCK",
+          modelId: "test-model",
+          modelDisplayName: "Test Model",
+          availability: "AVAILABLE"
+        }]}
+        providerOptionsLoading={false}
+        providerOptionsError={null}
+        activeSessionId={null}
+        activeSessionCount={0}
+        startPending={false}
+        onRefreshCatalog={async () => []}
+        onRefreshProviderOptions={async () => []}
+        onStart={async () => undefined}
+        onResumeActive={null}
+      />
+    );
+    expect(markup).toContain(
+      "Planning reminder only; the interview will not end automatically."
+    );
+  });
+
   it("freezes launch configuration while session entry is pending", () => {
     const markup = renderToStaticMarkup(
       <NewInterviewPage
