@@ -268,6 +268,7 @@ export const cantorGraphFamiliesA: readonly CantorFamilyAuthoring[] = [
     finalRole: "transfer",
     novelty: "moderate",
     abstraction: "moderate",
+    similarityClusterId: "cantor-reciprocal-symmetry",
     originalityRisk: "medium",
     correctnessRisk: "low",
     calibrationRisk: "medium"
@@ -389,7 +390,7 @@ export const cantorGraphFamiliesA: readonly CantorFamilyAuthoring[] = [
       ["generalization", "primary"],
       ["transfer", "primary"]
     ),
-    difficulty: { entry: "introductory-plus", core: "standard", ceiling: "strong" },
+    difficulty: { entry: "introductory-plus", core: "strong", ceiling: "strong" },
     timing: cantorTiming([2, 5], [16, 24], [13, 21], [4, 8], 24),
     stageTiming: [
       cantorTiming([1, 3], [4, 7], [3, 6], undefined, 7),
@@ -400,6 +401,7 @@ export const cantorGraphFamiliesA: readonly CantorFamilyAuthoring[] = [
     finalRole: "stretch",
     novelty: "moderate",
     abstraction: "moderate",
+    similarityClusterId: "cantor-cubic-graph-structure",
     originalityRisk: "medium",
     correctnessRisk: "low",
     calibrationRisk: "medium"
@@ -531,6 +533,7 @@ export const cantorGraphFamiliesA: readonly CantorFamilyAuthoring[] = [
     novelty: "moderate",
     abstraction: "moderate",
     provenance: { originType: "classic-problem", sourceCategory: "secondary-reference" },
+    similarityClusterId: "cantor-cubic-graph-structure",
     originalityRisk: "high",
     correctnessRisk: "medium",
     calibrationRisk: "high"
