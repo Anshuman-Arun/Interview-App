@@ -86,6 +86,8 @@ These decisions are **mathematical-correctness decisions only**. They do not app
 
 ## Final Wave 2 C/D/E certification
 
+The machine-readable exact-survivor artifact is `final-wave2-certification.json`; it contains only the 41 final C/D/E records and excludes the separate legacy baseline.
+
 Agent I — Itô completed a final diff-based synchronization against the author heads below. Previously certified mathematics was not blindly re-solved: only surviving families whose candidate-visible or protected mathematical payload changed were independently re-checked.
 
 | Author PR | Final reviewed head | Final survivors | Approved | Changes required |
