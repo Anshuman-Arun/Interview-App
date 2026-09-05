@@ -14,10 +14,30 @@ import {
   eulerOxfordCandidateSpecs
 } from "../packages/problems/src/curated/oxford-euler-candidates.js";
 
+const EXPECTED_CORE_STAGE = Object.freeze({
+  "oxford-euler-quadrilateral-balance": "classification",
+  "oxford-euler-random-chord-midpoint": "symmetry-sum",
+  "oxford-euler-circle-sweep": "parameter-test",
+  "oxford-euler-triangle-midpoint-cycle": "fixed-point",
+  "oxford-euler-box-diagonal-bisector": "edge-test",
+  "oxford-euler-locally-balanced-labels": "path-proof",
+  "oxford-euler-diagonal-blend-transform": "metric",
+  "oxford-euler-self-averaging-sets": "finite-orbit",
+  "oxford-euler-corner-balanced-tables": "classification",
+  "oxford-euler-tank-gauge-model": "structure",
+  "oxford-euler-periodic-queue-model": "classification",
+  "oxford-euler-kiosk-grid-model": "objective",
+  "oxford-euler-cooling-data-model": "structure",
+  "oxford-euler-random-adjacent-consecutives": "expectation",
+  "oxford-euler-stop-on-change": "expectation",
+  "oxford-euler-random-subset-blocks": "line-mean",
+  "oxford-euler-random-halving-interval": "distribution"
+} as const);
+
 describe("Agent E — Euler Oxford candidate batch", () => {
-  it("authors exactly 19 unique candidate families in the expert-review quarantine", () => {
-    expect(eulerOxfordCandidateSpecs).toHaveLength(19);
-    expect(eulerOxfordCandidateEntries).toHaveLength(19);
+  it("authors exactly 17 unique surviving candidate families in the expert-review quarantine", () => {
+    expect(eulerOxfordCandidateSpecs).toHaveLength(17);
+    expect(eulerOxfordCandidateEntries).toHaveLength(17);
     const ids = eulerOxfordCandidateSpecs.map((spec) => spec.id);
     expect(new Set(ids).size).toBe(ids.length);
     const liveIds = new Set(oxfordCuratedEntries.map((entry) => entry.problem.id));
@@ -59,15 +79,98 @@ describe("Agent E — Euler Oxford candidate batch", () => {
       expect(entry.problem.interviewer.protectedDisclosures).toHaveLength(5);
       expect(adaptive.stages[0]?.role).toBe("warm-up");
       expect(adaptive.stages.at(-1)?.role).toBe("transfer");
-      expect(adaptive.stages.some((stage) => stage.role === "core")).toBe(true);
-      expect(
-        adaptive.stages.some(
-          (stage) => stage.role === "core" && stage.difficulty === adaptive.difficulty?.core
-        )
-      ).toBe(true);
+      const coreStages = adaptive.stages.filter((stage) => stage.role === "core");
+      expect(coreStages).toHaveLength(1);
+      expect(coreStages[0]?.difficulty).toBe(adaptive.difficulty?.core);
+      expect(coreStages[0]?.id).toBe(
+        EXPECTED_CORE_STAGE[entry.problem.id as keyof typeof EXPECTED_CORE_STAGE]
+      );
       const extensionIds = entry.problem.interviewer.reasoningGraph.extensions.map((extension) => extension.id);
       expect(adaptive.stages.flatMap((stage) => stage.extensionIds).sort()).toEqual([...extensionIds].sort());
     }
+  });
+
+
+  it("uses independently authored family timing profiles rather than one shared timing table", () => {
+    const timings = eulerOxfordCandidateEntries.map((entry) => {
+      const adaptive = entry.metadata.oxfordAdaptive;
+      if (adaptive?.timing === undefined) throw new Error("Euler candidate missing family timing");
+      expect(adaptive.stages.every((stage) => stage.timing !== undefined)).toBe(true);
+      return JSON.stringify(adaptive.timing);
+    });
+    expect(new Set(timings).size).toBe(eulerOxfordCandidateEntries.length);
+  });
+
+  it("applies the Gauss circle-sweep calibration findings without self-approving calibration", () => {
+    const entry = eulerOxfordCandidateEntries.find(
+      (candidate) => candidate.problem.id === "oxford-euler-circle-sweep"
+    );
+    const adaptive = entry?.metadata.oxfordAdaptive;
+    expect(adaptive?.difficulty).toMatchObject({
+      entry: "introductory",
+      core: "strong",
+      ceiling: "stretch"
+    });
+    expect(adaptive?.stages.find((stage) => stage.id === "circle-equation")).toMatchObject({
+      role: "technique-check",
+      difficulty: "introductory-plus"
+    });
+    expect(adaptive?.stages.find((stage) => stage.id === "parameter-test")).toMatchObject({
+      role: "core",
+      difficulty: "strong"
+    });
+    expect(adaptive?.review.difficultyCalibration).toBe("unreviewed");
+    expect(adaptive?.review.timingCalibration).toBe("unreviewed");
+  });
+
+  it("applies the Gauss self-averaging taxonomy and core findings", () => {
+    const entry = eulerOxfordCandidateEntries.find(
+      (candidate) => candidate.problem.id === "oxford-euler-self-averaging-sets"
+    );
+    const adaptive = entry?.metadata.oxfordAdaptive;
+    expect(adaptive?.domains).toContain("set-theory");
+    expect(adaptive?.domains).not.toContain("combinatorics");
+    expect(adaptive?.contentConcepts).toContain("set-maps");
+    expect(adaptive?.contentConcepts).not.toContain("counting-structure");
+    expect(adaptive?.prerequisiteConcepts).toContain("set-notation");
+    expect(adaptive?.prerequisiteConcepts).not.toContain("counting-principles");
+    expect(adaptive?.difficulty).toMatchObject({
+      entry: "warm-up",
+      core: "strong",
+      ceiling: "strong"
+    });
+    expect(adaptive?.stages.find((stage) => stage.id === "finite-orbit")).toMatchObject({
+      role: "core",
+      difficulty: "strong"
+    });
+  });
+
+  it("removes Hilbert hard rejects and records quadrilateral classic provenance", () => {
+    const ids = new Set(eulerOxfordCandidateEntries.map((entry) => entry.problem.id));
+    expect(ids.has("oxford-euler-rectangle-area-table")).toBe(false);
+    expect(ids.has("oxford-euler-difference-closed-sets")).toBe(false);
+    const quadrilateral = eulerOxfordCandidateEntries.find(
+      (candidate) => candidate.problem.id === "oxford-euler-quadrilateral-balance"
+    )?.metadata.oxfordAdaptive;
+    expect(quadrilateral?.provenance).toEqual({
+      originType: "structural-adaptation",
+      sourceCategory: "classic-mathematics"
+    });
+    expect(quadrilateral?.review.originality).toBe("in-review");
+    expect(quadrilateral?.review.fidelity).toBe("in-review");
+  });
+
+  it("makes the periodic queue initial state, domains, phase, and event order candidate-visible", () => {
+    const queue = eulerOxfordCandidateEntries.find(
+      (candidate) => candidate.problem.id === "oxford-euler-periodic-queue-model"
+    )?.problem;
+    const visible = JSON.stringify(queue?.public);
+    expect(visible).toContain("q_0");
+    expect(visible).toContain("nonnegative integers");
+    expect(visible).toContain("positive integer");
+    expect(visible).toContain("minute 1");
+    expect(visible).toContain("arrivals join");
+    expect(visible).toContain("served");
   });
 
   it("never uses milestone completion as evidence for process-grounded skills", () => {
@@ -98,9 +201,9 @@ describe("Agent E — Euler Oxford candidate batch", () => {
     expect(metadata.filter((item) => item.introducesNewDefinition).length).toBeGreaterThanOrEqual(5);
     expect(metadata.filter((item) => item.skillEvidence.some((e) => e.skill === "modelling")).length).toBeGreaterThanOrEqual(4);
     expect(metadata.filter((item) => item.domains.includes("probability")).length).toBeGreaterThanOrEqual(5);
-    expect(metadata.filter((item) => item.skillEvidence.some((e) => e.skill === "visualization")).length).toBeGreaterThanOrEqual(8);
+    expect(metadata.filter((item) => item.skillEvidence.some((e) => e.skill === "visualization")).length).toBeGreaterThanOrEqual(7);
     expect(metadata.filter((item) => item.skillEvidence.some((e) => e.skill === "representation-switching")).length).toBeGreaterThanOrEqual(17);
-    expect(metadata.filter((item) => item.skillEvidence.some((e) => e.skill === "transfer")).length).toBeGreaterThanOrEqual(17);
+    expect(metadata.filter((item) => item.skillEvidence.some((e) => e.skill === "transfer")).length).toBeGreaterThanOrEqual(16);
   });
 
   it("uses similarity clusters only for clear same-wave near-neighbor mechanisms", () => {
