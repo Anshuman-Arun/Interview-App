@@ -268,7 +268,6 @@ const EULER_SIMILARITY_CLUSTERS: Readonly<Record<string, string>> = Object.freez
   "oxford-euler-diagonal-blend-transform": "euler-affine-dynamics",
   "oxford-euler-periodic-queue-model": "euler-discrete-dynamics-model",
   "oxford-euler-cooling-data-model": "euler-discrete-dynamics-model",
-  "oxford-euler-random-subset-blocks": "euler-local-indicator-expectation"
 });
 
 const EULER_PROVENANCE_OVERRIDES: Readonly<
