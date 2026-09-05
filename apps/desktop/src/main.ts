@@ -822,8 +822,16 @@ async function runPackagedSmoke(
     throw new Error("Packaged renderer did not mount the product shell");
   }
 
+  const startupHomeVisible: unknown = await window.webContents.executeJavaScript(
+    `document.body.textContent?.includes("Think aloud.") === true`
+  );
+  if (startupHomeVisible !== true) {
+    throw new Error("Packaged desktop did not start on Home");
+  }
+
   const firstRunReadiness: unknown = await window.webContents.executeJavaScript(
     `new Promise((resolve) => {
+      window.location.hash = "#/settings";
       const deadline = Date.now() + 5000;
       const check = async () => {
         const readiness = document.querySelector('[data-testid="local-ai-readiness"]');
