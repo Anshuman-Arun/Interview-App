@@ -3,7 +3,6 @@ import { z } from "zod";
 import { InterviewerProposalSchema } from "../../domain/src/index.js";
 import {
   ANTIGRAVITY_CLI_ADAPTER_VERSION,
-  ANTIGRAVITY_CLI_MODEL_ID,
   ANTIGRAVITY_CLI_MODEL_IDS,
   ANTIGRAVITY_CLI_PROVIDER_ID,
   createAntigravityCliReasoningProvider,
@@ -530,6 +529,7 @@ function antigravityModelDisplayName(modelId: string): string {
   if (match === null) return modelId;
   const version = match[1];
   const effort = match[2];
+  if (version === undefined || effort === undefined) return modelId;
   return `Gemini ${version} Flash (${effort[0]?.toUpperCase() ?? ""}${effort.slice(1)})`;
 }
 
