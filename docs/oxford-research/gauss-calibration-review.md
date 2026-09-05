@@ -9,19 +9,27 @@ This document defines the independent Wave 2 review/calibration layer for Oxford
 
 ## Full C/D/E certification
 
-The representative first-round review has been superseded by complete current-version certification in `docs/oxford-research/gauss-full-certification.json`. Every family still present on the reviewed C/D/E author heads has one G record containing the author head SHA, taxonomy decision, stage/milestone semantics review, independent entry/core/ceiling and stage bands, a family-specific timing estimate, requested changes, and explicit H/I ownership boundaries.
+The representative and intermediate certification passes have been superseded by the final current-version snapshot in `docs/oxford-research/gauss-full-certification.json`. Every final surviving C/D/E family has one G record pinned to the exact author head reviewed, with taxonomy/stage/milestone semantics, independent entry/core/ceiling and stage bands, a family-specific timing estimate, and explicit H/I ownership boundaries.
 
-Reviewed heads:
+Final author heads:
 
 - Agent C — Cantor, PR #132: `8b22dc5df99111fb95e27a2c006d5e74544dd385` — 17 survivors.
-- Agent D — Dirichlet, PR #133: `ecece22058c997d37c4b352fa5ed32bd1daf5243` — 12 survivors.
-- Agent E — Euler, PR #134: `b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6` — 17 survivors.
+- Agent D — Dirichlet, PR #133: `44b13bab28e315d3c76a177904bec47c884ef470` — 11 survivors.
+- Agent E — Euler, PR #134: `8846c612825d2b8ae53a81f6f8861fd851f452c6` — 13 survivors.
 
-Current certification totals are **46 / 46 survivors reviewed**: taxonomy **44 approved / 2 changes-required**, difficulty **43 approved / 3 changes-required**, timing **34 approved / 12 changes-required**.
+Final certification totals are **41 / 41 survivors reviewed and approved**:
 
-The remaining G-owned changes are deliberately narrow. Taxonomy changes are required only for `oxford-d-weighted-cycle-readings` (make recurrence structure explicit) and `oxford-d-mirror-orbits` (make divisibility/gcd content explicit). Difficulty changes remain only for Dirichlet `thirds-closed-integers`, `weighted-cycle-readings`, and `midpoint-closed-residues`; Cantor has consumed the `cubic-two-thresholds` strong-core correction. Twelve families still need author timing aligned to the independent G estimate; all other current family timings are accepted as low-confidence expert estimates.
+- taxonomy: **41 approved / 0 changes-required**;
+- difficulty: **41 approved / 0 changes-required**;
+- timing: **41 approved / 0 changes-required**.
 
-Systemic fixes were rechecked on the current versions: Cantor pruned another non-surviving family, shortened its overlong timing portfolio, fixed the cubic-divided-difference ceiling, and adopted the `cubic-two-thresholds` strong core; Dirichlet removed the generic timing template and applied the Triple Flip recurrence/difficulty corrections; Euler removed its generic timing/mechanical-core machinery and now keys stage roles/timing explicitly by mathematical stage, including the Circle Sweep and Self-Averaging corrections.
+Final synchronization verification:
+
+- Cantor remains clean at 17 survivors; no later G-owned field changed.
+- Dirichlet removes `mirror-orbits`, fixes weighted-cycle recurrence taxonomy, applies all three remaining difficulty corrections, and applies all eight timing corrections. Its final increment to `44b13...` is tests-only.
+- Euler removes the four H hard rejects, applies all four G timing corrections, and preserves the previously approved taxonomy/difficulty for all 13 survivors. Its final increment only removes stale metadata for deleted families.
+
+No final survivor has a G-owned blocker. Originality/fidelity remain Agent H-owned and mathematical correctness remains Agent I-owned.
 
 ## Review framework
 
