@@ -1,0 +1,32 @@
+import { authorCuratedProblem } from "../curated-authoring.js";
+import { makeEulerSpec, type EulerFamilyDefinition } from "./oxford-euler-authoring.js";
+const DEFINITION: EulerFamilyDefinition = {
+"id":"oxford-euler-triangle-midpoint-cycle","title":"A Repeated Midpoint Cycle in a Triangle","category":"geometry",
+"topics":["midpoints","affine iteration","fixed point","convergence"],
+"prompt":"Fix a triangle ABC and choose any starting point P. Replace P by the midpoint of PA, then by the midpoint of the new point with B, then by the midpoint of the new point with C. Call the result of those three midpoint moves T(P), and repeat the three-move cycle. What happens after many cycles? Locate the limiting point and explain how the order A,B,C matters.",
+"givenInformation":["P may start anywhere in the plane.","The same order A then B then C is repeated on every cycle."],
+"domains":["euclidean-geometry","sequences-recurrences","functions","algebra"],
+"contentConcepts":["spatial-configuration","recurrence-structure","sequence-convergence","function-transformations","composition-iteration"],
+"prerequisiteConcepts":["euclidean-geometry-basics","algebraic-manipulation","sequences-series"],
+"skills":["visualization","representation-switching","pattern-recognition","proof-construction","generalization","transfer","precision-checking","abstraction"],
+"difficulty":{"entry":"introductory","core":"standard","ceiling":"strong"},"novelty":"high","abstraction":"moderate","introducesNewDefinition":false,
+"stages":[
+{"id":"opening","description":"Draw one or two cycles from different starting points and conjecture whether the process forgets its starting point.","contentConcepts":["spatial-configuration","recurrence-structure"],"skills":["visualization","pattern-recognition"],"difficulty":"introductory","novelty":"moderate","abstraction":"low"},
+{"id":"structure","description":"Represent one full cycle algebraically and derive T(P)=P/8 plus a fixed vector.","contentConcepts":["function-transformations","composition-iteration"],"skills":["representation-switching","proof-construction"],"difficulty":"standard","novelty":"moderate","abstraction":"moderate"},
+{"id":"fixed-point","description":"Solve T(Q)=Q and locate Q as a weighted average of A,B,C.","contentConcepts":["composition-iteration","spatial-configuration"],"skills":["proof-construction","precision-checking"],"difficulty":"standard","novelty":"moderate","abstraction":"moderate"},
+{"id":"convergence","description":"Subtract the fixed point and prove each full cycle shrinks the error vector by exactly 1/8.","contentConcepts":["sequence-convergence","recurrence-structure"],"skills":["proof-construction","generalization"],"difficulty":"strong","novelty":"high","abstraction":"moderate"},
+{"id":"transfer","description":"Change the vertex order or replace midpoint by a fixed fractional move and predict the new weights and contraction factor.","contentConcepts":["function-transformations","sequence-convergence"],"skills":["transfer","abstraction","generalization"],"difficulty":"strong","novelty":"high","abstraction":"high"}],
+"commonErrors":[{"id":"equal-weights","description":"Assumes symmetry forces the centroid even though the order A,B,C breaks symmetry."},{"id":"tracks-three-steps","description":"Computes several points numerically but never compresses the three midpoint moves into one affine map."}],
+"followUps":["Where is the fixed point relative to the triangle, and why must it lie inside?","What fixed point results from the reversed order C,B,A?"],
+"extensions":[{"id":"fractional-move","prompt":"Replace each midpoint move by moving a fixed fraction r toward the named vertex. Determine the one-cycle contraction factor and fixed point."},{"id":"order-permutation","prompt":"Compute the six possible limiting weighted averages produced by the six orders of A,B,C."}],
+"hints":[
+{"text":"Use position vectors and carry out the three midpoint updates symbolically.","formulations":["write each midpoint as an average","compress one full A B C cycle"]},
+{"text":"After A then B then C, T(p)=p/8+a/8+b/4+c/2.","formulations":["the starting point gets coefficient one eighth","the later vertices receive larger weights"]},
+{"text":"A fixed point q satisfies 7q=a+2b+4c.","formulations":["solve q equals T(q)","the limiting weights are one two four"]},
+{"text":"Compute T(p)-T(q) once q is fixed.","formulations":["subtract the fixed point equation","the error scales by one eighth"]},
+{"text":"Reordering the vertices changes which vertex receives weights 1,2,4 but not the contraction factor 1/8.","formulations":["later midpoint moves get larger weights","order changes weights not shrinkage"]}],
+"canonicalSolution":"With position vectors p,a,b,c, the three moves are p1=(p+a)/2, p2=(p1+b)/2=p/4+a/4+b/2, and T(p)=p3=(p2+c)/2=p/8+a/8+b/4+c/2. A fixed point q obeys q=T(q), so 7q=a+2b+4c and q=(a+2b+4c)/7. These coefficients are positive and sum to 1, so q lies inside the triangle. Subtracting the fixed-point equation gives T(p)-q=(p-q)/8. Therefore after n full cycles, T^n(p)-q=(p-q)/8^n, so every starting point converges geometrically to q. Reversing or permuting the vertex order assigns the weights 1,2,4 according to first, second, third position while keeping the contraction 1/8.",
+"verificationNotes":"The process is affine and works for any starting point. The limiting point is not the centroid unless the vertex weights happen to be equal, which they are not. The convergence claim is per complete three-move cycle; intermediate within-cycle points converge to their own three-point periodic limiting positions if sampled after move 1 or 2, while the cycle endpoint converges to q."
+};
+export const oxfordEulerTriangleMidpointCycleSpec=makeEulerSpec(DEFINITION);
+export const oxfordEulerTriangleMidpointCycleEntry=authorCuratedProblem(oxfordEulerTriangleMidpointCycleSpec);
