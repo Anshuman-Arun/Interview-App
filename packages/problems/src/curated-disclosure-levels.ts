@@ -31,7 +31,6 @@ export const CURATED_DISCLOSURE_LEVELS: Readonly<Record<string, ReviewedLevels>>
   "oxford-cantor-radical-asymptote": reviewedLevels({ 1: 2, 2: 4, 3: 3, 4: 5, 5: 5 }),
   "oxford-cantor-shifted-cubic-intersections": reviewedLevels({ 1: 1, 2: 3, 3: 5, 4: 5, 5: 5 }),
   "oxford-cantor-moving-integral-window": reviewedLevels({ 1: 2, 2: 1, 3: 4, 4: 4, 5: 5 }),
-  "oxford-cantor-reciprocal-implicit-curve": reviewedLevels({ 1: 2, 2: 5, 3: 4, 4: 4, 5: 5 }),
   "oxford-cantor-three-cycle-map": reviewedLevels({ 1: 2, 2: 1, 3: 4, 4: 5, 5: 5 }),
   "oxford-cantor-quartic-horizontal-levels": reviewedLevels({ 1: 2, 2: 4, 3: 4, 4: 4, 5: 5 }),
   "oxford-cantor-reciprocal-increment-recurrence": reviewedLevels({ 1: 1, 2: 4, 3: 3, 4: 5, 5: 5 }),
