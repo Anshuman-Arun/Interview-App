@@ -220,12 +220,14 @@ export function NewInterviewPage({
       setFormError("Resolve launch readiness before starting the interview.");
       return;
     }
-    if (activeSessionCount > 1) {
-      setFormError("Multiple interviews are active. Resolve them from Sessions before starting another.");
-      return;
-    }
-    if (activeSessionId !== null) {
-      setFormError("An interview is already active. Resume it before starting another.");
+    if (activeSessionCount > 0) {
+      setFormError(
+        activeSessionCount > 1
+          ? "Multiple interviews are active. Resolve them from Sessions before starting another."
+          : activeSessionId === null
+            ? "An active interview exists but is not attached yet. Resolve it from Sessions before starting another."
+            : "An interview is already active. Resume it before starting another."
+      );
       return;
     }
     if (selectedTarget === null || selectedProvider?.availability !== "AVAILABLE") {
@@ -300,11 +302,15 @@ export function NewInterviewPage({
 
   return (
     <div className="new-interview" data-testid="new-interview-page">
-      {activeSessionCount > 1 ? (
+      {activeSessionCount > 1 || (activeSessionCount > 0 && activeSessionId === null) ? (
         <section className="new-interview__active" role="alert">
           <div>
             <span>ACTIVE SESSION CONFLICT</span>
-            <strong>{activeSessionCount} active sessions are stored.</strong>
+            <strong>
+              {activeSessionCount > 1
+                ? `${String(activeSessionCount)} active sessions are stored.`
+                : "An active session is stored but not attached."}
+            </strong>
             <p>
               {activeSessionId === null
                 ? "Starting another room is disabled. Open Sessions and choose an active room to recover first."
@@ -432,7 +438,7 @@ export function NewInterviewPage({
             <div><span>Duration</span><strong>{durationInvalid ? "Invalid" : durationText.trim().length === 0 ? "Open" : `${durationText} min`}</strong></div>
           </div>
           <button className="new-interview__start" type="submit" disabled={startPending || launchBlocked} data-testid="start-configured-session-btn"><span>{startPending ? "Starting…" : "Start interview"}</span><em aria-hidden="true">→</em></button>
-          <div className="new-interview__ready-note"><i data-ready={String(!launchBlocked)} aria-hidden="true" /><span>{activeSessionCount > 1 ? "Resolve the active-session conflict from Sessions." : activeSessionId !== null ? "Current interview owns session authority." : durationInvalid ? "Duration must be a whole number from 5 to 480 minutes." : launchChecking ? "Revalidating launch readiness…" : metadataUnavailable || selectedTarget === null || selectedProvider?.availability !== "AVAILABLE" ? "Resolve launch readiness first." : "Server revalidates this configuration on start."}</span></div>
+          <div className="new-interview__ready-note"><i data-ready={String(!launchBlocked)} aria-hidden="true" /><span>{activeSessionCount > 0 && activeSessionId === null ? "Resolve the stored active session from Sessions." : activeSessionCount > 1 ? "Resolve the active-session conflict from Sessions." : activeSessionId !== null ? "Current interview owns session authority." : durationInvalid ? "Duration must be a whole number from 5 to 480 minutes." : launchChecking ? "Revalidating launch readiness…" : metadataUnavailable || selectedTarget === null || selectedProvider?.availability !== "AVAILABLE" ? "Resolve launch readiness first." : "Server revalidates this configuration on start."}</span></div>
         </aside>
       </form>
     </div>
