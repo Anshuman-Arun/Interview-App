@@ -575,6 +575,7 @@ export const App: React.FC = () => {
     setEndConfirmOpen(false);
     setCompactPane("interview");
     setPaneFocus("split");
+    setSplitPercent(38);
   }, [session.sessionId]);
 
   useEffect(() => {
