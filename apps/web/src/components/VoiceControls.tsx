@@ -177,7 +177,8 @@ export function VoiceControls({
         onClick={() => {
           void (state.microphoneEnabled
             ? controls.disableMicrophone()
-            : controls.enableMicrophone());
+            : controls.enableMicrophone()
+          ).catch(() => undefined);
         }}
         className="voice-strip__mic"
       >
@@ -218,7 +219,7 @@ export function VoiceControls({
             disabled={disabled || state.inputDevices.length === 0}
             fallbackLabel="Microphone"
             onSelect={(deviceId) => {
-              void controls.selectInputDevice(deviceId);
+              void controls.selectInputDevice(deviceId).catch(() => undefined);
             }}
           />
 
