@@ -117,11 +117,18 @@ export interface OxfordRecommendationExclusion {
   readonly hypotheticalScore?: number;
 }
 
+export type OxfordRecommendationOutcome =
+  | "RECOMMENDATION_SELECTED"
+  | "NO_RECOMMENDATION_READY_CANDIDATES"
+  | "NO_ELIGIBLE_CANDIDATES";
+
 export interface OxfordRecommendationResult {
+  readonly outcome: OxfordRecommendationOutcome;
   readonly coldStart: boolean;
   readonly selected?: OxfordRankedRecommendation;
   readonly alternatives: readonly OxfordRankedRecommendation[];
   readonly exclusions: readonly OxfordRecommendationExclusion[];
+  readonly recommendationReadyCandidateCount: number;
   readonly eligibleCandidateCount: number;
 }
 
@@ -192,6 +199,7 @@ export function recommendNextOxfordProblem(
   const coldStart = totalGroundedEvidence(profile) === 0;
   const eligible: OxfordRankedRecommendation[] = [];
   const exclusions: OxfordRecommendationExclusion[] = [];
+  let recommendationReadyCandidateCount = 0;
 
   for (const candidate of candidates) {
     const exclusionCodes: OxfordRecommendationExclusionCode[] = [];
@@ -211,8 +219,11 @@ export function recommendNextOxfordProblem(
       if (adaptive.status === "provisional-legacy") {
         exclusionCodes.push("PROVISIONAL_LEGACY");
       }
-      if (!isOxfordRecommendationReady(adaptive)) {
+      const recommendationReady = isOxfordRecommendationReady(adaptive);
+      if (!recommendationReady) {
         exclusionCodes.push("NOT_RECOMMENDATION_READY");
+      } else if (metadata.mode === "OXFORD_MATHEMATICS") {
+        recommendationReadyCandidateCount += 1;
       }
 
       if (adaptive.status === "authored" && adaptive.difficulty !== undefined && adaptive.timing !== undefined) {
@@ -309,12 +320,19 @@ export function recommendNextOxfordProblem(
 
   const selected = eligible[0];
   const alternatives = eligible.slice(1, topK);
+  const outcome: OxfordRecommendationOutcome = selected !== undefined
+    ? "RECOMMENDATION_SELECTED"
+    : recommendationReadyCandidateCount === 0
+      ? "NO_RECOMMENDATION_READY_CANDIDATES"
+      : "NO_ELIGIBLE_CANDIDATES";
 
   return deepFreeze({
+    outcome,
     coldStart,
     ...(selected === undefined ? {} : { selected }),
     alternatives,
     exclusions,
+    recommendationReadyCandidateCount,
     eligibleCandidateCount: eligible.length
   });
 }
