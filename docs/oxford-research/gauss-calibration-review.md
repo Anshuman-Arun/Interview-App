@@ -7,6 +7,22 @@
 
 This document defines the independent Wave 2 review/calibration layer for Oxford family metadata. It does **not** create another taxonomy, another recommendation-readiness rule, or another problem model. The canonical Agent A metadata remains authoritative and the existing `isOxfordRecommendationReady` helper remains the only production eligibility gate.
 
+## Full C/D/E certification
+
+The representative first-round review has been superseded by complete current-version certification in `docs/oxford-research/gauss-full-certification.json`. Every family still present on the reviewed C/D/E author heads has one G record containing the author head SHA, taxonomy decision, stage/milestone semantics review, independent entry/core/ceiling and stage bands, a family-specific timing estimate, requested changes, and explicit H/I ownership boundaries.
+
+Reviewed heads:
+
+- Agent C — Cantor, PR #132: `0d4941ab3197b2297ab389d7438df39f599b2ad5` — 18 survivors.
+- Agent D — Dirichlet, PR #133: `ecece22058c997d37c4b352fa5ed32bd1daf5243` — 12 survivors.
+- Agent E — Euler, PR #134: `2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca` — 17 survivors.
+
+Current certification totals are **47 / 47 survivors reviewed**: taxonomy **45 approved / 2 changes-required**, difficulty **43 approved / 4 changes-required**, timing **35 approved / 12 changes-required**.
+
+The remaining G-owned changes are deliberately narrow. Taxonomy changes are required only for `oxford-d-weighted-cycle-readings` (make recurrence structure explicit) and `oxford-d-mirror-orbits` (make divisibility/gcd content explicit). Difficulty changes remain for Cantor `cubic-two-thresholds` and Dirichlet `thirds-closed-integers`, `weighted-cycle-readings`, and `midpoint-closed-residues`. Twelve families still need author timing aligned to the independent G estimate; all other current family timings are accepted as low-confidence expert estimates.
+
+Systemic fixes were rechecked on the current versions: Cantor shortened its overlong timing portfolio and fixed the cubic-divided-difference ceiling; Dirichlet removed the generic timing template and applied the Triple Flip recurrence/difficulty corrections; Euler removed its generic timing/mechanical-core machinery and now keys stage roles/timing explicitly by mathematical stage, including the Circle Sweep and Self-Averaging corrections.
+
 ## Review framework
 
 The reusable implementation is `packages/problems/src/oxford-calibration-review.ts`. A Gauss review record independently records:
