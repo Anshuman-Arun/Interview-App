@@ -3495,24 +3495,33 @@ summary:focus-visible,
   }
 
   .input-dock .voice-strip {
-    display: none;
+    min-height: 14px;
+    margin-bottom: 1px;
+  }
+
+  .input-dock .voice-strip__mic,
+  .input-dock .voice-strip__devices > summary {
+    min-height: 14px;
+    padding-right: 3px;
+    padding-left: 3px;
+    font-size: 6px;
   }
 
   .input-dock .reasoning-composer__textarea {
-    min-height: 24px;
-    max-height: 28px;
+    min-height: 22px;
+    max-height: 26px;
     padding: 2px 4px;
   }
 
   .input-dock .reasoning-composer__foot {
-    min-height: 18px;
+    min-height: 16px;
     padding: 1px 2px;
   }
 
   .input-dock .reasoning-composer__submit {
-    min-height: 16px;
-    padding-right: 5px;
-    padding-left: 5px;
+    min-height: 14px;
+    padding-right: 4px;
+    padding-left: 4px;
   }
 
   .board-appbar {
