@@ -115,21 +115,21 @@ export const oxfordDWeightedCycleReadingsSpec: CuratedProblemSpec = {
   reviewNotes: DIRICHLET_CANDIDATE_REVIEW_NOTES,
   oxfordAdaptive: makeDirichletAdaptive({
     familyId: "oxford-d-weighted-cycle-readings",
-    domains: ["graph-theory", "algebra"],
-    contentConcepts: ["paths-cycles-connectivity", "parameter-dependent-algebra"],
+    domains: ["graph-theory", "algebra", "sequences-recurrences"],
+    contentConcepts: ["paths-cycles-connectivity", "parameter-dependent-algebra", "recurrence-structure"],
     prerequisiteConcepts: ["algebraic-manipulation", "equations-inequalities", "graph-basics"],
     skillEvidence: [evidence("small-case-exploration", "supporting"), evidence("representation-switching", "primary"), evidence("case-analysis", "primary"), evidence("proof-construction", "primary"), evidence("precision-checking", "supporting")],
-    difficulty: { entry: "introductory-plus", core: "standard", ceiling: "strong" },
+    difficulty: { entry: "introductory-plus", core: "strong", ceiling: "strong" },
     novelty: "high",
     abstraction: "moderate",
     introducesNewDefinition: false,
     stages: [
       { id: "weighted-cycle-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["graph-theory", "algebra"], contentConcepts: ["paths-cycles-connectivity", "parameter-dependent-algebra"], skillEvidence: [evidence("small-case-exploration", "primary")], milestones: [{ milestoneId: "solve-small-cycles", skillEvidence: [evidence("small-case-exploration", "primary")], contentConcepts: ["paths-cycles-connectivity"] }], extensionIds: [], difficulty: "introductory-plus" },
-      { id: "weighted-cycle-core", role: "core", prerequisiteStageIds: ["weighted-cycle-opening"], domains: ["graph-theory", "algebra"], contentConcepts: ["paths-cycles-connectivity", "parameter-dependent-algebra"], skillEvidence: [evidence("representation-switching", "primary"), evidence("case-analysis", "primary"), evidence("proof-construction", "primary")], milestones: [
-        { milestoneId: "derive-one-step-recurrence", skillEvidence: [evidence("representation-switching", "primary")], contentConcepts: ["parameter-dependent-algebra"] },
-        { milestoneId: "close-after-n-steps", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["paths-cycles-connectivity", "parameter-dependent-algebra"] },
+      { id: "weighted-cycle-core", role: "core", prerequisiteStageIds: ["weighted-cycle-opening"], domains: ["graph-theory", "algebra", "sequences-recurrences"], contentConcepts: ["paths-cycles-connectivity", "parameter-dependent-algebra", "recurrence-structure"], skillEvidence: [evidence("representation-switching", "primary"), evidence("case-analysis", "primary"), evidence("proof-construction", "primary")], milestones: [
+        { milestoneId: "derive-one-step-recurrence", skillEvidence: [evidence("representation-switching", "primary")], contentConcepts: ["parameter-dependent-algebra", "recurrence-structure"] },
+        { milestoneId: "close-after-n-steps", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["paths-cycles-connectivity", "parameter-dependent-algebra", "recurrence-structure"] },
         { milestoneId: "classify-singular-parameters", skillEvidence: [evidence("case-analysis", "primary")], contentConcepts: ["parameter-dependent-algebra"] }
-      ], extensionIds: [], difficulty: "standard" },
+      ], extensionIds: [], difficulty: "strong" },
       { id: "weighted-cycle-transfer", role: "transfer", prerequisiteStageIds: ["weighted-cycle-core"], domains: ["graph-theory", "algebra"], contentConcepts: ["paths-cycles-connectivity", "parameter-dependent-algebra"], skillEvidence: [evidence("precision-checking", "primary"), evidence("case-analysis", "supporting")], milestones: [{ milestoneId: "analyze-exception-consistency", skillEvidence: [evidence("precision-checking", "primary"), evidence("case-analysis", "supporting")], contentConcepts: ["parameter-dependent-algebra"] }], extensionIds: ["ordinary-sum-specialization", "difference-specialization"], difficulty: "strong"
       }
     ]
@@ -188,7 +188,7 @@ export const oxfordDMidpointClosedResiduesSpec: CuratedProblemSpec = {
     contentConcepts: ["modular-reasoning", "relations-operations"],
     prerequisiteConcepts: ["modular-arithmetic", "set-notation"],
     skillEvidence: [evidence("small-case-exploration", "supporting"), evidence("abstraction", "primary"), evidence("proof-construction", "primary"), evidence("generalization", "primary"), evidence("precision-checking", "supporting")],
-    difficulty: { entry: "introductory-plus", core: "standard", ceiling: "strong" },
+    difficulty: { entry: "introductory-plus", core: "strong", ceiling: "stretch" },
     novelty: "moderate",
     abstraction: "high",
     introducesNewDefinition: true,
@@ -199,85 +199,16 @@ export const oxfordDMidpointClosedResiduesSpec: CuratedProblemSpec = {
         { milestoneId: "translate-to-zero", skillEvidence: [evidence("abstraction", "primary")], contentConcepts: ["relations-operations"] },
         { milestoneId: "recover-doubling", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["modular-reasoning"] },
         { milestoneId: "prove-additive-subgroup", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["relations-operations"] }
-      ], extensionIds: [], difficulty: "standard" },
-      { id: "midpoint-transfer", role: "transfer", prerequisiteStageIds: ["midpoint-core"], domains: ["number-theory", "set-theory"], contentConcepts: ["modular-reasoning", "relations-operations"], skillEvidence: [evidence("generalization", "primary"), evidence("precision-checking", "supporting")], milestones: [{ milestoneId: "classify-prime-and-composite", skillEvidence: [evidence("generalization", "primary")], contentConcepts: ["modular-reasoning", "relations-operations"] }], extensionIds: ["odd-composite-cosets", "mod-nine-examples"], difficulty: "strong"
+      ], extensionIds: [], difficulty: "strong" },
+      { id: "midpoint-transfer", role: "transfer", prerequisiteStageIds: ["midpoint-core"], domains: ["number-theory", "set-theory"], contentConcepts: ["modular-reasoning", "relations-operations"], skillEvidence: [evidence("generalization", "primary"), evidence("precision-checking", "supporting")], milestones: [{ milestoneId: "classify-prime-and-composite", skillEvidence: [evidence("generalization", "primary")], contentConcepts: ["modular-reasoning", "relations-operations"] }], extensionIds: ["odd-composite-cosets", "mod-nine-examples"], difficulty: "stretch"
       }
     ]
   })
 };
 export const oxfordDMidpointClosedResiduesEntry = authorCuratedProblem(oxfordDMidpointClosedResiduesSpec);
 
-export const oxfordDMirrorOrbitsSpec: CuratedProblemSpec = {
-  id: "oxford-d-mirror-orbits",
-  title: "Two Mirrors on a Modular Clock",
-  mode: "OXFORD_MATHEMATICS",
-  category: "number theory",
-  topics: ["modular arithmetic", "function composition", "reachability"],
-  difficulty: "uncalibrated-oxford-candidate",
-  prompt: "A token moves on the residue classes modulo m, starting at 0. Two moves are available: R sends x to -x, and S sends x to c-x, where c is fixed. Which residues are reachable? Exactly when can every residue be reached? Explain the answer by composing the two mirror moves rather than by searching the state space.",
-  givenInformation: ["m>=2.", "All positions and formulas are interpreted modulo m."],
-  approaches: [{ id: "compose-reflections", label: "Compose two involutions to reveal a translation and then identify its modular orbit" }],
-  milestones: [
-    { id: "experiment-small-clocks", description: "Trace reachable positions for several pairs (m,c) and conjecture a gcd pattern.", approachIds: ["compose-reflections"], hintLevels: [1] },
-    { id: "compose-to-translation", description: "Compute S∘R and R∘S and discover moves by +c and -c.", approachIds: ["compose-reflections"], prerequisiteIds: ["experiment-small-clocks"], hintLevels: [2] },
-    { id: "construct-all-multiples", description: "Use repeated compositions to reach every integer multiple of c modulo m.", approachIds: ["compose-reflections"], prerequisiteIds: ["compose-to-translation"], hintLevels: [3] },
-    { id: "prove-gcd-obstruction", description: "Let d=gcd(c,m) and prove both mirror moves preserve divisibility by d, so nothing outside that residue subgroup is reachable from 0.", approachIds: ["compose-reflections"], prerequisiteIds: ["construct-all-multiples"], hintLevels: [4] },
-    { id: "general-starting-orbit", description: "From an arbitrary start a, describe the union of the translated class a+<c> and its reflected class -a+<c>.", approachIds: ["compose-reflections"], prerequisiteIds: ["prove-gcd-obstruction"], hintLevels: [5] }
-  ],
-  edges: [
-    { from: "experiment-small-clocks", to: "compose-to-translation" },
-    { from: "compose-to-translation", to: "construct-all-multiples" },
-    { from: "construct-all-multiples", to: "prove-gcd-obstruction" },
-    { from: "prove-gcd-obstruction", to: "general-starting-orbit" }
-  ],
-  commonErrors: [
-    { id: "only-forward-c", description: "Finds +c but does not notice the inverse composition gives -c, making the reachable translation orbit transparent." },
-    { id: "gcd-count-only", description: "States there are m/gcd(m,c) reachable positions without proving both inclusion directions." },
-    { id: "arbitrary-start-coset", description: "For a nonzero start, claims only a+<c> is reachable and forgets that R can also move to the reflected coset -a+<c>." }
-  ],
-  followUps: ["How many residues are reachable from 0?", "What changes if the token starts at a instead?"],
-  extensions: [
-    { id: "arbitrary-start", prompt: "Starting at a, prove the orbit is (a+H) union (-a+H), where H is the set of multiples of gcd(c,m)." },
-    { id: "orbit-size-boundary", prompt: "For an arbitrary start a, determine when the two cosets in the orbit description coincide and when the orbit has twice the size of H." }
-  ],
-  hints: [
-    { level: 1, text: "Apply the two mirrors one after the other. Two reflections often act like a translation.", formulations: ["compose R and S", "look for a hidden shift"] },
-    { level: 2, text: "S(R(x))=c+x, while R(S(x))=x-c.", formulations: ["the compositions add or subtract c", "two moves reveal translations"] },
-    { level: 3, text: "Starting from 0, repeated translations reach every multiple kc modulo m.", formulations: ["generate the cyclic subgroup from c", "all multiples of c are constructible"] },
-    { level: 4, text: "If d=gcd(c,m), both -x and c-x remain divisible by d whenever x is. The multiples of c modulo m are exactly the multiples of d.", formulations: ["gcd gives the obstruction", "reachable from zero means multiple of d"] },
-    { level: 5, text: "From a, translations give a+H; one reflection gives -a+H. Further moves never leave the union of those two cosets.", formulations: ["general orbit is two reflected cosets", "check when the two cosets coincide"] }
-  ],
-  canonicalSolution: "The key compositions are S(R(x))=S(-x)=c+x and R(S(x))=-(c-x)=x-c. Thus from 0 we can repeatedly add or subtract c, so every multiple kc modulo m is reachable. Let d=gcd(c,m). The set of multiples of c modulo m is exactly the set H of residues divisible by d, and it has m/d elements. Conversely, if x is divisible by d, then R(x)=-x and S(x)=c-x are also divisible by d because d divides c. Starting at 0, no move can leave H. Hence the reachable residues are exactly H, and every residue is reachable exactly when gcd(c,m)=1. From a general starting position a, translations generate a+H; applying R gives -a+H, and R or S preserves the union. Therefore the full orbit is (a+H) union (-a+H). The two cosets coincide exactly when 2a is in H.",
-  verificationNotes: "The reachable set from 0 is the cyclic subgroup generated additively by c; no group-theory terminology is required in the interview. The equality between multiples of c and multiples of d=gcd(c,m) is standard Bezout/modular arithmetic. For a general start, the two cosets coincide iff a-(-a)=2a lies in H.",
-  reviewStatus: "expert-review",
-  reviewNotes: DIRICHLET_CANDIDATE_REVIEW_NOTES,
-  oxfordAdaptive: makeDirichletAdaptive({
-    familyId: "oxford-d-mirror-orbits",
-    domains: ["number-theory", "functions"],
-    contentConcepts: ["modular-reasoning", "composition-iteration"],
-    prerequisiteConcepts: ["modular-arithmetic", "functions-graphs", "divisibility"],
-    skillEvidence: [evidence("small-case-exploration", "supporting"), evidence("representation-switching", "primary"), evidence("proof-construction", "primary"), evidence("generalization", "supporting"), evidence("precision-checking", "supporting")],
-    difficulty: { entry: "introductory", core: "standard", ceiling: "strong" },
-    novelty: "high",
-    abstraction: "moderate",
-    introducesNewDefinition: false,
-    stages: [
-      { id: "mirror-opening", role: "warm-up", prerequisiteStageIds: [], domains: ["number-theory", "functions"], contentConcepts: ["modular-reasoning", "composition-iteration"], skillEvidence: [evidence("small-case-exploration", "primary")], milestones: [{ milestoneId: "experiment-small-clocks", skillEvidence: [evidence("small-case-exploration", "primary")], contentConcepts: ["modular-reasoning"] }], extensionIds: [], difficulty: "introductory" },
-      { id: "mirror-core", role: "core", prerequisiteStageIds: ["mirror-opening"], domains: ["number-theory", "functions"], contentConcepts: ["modular-reasoning", "composition-iteration"], skillEvidence: [evidence("representation-switching", "primary"), evidence("proof-construction", "primary")], milestones: [
-        { milestoneId: "compose-to-translation", skillEvidence: [evidence("representation-switching", "primary")], contentConcepts: ["composition-iteration"] },
-        { milestoneId: "construct-all-multiples", skillEvidence: [evidence("proof-construction", "supporting")], contentConcepts: ["modular-reasoning"] },
-        { milestoneId: "prove-gcd-obstruction", skillEvidence: [evidence("proof-construction", "primary")], contentConcepts: ["modular-reasoning"] }
-      ], extensionIds: [], difficulty: "standard" },
-      { id: "mirror-transfer", role: "transfer", prerequisiteStageIds: ["mirror-core"], domains: ["number-theory", "functions"], contentConcepts: ["modular-reasoning", "composition-iteration"], skillEvidence: [evidence("generalization", "primary"), evidence("precision-checking", "supporting")], milestones: [{ milestoneId: "general-starting-orbit", skillEvidence: [evidence("generalization", "primary")], contentConcepts: ["composition-iteration", "modular-reasoning"] }], extensionIds: ["arbitrary-start", "orbit-size-boundary"], difficulty: "strong"
-      }
-    ]
-  })
-};
-export const oxfordDMirrorOrbitsEntry = authorCuratedProblem(oxfordDMirrorOrbitsSpec);
-
 export const dirichletBatchBEntries = Object.freeze([
   oxfordDSlidingWindowParityEntry,
   oxfordDWeightedCycleReadingsEntry,
   oxfordDMidpointClosedResiduesEntry,
-  oxfordDMirrorOrbitsEntry
 ] as const);
