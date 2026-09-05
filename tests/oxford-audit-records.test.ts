@@ -102,7 +102,7 @@ describe("Oxford originality/fidelity audit records", () => {
     expect(new Set(document.audits.map((audit) => audit.familyId)).size).toBe(47);
 
     const expected = new Map<number, { head: string; surviving: number }>([
-      [132, { head: "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf", surviving: 18 }],
+      [132, { head: "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1", surviving: 18 }],
       [133, { head: "ecece22058c997d37c4b352fa5ed32bd1daf5243", surviving: 12 }],
       [134, { head: "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6", surviving: 17 }]
     ]);
