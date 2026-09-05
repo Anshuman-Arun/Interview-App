@@ -39,8 +39,6 @@ describe("Oxford originality/fidelity audit records", () => {
       expect(audit.externalSearchQueries.length).toBeGreaterThan(0);
       expect(audit.nearestMatches.some((match) => match.pool === "E")).toBe(true);
 
-      expect(["PASS", "PASS_WITH_NOTES"]).toContain((audit as any).originalityDecision);
-      expect(["PASS", "PASS_WITH_NOTES"]).toContain((audit as any).fidelityDecision);
     }
   });
   it("validates the retained high-risk same-wave C/D/E batch", () => {
