@@ -26,7 +26,9 @@ describe("Agent D — Dirichlet Oxford candidate bank", () => {
       const metadata = entry.metadata.oxfordAdaptive;
       expect(metadata?.status).toBe("authored");
       expect(isOxfordRecommendationReady(metadata)).toBe(false);
+      expect(metadata?.review.taxonomyClassification).toBe("unreviewed");
       expect(metadata?.review.originality).toBe("unreviewed");
+      expect(metadata?.review.fidelity).toBe("unreviewed");
       expect(metadata?.review.mathematicalCorrectness).toBe("unreviewed");
       expect(metadata?.review.difficultyCalibration).toBe("unreviewed");
       expect(metadata?.review.timingCalibration).toBe("unreviewed");
