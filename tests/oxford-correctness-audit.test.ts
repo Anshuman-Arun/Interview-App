@@ -15,7 +15,7 @@ describe("Oxford mathematical correctness audit gate", () => {
     const parsed = JSON.parse(raw) as unknown;
     expect(() => assertOxfordCorrectnessReviewBatch(parsed)).not.toThrow();
     if (!Array.isArray(parsed)) throw new Error("Expected review record array");
-    expect(parsed).toHaveLength(14);
+    expect(parsed).toHaveLength(20);
   });
 
   it("fails closed when approval carries an unresolved mathematical error", () => {
