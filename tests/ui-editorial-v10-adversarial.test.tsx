@@ -583,6 +583,48 @@ describe("editorial v10 adversarial UI states", () => {
     expect(restartBlock).toContain("setupOperationInFlightRef.current = false");
   });
 
+  it("does not advertise shell readiness when session authority is unavailable", () => {
+    const markup = renderToStaticMarkup(
+      <AppearanceProvider>
+        <ProductFrame
+          activePage="home"
+          title="Home"
+          kicker="Interview room"
+          onNavigate={vi.fn()}
+          reasoningReady
+          authorityUnavailable
+        >
+          content
+        </ProductFrame>
+      </AppearanceProvider>
+    );
+
+    expect(markup).toContain("Session check needed");
+    expect(markup).toContain(">RETRY<");
+    expect(markup).toContain("CHECK SESSIONS");
+    expect(markup).toContain('data-ready="false"');
+  });
+
+  it("keeps shell checking and ready states mutually exclusive", () => {
+    const markup = renderToStaticMarkup(
+      <AppearanceProvider>
+        <ProductFrame
+          activePage="home"
+          title="Home"
+          kicker="Interview room"
+          onNavigate={vi.fn()}
+          reasoningReady
+          reasoningChecking
+        >
+          content
+        </ProductFrame>
+      </AppearanceProvider>
+    );
+
+    expect(markup).toContain("CHECKING");
+    expect(markup).not.toContain('data-ready="true"');
+  });
+
   it("shows provider rechecks as checking rather than ready", () => {
     const markup = renderToStaticMarkup(
       <AppearanceProvider>
