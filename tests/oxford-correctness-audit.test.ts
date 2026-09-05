@@ -15,7 +15,32 @@ describe("Oxford mathematical correctness audit gate", () => {
     const parsed = JSON.parse(raw) as unknown;
     expect(() => assertOxfordCorrectnessReviewBatch(parsed)).not.toThrow();
     if (!Array.isArray(parsed)) throw new Error("Expected review record array");
-    expect(parsed).toHaveLength(33);
+    expect(parsed).toHaveLength(75);
+  });
+
+  it("pins every current C/D/E review to an author head", () => {
+    const raw = readFileSync(
+      new URL("../docs/oxford-correctness/existing-bank-review-records.json", import.meta.url),
+      "utf8"
+    );
+    const parsed = JSON.parse(raw) as OxfordCorrectnessReviewRecord[];
+    const authorRecords = parsed.filter((record) => record.source.kind === "author-pr");
+    expect(authorRecords).toHaveLength(61);
+    expect(authorRecords.filter((record) => record.source.authorAgent === "C — Cantor")).toHaveLength(20);
+    expect(authorRecords.filter((record) => record.source.authorAgent === "D — Dirichlet")).toHaveLength(22);
+    expect(authorRecords.filter((record) => record.source.authorAgent === "E — Euler")).toHaveLength(19);
+    expect(authorRecords.filter((record) => record.mathematicalCorrectness === "approved")).toHaveLength(58);
+    expect(authorRecords.filter((record) => record.mathematicalCorrectness === "changes-required")).toHaveLength(3);
+  });
+
+  it("fails closed when author reviews omit the exact reviewed head", () => {
+    const invalid = {
+      ...validReviewRecord(),
+      source: { kind: "author-pr", authorAgent: "C — Cantor", prNumber: 132 }
+    };
+    expect(() => assertOxfordCorrectnessReviewRecord(invalid)).toThrow(
+      /reviewedAuthorHead/
+    );
   });
 
   it("fails closed when approval carries an unresolved mathematical error", () => {
@@ -388,6 +413,57 @@ describe("Wave 2 author-family computational spot checks", () => {
     }
   });
 
+  it("verifies thirds-closed classification on exhaustive small sets", () => {
+    const universe = [-4, -3, -2, -1, 0, 1, 2, 3, 4];
+    for (let size = 1; size <= 6; size += 1) {
+      for (const subset of combinations(universe, size)) {
+        expect(isThirdsClosed(subset)).toBe(matchesThirdsClosedClassification(subset));
+      }
+    }
+  });
+
+  it("matches sliding-window parity counts through n=8", () => {
+    for (let n = 1; n <= 8; n += 1) {
+      for (let k = 1; k <= n; k += 1) {
+        let count = 0;
+        for (let mask = 0; mask < (1 << n); mask += 1) {
+          const bits = Array.from({ length: n }, (_, index) => (mask >> index) & 1);
+          if (hasEqualWindowParity(bits, k)) count += 1;
+        }
+        expect(count).toBe(2 ** integerGcd(n, k));
+      }
+    }
+  });
+
+  it("matches the stable-binary-word recurrence through n=10", () => {
+    const counts: number[] = [];
+    for (let n = 0; n <= 10; n += 1) {
+      let count = 0;
+      for (let mask = 0; mask < (1 << n); mask += 1) {
+        const bits = Array.from({ length: n }, (_, index) => (mask >> index) & 1);
+        if (isStableBinaryWord(bits)) count += 1;
+      }
+      counts.push(count);
+    }
+    expect(counts).toEqual([1, 1, 2, 4, 7, 12, 21, 37, 65, 114, 200]);
+    for (let n = 3; n < counts.length; n += 1) {
+      expect(counts[n]).toBe(2 * (counts[n - 1] ?? 0) - (counts[n - 2] ?? 0) + (counts[n - 3] ?? 0));
+    }
+  });
+
+  it("matches random-adjacent linear and circular expectations by enumeration", () => {
+    for (let n = 2; n <= 7; n += 1) {
+      const values = Array.from({ length: n }, (_, index) => index + 1);
+      const orders = permutations(values);
+      const lineMean = orders.reduce((total, order) => total + adjacentConsecutiveCount(order, false), 0) / orders.length;
+      expect(lineMean).toBeCloseTo(2 * (n - 1) / n, 12);
+      if (n >= 3) {
+        const circleMean = orders.reduce((total, order) => total + adjacentConsecutiveCount(order, true), 0) / orders.length;
+        expect(circleMean).toBeCloseTo(2, 12);
+      }
+    }
+  });
+
   it("matches the random-chord midpoint expectation through n=14", () => {
     for (let n = 3; n <= 14; n += 1) {
       let sum = 0;
@@ -472,4 +548,93 @@ function circleBlockCount(bits: readonly number[]): number {
     if (bit === 1 && previous === 0) blocks += 1;
   }
   return blocks;
+}
+
+
+function isThirdsClosed(values: readonly number[]): boolean {
+  const set = new Set(values);
+  for (const x of values) {
+    for (const y of values) {
+      if ((x - y) % 3 !== 0) continue;
+      const first = (2 * x + y) / 3;
+      const second = (x + 2 * y) / 3;
+      if (!set.has(first) || !set.has(second)) return false;
+    }
+  }
+  return true;
+}
+
+function matchesThirdsClosedClassification(values: readonly number[]): boolean {
+  const sorted = [...values].sort((a, b) => a - b);
+  if (sorted.length === 1) return true;
+  const residues = sorted.map((value) => ((value % 3) + 3) % 3);
+  if (sorted.length === 2) return residues[0] !== residues[1];
+  if (sorted.length === 3) return new Set(residues).size === 3;
+  const gap = (sorted[1] ?? 0) - (sorted[0] ?? 0);
+  if (gap % 3 === 0) return false;
+  for (let index = 2; index < sorted.length; index += 1) {
+    if ((sorted[index] ?? 0) - (sorted[index - 1] ?? 0) !== gap) return false;
+  }
+  return true;
+}
+
+function hasEqualWindowParity(bits: readonly number[], k: number): boolean {
+  const n = bits.length;
+  let parity: number | undefined;
+  for (let start = 0; start < n; start += 1) {
+    let current = 0;
+    for (let offset = 0; offset < k; offset += 1) {
+      current ^= bits[(start + offset) % n] ?? 0;
+    }
+    if (parity === undefined) parity = current;
+    else if (parity !== current) return false;
+  }
+  return true;
+}
+
+function integerGcd(a: number, b: number): number {
+  let x = Math.abs(a);
+  let y = Math.abs(b);
+  while (y !== 0) {
+    const next = x % y;
+    x = y;
+    y = next;
+  }
+  return x;
+}
+
+function isStableBinaryWord(bits: readonly number[]): boolean {
+  let index = 0;
+  while (index < bits.length) {
+    if ((bits[index] ?? 0) === 0) {
+      index += 1;
+      continue;
+    }
+    let end = index;
+    while (end < bits.length && (bits[end] ?? 0) === 1) end += 1;
+    if (end - index < 2) return false;
+    index = end;
+  }
+  return true;
+}
+
+function permutations(values: readonly number[]): number[][] {
+  if (values.length === 0) return [[]];
+  const result: number[][] = [];
+  values.forEach((value, index) => {
+    const rest = [...values.slice(0, index), ...values.slice(index + 1)];
+    for (const suffix of permutations(rest)) result.push([value, ...suffix]);
+  });
+  return result;
+}
+
+function adjacentConsecutiveCount(order: readonly number[], circular: boolean): number {
+  let count = 0;
+  const edgeCount = circular ? order.length : Math.max(0, order.length - 1);
+  for (let index = 0; index < edgeCount; index += 1) {
+    const left = order[index];
+    const right = order[(index + 1) % order.length];
+    if (left !== undefined && right !== undefined && Math.abs(left - right) === 1) count += 1;
+  }
+  return count;
 }
