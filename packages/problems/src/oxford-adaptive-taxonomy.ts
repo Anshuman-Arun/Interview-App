@@ -281,11 +281,13 @@ export function assertOxfordAdaptiveMetadataIntegrity(
   metadata: OxfordAdaptiveMetadata,
   problem?: InterviewProblem
 ): void {
-  if (metadata.schemaVersion !== OXFORD_ADAPTIVE_METADATA_SCHEMA_VERSION) {
-    throw new Error(`Unsupported Oxford adaptive metadata schema version "${String(metadata.schemaVersion)}"`);
+  const schemaVersion: number = metadata.schemaVersion;
+  if (schemaVersion !== OXFORD_ADAPTIVE_METADATA_SCHEMA_VERSION) {
+    throw new Error(`Unsupported Oxford adaptive metadata schema version "${schemaVersion}"`);
   }
-  if (metadata.taxonomyVersion !== OXFORD_TAXONOMY_VERSION) {
-    throw new Error(`Unsupported Oxford taxonomy version "${String(metadata.taxonomyVersion)}"`);
+  const taxonomyVersion: string = metadata.taxonomyVersion;
+  if (taxonomyVersion !== OXFORD_TAXONOMY_VERSION) {
+    throw new Error(`Unsupported Oxford taxonomy version "${taxonomyVersion}"`);
   }
 
   assertCanonicalId(metadata.familyId, "Oxford problem family id");
@@ -302,22 +304,23 @@ export function assertOxfordAdaptiveMetadataIntegrity(
   assertSkillEvidence(metadata.skillEvidence, "Oxford problem");
 
   if (!ORIGIN_TYPE_SET.has(metadata.provenance.originType)) {
-    throw new Error(`Invalid Oxford provenance origin type "${String(metadata.provenance.originType)}"`);
+    throw new Error(`Invalid Oxford provenance origin type "${metadata.provenance.originType}"`);
   }
   if (!SOURCE_CATEGORY_SET.has(metadata.provenance.sourceCategory)) {
-    throw new Error(`Invalid Oxford provenance source category "${String(metadata.provenance.sourceCategory)}"`);
+    throw new Error(`Invalid Oxford provenance source category "${metadata.provenance.sourceCategory}"`);
   }
   if (metadata.provenance.referenceFamilyId !== undefined) {
     assertCanonicalId(metadata.provenance.referenceFamilyId, "Oxford reference family id");
   }
   assertReviewMetadata(metadata.review);
 
-  if (metadata.status === "provisional-legacy") {
+  const metadataStatus: string = metadata.status;
+  if (metadataStatus === "provisional-legacy") {
     assertProvisionalLegacyMetadata(metadata);
     return;
   }
-  if (metadata.status !== "authored") {
-    throw new Error(`Invalid Oxford adaptive metadata status "${String(metadata.status)}"`);
+  if (metadataStatus !== "authored") {
+    throw new Error(`Invalid Oxford adaptive metadata status "${metadataStatus}"`);
   }
 
   if (metadata.domains.length === 0) {
@@ -429,7 +432,7 @@ function assertAuthoredStages(
     stageIds.add(stage.id);
 
     if (!STAGE_ROLE_SET.has(stage.role)) {
-      throw new Error(`Invalid Oxford stage role "${String(stage.role)}"`);
+      throw new Error(`Invalid Oxford stage role "${stage.role}"`);
     }
     assertCanonicalMembers(stage.domains, DOMAIN_SET, `Oxford stage "${stage.id}" domain`);
     if (stage.domains.length === 0) {
@@ -453,7 +456,7 @@ function assertAuthoredStages(
     }
 
     if (!DIFFICULTY_SET.has(stage.difficulty)) {
-      throw new Error(`Invalid Oxford stage difficulty "${String(stage.difficulty)}"`);
+      throw new Error(`Invalid Oxford stage difficulty "${stage.difficulty}"`);
     }
     const entryRank = difficultyRank(metadata.difficulty?.entry);
     const ceilingRank = difficultyRank(metadata.difficulty?.ceiling);
@@ -464,10 +467,10 @@ function assertAuthoredStages(
 
     assertTimingEstimate(stage.timing, `Oxford stage "${stage.id}"`);
     if (!["low", "moderate", "high"].includes(stage.novelty)) {
-      throw new Error(`Invalid Oxford stage novelty "${String(stage.novelty)}"`);
+      throw new Error(`Invalid Oxford stage novelty "${stage.novelty}"`);
     }
     if (!["low", "moderate", "high"].includes(stage.abstraction)) {
-      throw new Error(`Invalid Oxford stage abstraction "${String(stage.abstraction)}"`);
+      throw new Error(`Invalid Oxford stage abstraction "${stage.abstraction}"`);
     }
 
     if (stage.milestones.length === 0) {
@@ -653,12 +656,12 @@ function assertDifficultyProfile(profile: OxfordDifficultyProfile): void {
     ["ceiling", profile.ceiling]
   ] as const) {
     if (!DIFFICULTY_SET.has(band)) {
-      throw new Error(`Invalid Oxford ${label} difficulty "${String(band)}"`);
+      throw new Error(`Invalid Oxford ${label} difficulty "${band}"`);
     }
   }
   const difficultyConfidence: string = profile.confidence;
   if (!ESTIMATE_CONFIDENCE_SET.has(difficultyConfidence) || difficultyConfidence === "unknown") {
-    throw new Error(`Invalid Oxford difficulty confidence "${String(profile.confidence)}"`);
+    throw new Error(`Invalid Oxford difficulty confidence "${profile.confidence}"`);
   }
   if (
     difficultyRank(profile.entry) > difficultyRank(profile.core)
@@ -683,7 +686,7 @@ function assertTimingEstimate(estimate: OxfordTimingEstimate, label: string): vo
   }
   const timingConfidence: string = estimate.confidence;
   if (!ESTIMATE_CONFIDENCE_SET.has(timingConfidence) || timingConfidence === "unknown") {
-    throw new Error(`Invalid ${label} timing confidence "${String(estimate.confidence)}"`);
+    throw new Error(`Invalid ${label} timing confidence "${estimate.confidence}"`);
   }
 }
 
@@ -706,10 +709,10 @@ function assertSkillEvidence(
   const seen = new Set<string>();
   for (const item of evidence) {
     if (!SKILL_SET.has(item.skill)) {
-      throw new Error(`${label} has illegal reasoning skill "${String(item.skill)}"`);
+      throw new Error(`${label} has illegal reasoning skill "${item.skill}"`);
     }
     if (!EVIDENCE_WEIGHT_SET.has(item.weight)) {
-      throw new Error(`${label} has invalid skill evidence weight "${String(item.weight)}"`);
+      throw new Error(`${label} has invalid skill evidence weight "${item.weight}"`);
     }
     if (seen.has(item.skill)) {
       throw new Error(`${label} repeats reasoning skill "${item.skill}"`);
@@ -726,17 +729,17 @@ function assertReviewMetadata(review: OxfordReviewMetadata): void {
     ["mathematical correctness", review.mathematicalCorrectness]
   ] as const) {
     if (!REVIEW_STATUS_SET.has(value)) {
-      throw new Error(`Invalid Oxford ${label} review status "${String(value)}"`);
+      throw new Error(`Invalid Oxford ${label} review status "${value}"`);
     }
   }
   if (!CALIBRATION_STATUS_SET.has(review.difficultyCalibration)) {
     throw new Error(
-      `Invalid Oxford difficulty calibration status "${String(review.difficultyCalibration)}"`
+      `Invalid Oxford difficulty calibration status "${review.difficultyCalibration}"`
     );
   }
   if (!CALIBRATION_STATUS_SET.has(review.timingCalibration)) {
     throw new Error(
-      `Invalid Oxford timing calibration status "${String(review.timingCalibration)}"`
+      `Invalid Oxford timing calibration status "${review.timingCalibration}"`
     );
   }
 }
@@ -749,7 +752,7 @@ function assertCanonicalMembers(
   const seen = new Set<string>();
   for (const value of values) {
     if (!allowed.has(value)) {
-      throw new Error(`${label} "${String(value)}" is not part of taxonomy ${OXFORD_TAXONOMY_VERSION}`);
+      throw new Error(`${label} "${value}" is not part of taxonomy ${OXFORD_TAXONOMY_VERSION}`);
     }
     if (seen.has(value)) {
       throw new Error(`Duplicate ${label} "${value}"`);
@@ -771,7 +774,7 @@ function assertUniqueCanonicalIds(values: readonly string[], label: string): voi
 
 function assertCanonicalId(value: string, label: string): void {
   if (!CANONICAL_ID.test(value)) {
-    throw new Error(`${label} "${String(value)}" must be a lowercase kebab-case identifier`);
+    throw new Error(`${label} "${value}" must be a lowercase kebab-case identifier`);
   }
 }
 
@@ -781,7 +784,7 @@ function difficultyRank(band: OxfordDifficultyBand | undefined): number {
   }
   const rank = DIFFICULTY_RANK.get(band);
   if (rank === undefined) {
-    throw new Error(`Invalid Oxford difficulty "${String(band)}"`);
+    throw new Error(`Invalid Oxford difficulty "${band}"`);
   }
   return rank;
 }
