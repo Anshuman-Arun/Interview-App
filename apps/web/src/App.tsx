@@ -108,6 +108,11 @@ export const App: React.FC = () => {
   const { route, navigate } = useProductNavigation();
   const routeRef = useRef(route);
   const reviewAutoUpgradeEpochRef = useRef(0);
+  const reviewAutoUpgradePendingRef = useRef<{
+    readonly epoch: number;
+    readonly sessionId: SessionId;
+    resolvedOxford: boolean | null;
+  } | null>(null);
   const firstRunRedirectedRef = useRef(false);
   routeRef.current = route;
 
@@ -130,9 +135,41 @@ export const App: React.FC = () => {
     navigate({ page: "settings" }, { replace: true });
   }, [navigate, route.page, session.isTransportManaged]);
 
+  useEffect(() => {
+    const pending = reviewAutoUpgradePendingRef.current;
+    if (pending === null) return;
+    if (reviewAutoUpgradeEpochRef.current !== pending.epoch) {
+      reviewAutoUpgradePendingRef.current = null;
+      return;
+    }
+
+    const atIntendedReplay =
+      route.page === "review"
+      && route.sessionId === pending.sessionId
+      && route.view === "replay";
+    if (!atIntendedReplay) {
+      reviewAutoUpgradeEpochRef.current += 1;
+      reviewAutoUpgradePendingRef.current = null;
+      return;
+    }
+    if (pending.resolvedOxford !== true) return;
+
+    reviewAutoUpgradePendingRef.current = null;
+    navigate({
+      page: "review",
+      sessionId: pending.sessionId,
+      view: "evaluation"
+    }, { replace: true });
+  }, [navigate, route]);
+
   const openDefaultReview = useCallback((targetSessionId: SessionId): void => {
     const autoUpgradeEpoch = reviewAutoUpgradeEpochRef.current + 1;
     reviewAutoUpgradeEpochRef.current = autoUpgradeEpoch;
+    reviewAutoUpgradePendingRef.current = {
+      epoch: autoUpgradeEpoch,
+      sessionId: targetSessionId,
+      resolvedOxford: null
+    };
     navigate({
       page: "review",
       sessionId: targetSessionId,
@@ -141,16 +178,30 @@ export const App: React.FC = () => {
 
     void session.readSessionConfiguration(targetSessionId)
       .then((configuration) => {
-        const currentRoute = routeRef.current;
+        const pending = reviewAutoUpgradePendingRef.current;
         if (
           reviewAutoUpgradeEpochRef.current !== autoUpgradeEpoch
-          || configuration.mode !== "OXFORD_MATHEMATICS"
-          || currentRoute.page !== "review"
+          || pending === null
+          || pending.epoch !== autoUpgradeEpoch
+          || pending.sessionId !== targetSessionId
+        ) {
+          return;
+        }
+        if (configuration.mode !== "OXFORD_MATHEMATICS") {
+          reviewAutoUpgradePendingRef.current = null;
+          return;
+        }
+
+        pending.resolvedOxford = true;
+        const currentRoute = routeRef.current;
+        if (
+          currentRoute.page !== "review"
           || currentRoute.sessionId !== targetSessionId
           || currentRoute.view !== "replay"
         ) {
           return;
         }
+        reviewAutoUpgradePendingRef.current = null;
         navigate({
           page: "review",
           sessionId: targetSessionId,
@@ -158,6 +209,10 @@ export const App: React.FC = () => {
         }, { replace: true });
       })
       .catch(() => {
+        const pending = reviewAutoUpgradePendingRef.current;
+        if (pending?.epoch === autoUpgradeEpoch) {
+          reviewAutoUpgradePendingRef.current = null;
+        }
         // Replay is the conservative fallback for unknown or unreadable mode.
       });
   }, [navigate, session.readSessionConfiguration]);
@@ -697,6 +752,7 @@ export const App: React.FC = () => {
             return;
           }
           reviewAutoUpgradeEpochRef.current += 1;
+          reviewAutoUpgradePendingRef.current = null;
           navigate(
             {
               page: "review",
