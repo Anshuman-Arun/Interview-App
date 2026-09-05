@@ -454,6 +454,8 @@ export const App: React.FC = () => {
   }, [navigate]);
 
   useEffect(() => {
+    reviewAutoUpgradeEpochRef.current += 1;
+    reviewAutoUpgradePendingRef.current = null;
     historyAbortRef.current?.abort();
     historyAbortRef.current = null;
     setHistoryRead(null);
@@ -796,7 +798,7 @@ export const App: React.FC = () => {
         onDismissNotice={session.clearError}
         renderReview={(sessionId, view) => (
           <ReviewReadPanel
-            key={sessionId}
+            key={`${session.baseUrl}:${sessionId}`}
             sessionId={sessionId}
             view={view}
             readEvaluation={session.readSessionEvaluation}
