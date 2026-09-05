@@ -23,7 +23,6 @@ export const CURATED_DISCLOSURE_LEVELS: Readonly<Record<string, ReviewedLevels>>
   "oxford-d-divisor-step-geometry": reviewedLevels({ 1: 1, 2: 2, 3: 4, 4: 5, 5: 5 }),
   "oxford-d-gcd-descent-network": reviewedLevels({ 1: 1, 2: 2, 3: 4, 4: 5, 5: 5 }),
   "oxford-d-midpoint-closed-residues": reviewedLevels({ 1: 1, 2: 2, 3: 4, 4: 5, 5: 5 }),
-  "oxford-d-mirror-orbits": reviewedLevels({ 1: 1, 2: 3, 3: 4, 4: 5, 5: 5 }),
   "oxford-d-odd-symmetric-difference": reviewedLevels({ 1: 1, 2: 3, 3: 4, 4: 5, 5: 5 }),
   "oxford-d-sliding-window-parity": reviewedLevels({ 1: 1, 2: 3, 3: 4, 4: 5, 5: 5 }),
   "oxford-d-thirds-closed-integers": reviewedLevels({ 1: 1, 2: 2, 3: 4, 4: 5, 5: 5 }),
