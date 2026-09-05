@@ -32,7 +32,7 @@
     {
       "agent": "D — Dirichlet",
       "prNumber": 133,
-      "headSha": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
+      "headSha": "44b13bab28e315d3c76a177904bec47c884ef470",
       "survivingFamilyCount": 11,
       "familiesReviewed": [
         "oxford-d-gcd-descent-network",
@@ -80,7 +80,7 @@
       "finalApproved": true
     },
     "dirichlet": {
-      "headSha": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
+      "headSha": "44b13bab28e315d3c76a177904bec47c884ef470",
       "genericTimingTemplateRemoved": true,
       "tripleFlipRecurrenceTaxonomyCorrected": true,
       "knownDifficultyChangesApplied": true,
@@ -88,7 +88,7 @@
       "weightedCycleRecurrenceTaxonomyFixed": true,
       "eightTimingCorrectionsApplied": true,
       "finalApproved": true,
-      "note": "Final 11-family D head removes mirror-orbits and exactly applies the remaining weighted-cycle taxonomy, three difficulty, and eight timing findings. The last synchronization increment is documentation-only."
+      "note": "Final 11-family D head applies all Gauss findings; the last increment after certification changes tests only."
     },
     "euler": {
       "headSha": "8846c612825d2b8ae53a81f6f8861fd851f452c6",
@@ -4610,7 +4610,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-gcd-descent-network",
-      "authorHeadReviewed": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
+      "authorHeadReviewed": "44b13bab28e315d3c76a177904bec47c884ef470",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -4814,7 +4814,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-thirds-closed-integers",
-      "authorHeadReviewed": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
+      "authorHeadReviewed": "44b13bab28e315d3c76a177904bec47c884ef470",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -5024,7 +5024,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-balancing-transfers",
-      "authorHeadReviewed": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
+      "authorHeadReviewed": "44b13bab28e315d3c76a177904bec47c884ef470",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -5226,7 +5226,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-cube-twist-equivalence",
-      "authorHeadReviewed": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
+      "authorHeadReviewed": "44b13bab28e315d3c76a177904bec47c884ef470",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -5443,7 +5443,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-sliding-window-parity",
-      "authorHeadReviewed": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
+      "authorHeadReviewed": "44b13bab28e315d3c76a177904bec47c884ef470",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -5651,7 +5651,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-weighted-cycle-readings",
-      "authorHeadReviewed": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
+      "authorHeadReviewed": "44b13bab28e315d3c76a177904bec47c884ef470",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -5864,7 +5864,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-midpoint-closed-residues",
-      "authorHeadReviewed": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
+      "authorHeadReviewed": "44b13bab28e315d3c76a177904bec47c884ef470",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -6068,7 +6068,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-odd-symmetric-difference",
-      "authorHeadReviewed": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
+      "authorHeadReviewed": "44b13bab28e315d3c76a177904bec47c884ef470",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -6276,7 +6276,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-three-reversal-permutations",
-      "authorHeadReviewed": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
+      "authorHeadReviewed": "44b13bab28e315d3c76a177904bec47c884ef470",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -6480,7 +6480,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-divisor-step-geometry",
-      "authorHeadReviewed": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
+      "authorHeadReviewed": "44b13bab28e315d3c76a177904bec47c884ef470",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -6704,7 +6704,7 @@
       "authorAgent": "D — Dirichlet",
       "prNumber": 133,
       "familyId": "oxford-d-triple-flip-circle",
-      "authorHeadReviewed": "1d9222ed89895f643b4f25429b0a5dbe1dac0a4c",
+      "authorHeadReviewed": "44b13bab28e315d3c76a177904bec47c884ef470",
       "taxonomy": {
         "decision": "approved",
         "author": {
