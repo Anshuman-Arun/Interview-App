@@ -7,7 +7,7 @@
     {
       "agent": "C — Cantor",
       "prNumber": 132,
-      "headSha": "0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "headSha": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "survivingFamilyCount": 18,
       "familiesReviewed": [
         "oxford-cantor-moving-v-envelope",
@@ -53,7 +53,7 @@
     {
       "agent": "E — Euler",
       "prNumber": 134,
-      "headSha": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
+      "headSha": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "survivingFamilyCount": 17,
       "familiesReviewed": [
         "oxford-euler-quadrilateral-balance",
@@ -78,11 +78,11 @@
   ],
   "systemicVerification": {
     "cantor": {
-      "headSha": "0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "headSha": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "overlongCutoffsCorrected": true,
       "cubicDividedDifferenceCeilingCorrected": true,
       "prerequisiteWordingImproved": true,
-      "note": "Cantor pruned tangent-intersection-locus and line-envelope, shortened all surviving family timings to interview-scale estimates, lowered cubic-divided-difference ceiling to strong, and keeps reciprocal-increment harmonic/log comparison as supplied/developed material rather than a hidden prerequisite."
+      "note": "Cantor pruned the two hard-reject families, shortened timings, fixed cubic-divided-difference, and then added missing family-level generalization/transfer/case-analysis skill containment without changing milestone process-grounded semantics."
     },
     "dirichlet": {
       "headSha": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
@@ -92,13 +92,13 @@
       "note": "All 12 survivors now use family-specific author timings. GCD descent and Triple Flip first-round difficulty/taxonomy changes are present."
     },
     "euler": {
-      "headSha": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
+      "headSha": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "genericTimingTableRemoved": true,
       "mechanicalCoreAssignmentRemoved": true,
       "circleSweepCoreCorrected": true,
       "selfAveragingSetTaxonomyCorrected": true,
       "allStageRolesMathematicallyKeyed": true,
-      "note": "Roles and timings are explicitly keyed by family/stage. Circle Sweep parameter-test is core; Self-Averaging uses set-theory/set-maps with finite-orbit core. Latest post-review code increment only added an H-owned provenance reference and did not change G-owned family taxonomy/difficulty/timing."
+      "note": "Roles and timings are explicitly keyed by family/stage. Circle Sweep and Self-Averaging fixes remain present. Latest increment is documentation-only."
     }
   },
   "records": [
@@ -107,7 +107,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-moving-v-envelope",
-      "authorHeadReviewed": "0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -368,7 +368,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-reciprocal-root-parabolas",
-      "authorHeadReviewed": "0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -629,7 +629,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-cubic-two-thresholds",
-      "authorHeadReviewed": "0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -900,7 +900,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-cubic-divided-difference",
-      "authorHeadReviewed": "0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -1163,7 +1163,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-integral-sign-landscape",
-      "authorHeadReviewed": "0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -1434,7 +1434,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-absolute-quadratic-crossings",
-      "authorHeadReviewed": "0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -1690,7 +1690,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-radical-asymptote",
-      "authorHeadReviewed": "0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -1961,7 +1961,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-shifted-cubic-intersections",
-      "authorHeadReviewed": "0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -2236,7 +2236,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-moving-integral-window",
-      "authorHeadReviewed": "0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -2503,7 +2503,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-reciprocal-implicit-curve",
-      "authorHeadReviewed": "0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -2770,7 +2770,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-reciprocal-paired-inputs",
-      "authorHeadReviewed": "0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -3032,7 +3032,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-exponential-rotating-line",
-      "authorHeadReviewed": "0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -3300,7 +3300,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-mobius-recurrence",
-      "authorHeadReviewed": "0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -3557,7 +3557,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-squared-error-recurrence",
-      "authorHeadReviewed": "0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -3816,7 +3816,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-three-cycle-map",
-      "authorHeadReviewed": "0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -4066,7 +4066,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-quartic-horizontal-levels",
-      "authorHeadReviewed": "0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -4332,7 +4332,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-reciprocal-increment-recurrence",
-      "authorHeadReviewed": "0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -4592,7 +4592,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-mobius-involution",
-      "authorHeadReviewed": "0d4941ab3197b2297ab389d7438df39f599b2ad5",
+      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -7415,7 +7415,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-quadrilateral-balance",
-      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
+      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -7665,7 +7665,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-random-chord-midpoint",
-      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
+      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -7921,7 +7921,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-circle-sweep",
-      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
+      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -8183,7 +8183,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-triangle-midpoint-cycle",
-      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
+      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -8441,7 +8441,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-box-diagonal-bisector",
-      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
+      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -8702,7 +8702,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-locally-balanced-labels",
-      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
+      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -8958,7 +8958,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-diagonal-blend-transform",
-      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
+      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -9219,7 +9219,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-self-averaging-sets",
-      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
+      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -9478,7 +9478,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-corner-balanced-tables",
-      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
+      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -9724,7 +9724,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-tank-gauge-model",
-      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
+      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -9970,7 +9970,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-periodic-queue-model",
-      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
+      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -10222,7 +10222,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-kiosk-grid-model",
-      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
+      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -10474,7 +10474,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-cooling-data-model",
-      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
+      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -10726,7 +10726,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-random-adjacent-consecutives",
-      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
+      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -10971,7 +10971,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-stop-on-change",
-      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
+      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -11218,7 +11218,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-random-subset-blocks",
-      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
+      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -11470,7 +11470,7 @@
       "authorAgent": "E — Euler",
       "prNumber": 134,
       "familyId": "oxford-euler-random-halving-interval",
-      "authorHeadReviewed": "2f75a96ec31eaeed2a2e87aea5fc6281e6eb1aca",
+      "authorHeadReviewed": "b0ac88218da1079ea2b99b52bf4dc8222bf7b0c6",
       "taxonomy": {
         "decision": "approved",
         "author": {
