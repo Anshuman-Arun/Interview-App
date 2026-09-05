@@ -7,7 +7,7 @@
     {
       "agent": "C — Cantor",
       "prNumber": 132,
-      "headSha": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
+      "headSha": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
       "survivingFamilyCount": 18,
       "familiesReviewed": [
         "oxford-cantor-moving-v-envelope",
@@ -78,11 +78,11 @@
   ],
   "systemicVerification": {
     "cantor": {
-      "headSha": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
+      "headSha": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
       "overlongCutoffsCorrected": true,
       "cubicDividedDifferenceCeilingCorrected": true,
       "prerequisiteWordingImproved": true,
-      "note": "Cantor pruned the two hard-reject families, shortened timings, fixed cubic-divided-difference, and then added missing family-level generalization/transfer/case-analysis skill containment without changing milestone process-grounded semantics."
+      "note": "Cantor pruned hard rejects, shortened timings, fixed cubic-divided-difference, repaired family-level skill containment, and latest added missing family-level content containment for already exercised stage concepts. G decisions remain unchanged."
     },
     "dirichlet": {
       "headSha": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
@@ -107,7 +107,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-moving-v-envelope",
-      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
+      "authorHeadReviewed": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -368,7 +368,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-reciprocal-root-parabolas",
-      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
+      "authorHeadReviewed": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -629,7 +629,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-cubic-two-thresholds",
-      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
+      "authorHeadReviewed": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -900,7 +900,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-cubic-divided-difference",
-      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
+      "authorHeadReviewed": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -1163,7 +1163,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-integral-sign-landscape",
-      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
+      "authorHeadReviewed": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -1434,7 +1434,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-absolute-quadratic-crossings",
-      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
+      "authorHeadReviewed": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -1690,7 +1690,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-radical-asymptote",
-      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
+      "authorHeadReviewed": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -1961,7 +1961,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-shifted-cubic-intersections",
-      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
+      "authorHeadReviewed": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -2236,7 +2236,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-moving-integral-window",
-      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
+      "authorHeadReviewed": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -2503,7 +2503,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-reciprocal-implicit-curve",
-      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
+      "authorHeadReviewed": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -2521,7 +2521,8 @@
             "roots-intersections",
             "qualitative-function-behavior",
             "asymptotic-behavior",
-            "inequalities-bounds"
+            "inequalities-bounds",
+            "parameter-dependent-curves"
           ],
           "prerequisiteConcepts": [
             "algebraic-manipulation",
@@ -2566,7 +2567,8 @@
             "roots-intersections",
             "qualitative-function-behavior",
             "asymptotic-behavior",
-            "inequalities-bounds"
+            "inequalities-bounds",
+            "parameter-dependent-curves"
           ],
           "prerequisiteConcepts": [
             "algebraic-manipulation",
@@ -2770,7 +2772,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-reciprocal-paired-inputs",
-      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
+      "authorHeadReviewed": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -3032,7 +3034,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-exponential-rotating-line",
-      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
+      "authorHeadReviewed": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -3300,7 +3302,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-mobius-recurrence",
-      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
+      "authorHeadReviewed": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -3314,7 +3316,8 @@
             "sequence-convergence",
             "monotonicity-boundedness",
             "composition-iteration",
-            "continuity-fixed-points"
+            "continuity-fixed-points",
+            "qualitative-function-behavior"
           ],
           "prerequisiteConcepts": [
             "algebraic-manipulation",
@@ -3355,7 +3358,8 @@
             "sequence-convergence",
             "monotonicity-boundedness",
             "composition-iteration",
-            "continuity-fixed-points"
+            "continuity-fixed-points",
+            "qualitative-function-behavior"
           ],
           "prerequisiteConcepts": [
             "algebraic-manipulation",
@@ -3557,7 +3561,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-squared-error-recurrence",
-      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
+      "authorHeadReviewed": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -3572,7 +3576,8 @@
             "sequence-convergence",
             "monotonicity-boundedness",
             "continuity-fixed-points",
-            "composition-iteration"
+            "composition-iteration",
+            "inequalities-bounds"
           ],
           "prerequisiteConcepts": [
             "algebraic-manipulation",
@@ -3614,7 +3619,8 @@
             "sequence-convergence",
             "monotonicity-boundedness",
             "continuity-fixed-points",
-            "composition-iteration"
+            "composition-iteration",
+            "inequalities-bounds"
           ],
           "prerequisiteConcepts": [
             "algebraic-manipulation",
@@ -3816,7 +3822,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-three-cycle-map",
-      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
+      "authorHeadReviewed": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -4066,7 +4072,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-quartic-horizontal-levels",
-      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
+      "authorHeadReviewed": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -4332,7 +4338,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-reciprocal-increment-recurrence",
-      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
+      "authorHeadReviewed": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -4592,7 +4598,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-mobius-involution",
-      "authorHeadReviewed": "29ae86d5bccfa10eb91987bfaccc94adfbd57fcf",
+      "authorHeadReviewed": "f577c1a78ae9c8f801fc4c6e0ced46efb330a3b1",
       "taxonomy": {
         "decision": "approved",
         "author": {
