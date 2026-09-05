@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "agent": "C — Cantor",
-  "purpose": "Source-independent mathematical fingerprints for downstream Agent H originality/fidelity audit. These are author claims, not approval decisions.",
+  "purpose": "Source-independent mathematical fingerprints for the 18 surviving Agent C — Cantor Wave 2 families after the completion pass. Removed Hilbert hard rejects are intentionally excluded.",
   "families": [
     {
       "family_id": "oxford-cantor-moving-v-envelope",
@@ -46,8 +46,8 @@
         "quadratic central envelope with linear tails",
         "switch points arise from optimizer feasibility rather than curve intersections"
       ],
-      "known_classic_overlap": "Generic envelope/convex-optimization structure; no exact classic match identified in author spot-check.",
-      "author_provenance": "Independently designed from target graph-sketching + parameter-optimization behaviors; originality pending Agent H."
+      "known_classic_overlap": "Hilbert five-pool review identified the construction as the Moreau-Yosida envelope of |x|, equivalently a scaled Huber function after a variable substitution.",
+      "author_provenance": "Structural adaptation / classic-mathematics. Moving-V interview progression is retained, but the mathematical construction is not claimed independent-original."
     },
     {
       "family_id": "oxford-cantor-reciprocal-root-parabolas",
@@ -182,8 +182,8 @@
       "distinctive_features": [
         "two separate special a-values: stationary basepoint and merger of the other two preimages"
       ],
-      "known_classic_overlap": "Divided differences and cubic level sets are standard tools; exact combination not identified.",
-      "author_provenance": "Independently designed kernel; correctness/calibration intentionally flagged for Agent I/G."
+      "known_classic_overlap": "Exact equal-height equation x^3-x=a^3-a and factorization by x-a are documented as an established exercise; the quotient/removable-hole progression is author-structured.",
+      "author_provenance": "Classic problem / secondary reference; no independent-original claim."
     },
     {
       "family_id": "oxford-cantor-integral-sign-landscape",
@@ -272,52 +272,6 @@
       "author_provenance": "Independently designed progression; pending H."
     },
     {
-      "family_id": "oxford-cantor-tangent-intersection-locus",
-      "primary_domain": "calculus",
-      "secondary_domains": [
-        "coordinate-geometry",
-        "graph-sketching",
-        "functions",
-        "algebra"
-      ],
-      "surface_objects": [
-        "parabola",
-        "two moving tangents",
-        "intersection locus"
-      ],
-      "constraints": [
-        "y=x^2",
-        "contact parameters u and u+h",
-        "h fixed positive"
-      ],
-      "target_type": "derive locus of intersections for fixed separation of tangency parameters",
-      "central_mechanism": "tangents at u,v intersect at ((u+v)/2,uv), then fixed gap converts product to midpoint square minus h^2/4",
-      "secondary_mechanisms": [
-        "parameter elimination",
-        "slope verification",
-        "scaled parabola"
-      ],
-      "critical_representation_change": "pair of tangent equations -> midpoint/product coordinates -> eliminated locus",
-      "diagram_topology": "two tangents to one parabola whose intersection traces a vertically shifted parallel parabola",
-      "small_case_signature": [
-        "u=0,h=1",
-        "u=1,h=1"
-      ],
-      "progression_signature": {
-        "opening": "general tangent line",
-        "first_deepening": "symmetric intersection formula",
-        "core": "fixed-gap locus",
-        "transfer": "arbitrary h",
-        "stretch": "scaled parabola"
-      },
-      "solution_dependency_graph_summary": "tangent equation -> intersect -> set v=u+h -> complete square -> surjectivity -> scaled curve",
-      "distinctive_features": [
-        "fixed tangency-parameter separation yields a parallel parabola with exact shift h^2/4"
-      ],
-      "known_classic_overlap": "Parabola tangent-intersection geometry is classical; exact fixed-gap formulation not confirmed. High originality risk.",
-      "author_provenance": "Author-created formulation from classical tangent geometry; should receive aggressive Agent H search."
-    },
-    {
       "family_id": "oxford-cantor-exponential-rotating-line",
       "primary_domain": "functions",
       "secondary_domains": [
@@ -403,8 +357,8 @@
       "distinctive_features": [
         "parabolic fixed point becomes translation y->y+1 under a reciprocal-error coordinate"
       ],
-      "known_classic_overlap": "Möbius-iteration linearization is classical in spirit; exact recurrence not matched in spot-check.",
-      "author_provenance": "Independently selected recurrence/progression; correctness edge case above 1 flagged for I."
+      "known_classic_overlap": "Exact recurrence x_{n+1}=1/(2-x_n), including the reciprocal-error transform y_n=1/(1-x_n), is documented as an established recurrence exercise.",
+      "author_provenance": "Classic problem / secondary reference; domain/pole extension remains author-structured."
     },
     {
       "family_id": "oxford-cantor-squared-error-recurrence",
@@ -799,53 +753,8 @@
       "distinctive_features": [
         "constant leading squared increment with logarithmically accumulated correction"
       ],
-      "known_classic_overlap": "Related asymptotic recurrences are classical; exact author spot-check did not identify this progression.",
-      "author_provenance": "Independently chosen recurrence/progression; I/G high-risk review requested."
-    },
-    {
-      "family_id": "oxford-cantor-line-envelope",
-      "primary_domain": "graph-sketching",
-      "secondary_domains": [
-        "functions",
-        "calculus",
-        "algebra",
-        "elementary-analysis"
-      ],
-      "surface_objects": [
-        "one-parameter lines",
-        "upper envelope parabola"
-      ],
-      "constraints": [
-        "L_t(x)=t x-t^2-t",
-        "t real"
-      ],
-      "target_type": "derive pointwise envelope and prove each family member is tangent",
-      "central_mechanism": "for fixed x maximize a concave quadratic in t, then rewrite envelope-minus-line as a square",
-      "secondary_mechanisms": [
-        "slope/contact check",
-        "dual tangent reconstruction",
-        "alpha,beta generalization"
-      ],
-      "critical_representation_change": "family of lines -> optimization in parameter t -> envelope graph",
-      "diagram_topology": "fan of lines tangent from below to a single upward parabola",
-      "small_case_signature": [
-        "t=-1",
-        "t=0",
-        "t=1"
-      ],
-      "progression_signature": {
-        "opening": "draw lines and conjecture boundary",
-        "first_deepening": "fix x/optimize t",
-        "core": "complete square + global inequality",
-        "transfer": "alpha,beta family",
-        "stretch": "derive line family back from parabola tangents"
-      },
-      "solution_dependency_graph_summary": "samples -> parameter optimization -> envelope -> square-difference proof -> tangency -> general coefficients",
-      "distinctive_features": [
-        "parameter equals tangent slope and contact coordinate is 2t+1"
-      ],
-      "known_classic_overlap": "Envelope-of-lines methodology is classical; exact line family not confirmed. High originality risk.",
-      "author_provenance": "Author-created simple envelope family from generic classical technique; aggressive H review requested."
+      "known_classic_overlap": "Exact recurrence a_{n+1}=a_n+1/a_n and leading asymptotic a_n~sqrt(2n) are documented in public recurrence/asymptotics discussions.",
+      "author_provenance": "Classic problem / secondary reference; interview staging and c/a_n transfer remain author-structured."
     },
     {
       "family_id": "oxford-cantor-mobius-involution",
