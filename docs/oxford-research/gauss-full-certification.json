@@ -7,8 +7,8 @@
     {
       "agent": "C — Cantor",
       "prNumber": 132,
-      "headSha": "794fe2282c2c8ef265869ccf84bb955695fbaa7f",
-      "survivingFamilyCount": 18,
+      "headSha": "8b22dc5df99111fb95e27a2c006d5e74544dd385",
+      "survivingFamilyCount": 17,
       "familiesReviewed": [
         "oxford-cantor-moving-v-envelope",
         "oxford-cantor-reciprocal-root-parabolas",
@@ -19,7 +19,6 @@
         "oxford-cantor-radical-asymptote",
         "oxford-cantor-shifted-cubic-intersections",
         "oxford-cantor-moving-integral-window",
-        "oxford-cantor-reciprocal-implicit-curve",
         "oxford-cantor-reciprocal-paired-inputs",
         "oxford-cantor-exponential-rotating-line",
         "oxford-cantor-mobius-recurrence",
@@ -78,11 +77,11 @@
   ],
   "systemicVerification": {
     "cantor": {
-      "headSha": "794fe2282c2c8ef265869ccf84bb955695fbaa7f",
+      "headSha": "8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "overlongCutoffsCorrected": true,
       "cubicDividedDifferenceCeilingCorrected": true,
       "prerequisiteWordingImproved": true,
-      "note": "Cantor pruned hard rejects, shortened timings, fixed cubic-divided-difference, repaired family-level skill/content containment, and the latest post-review delta changes only H-owned provenance classification. G taxonomy/difficulty/timing decisions are unchanged."
+      "note": "Cantor now has 17 survivors. It pruned reciprocal-implicit-curve, adopted the strong core for cubic-two-thresholds, retained interview-scale family timing, improved prerequisite wording, and preserved family-level skill/content containment. All current Cantor G taxonomy/difficulty/timing decisions are approved."
     },
     "dirichlet": {
       "headSha": "ecece22058c997d37c4b352fa5ed32bd1daf5243",
@@ -107,7 +106,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-moving-v-envelope",
-      "authorHeadReviewed": "794fe2282c2c8ef265869ccf84bb955695fbaa7f",
+      "authorHeadReviewed": "8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -368,7 +367,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-reciprocal-root-parabolas",
-      "authorHeadReviewed": "794fe2282c2c8ef265869ccf84bb955695fbaa7f",
+      "authorHeadReviewed": "8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -629,7 +628,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-cubic-two-thresholds",
-      "authorHeadReviewed": "794fe2282c2c8ef265869ccf84bb955695fbaa7f",
+      "authorHeadReviewed": "8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -824,10 +823,10 @@
         "requestedChanges": []
       },
       "difficulty": {
-        "decision": "changes-required",
+        "decision": "approved",
         "author": {
           "entry": "introductory-plus",
-          "core": "standard",
+          "core": "strong",
           "ceiling": "strong"
         },
         "recommended": {
@@ -846,9 +845,9 @@
           {
             "stageId": "core",
             "role": "core",
-            "authorDifficulty": "standard",
+            "authorDifficulty": "strong",
             "recommendedDifficulty": "strong",
-            "decision": "changes-required"
+            "decision": "approved"
           },
           {
             "stageId": "extension",
@@ -886,9 +885,7 @@
         "confidence": "low",
         "evidenceBasis": "expert-judgment"
       },
-      "requestedChanges": [
-        "Use G difficulty introductory-plus / strong / strong; raise the substantive two-threshold core to strong."
-      ],
+      "requestedChanges": [],
       "ownershipBoundaries": {
         "originality": "pending-agent-h",
         "fidelity": "pending-agent-h",
@@ -900,7 +897,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-cubic-divided-difference",
-      "authorHeadReviewed": "794fe2282c2c8ef265869ccf84bb955695fbaa7f",
+      "authorHeadReviewed": "8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -1163,7 +1160,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-integral-sign-landscape",
-      "authorHeadReviewed": "794fe2282c2c8ef265869ccf84bb955695fbaa7f",
+      "authorHeadReviewed": "8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -1434,7 +1431,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-absolute-quadratic-crossings",
-      "authorHeadReviewed": "794fe2282c2c8ef265869ccf84bb955695fbaa7f",
+      "authorHeadReviewed": "8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -1690,7 +1687,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-radical-asymptote",
-      "authorHeadReviewed": "794fe2282c2c8ef265869ccf84bb955695fbaa7f",
+      "authorHeadReviewed": "8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -1961,7 +1958,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-shifted-cubic-intersections",
-      "authorHeadReviewed": "794fe2282c2c8ef265869ccf84bb955695fbaa7f",
+      "authorHeadReviewed": "8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -2236,7 +2233,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-moving-integral-window",
-      "authorHeadReviewed": "794fe2282c2c8ef265869ccf84bb955695fbaa7f",
+      "authorHeadReviewed": "8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -2502,277 +2499,8 @@
       "agent": "G — Gauss",
       "authorAgent": "C — Cantor",
       "prNumber": 132,
-      "familyId": "oxford-cantor-reciprocal-implicit-curve",
-      "authorHeadReviewed": "794fe2282c2c8ef265869ccf84bb955695fbaa7f",
-      "taxonomy": {
-        "decision": "approved",
-        "author": {
-          "domains": [
-            "graph-sketching",
-            "coordinate-geometry",
-            "functions",
-            "algebra",
-            "elementary-analysis"
-          ],
-          "contentConcepts": [
-            "analytic-curve-geometry",
-            "symmetry-periodicity",
-            "loci-coordinate-constraints",
-            "roots-intersections",
-            "qualitative-function-behavior",
-            "asymptotic-behavior",
-            "inequalities-bounds",
-            "parameter-dependent-curves"
-          ],
-          "prerequisiteConcepts": [
-            "algebraic-manipulation",
-            "equations-inequalities",
-            "coordinate-geometry-basics",
-            "functions-graphs"
-          ],
-          "reasoningSkills": [
-            "precision-checking",
-            "visualization",
-            "analytic-curve-geometry",
-            "representation-switching",
-            "strategic-simplification",
-            "proof-construction",
-            "case-analysis",
-            "roots-intersections",
-            "graph-sketching",
-            "asymptotic-behavior",
-            "generalization",
-            "transfer",
-            "justify division before using reciprocals",
-            "reciprocal squares simplify the product",
-            "the branches live only outside |x|=1",
-            "finish the global sketch before optimizing branch distance",
-            "the asymptotes and closest nonzero branch points scale with sqrt(c)",
-            "algebraic-manipulation",
-            "error-recovery"
-          ]
-        },
-        "recommended": {
-          "domains": [
-            "graph-sketching",
-            "coordinate-geometry",
-            "functions",
-            "algebra",
-            "elementary-analysis"
-          ],
-          "contentConcepts": [
-            "analytic-curve-geometry",
-            "symmetry-periodicity",
-            "loci-coordinate-constraints",
-            "roots-intersections",
-            "qualitative-function-behavior",
-            "asymptotic-behavior",
-            "inequalities-bounds",
-            "parameter-dependent-curves"
-          ],
-          "prerequisiteConcepts": [
-            "algebraic-manipulation",
-            "equations-inequalities",
-            "coordinate-geometry-basics",
-            "functions-graphs"
-          ],
-          "reasoningSkills": [
-            "precision-checking",
-            "visualization",
-            "analytic-curve-geometry",
-            "representation-switching",
-            "strategic-simplification",
-            "proof-construction",
-            "case-analysis",
-            "roots-intersections",
-            "graph-sketching",
-            "asymptotic-behavior",
-            "generalization",
-            "transfer",
-            "justify division before using reciprocals",
-            "reciprocal squares simplify the product",
-            "the branches live only outside |x|=1",
-            "finish the global sketch before optimizing branch distance",
-            "the asymptotes and closest nonzero branch points scale with sqrt(c)",
-            "algebraic-manipulation",
-            "error-recovery"
-          ]
-        },
-        "stageRoles": [
-          {
-            "stageId": "opening",
-            "authorRole": "warm-up",
-            "recommendedRole": "warm-up",
-            "decision": "approved"
-          },
-          {
-            "stageId": "core",
-            "authorRole": "core",
-            "recommendedRole": "core",
-            "decision": "approved"
-          },
-          {
-            "stageId": "extension",
-            "authorRole": "stretch",
-            "recommendedRole": "stretch",
-            "decision": "approved"
-          }
-        ],
-        "milestoneContentSkillAttribution": [
-          {
-            "milestoneId": "exclude-axes-and-symmetry",
-            "skills": [
-              "precision-checking",
-              "visualization"
-            ],
-            "contentConcepts": [
-              "analytic-curve-geometry",
-              "symmetry-periodicity"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          },
-          {
-            "milestoneId": "reciprocal-circle",
-            "skills": [
-              "representation-switching",
-              "strategic-simplification"
-            ],
-            "contentConcepts": [
-              "analytic-curve-geometry",
-              "loci-coordinate-constraints"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          },
-          {
-            "milestoneId": "branch-domain",
-            "skills": [
-              "proof-construction",
-              "case-analysis"
-            ],
-            "contentConcepts": [
-              "roots-intersections",
-              "qualitative-function-behavior"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          },
-          {
-            "milestoneId": "asymptotes-and-closest",
-            "skills": [
-              "graph-sketching",
-              "proof-construction",
-              "strategic-simplification",
-              "precision-checking"
-            ],
-            "contentConcepts": [
-              "asymptotic-behavior",
-              "qualitative-function-behavior",
-              "inequalities-bounds",
-              "analytic-curve-geometry"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          },
-          {
-            "milestoneId": "scaled-reciprocal-transfer",
-            "skills": [
-              "generalization",
-              "transfer",
-              "representation-switching"
-            ],
-            "contentConcepts": [
-              "analytic-curve-geometry",
-              "parameter-dependent-curves",
-              "asymptotic-behavior"
-            ],
-            "decision": "approved",
-            "requestedChanges": []
-          }
-        ],
-        "processGroundedSemantics": {
-          "decision": "approved",
-          "note": "guided-adaptation/error-recovery remain process-grounded and are not milestone-completion evidence."
-        },
-        "requestedChanges": []
-      },
-      "difficulty": {
-        "decision": "approved",
-        "author": {
-          "entry": "introductory-plus",
-          "core": "strong",
-          "ceiling": "stretch"
-        },
-        "recommended": {
-          "entry": "introductory-plus",
-          "core": "strong",
-          "ceiling": "stretch"
-        },
-        "stageBands": [
-          {
-            "stageId": "opening",
-            "role": "warm-up",
-            "authorDifficulty": "introductory-plus",
-            "recommendedDifficulty": "introductory-plus",
-            "decision": "approved"
-          },
-          {
-            "stageId": "core",
-            "role": "core",
-            "authorDifficulty": "strong",
-            "recommendedDifficulty": "strong",
-            "decision": "approved"
-          },
-          {
-            "stageId": "extension",
-            "role": "stretch",
-            "authorDifficulty": "stretch",
-            "recommendedDifficulty": "stretch",
-            "decision": "approved"
-          }
-        ],
-        "confidence": "low",
-        "evidenceBasis": "expert-judgment"
-      },
-      "timing": {
-        "decision": "approved",
-        "recommended": {
-          "firstMeaningfulInsightMinutes": {
-            "min": 3,
-            "max": 6
-          },
-          "independentCompletionMinutes": {
-            "min": 18,
-            "max": 27
-          },
-          "promptedCompletionMinutes": {
-            "min": 14,
-            "max": 23
-          },
-          "optionalExtensionMinutes": {
-            "min": 5,
-            "max": 9
-          },
-          "softCutoffMinutes": 25,
-          "confidence": "low"
-        },
-        "confidence": "low",
-        "evidenceBasis": "expert-judgment"
-      },
-      "requestedChanges": [],
-      "ownershipBoundaries": {
-        "originality": "pending-agent-h",
-        "fidelity": "pending-agent-h",
-        "mathematicalCorrectness": "pending-agent-i"
-      }
-    },
-    {
-      "agent": "G — Gauss",
-      "authorAgent": "C — Cantor",
-      "prNumber": 132,
       "familyId": "oxford-cantor-reciprocal-paired-inputs",
-      "authorHeadReviewed": "794fe2282c2c8ef265869ccf84bb955695fbaa7f",
+      "authorHeadReviewed": "8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -3034,7 +2762,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-exponential-rotating-line",
-      "authorHeadReviewed": "794fe2282c2c8ef265869ccf84bb955695fbaa7f",
+      "authorHeadReviewed": "8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -3302,7 +3030,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-mobius-recurrence",
-      "authorHeadReviewed": "794fe2282c2c8ef265869ccf84bb955695fbaa7f",
+      "authorHeadReviewed": "8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -3561,7 +3289,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-squared-error-recurrence",
-      "authorHeadReviewed": "794fe2282c2c8ef265869ccf84bb955695fbaa7f",
+      "authorHeadReviewed": "8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -3822,7 +3550,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-three-cycle-map",
-      "authorHeadReviewed": "794fe2282c2c8ef265869ccf84bb955695fbaa7f",
+      "authorHeadReviewed": "8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -4072,7 +3800,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-quartic-horizontal-levels",
-      "authorHeadReviewed": "794fe2282c2c8ef265869ccf84bb955695fbaa7f",
+      "authorHeadReviewed": "8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -4338,7 +4066,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-reciprocal-increment-recurrence",
-      "authorHeadReviewed": "794fe2282c2c8ef265869ccf84bb955695fbaa7f",
+      "authorHeadReviewed": "8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -4598,7 +4326,7 @@
       "authorAgent": "C — Cantor",
       "prNumber": 132,
       "familyId": "oxford-cantor-mobius-involution",
-      "authorHeadReviewed": "794fe2282c2c8ef265869ccf84bb955695fbaa7f",
+      "authorHeadReviewed": "8b22dc5df99111fb95e27a2c006d5e74544dd385",
       "taxonomy": {
         "decision": "approved",
         "author": {
@@ -11729,23 +11457,23 @@
     }
   ],
   "summary": {
-    "reviewed": 47,
-    "surviving": 47,
+    "reviewed": 46,
+    "surviving": 46,
     "byAuthor": {
-      "cantor": 18,
+      "cantor": 17,
       "dirichlet": 12,
       "euler": 17
     },
     "taxonomy": {
-      "approved": 45,
+      "approved": 44,
       "changesRequired": 2
     },
     "difficulty": {
       "approved": 43,
-      "changesRequired": 4
+      "changesRequired": 3
     },
     "timing": {
-      "approved": 35,
+      "approved": 34,
       "changesRequired": 12
     }
   }
