@@ -182,6 +182,7 @@
   width: min(100%, 520px);
   justify-self: end;
   padding: 24px 0 30px;
+  transform: translateX(-16px);
 }
 
 .expressive-home__folio-sheet {
@@ -492,6 +493,7 @@
   .expressive-home__folio {
     width: min(100%, 520px);
     justify-self: start;
+    transform: none;
   }
 }
 
