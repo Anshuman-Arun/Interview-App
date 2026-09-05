@@ -89,8 +89,8 @@ These decisions are **mathematical-correctness decisions only**. They do not app
 Agent I — Itô independently reviewed the six correctness-sensitive families explicitly prioritized by Agent C — Cantor in PR #132. The review used the actual family source at Cantor head `aba246a26a28a115af59ce145491776de7d4553a`, not the PR summary.
 
 - Families independently solved/reviewed from PR #132: **6**
-- Correctness approvals: **5**
-- Changes required: **1**
+- Correctness approvals: **6**
+- Changes required at latest Cantor head: **0**
 - Formal GitHub REQUEST_CHANGES could not be used because both agent PRs are authored through the same connected GitHub account; Agent I instead left a review COMMENT with inline findings and retained the fail-closed `changes-required` record here.
 
 | Family | Correctness | Independent result |
@@ -98,13 +98,13 @@ Agent I — Itô independently reviewed the six correctness-sensitive families e
 | `oxford-cantor-cubic-divided-difference` | approved | Factorization, both distinct-root thresholds, stationary duplication, scaled-cubic extension, and secant-slope extension verified. |
 | `oxford-cantor-mobius-recurrence` | approved | Reciprocal-error translation and exact pole classification for `x_0>1` verified. |
 | `oxford-cantor-radical-asymptote` | approved | Domain, unequal end behavior, derivative sign, range, `a=±2` boundaries, and disconnected-domain extension verified. |
-| `oxford-cantor-reciprocal-implicit-curve` | changes-required | The isolated origin is correctly preserved in the opening/solution but contradicted by the closest-points milestone and by a false common-error description. |
+| `oxford-cantor-reciprocal-implicit-curve` | approved after revision | Agent I found an origin/closest-point contradiction at the reviewed head; Cantor fixed the milestone, common-error text, and scaled extension on head `b9fe1d9cdd3d0216bc3f4a0fa350824a97f36b73`, and Agent I re-verified the family. |
 | `oxford-cantor-reciprocal-increment-recurrence` | approved | Squared recurrence, logarithmic cumulative-error bound, normalized limit, and `c/a_n` transfer verified. |
 | `oxford-cantor-mobius-involution` | approved with warning | Generic and `a=-1` cases are correct; the stretch prompt should define “involution” as `T(T(x))=x` rather than assume the term. |
 
-### Blocking Cantor repair
+### Cantor repair verified
 
-For `oxford-cantor-reciprocal-implicit-curve`, the full curve contains `(0,0)`. Therefore the global closest point to the origin is `(0,0)`; the four `(±sqrt(2),±sqrt(2))` points are only closest on the nonzero branches. In addition, the authored `include-axis-points` common-error description says that `x=0` or `y=0` cannot satisfy the equation, which is false at the origin. This can make interviewer guidance reject a correct candidate observation, so it is an error-level correctness blocker rather than editorial polish.
+Agent I initially found two error-level issues in `oxford-cantor-reciprocal-implicit-curve`: the four nonzero-branch minima were described as globally closest despite the isolated origin, and the common-error text falsely said the axis case could not satisfy the equation. Cantor repaired both on head `b9fe1d9cdd3d0216bc3f4a0fa350824a97f36b73` and also clarified the scaled extension. Agent I re-reviewed the actual updated source and marked both findings resolved; the family is now correctness-approved. The `mobius-involution` vocabulary warning remains non-blocking.
 
 ## Computational regression checks retained
 
