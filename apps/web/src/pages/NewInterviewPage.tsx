@@ -680,9 +680,11 @@ export function NewInterviewPage({
                         options={modelFamilies.map((family) => ({
                           value: family.key,
                           label: family.label,
-                          meta: family.options[0] === undefined
-                            ? undefined
-                            : `${family.options[0].providerDisplayName} · ${providerRouteLabel(family.options[0])}`
+                          ...(family.options[0] === undefined
+                            ? {}
+                            : {
+                                meta: `${family.options[0].providerDisplayName} · ${providerRouteLabel(family.options[0])}`
+                              })
                         }))}
                         placeholder="No launch-ready provider"
                         disabled={startPending || modelFamilies.length === 0}
