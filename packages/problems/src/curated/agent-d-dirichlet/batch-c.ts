@@ -31,7 +31,7 @@ export const oxfordDDiscreteMaximumPrincipleSpec: CuratedProblemSpec = {
   ],
   followUps: ["Can the same proof use a minimum instead?", "What changes if the graph is disconnected?"],
   extensions: [
-    { id: "boundary-maximum-principle", prompt: "Let B be a nonempty set of boundary vertices and impose the averaging rule only on V\B. Prove max_V f<=max_B f and min_V f>=min_B f." },
+    { id: "boundary-maximum-principle", prompt: "Let B be a nonempty set of boundary vertices and impose the averaging rule only on V\\B. Prove max_V f<=max_B f and min_V f>=min_B f." },
     { id: "positive-weighted-averages", prompt: "Replace the ordinary average by a positive weighted average of neighbors whose weights sum to 1. Which steps of the proof still work?" }
   ],
   hints: [
@@ -217,10 +217,10 @@ export const oxfordDSpanningTreeExchangeSpec: CuratedProblemSpec = {
   approaches: [{ id: "cycle-exchange", label: "Add a target edge, remove a non-target edge from the unique created cycle, and iterate" }],
   milestones: [
     { id: "try-small-tree-swaps", description: "Experiment on a small graph with two different spanning trees and identify the add-then-delete pattern.", approachIds: ["cycle-exchange"], hintLevels: [1] },
-    { id: "add-target-edge-cycle", description: "Choose e in U\T and show T+e contains one cycle.", approachIds: ["cycle-exchange"], prerequisiteIds: ["try-small-tree-swaps"], hintLevels: [2] },
-    { id: "find-removable-nontarget-edge", description: "Prove the created cycle contains some edge f in T\U; otherwise U would contain the whole cycle.", approachIds: ["cycle-exchange"], prerequisiteIds: ["add-target-edge-cycle"], hintLevels: [3] },
+    { id: "add-target-edge-cycle", description: "Choose e in U\\T and show T+e contains one cycle.", approachIds: ["cycle-exchange"], prerequisiteIds: ["try-small-tree-swaps"], hintLevels: [2] },
+    { id: "find-removable-nontarget-edge", description: "Prove the created cycle contains some edge f in T\\U; otherwise U would contain the whole cycle.", approachIds: ["cycle-exchange"], prerequisiteIds: ["add-target-edge-cycle"], hintLevels: [3] },
     { id: "increase-tree-overlap", description: "Replace f by e, prove the result is a spanning tree, and show |T intersect U| increases by one.", approachIds: ["cycle-exchange"], prerequisiteIds: ["find-removable-nontarget-edge"], hintLevels: [4] },
-    { id: "iterate-and-transfer-weighted", description: "Conclude in exactly |T\U| exchanges and derive the standard no-cheaper-cycle-swap consequence for a minimum-weight spanning tree.", approachIds: ["cycle-exchange"], prerequisiteIds: ["increase-tree-overlap"], hintLevels: [5] }
+    { id: "iterate-and-transfer-weighted", description: "Conclude in exactly |T\\U| exchanges and derive the standard no-cheaper-cycle-swap consequence for a minimum-weight spanning tree.", approachIds: ["cycle-exchange"], prerequisiteIds: ["increase-tree-overlap"], hintLevels: [5] }
   ],
   edges: [
     { from: "try-small-tree-swaps", to: "add-target-edge-cycle" },
@@ -231,12 +231,12 @@ export const oxfordDSpanningTreeExchangeSpec: CuratedProblemSpec = {
   commonErrors: [
     { id: "removes-any-cycle-edge", description: "Deletes an arbitrary edge from the created cycle; it must be chosen outside U to guarantee monotone progress toward U." },
     { id: "cycle-contained-in-u", description: "Fails to use that U is acyclic when proving a removable non-U edge exists." },
-    { id: "at-most-not-exact", description: "Says the procedure needs at most |T\U| exchanges but overlooks that each permitted exchange can add only one missing U-edge, so that many are necessary and sufficient." }
+    { id: "at-most-not-exact", description: "Says the procedure needs at most |T\\U| exchanges but overlooks that each permitted exchange can add only one missing U-edge, so that many are necessary and sufficient." }
   ],
   followUps: ["Why does removing any edge of the created cycle restore a spanning tree?", "What weighted-tree fact follows if a cheaper replacement edge existed?"],
   extensions: [
     { id: "minimum-tree-cycle-property", prompt: "If T is a minimum-weight spanning tree and e is not in T, prove no edge on the T-path between e's endpoints can have weight strictly larger than e." },
-    { id: "exchange-distance", prompt: "Prove the minimum number of allowed target-edge exchanges required to turn T into U is exactly |T\U|." }
+    { id: "exchange-distance", prompt: "Prove the minimum number of allowed target-edge exchanges required to turn T into U is exactly |T\\U|." }
   ],
   hints: [
     { level: 1, text: "If T is not U, choose an edge e that U has and T lacks. What happens when you temporarily add e to T?", formulations: ["add a missing target edge", "one extra edge creates one cycle"] },
@@ -245,8 +245,8 @@ export const oxfordDSpanningTreeExchangeSpec: CuratedProblemSpec = {
     { level: 4, text: "T-f+e is connected and has the right number of edges, hence is a spanning tree. It has one more edge in common with U.", formulations: ["the overlap increases by one", "each exchange makes monotone progress"] },
     { level: 5, text: "Repeat until no U-edge is missing. For weights, if e were lighter than some path edge f, the same swap would produce a cheaper spanning tree.", formulations: ["iterate exactly the symmetric difference away", "reuse the exchange for a weight contradiction"] }
   ],
-  canonicalSolution: "If T=U there is nothing to do. Otherwise choose e in U\T. Adding e to T creates a unique cycle C: the edge e plus the unique T-path between its endpoints. Because U is itself a tree and already contains e, C cannot have every other edge in U; otherwise U would contain C. Hence choose f in C with f in T\U. Delete f. The graph T'=T-f+e is still connected because removing one edge from a cycle does not disconnect it, and it has |V|-1 edges, so it is a spanning tree. Moreover T' has gained e from U and lost f outside U, so |T' intersect U|=|T intersect U|+1. Repeating this step eventually reaches U. Each move adds exactly one previously missing edge of U, so exactly |U\T|=|T\U| exchanges are both sufficient and necessary. For the weighted extension, if T is minimum-weight and a non-tree edge e were lighter than some edge f on the T-path between its endpoints, then T-f+e would be a spanning tree of smaller total weight, contradiction.",
-  verificationNotes: "The unique-cycle fact is a stated prerequisite. The removable edge f must be in T\U, not merely any T-edge. The equality |T\U|=|U\T| follows because both spanning trees have |V|-1 edges. The weighted extension allows equal weights; only a strict inequality gives a contradiction.",
+  canonicalSolution: "If T=U there is nothing to do. Otherwise choose e in U\\T. Adding e to T creates a unique cycle C: the edge e plus the unique T-path between its endpoints. Because U is itself a tree and already contains e, C cannot have every other edge in U; otherwise U would contain C. Hence choose f in C with f in T\\U. Delete f. The graph T'=T-f+e is still connected because removing one edge from a cycle does not disconnect it, and it has |V|-1 edges, so it is a spanning tree. Moreover T' has gained e from U and lost f outside U, so |T' intersect U|=|T intersect U|+1. Repeating this step eventually reaches U. Each move adds exactly one previously missing edge of U, so exactly |U\\T|=|T\\U| exchanges are both sufficient and necessary. For the weighted extension, if T is minimum-weight and a non-tree edge e were lighter than some edge f on the T-path between its endpoints, then T-f+e would be a spanning tree of smaller total weight, contradiction.",
+  verificationNotes: "The unique-cycle fact is a stated prerequisite. The removable edge f must be in T\\U, not merely any T-edge. The equality |T\\U|=|U\\T| follows because both spanning trees have |V|-1 edges. The weighted extension allows equal weights; only a strict inequality gives a contradiction.",
   reviewStatus: "expert-review",
   reviewNotes: DIRICHLET_CANDIDATE_REVIEW_NOTES,
   oxfordAdaptive: makeDirichletAdaptive({
