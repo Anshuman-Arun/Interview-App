@@ -47,7 +47,7 @@
         "switch points arise from optimizer feasibility rather than curve intersections"
       ],
       "known_classic_overlap": "Hilbert five-pool review identified the construction as the Moreau-Yosida envelope of |x|, equivalently a scaled Huber function after a variable substitution.",
-      "author_provenance": "Structural adaptation / classic-mathematics. Moving-V interview progression is retained, but the mathematical construction is not claimed independent-original."
+      "author_provenance": "Classic problem / classic-mathematics. The moving-V interview progression is author-structured, but the underlying Huber/Moreau construction is explicitly not claimed independent-original."
     },
     {
       "family_id": "oxford-cantor-reciprocal-root-parabolas",
