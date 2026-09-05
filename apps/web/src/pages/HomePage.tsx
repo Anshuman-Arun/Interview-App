@@ -16,7 +16,8 @@ export function HomePage({
   onOpenSessions,
   canReview,
   onReview,
-  sessionEntryPending
+  sessionEntryPending,
+  sessionAuthorityChecking = false
 }: {
   readonly activeSessionId: SessionId | null;
   readonly activeSessionCount?: number;
@@ -30,11 +31,14 @@ export function HomePage({
   readonly canReview: (session: StoredSessionSummary) => boolean;
   readonly onReview: (sessionId: SessionId) => void;
   readonly sessionEntryPending: boolean;
+  readonly sessionAuthorityChecking?: boolean;
 }) {
   const heroRef = useRef<HTMLElement | null>(null);
   const heroCopyRef = useRef<HTMLDivElement | null>(null);
   const folioRef = useRef<HTMLDivElement | null>(null);
   const routeLocked = activeSessionPaused === true && activeSessionId !== null;
+  const entryBlocked =
+    sessionEntryPending || (activeSessionId === null && sessionAuthorityChecking);
   const recent = [...sessions]
     .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
     .slice(0, 5);
@@ -121,7 +125,7 @@ export function HomePage({
                     ? onOpenSessions
                     : () => onResumeInterview(activeSessionId)
                 }
-                disabled={sessionEntryPending}
+                disabled={entryBlocked}
               >
                 <span>{activeSessionId === null ? "Choose active session" : "Resume current interview"}</span>
                 <i aria-hidden="true">→</i>
@@ -131,10 +135,10 @@ export function HomePage({
                 type="button"
                 className="expressive-home__primary"
                 onClick={onStartInterview}
-                disabled={sessionEntryPending}
+                disabled={entryBlocked}
                 data-testid="start-session-btn"
               >
-                <span>{sessionEntryPending ? "Opening room…" : "New interview"}</span>
+                <span>{sessionAuthorityChecking ? "Checking rooms…" : sessionEntryPending ? "Opening room…" : "New interview"}</span>
                 <i aria-hidden="true">→</i>
               </button>
             ) : (
@@ -142,7 +146,7 @@ export function HomePage({
                 type="button"
                 className="expressive-home__primary"
                 onClick={() => onResumeInterview(activeSessionId)}
-                disabled={sessionEntryPending}
+                disabled={entryBlocked}
               >
                 <span>
                   {sessionEntryPending
@@ -234,7 +238,7 @@ export function HomePage({
           </div>
           <button
             type="button"
-            disabled={sessionEntryPending}
+            disabled={entryBlocked}
             onClick={
               activeSessionId === null
                 ? onOpenSessions
@@ -257,7 +261,7 @@ export function HomePage({
           </div>
           <button
             type="button"
-            disabled={sessionEntryPending}
+            disabled={entryBlocked}
             onClick={() => onResumeInterview(activeSessionId)}
           >
             {sessionEntryPending ? "Opening…" : "Resume"}
