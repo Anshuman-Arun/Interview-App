@@ -365,12 +365,10 @@ export function NewInterviewPage({
     () => providerOptions.filter((option) => option.availability === "AVAILABLE"),
     [providerOptions]
   );
-  const selectableProviders = useMemo(() => {
-    const realProviders = availableProviders.filter(
-      (option) => option.providerKind !== "MOCK"
-    );
-    return realProviders.length > 0 ? realProviders : availableProviders;
-  }, [availableProviders]);
+  const selectableProviders = useMemo(
+    () => availableProviders.filter((option) => option.providerId !== "mock-model"),
+    [availableProviders]
+  );
 
   useEffect(() => {
     if (
