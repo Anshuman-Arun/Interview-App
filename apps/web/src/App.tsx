@@ -1067,7 +1067,7 @@ export const App: React.FC = () => {
                   sessionEntryPendingRef.current
                   || sessionTerminalPendingRef.current
                 ) return;
-                void session.retrySubmission(itemId);
+                void session.retrySubmission(itemId).catch(() => undefined);
               }}
               retryDisabled={sessionEntryPending || sessionTerminalPending}
               scrollContextKey={session.sessionId}
