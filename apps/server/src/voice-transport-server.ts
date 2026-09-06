@@ -778,6 +778,7 @@ function allowedPreflightMethod(rawUrl: string | undefined): "GET" | "POST" | un
     || rawUrl === VOICE_FRAME_PATH
     || rawUrl === VOICE_FLUSH_PATH
     || rawUrl === VOICE_CANCEL_PATH
+    || rawUrl === VOICE_OPENING_AUDIO_PATH
   ) {
     return "POST";
   }
