@@ -23,7 +23,7 @@ describe("native appearance menu placement", () => {
 
     expect(main).not.toContain("<AppearanceDock");
     expect(app).toContain("<AppearanceDock compact");
-    expect(frame).toContain("<AppearanceDock />");
+    expect(frame).toContain("<AppearanceDock compact");
     expect(css).toContain("position: relative");
     expect(css).not.toContain("position: fixed");
   });

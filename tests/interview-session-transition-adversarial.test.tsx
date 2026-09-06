@@ -937,8 +937,10 @@ describe("interview session transition authority", () => {
       await rendered.current().submitTypedInput("allowed after confirmed active");
     });
     expect(commitCalls).toBe(1);
+    expect(rendered.current().isResponding).toBe(true);
 
     act(() => rendered.current().disconnect());
+    expect(rendered.current().isResponding).toBe(false);
     await act(async () => {
       rendered.root.unmount();
     });

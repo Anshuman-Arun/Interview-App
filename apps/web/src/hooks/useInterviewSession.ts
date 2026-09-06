@@ -66,6 +66,23 @@ import type { TranscriptItem } from "../components/TranscriptFeed.js";
 
 const RENDERER_REATTACH_MAX_ATTEMPTS = 10;
 const RENDERER_REATTACH_DELAY_MS = 50;
+const INTERVIEWER_RESPONSE_TIMEOUT_MS = 40_000;
+const INTERVIEWER_RESPONSE_TIMEOUT_MESSAGE =
+  "The interviewer did not produce a valid response. Please try again or check the selected provider in Settings.";
+export const DEFAULT_INTERVIEW_OPENING_TEXT =
+  "Hi, welcome! Before we get started, is everything ready to go on your end?";
+
+function speakInterviewOpening(text: string): void {
+  if (
+    typeof globalThis.speechSynthesis === "undefined"
+    || typeof globalThis.SpeechSynthesisUtterance === "undefined"
+  ) return;
+  globalThis.speechSynthesis.cancel();
+  const utterance = new globalThis.SpeechSynthesisUtterance(text);
+  utterance.rate = 1;
+  utterance.pitch = 1;
+  globalThis.speechSynthesis.speak(utterance);
+}
 
 export class TerminalSessionOutcomeUnknownError extends Error {
   public constructor() {
@@ -91,6 +108,7 @@ export interface UseInterviewSessionOptions {
   readonly initialSessionId?: SessionId;
   readonly whiteboardAdapter?: TldrawWhiteboardAdapter;
   readonly fetchImpl?: typeof fetch;
+  readonly openingSpeaker?: (text: string) => void;
 }
 
 export type QuantSessionPublicState =
@@ -103,6 +121,7 @@ export interface UseInterviewSessionResult {
   readonly isSessionStarted: boolean;
   readonly isPaused: boolean;
   readonly isStreaming: boolean;
+  readonly isResponding: boolean;
   readonly sessionStatus: SessionStatus;
   readonly availableSessions: readonly StoredSessionSummary[];
   readonly interviewCatalog: readonly InterviewCatalogEntry[];
@@ -383,6 +402,7 @@ export function useInterviewSession(
   const [providerOptionsLoading, setProviderOptionsLoading] = useState(false);
   const [providerOptionsError, setProviderOptionsError] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
+  const [isResponding, setIsResponding] = useState<boolean>(false);
   const [transcript, setTranscript] = useState<readonly TranscriptItem[]>([]);
   const [problem, setProblem] = useState<InterviewProblemPublicView | null>(null);
   const [configuration, setConfiguration] = useState<InterviewSessionConfiguration | null>(null);
@@ -422,7 +442,35 @@ export function useInterviewSession(
   const visionSchedulerSessionRef = useRef<SessionId | null>(null);
   const rendererAudioPlayerRef = useRef<QueuedRendererAudioPlayer | null>(null);
   const audioOutputDeviceRef = useRef<string | undefined>(undefined);
+  const responseTimeoutRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
+  const inputResponseCycleRef = useRef(0);
+  const deliveredResponseCycleRef = useRef(0);
+  const voiceResponseCyclePendingRef = useRef(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+
+  const clearPendingInterviewerResponse = useCallback((): void => {
+    if (responseTimeoutRef.current !== null) {
+      globalThis.clearTimeout(responseTimeoutRef.current);
+      responseTimeoutRef.current = null;
+    }
+    setIsResponding(false);
+    setError((current) =>
+      current === INTERVIEWER_RESPONSE_TIMEOUT_MESSAGE ? null : current
+    );
+  }, []);
+
+  const awaitInterviewerResponse = useCallback((): void => {
+    if (deliveredResponseCycleRef.current >= inputResponseCycleRef.current) return;
+    if (responseTimeoutRef.current !== null) {
+      globalThis.clearTimeout(responseTimeoutRef.current);
+    }
+    setIsResponding(true);
+    responseTimeoutRef.current = globalThis.setTimeout(() => {
+      responseTimeoutRef.current = null;
+      setIsResponding(false);
+      setError(INTERVIEWER_RESPONSE_TIMEOUT_MESSAGE);
+    }, INTERVIEWER_RESPONSE_TIMEOUT_MS);
+  }, []);
   const fetchImpl = useMemo(
     () => options.fetchImpl ?? globalThis.fetch.bind(globalThis),
     [options.fetchImpl]
@@ -460,6 +508,9 @@ export function useInterviewSession(
     [authenticatedFetch, voiceBaseUrl]
   );
   const interruptPlaybackForBargeIn = useCallback((): void => {
+    inputResponseCycleRef.current += 1;
+    voiceResponseCyclePendingRef.current = true;
+    clearPendingInterviewerResponse();
     const player = rendererAudioPlayerRef.current;
     player?.interruptCurrent();
     player?.clearQueued();
@@ -469,12 +520,16 @@ export function useInterviewSession(
     // consumer has settled, so recovery can classify uncertainty first and
     // cannot replay cancelled/POSSIBLY_EXPOSED output.
     if (sessionId !== null) rendererRestartRef.current?.(sessionId);
-  }, [sessionId]);
+  }, [clearPendingInterviewerResponse, sessionId]);
   const setAudioOutputDevice = useCallback((deviceId: string | undefined): void => {
     audioOutputDeviceRef.current = deviceId;
     rendererAudioPlayerRef.current?.setOutputDeviceId(deviceId);
   }, []);
   const onVoiceCommit = useCallback((commit: BrowserVoiceCommit): void => {
+    if (!voiceResponseCyclePendingRef.current) {
+      inputResponseCycleRef.current += 1;
+    }
+    voiceResponseCyclePendingRef.current = false;
     setTranscript((previous) => {
       if (previous.some((item) => item.turnId === commit.turnId)) return previous;
       const item: TranscriptItem = {
@@ -488,7 +543,8 @@ export function useInterviewSession(
       };
       return [...previous, item];
     });
-  }, []);
+    awaitInterviewerResponse();
+  }, [awaitInterviewerResponse]);
   const voiceIntegration = useInterviewVoice({
     sessionId,
     sessionActive: isSessionStarted && sessionStatus === "ACTIVE" && !isPaused,
@@ -535,6 +591,7 @@ export function useInterviewSession(
     quantActionInFlightRef.current = false;
     sessionTransitionEpochRef.current += 1;
     sessionMutationAdmissionRef.current = false;
+    voiceResponseCyclePendingRef.current = false;
     pendingSubmissionsRef.current.clear();
     retrySubmissionsInFlightRef.current.clear();
     resetBoardSync();
@@ -1061,6 +1118,8 @@ export function useInterviewSession(
 
       const textPresenter: TextPresenter = {
         presentText: (text: string, deliveryId: DeliveryId) => {
+          deliveredResponseCycleRef.current = inputResponseCycleRef.current;
+          clearPendingInterviewerResponse();
           setTranscript((prev) => {
             const existing = prev.find((item) => item.deliveryId === deliveryId);
             if (existing !== undefined) {
@@ -1160,7 +1219,14 @@ export function useInterviewSession(
         }
       }
     },
-    [audioVoiceClient, authenticatedFetch, baseUrl, options.whiteboardAdapter, rendererStreamUrl]
+    [
+      audioVoiceClient,
+      authenticatedFetch,
+      baseUrl,
+      clearPendingInterviewerResponse,
+      options.whiteboardAdapter,
+      rendererStreamUrl
+    ]
   );
 
   const launchRendererStream = useCallback((targetSessionId: SessionId): void => {
@@ -1232,13 +1298,17 @@ export function useInterviewSession(
     rendererAudioPlayerRef.current = null;
     setIsSpeaking(false);
     setIsStreaming(false);
+    clearPendingInterviewerResponse();
     setIsConnected(false);
-  }, []);
+  }, [clearPendingInterviewerResponse]);
 
   const beginSessionTransition = useCallback(async (): Promise<number> => {
     const transitionEpoch = sessionTransitionEpochRef.current + 1;
     sessionTransitionEpochRef.current = transitionEpoch;
     sessionMutationAdmissionRef.current = false;
+    inputResponseCycleRef.current = 0;
+    deliveredResponseCycleRef.current = 0;
+    voiceResponseCyclePendingRef.current = false;
     quantReadEpochRef.current += 1;
     quantActionEpochRef.current += 1;
     quantActionInFlightRef.current = false;
@@ -1264,6 +1334,7 @@ export function useInterviewSession(
         readonly configuration: InterviewSessionConfiguration | null;
         readonly configurationSource: SessionConfigurationSource | null;
         readonly problem: InterviewProblemPublicView | null;
+        readonly openingText?: string;
       }>,
       customSessionId?: SessionId
     ): Promise<void> => {
@@ -1323,7 +1394,21 @@ export function useInterviewSession(
         setProblem(problemView);
         setConfiguration(resolvedConfiguration);
         setConfigurationSource(resolvedConfigurationSource);
-        setTranscript([]);
+        const openingText = started.openingText;
+        setTranscript(openingText === undefined ? [] : [{
+          id: `opening_${targetSessionId}`,
+          role: "interviewer",
+          text: openingText,
+          status: "COMPLETED",
+          timestamp: Date.now()
+        }]);
+        if (openingText !== undefined) {
+          try {
+            (options.openingSpeaker ?? speakInterviewOpening)(openingText);
+          } catch {
+            // Opening speech is presentation-only and must never undo a successful start.
+          }
+        }
 
         if (!usesOxfordWorkspace) {
           sessionMutationAdmissionRef.current = false;
@@ -1361,6 +1446,7 @@ export function useInterviewSession(
       getCommandClient,
       launchRendererStream,
       options.whiteboardAdapter,
+      options.openingSpeaker,
       resetBoardSync,
       sessionId,
       sessionStatus,
@@ -1392,7 +1478,8 @@ export function useInterviewSession(
         return {
           configuration: started.configuration,
           configurationSource: "CONFIGURED",
-          problem: started.problem ?? null
+          problem: started.problem ?? null,
+          openingText: DEFAULT_INTERVIEW_OPENING_TEXT
         };
       }, customSessionId);
     },
@@ -1965,6 +2052,9 @@ export function useInterviewSession(
         text
       });
       setTranscript((prev) => [...prev, pendingItem]);
+      voiceResponseCyclePendingRef.current = false;
+      inputResponseCycleRef.current += 1;
+      awaitInterviewerResponse();
 
       try {
         const client = getCommandClient();
@@ -1984,6 +2074,7 @@ export function useInterviewSession(
         );
         pendingSubmissionsRef.current.delete(itemId);
       } catch (err) {
+        clearPendingInterviewerResponse();
         const errorMsg = err instanceof Error ? err.message : "Submission failed";
         setTranscript((prev) =>
           prev.map((item) =>
@@ -1999,7 +2090,13 @@ export function useInterviewSession(
         throw err;
       }
     },
-    [sessionId, sessionStatus, getCommandClient]
+    [
+      awaitInterviewerResponse,
+      clearPendingInterviewerResponse,
+      sessionId,
+      sessionStatus,
+      getCommandClient
+    ]
   );
 
   const retrySubmission = useCallback(
@@ -2118,6 +2215,10 @@ export function useInterviewSession(
       boardSyncSessionRef.current = null;
       rendererAudioPlayerRef.current?.dispose();
       rendererAudioPlayerRef.current = null;
+      if (responseTimeoutRef.current !== null) {
+        globalThis.clearTimeout(responseTimeoutRef.current);
+        responseTimeoutRef.current = null;
+      }
     };
   }, []);
 
@@ -2135,6 +2236,7 @@ export function useInterviewSession(
     providerOptionsLoading,
     providerOptionsError,
     isStreaming,
+    isResponding,
     transcript,
     problem,
     configuration,

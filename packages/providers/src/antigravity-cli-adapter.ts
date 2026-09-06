@@ -579,7 +579,8 @@ export function createAntigravityCliReasoningProvider(
       return parseAntigravityStream(
         result.stdout,
         modelProfile.cliModelId,
-        ANTIGRAVITY_CLI_AGENT_ID
+        ANTIGRAVITY_CLI_AGENT_ID,
+        modelProfile.logicalModelId
       );
     }
   });
@@ -706,10 +707,17 @@ export function assertAntigravityCliZeroTurnPreflightResult(
 
     const init = InitEventSchema.safeParse(event);
     if (init.success) {
+      const expectedNormalizedModelId = ANTIGRAVITY_CLI_MODEL_ID.replace(
+        /-(high|medium|low)$/u,
+        ""
+      );
+      const modelMatches =
+        init.data.init.model === expectedNormalizedModelId
+        || init.data.init.model === ANTIGRAVITY_CLI_MODEL_ID;
       if (
         sawInit
         || index !== firstNonBlankLineIndex(lines)
-        || init.data.init.model !== ANTIGRAVITY_CLI_MODEL_ID
+        || !modelMatches
         || init.data.init.agent !== ANTIGRAVITY_CLI_AGENT_ID
         || !isAuditedAntigravityCliToolSurface(init.data.init[INIT_TOOLS_FIELD])
         || init.data.init.permission_mode !== "strict"
@@ -835,7 +843,8 @@ function createSingleTurnInput(input: ReasoningTurnInput): string {
 function parseAntigravityStream(
   stdout: string,
   expectedModelId: string,
-  expectedAgentId: string
+  expectedAgentId: string,
+  logicalModelId?: string
 ): InterviewerProposal {
   const lines = stdout.split(/\r?\n/u);
   let sawInit = false;
@@ -860,10 +869,18 @@ function parseAntigravityStream(
       const schemaMatches = schemaMatchesProposalContract(
         init.data.init.json_schema
       );
+      const expectedNormalizedModelId = expectedModelId.replace(
+        /-(high|medium|low)$/u,
+        ""
+      );
+      const modelMatches =
+        init.data.init.model === expectedModelId
+        || init.data.init.model === expectedNormalizedModelId
+        || (logicalModelId !== undefined && init.data.init.model === logicalModelId);
       if (
         sawInit
         || index !== firstNonBlankLineIndex(lines)
-        || init.data.init.model !== expectedModelId
+        || !modelMatches
         || init.data.init.agent !== expectedAgentId
         || !isAuditedAntigravityCliToolSurface(init.data.init[INIT_TOOLS_FIELD])
         || !schemaMatches

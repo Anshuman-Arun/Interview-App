@@ -155,6 +155,12 @@ describe("supervised Antigravity runtime profile", () => {
     expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain(
       "name: interview-realizer"
     );
+    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain(
+      "exact schema property names"
+    );
+    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain(
+      "Never wrap JSON in Markdown or a code fence"
+    );
     expect(ANTIGRAVITY_FORMAL_INTERPRETER_AGENT_MARKDOWN).toContain(
       "name: formal-interpreter"
     );

@@ -10,6 +10,10 @@ import {
   ReplayPanel,
   failureMessage
 } from "../components/SessionReviewModal.js";
+import {
+  downloadLatexTranscript,
+  exportPrintablePdfTranscript
+} from "../export/transcript-export.js";
 import type { ReviewView } from "./ReviewPageShell.js";
 import "./ReviewReadPanel.css";
 
@@ -176,6 +180,30 @@ export function ReviewReadPanel({
 
   return (
     <>
+      <div className="review-export-bar">
+        <div>
+          <strong>Oxford Tutorial Summary & Transcript</strong>
+          <span>Export formatted Oxford-style LaTeX document or generate printable PDF transcript</span>
+        </div>
+        <div className="review-export-buttons">
+          <button
+            type="button"
+            className="review-export-btn"
+            onClick={() => downloadLatexTranscript({ sessionId, evaluation, replay })}
+            title="Download formatted .tex source"
+          >
+            Export LaTeX (.tex)
+          </button>
+          <button
+            type="button"
+            className="review-export-btn review-export-btn--primary"
+            onClick={() => exportPrintablePdfTranscript({ sessionId, evaluation, replay })}
+            title="Open printable view to save as PDF"
+          >
+            Export PDF Transcript
+          </button>
+        </div>
+      </div>
       {primary}
       <PerformancePanel
         response={performance}

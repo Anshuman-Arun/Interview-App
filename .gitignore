@@ -36,5 +36,9 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Python
+__pycache__/
+*.pyc
+
 # Generated from the reviewed base64 icon source during Windows packaging.
 apps/desktop/assets/icon.png

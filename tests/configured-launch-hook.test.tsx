@@ -24,7 +24,10 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-function renderHook(fetchImpl: typeof fetch): {
+function renderHook(
+  fetchImpl: typeof fetch,
+  openingSpeaker?: (text: string) => void
+): {
   readonly root: Root;
   readonly container: HTMLDivElement;
   current(): UseInterviewSessionResult;
@@ -36,7 +39,8 @@ function renderHook(fetchImpl: typeof fetch): {
       rendererStreamUrl: RENDERER_URL,
       voiceBaseUrl: VOICE_URL,
       clientToken: CLIENT_TOKEN,
-      fetchImpl
+      fetchImpl,
+      ...(openingSpeaker === undefined ? {} : { openingSpeaker })
     });
     return <div>{current.sessionId ?? "none"}</div>;
   }
@@ -88,6 +92,7 @@ describe("configured interview hook launch", () => {
     });
     const commandTypes: string[] = [];
     let rendererRequests = 0;
+    const spokenOpenings: string[] = [];
 
     const fetchImpl: typeof fetch = async (input, init = {}) => {
       const url = typeof input === "string"
@@ -139,7 +144,7 @@ describe("configured interview hook launch", () => {
       throw new Error(`Unexpected command type: ${command.type}`);
     };
 
-    const rendered = renderHook(fetchImpl);
+    const rendered = renderHook(fetchImpl, (text) => spokenOpenings.push(text));
     await act(async () => {
       await rendered.current().startConfiguredSession(configuration, sessionId);
     });
@@ -149,6 +154,16 @@ describe("configured interview hook launch", () => {
     expect(rendered.current().configuration).toEqual(configuration);
     expect(rendered.current().configurationSource).toBe("CONFIGURED");
     expect(rendered.current().problem).toBeNull();
+    expect(rendered.current().transcript).toEqual([
+      expect.objectContaining({
+        role: "interviewer",
+        text: "Hi, welcome! Before we get started, is everything ready to go on your end?",
+        status: "COMPLETED"
+      })
+    ]);
+    expect(spokenOpenings).toEqual([
+      "Hi, welcome! Before we get started, is everything ready to go on your end?"
+    ]);
     expect(rendered.current().whiteboardSync.status).toBe("UNINITIALIZED");
     expect(rendered.current().isConnected).toBe(false);
     expect(rendererRequests).toBe(0);

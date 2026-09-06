@@ -1,18 +1,14 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ACCENT_OPTIONS,
   MAX_INTERFACE_ZOOM_PERCENT,
   MIN_INTERFACE_ZOOM_PERCENT,
-  type BorderStyle,
-  type CornerStyle,
   type ThemeMode
 } from "../appearance/appearance.js";
 import { useAppearance } from "../appearance/AppearanceProvider.js";
 import "./AppearanceDock.css";
 
-const THEMES: readonly ThemeMode[] = ["system", "light", "dark"];
-const CORNERS: readonly CornerStyle[] = ["square", "soft", "round", "generous"];
-const BORDERS: readonly BorderStyle[] = ["quiet", "regular", "strong", "contrast"];
+const THEMES: readonly ThemeMode[] = ["light", "dark"];
 
 export function AppearanceDock({
   compact = false
@@ -26,10 +22,13 @@ export function AppearanceDock({
     setAccent,
     setAccentIntensity,
     setZoomPercent,
-    setCorners,
-    setBorders,
     reset
   } = useAppearance();
+  const [draftZoom, setDraftZoom] = useState(settings.zoomPercent);
+
+  useEffect(() => {
+    setDraftZoom(settings.zoomPercent);
+  }, [settings.zoomPercent]);
 
   useEffect(() => {
     const closeFromOutside = (event: PointerEvent): void => {
@@ -58,8 +57,10 @@ export function AppearanceDock({
     };
   }, []);
 
-  const nudgeZoom = (delta: number): void => {
-    setZoomPercent(settings.zoomPercent + delta);
+  const nudgeDraftZoom = (delta: number): void => {
+    setDraftZoom((prev) =>
+      Math.min(MAX_INTERFACE_ZOOM_PERCENT, Math.max(MIN_INTERFACE_ZOOM_PERCENT, prev + delta))
+    );
   };
 
   return (
@@ -72,7 +73,7 @@ export function AppearanceDock({
       }
     >
       <summary className="appearance-dock__trigger" aria-label="Appearance settings">
-        <span aria-hidden="true" className="appearance-dock__trigger-mark">Aa</span>
+        <span aria-hidden="true" className="appearance-dock__trigger-mark">◐</span>
         {!compact && <span>Appearance</span>}
       </summary>
 
@@ -131,57 +132,17 @@ export function AppearanceDock({
           </label>
         </section>
 
-        <section className="appearance-dock__section">
-          <span className="appearance-dock__label">Corners</span>
-          <div className="appearance-icon-options">
-            {CORNERS.map((corner, index) => (
-              <button
-                key={corner}
-                type="button"
-                aria-label={corner}
-                aria-pressed={settings.corners === corner}
-                onClick={() => setCorners(corner)}
-              >
-                <span
-                  className="appearance-corner-sample"
-                  data-corner={corner}
-                  aria-hidden="true"
-                />
-                <small>{index + 1}</small>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="appearance-dock__section">
-          <span className="appearance-dock__label">Borders</span>
-          <div className="appearance-icon-options">
-            {BORDERS.map((border) => (
-              <button
-                key={border}
-                type="button"
-                aria-label={border}
-                aria-pressed={settings.borders === border}
-                onClick={() => setBorders(border)}
-              >
-                <span
-                  className="appearance-border-sample"
-                  data-border={border}
-                  aria-hidden="true"
-                />
-              </button>
-            ))}
-          </div>
-        </section>
-
         <section className="appearance-dock__section appearance-dock__section--last">
           <div className="appearance-zoom__heading">
             <span className="appearance-dock__label">Zoom</span>
             <button
               type="button"
               className="appearance-zoom__reset"
-              onClick={() => setZoomPercent(100)}
-              disabled={settings.zoomPercent === 100}
+              onClick={() => {
+                setDraftZoom(100);
+                setZoomPercent(100);
+              }}
+              disabled={settings.zoomPercent === 100 && draftZoom === 100}
             >
               100%
             </button>
@@ -190,44 +151,41 @@ export function AppearanceDock({
             <button
               type="button"
               aria-label="Zoom out"
-              onClick={() => nudgeZoom(-10)}
-              disabled={settings.zoomPercent <= MIN_INTERFACE_ZOOM_PERCENT}
+              onClick={() => nudgeDraftZoom(-10)}
+              disabled={draftZoom <= MIN_INTERFACE_ZOOM_PERCENT}
             >
               −
             </button>
             <label className="appearance-zoom__value">
               <input
-                key={settings.zoomPercent}
+                key={draftZoom}
                 type="number"
                 min={MIN_INTERFACE_ZOOM_PERCENT}
                 max={MAX_INTERFACE_ZOOM_PERCENT}
                 step="1"
-                defaultValue={settings.zoomPercent}
+                value={draftZoom}
                 aria-label="Interface zoom percent"
-                onBlur={(event) => {
-                  const raw = event.currentTarget.value.trim();
-                  if (raw.length === 0) {
-                    event.currentTarget.value = String(settings.zoomPercent);
-                    return;
-                  }
-                  const next = Number(raw);
-                  if (!Number.isFinite(next)) {
-                    event.currentTarget.value = String(settings.zoomPercent);
-                    return;
-                  }
+                onChange={(event) => {
+                  const val = Number(event.currentTarget.value);
+                  if (Number.isFinite(val)) setDraftZoom(val);
+                }}
+                onBlur={() => {
                   const normalized = Math.min(
                     MAX_INTERFACE_ZOOM_PERCENT,
-                    Math.max(MIN_INTERFACE_ZOOM_PERCENT, Math.round(next))
+                    Math.max(MIN_INTERFACE_ZOOM_PERCENT, Math.round(draftZoom))
                   );
-                  event.currentTarget.value = String(normalized);
-                  setZoomPercent(normalized);
+                  setDraftZoom(normalized);
                 }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
-                    event.currentTarget.blur();
+                    const normalized = Math.min(
+                      MAX_INTERFACE_ZOOM_PERCENT,
+                      Math.max(MIN_INTERFACE_ZOOM_PERCENT, Math.round(draftZoom))
+                    );
+                    setDraftZoom(normalized);
+                    setZoomPercent(normalized);
                   } else if (event.key === "Escape") {
-                    event.currentTarget.value = String(settings.zoomPercent);
-                    event.currentTarget.blur();
+                    setDraftZoom(settings.zoomPercent);
                   }
                 }}
               />
@@ -236,22 +194,27 @@ export function AppearanceDock({
             <button
               type="button"
               aria-label="Zoom in"
-              onClick={() => nudgeZoom(10)}
-              disabled={settings.zoomPercent >= MAX_INTERFACE_ZOOM_PERCENT}
+              onClick={() => nudgeDraftZoom(10)}
+              disabled={draftZoom >= MAX_INTERFACE_ZOOM_PERCENT}
             >
               +
             </button>
           </div>
-          <input
-            className="appearance-zoom__range"
-            type="range"
-            min={MIN_INTERFACE_ZOOM_PERCENT}
-            max={MAX_INTERFACE_ZOOM_PERCENT}
-            step="1"
-            value={settings.zoomPercent}
-            aria-label="Interface zoom"
-            onChange={(event) => setZoomPercent(Number(event.target.value))}
-          />
+          <button
+            type="button"
+            className="appearance-zoom__apply"
+            onClick={() => {
+              const normalized = Math.min(
+                MAX_INTERFACE_ZOOM_PERCENT,
+                Math.max(MIN_INTERFACE_ZOOM_PERCENT, Math.round(draftZoom))
+              );
+              setDraftZoom(normalized);
+              setZoomPercent(normalized);
+            }}
+            disabled={draftZoom === settings.zoomPercent}
+          >
+            Apply
+          </button>
         </section>
       </div>
     </details>

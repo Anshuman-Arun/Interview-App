@@ -171,7 +171,7 @@ export function ProductFrame({
               <i aria-hidden="true" />
               {readinessChecking ? "CHECKING" : readinessReady ? "READY" : authorityUnavailable ? "CHECK SESSIONS" : "CHECK SETUP"}
             </span>
-            <AppearanceDock />
+            <AppearanceDock compact />
           </div>
         </header>
         {notice !== undefined && notice !== null && (

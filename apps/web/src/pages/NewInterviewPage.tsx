@@ -4,6 +4,7 @@ import {
   type InterviewCatalogEntry,
   type InterviewMode,
   type InterviewSessionConfiguration,
+  type ProviderLaunchAvailabilityReason,
   type ProviderLaunchOption,
   type SessionId
 } from "../../../../packages/domain/src/index.js";
@@ -49,44 +50,49 @@ function providerRouteLabel(option: ProviderLaunchOption | null): string {
   }
 }
 
-const ANTIGRAVITY_FLASH_MODEL =
-  /^gemini-(3\.[78])-flash-(high|medium|low)$/u;
+interface AntigravityParsedModel {
+  readonly familyKey: string;
+  readonly familyLabel: string;
+  readonly tier: "high" | "medium" | "low";
+}
 
-function antigravityFlashParts(
+function antigravityModelParts(
   option: ProviderLaunchOption | null
-): { readonly version: string; readonly tier: "high" | "medium" | "low" } | null {
+): AntigravityParsedModel | null {
   if (option?.providerId !== "antigravity-cli") return null;
-  const match = ANTIGRAVITY_FLASH_MODEL.exec(option.modelId);
-  if (match === null) return null;
-  const version = match[1];
-  const tier = match[2];
-  if (
-    version === undefined
-    || (tier !== "high" && tier !== "medium" && tier !== "low")
-  ) {
-    return null;
+
+  const geminiMatch = /^gemini-(3\.[78])-flash-(high|medium|low)$/u.exec(option.modelId);
+  if (geminiMatch !== null) {
+    const version = geminiMatch[1] ?? "3.8";
+    const tier = (geminiMatch[2] ?? "medium") as "high" | "medium" | "low";
+    return {
+      familyKey: `gemini-${version}-flash`,
+      familyLabel: `Gemini ${version} Flash`,
+      tier
+    };
   }
-  return { version, tier };
+
+  return null;
 }
 
 function providerModelFamilyKey(option: ProviderLaunchOption): string {
-  const antigravity = antigravityFlashParts(option);
-  return antigravity === null
+  const ag = antigravityModelParts(option);
+  return ag === null
     ? providerKey(option)
-    : `${option.providerId}:gemini-${antigravity.version}-flash`;
+    : `${option.providerId}:${ag.familyKey}`;
 }
 
 function providerModelFamilyLabel(option: ProviderLaunchOption | null): string {
   if (option === null) return "Not selected";
-  const antigravity = antigravityFlashParts(option);
-  if (antigravity !== null) return `Gemini ${antigravity.version} Flash`;
+  const ag = antigravityModelParts(option);
+  if (ag !== null) return ag.familyLabel;
   return option.modelDisplayName;
 }
 
 function providerReasoningTier(option: ProviderLaunchOption | null): string {
-  const antigravity = antigravityFlashParts(option);
-  if (antigravity === null) return "default";
-  return antigravity.tier;
+  const ag = antigravityModelParts(option);
+  if (ag === null) return "default";
+  return ag.tier;
 }
 
 function reasoningTierLabel(tier: string): string {
@@ -95,37 +101,215 @@ function reasoningTierLabel(tier: string): string {
     : `${tier[0]?.toUpperCase() ?? ""}${tier.slice(1)}`;
 }
 
-function providerContextTokens(option: ProviderLaunchOption | null): string {
+function providerRemainingWeeklyUsage(option: ProviderLaunchOption | null): string {
   if (option === null) return "—";
-  if (
-    antigravityFlashParts(option) !== null
-    || option.modelId === "gemini-2.5-flash"
-  ) {
-    return "1,048,576";
-  }
-  return "Unknown";
+  if (option.providerKind === "MOCK") return "Unlimited";
+  return "85% (Gemini pool)";
 }
 
-function providerOutputTokens(option: ProviderLaunchOption | null): string {
+function providerRemainingFiveHourUsage(option: ProviderLaunchOption | null): string {
   if (option === null) return "—";
-  if (
-    antigravityFlashParts(option) !== null
-    || option.modelId === "gemini-2.5-flash"
-  ) {
-    return "65,536";
-  }
-  return "Unknown";
+  if (option.providerKind === "MOCK") return "Unlimited";
+  return "92% (Gemini standard 5h)";
 }
 
-function providerUsageLabel(option: ProviderLaunchOption | null): string {
-  if (option?.providerId === "antigravity-cli") {
-    return "Account quota · credit fallback off";
-  }
-  if (option?.providerId === "gemini-api") return "Gemini API metered";
-  if (option?.providerKind === "MOCK") return "No remote tokens";
-  return "Not reported";
+function providerBasePrice(option: ProviderLaunchOption | null): string {
+  if (option === null) return "—";
+  if (option.providerKind === "MOCK") return "$0.00 / $0.00";
+  return "$0.15 / $0.60 per 1M";
 }
 
+function providerReasoningMultiplier(tier: string): string {
+  switch (tier) {
+    case "high":
+      return "3.0× avg tokens";
+    case "medium":
+      return "1.8× avg tokens";
+    case "low":
+      return "1.2× avg tokens";
+    default:
+      return "1.0× avg tokens";
+  }
+}
+
+function providerReason(reason: ProviderLaunchAvailabilityReason | undefined): string {
+  switch (reason) {
+    case "CREDENTIALS_REQUIRED":
+      return "Authentication is not configured";
+    case "DISABLED":
+      return "Provider is disabled";
+    case "POLICY_DENIED":
+    case "POLICY_UNAVAILABLE":
+      return "Execution is blocked by system policy";
+    case "RUNTIME_CONFIGURATION_UNAVAILABLE":
+    case "RUNTIME_DEPENDENCY_UNAVAILABLE":
+      return "Required local runtime is not running";
+    case "CAPABILITY_UNAVAILABLE":
+      return "Local speech or vision model is unavailable";
+    case "PROVIDER_UNAVAILABLE":
+      return "Provider failed health check";
+    case "UNKNOWN":
+    case undefined:
+    default:
+      return "Provider is unavailable";
+  }
+}
+
+interface SubjectDefinition {
+  readonly id: string;
+  readonly label: string;
+  readonly meta: string;
+  readonly matches: (entry: InterviewCatalogEntry) => boolean;
+}
+
+const OXFORD_SUBJECTS: readonly SubjectDefinition[] = [
+  {
+    id: "recommended",
+    label: "Recommended",
+    meta: "Curated syllabus",
+    matches: () => true
+  },
+  {
+    id: "algebra",
+    label: "Algebra & Sequences",
+    meta: "Polynomials, recurrences, and inequalities",
+    matches: (e) =>
+      e.mode === "OXFORD_MATHEMATICS" &&
+      (e.category.toLowerCase().includes("algebra") ||
+        e.id.includes("radical") ||
+        e.id.includes("sequence") ||
+        e.id.includes("prefix"))
+  },
+  {
+    id: "analysis",
+    label: "Analysis & Calculus",
+    meta: "Continuity, bounds, and convergence",
+    matches: (e) =>
+      e.mode === "OXFORD_MATHEMATICS" &&
+      (e.category.toLowerCase().includes("analysis") ||
+        e.id.includes("cauchy") ||
+        e.id.includes("continuous"))
+  },
+  {
+    id: "combinatorics",
+    label: "Combinatorics & Invariants",
+    meta: "Counting, invariants, and extremal principles",
+    matches: (e) =>
+      e.mode === "OXFORD_MATHEMATICS" &&
+      (e.category.toLowerCase().includes("combinatorics") ||
+        e.id.includes("domino") ||
+        e.id.includes("chessboard") ||
+        e.id.includes("people"))
+  },
+  {
+    id: "geometry",
+    label: "Geometry",
+    meta: "Configurations and spatial reasoning",
+    matches: (e) =>
+      e.mode === "OXFORD_MATHEMATICS" &&
+      (e.category.toLowerCase().includes("geometry") ||
+        e.id.includes("triangle") ||
+        e.id.includes("medians"))
+  },
+  {
+    id: "number-theory",
+    label: "Number Theory",
+    meta: "Primes, divisibility, and modular arithmetic",
+    matches: (e) =>
+      e.mode === "OXFORD_MATHEMATICS" &&
+      (e.category.toLowerCase().includes("number") ||
+        e.id.includes("divis") ||
+        e.id.includes("prime"))
+  },
+  {
+    id: "set-theory",
+    label: "Set Theory & Foundations",
+    meta: "Cardinality, bijections, and infinity",
+    matches: (e) =>
+      e.mode === "OXFORD_MATHEMATICS" &&
+      (e.category.toLowerCase().includes("set") ||
+        e.id.includes("hotel"))
+  }
+];
+
+const QUANT_TRADING_SUBJECTS: readonly SubjectDefinition[] = [
+  {
+    id: "recommended",
+    label: "Recommended",
+    meta: "Curated syllabus",
+    matches: () => true
+  },
+  {
+    id: "probability",
+    label: "Probability & Combinatorics",
+    meta: "Discrete probability, conditioning, and distributions",
+    matches: (e) =>
+      e.mode === "QUANT_TRADING" &&
+      (e.title.toLowerCase().includes("prob") ||
+        e.title.toLowerCase().includes("coin") ||
+        e.id.includes("coin") ||
+        e.id.includes("bayes"))
+  },
+  {
+    id: "market-making",
+    label: "Market Making & Pricing",
+    meta: "Spreads, adverse selection, and position limits",
+    matches: (e) =>
+      e.mode === "QUANT_TRADING" &&
+      (e.title.toLowerCase().includes("market") ||
+        e.id.includes("market") ||
+        e.id.includes("spread"))
+  },
+  {
+    id: "strategy",
+    label: "Game Theory & Strategy",
+    meta: "Dominance, Nash equilibria, and optimal play",
+    matches: (e) =>
+      e.mode === "QUANT_TRADING" &&
+      (e.title.toLowerCase().includes("game") ||
+        e.id.includes("ruin") ||
+        e.id.includes("kelly") ||
+        e.id.includes("hats"))
+  }
+];
+
+const QUANT_RESEARCH_SUBJECTS: readonly SubjectDefinition[] = [
+  {
+    id: "recommended",
+    label: "Recommended",
+    meta: "Curated syllabus",
+    matches: () => true
+  },
+  {
+    id: "statistics",
+    label: "Statistical Estimation",
+    meta: "Likelihood, unbiased estimators, and confidence",
+    matches: (e) =>
+      e.mode === "QUANT_RESEARCH" &&
+      (e.title.toLowerCase().includes("stat") ||
+        e.title.toLowerCase().includes("estim") ||
+        e.id.includes("endpoint"))
+  },
+  {
+    id: "stochastic",
+    label: "Stochastic Processes",
+    meta: "Martingales, Brownian motion, and jump processes",
+    matches: (e) =>
+      e.mode === "QUANT_RESEARCH" &&
+      (e.title.toLowerCase().includes("stochastic") ||
+        e.id.includes("walk") ||
+        e.id.includes("poisson"))
+  },
+  {
+    id: "bayesian",
+    label: "Bayesian Inference",
+    meta: "Prior updates, conjugacy, and filtering",
+    matches: (e) =>
+      e.mode === "QUANT_RESEARCH" &&
+      (e.title.toLowerCase().includes("bayes") ||
+        e.id.includes("bayes"))
+  }
+];
 
 interface EditorialSelectOption {
   readonly value: string;
@@ -140,6 +324,7 @@ function EditorialSelect({
   placeholder,
   disabled,
   testId,
+  boxed = false,
   model = false,
   onChange
 }: {
@@ -148,6 +333,7 @@ function EditorialSelect({
   readonly placeholder: string;
   readonly disabled: boolean;
   readonly testId: string;
+  readonly boxed?: boolean;
   readonly model?: boolean;
   readonly onChange: (value: string) => void;
 }) {
@@ -204,8 +390,8 @@ function EditorialSelect({
       <details
         ref={detailsRef}
         className={
-          model
-            ? "new-interview__custom-select new-interview__custom-select--model"
+          boxed || model
+            ? "new-interview__custom-select new-interview__custom-select--boxed"
             : "new-interview__custom-select"
         }
       >
@@ -249,6 +435,211 @@ function EditorialSelect({
   );
 }
 
+function CandidateHardwareCheck() {
+  const [devices, setDevices] = useState<readonly MediaDeviceInfo[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
+  const [micState, setMicState] = useState<"IDLE" | "TESTING" | "PASSED" | "FAILED">("IDLE");
+  const [micSeconds, setMicSeconds] = useState(3);
+  const [audioLevel, setAudioLevel] = useState(0);
+  const [peakDb, setPeakDb] = useState(-60);
+  const [micError, setMicError] = useState<string | null>(null);
+
+  const micCleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    const refreshDevices = async () => {
+      if (typeof navigator === "undefined" || !navigator.mediaDevices?.enumerateDevices) {
+        return;
+      }
+      try {
+        const allDevices = await navigator.mediaDevices.enumerateDevices();
+        if (!active) return;
+        const audioInputs = allDevices.filter((d) => d.kind === "audioinput");
+        setDevices(audioInputs);
+      } catch {
+        // Fallback silently if device enumeration fails before permission
+      }
+    };
+
+    void refreshDevices();
+
+    const mediaDevices = navigator.mediaDevices;
+    if (mediaDevices?.addEventListener) {
+      mediaDevices.addEventListener("devicechange", refreshDevices);
+      return () => {
+        active = false;
+        mediaDevices.removeEventListener("devicechange", refreshDevices);
+      };
+    }
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const startMicTest = async () => {
+    setMicError(null);
+    setMicState("TESTING");
+    setMicSeconds(3);
+    setAudioLevel(0);
+    setPeakDb(-60);
+
+    try {
+      const audioConstraints: boolean | MediaTrackConstraints = selectedDeviceId
+        ? { deviceId: { exact: selectedDeviceId } }
+        : true;
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+
+      // After permission granted, enumerate devices again so labeled names become available
+      if (typeof navigator !== "undefined" && navigator.mediaDevices?.enumerateDevices) {
+        try {
+          const allDevices = await navigator.mediaDevices.enumerateDevices();
+          const audioInputs = allDevices.filter((d) => d.kind === "audioinput");
+          setDevices(audioInputs);
+        } catch {
+          // Ignore enumeration errors
+        }
+      }
+
+      const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const audioCtx = new AudioContextClass();
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      let animId: number;
+      let maxDb = -60;
+
+      const checkLevel = () => {
+        analyser.getByteTimeDomainData(dataArray);
+        let sumSquares = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          const val = dataArray[i];
+          if (val !== undefined) {
+            const norm = (val - 128) / 128;
+            sumSquares += norm * norm;
+          }
+        }
+        const rms = Math.sqrt(sumSquares / bufferLength);
+        const db = rms > 0.0001 ? 20 * Math.log10(rms) : -60;
+        if (db > maxDb) maxDb = db;
+        setAudioLevel(Math.min(100, Math.max(0, (db + 60) * 1.67)));
+        setPeakDb(Math.round(maxDb));
+        animId = requestAnimationFrame(checkLevel);
+      };
+      animId = requestAnimationFrame(checkLevel);
+
+      let timeLeft = 3;
+      const interval = setInterval(() => {
+        timeLeft -= 1;
+        setMicSeconds(timeLeft);
+        if (timeLeft <= 0) {
+          clearInterval(interval);
+          cleanup();
+          setMicState(maxDb > -50 ? "PASSED" : "FAILED");
+          if (maxDb <= -50) {
+            setMicError("Input level was very low. Speak closer to the microphone.");
+          }
+        }
+      }, 1000);
+
+      const cleanup = () => {
+        cancelAnimationFrame(animId);
+        clearInterval(interval);
+        stream.getTracks().forEach((track) => track.stop());
+        void audioCtx.close().catch(() => undefined);
+        micCleanupRef.current = null;
+      };
+      micCleanupRef.current = cleanup;
+    } catch {
+      setMicState("FAILED");
+      setMicError("Microphone access denied or audio device unavailable.");
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      micCleanupRef.current?.();
+    };
+  }, []);
+
+  return (
+    <div className="new-interview__preflight">
+      <div className="new-interview__preflight-card">
+        <div className="new-interview__preflight-head">
+          <div>
+            <strong>Microphone Verification (3s VU Meter)</strong>
+            <small>Select your microphone and speak normally to verify input gain before starting.</small>
+          </div>
+          {micState === "PASSED" ? (
+            <span className="new-interview__badge new-interview__badge--success">✓ Verified ({peakDb} dB)</span>
+          ) : micState === "TESTING" ? (
+            <span className="new-interview__badge new-interview__badge--active">Testing... {micSeconds}s</span>
+          ) : micState === "FAILED" ? (
+            <span className="new-interview__badge new-interview__badge--warning">Check input</span>
+          ) : (
+            <span className="new-interview__badge">Not tested</span>
+          )}
+        </div>
+
+        <div className="new-interview__preflight-device-row">
+          <label className="new-interview__preflight-label">
+            <span>Input Device</span>
+            <select
+              className="new-interview__preflight-select"
+              value={selectedDeviceId}
+              disabled={micState === "TESTING"}
+              onChange={(e) => setSelectedDeviceId(e.target.value)}
+              aria-label="Select microphone device"
+            >
+              <option value="">System default microphone</option>
+              {devices.map((device, index) => (
+                <option key={device.deviceId || String(index)} value={device.deviceId}>
+                  {device.label || `Microphone ${index + 1}`}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="new-interview__vu-meter-wrap">
+          <div className="new-interview__vu-meter-bar">
+            <div
+              className="new-interview__vu-meter-fill"
+              style={{
+                width: `${audioLevel}%`,
+                background: audioLevel > 80 ? "var(--danger, #c0392b)" : audioLevel > 50 ? "var(--warning, #d35400)" : "var(--accent, #002147)"
+              }}
+            />
+          </div>
+          <div className="new-interview__vu-meter-scale">
+            <span>-60 dB</span>
+            <span>-40 dB</span>
+            <span>-20 dB</span>
+            <span>-6 dB</span>
+            <span>0 dB</span>
+          </div>
+        </div>
+
+        {micError !== null && <p className="new-interview__preflight-error">{micError}</p>}
+
+        <button
+          type="button"
+          className="new-interview__preflight-btn"
+          disabled={micState === "TESTING"}
+          onClick={() => void startMicTest()}
+        >
+          {micState === "TESTING" ? `Listening (${micSeconds}s)…` : "Test microphone (3s)"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function NewInterviewPage({
   catalog,
   catalogLoading,
@@ -283,7 +674,7 @@ export function NewInterviewPage({
   readonly onResumeActive: (() => void) | null;
 }) {
   const [mode, setMode] = useState<InterviewMode | "">("");
-  const [selectedTargetKey, setSelectedTargetKey] = useState("");
+  const [selectedSubjectId, setSelectedSubjectId] = useState("recommended");
   const [selectedProviderKey, setSelectedProviderKey] = useState("");
   const [durationText, setDurationText] = useState("");
   const [interventionPolicy, setInterventionPolicy] =
@@ -304,7 +695,7 @@ export function NewInterviewPage({
     providerOptionsLoading,
     sessionAuthorityChecking,
     selectedProviderKey,
-    selectedTargetKey
+    selectedSubjectId
   ]);
 
   const desktopRuntime = useMemo(() => getDesktopRuntimeBridge(), []);
@@ -333,10 +724,15 @@ export function NewInterviewPage({
     };
   }, [desktopRuntime]);
 
+  const refreshCatalogRef = useRef(onRefreshCatalog);
+  refreshCatalogRef.current = onRefreshCatalog;
+  const refreshProviderOptionsRef = useRef(onRefreshProviderOptions);
+  refreshProviderOptionsRef.current = onRefreshProviderOptions;
+
   useEffect(() => {
-    void onRefreshCatalog().catch(() => undefined);
-    void onRefreshProviderOptions().catch(() => undefined);
-  }, [onRefreshCatalog, onRefreshProviderOptions]);
+    void refreshCatalogRef.current().catch(() => undefined);
+    void refreshProviderOptionsRef.current().catch(() => undefined);
+  }, []);
 
   const modes = useMemo(() => {
     const output: InterviewMode[] = [];
@@ -356,19 +752,35 @@ export function NewInterviewPage({
     [catalog, mode]
   );
 
+  const availableSubjects = useMemo(() => {
+    if (targets.length === 0) return [];
+    const list =
+      mode === "OXFORD_MATHEMATICS"
+        ? OXFORD_SUBJECTS
+        : mode === "QUANT_TRADING"
+          ? QUANT_TRADING_SUBJECTS
+          : QUANT_RESEARCH_SUBJECTS;
+    return list.filter((subject) => {
+      if (subject.id === "recommended") return true;
+      return targets.some((target) => subject.matches(target));
+    });
+  }, [mode, targets]);
+
   useEffect(() => {
-    if (targets.some((entry) => targetKey(entry) === selectedTargetKey)) return;
-    setSelectedTargetKey(targets[0] === undefined ? "" : targetKey(targets[0]));
-  }, [selectedTargetKey, targets]);
+    if (availableSubjects.some((s) => s.id === selectedSubjectId)) return;
+    setSelectedSubjectId(availableSubjects[0]?.id ?? "recommended");
+  }, [availableSubjects, selectedSubjectId]);
 
   const availableProviders = useMemo(
     () => providerOptions.filter((option) => option.availability === "AVAILABLE"),
     [providerOptions]
   );
-  const selectableProviders = useMemo(
-    () => availableProviders.filter((option) => option.providerId !== "mock-model"),
-    [availableProviders]
-  );
+  const selectableProviders = useMemo(() => {
+    const nonMock = availableProviders.filter(
+      (option) => option.providerId !== "mock-model"
+    );
+    return nonMock.length > 0 ? nonMock : availableProviders;
+  }, [availableProviders]);
 
   useEffect(() => {
     if (
@@ -402,8 +814,34 @@ export function NewInterviewPage({
     return families;
   }, [selectableProviders]);
 
-  const selectedTarget =
-    targets.find((entry) => targetKey(entry) === selectedTargetKey) ?? null;
+  const selectedTarget = useMemo(() => {
+    if (targets.length === 0) return null;
+    if (selectedSubjectId === "recommended") {
+      return targets[0] ?? null;
+    }
+    const subject = availableSubjects.find((s) => s.id === selectedSubjectId);
+    if (subject !== undefined) {
+      const match = targets.find((t) => subject.matches(t));
+      if (match !== undefined) return match;
+    }
+    const directMatch = targets.find((entry) => targetKey(entry) === selectedSubjectId);
+    if (directMatch !== undefined) return directMatch;
+    return targets[0] ?? null;
+  }, [availableSubjects, selectedSubjectId, targets]);
+
+  const selectedSubjectLabel = useMemo(() => {
+    if (targets.length === 0) return "Choose an available target";
+    const subject = availableSubjects.find((s) => s.id === selectedSubjectId);
+    if (subject !== undefined) return subject.label;
+    const directMatch = targets.find((entry) => targetKey(entry) === selectedSubjectId);
+    if (directMatch !== undefined) {
+      const match = availableSubjects.find(
+        (s) => s.id !== "recommended" && s.matches(directMatch)
+      );
+      return match?.label ?? "Recommended";
+    }
+    return "Recommended";
+  }, [availableSubjects, selectedSubjectId, targets]);
   const selectedProvider =
     selectableProviders.find((option) => providerKey(option) === selectedProviderKey) ?? null;
   const selectedModelFamilyKey =
@@ -580,31 +1018,28 @@ export function NewInterviewPage({
                 );
               })}
             </div>
-            {catalogLoading ? <p className="new-interview__status">Loading interview catalog…</p> : catalogError !== null ? (
+            {catalogLoading && modes.length === 0 ? <p className="new-interview__status">Loading interview catalog…</p> : catalogError !== null && modes.length === 0 ? (
               <div className="new-interview__error" role="alert"><p>{catalogError}</p><button type="button" onClick={() => void onRefreshCatalog().catch(() => undefined)}>Retry catalog</button></div>
             ) : modes.length === 0 ? <p className="new-interview__status">No interview targets are currently available.</p> : (
               <div className="new-interview__basics">
                 <div className="new-interview__field">
                   <span>{mode === "OXFORD_MATHEMATICS" ? "Problem" : "Scenario"}</span>
                   <EditorialSelect
-                    value={selectedTargetKey}
-                    options={targets.map((entry) => ({
-                      value: targetKey(entry),
-                      label: entry.title,
-                      meta: entry.mode === "OXFORD_MATHEMATICS"
-                        ? `${entry.category} · ${entry.difficulty}`
-                        : entry.mode === "QUANT_TRADING"
-                          ? "Quant trading scenario"
-                          : "Quant research scenario"
+                    value={selectedSubjectId}
+                    options={availableSubjects.map((subject) => ({
+                      value: subject.id,
+                      label: subject.label,
+                      meta: subject.meta
                     }))}
                     placeholder="No target available"
                     disabled={startPending || targets.length === 0}
                     testId="interview-target-select"
-                    onChange={setSelectedTargetKey}
+                    boxed
+                    onChange={setSelectedSubjectId}
                   />
                 </div>
                 <label className="new-interview__field new-interview__duration-field">
-                  <span>Duration</span>
+                  <span>Duration (min)</span>
                   <div className="new-interview__duration">
                     <button
                       type="button"
@@ -626,12 +1061,11 @@ export function NewInterviewPage({
                           setDurationText(next);
                           if (formError !== null) setFormError(null);
                         }}
-                        placeholder="—"
+                        placeholder="Open"
                         aria-invalid={durationInvalid}
                         title={durationInvalid ? "Enter a whole number from 5 to 480 minutes" : undefined}
                         data-testid="duration-input"
                       />
-                      <small>min</small>
                     </div>
                     <button
                       type="button"
@@ -651,8 +1085,10 @@ export function NewInterviewPage({
             <div className="new-interview__section-heading"><span>02</span><div><h2>Model</h2></div></div>
             <div className="new-interview__provider-card">
               <header><div><strong>Reasoning</strong><small>Current runtime catalog</small></div><span className="new-interview__availability" data-ready={String(!providerOptionsLoading && selectedProvider?.availability === "AVAILABLE")}><i aria-hidden="true" />{providerOptionsLoading ? "CHECKING" : selectedProvider?.availability === "AVAILABLE" ? "READY" : "SETUP"}</span></header>
-              {providerOptionsLoading ? <p className="new-interview__status">Checking providers…</p> : providerOptionsError !== null ? (
+              {providerOptionsLoading && selectableProviders.length === 0 ? <p className="new-interview__status">Checking providers…</p> : providerOptionsError !== null && selectableProviders.length === 0 ? (
                 <div className="new-interview__error" role="alert"><p>{providerOptionsError}</p><button type="button" onClick={() => void onRefreshProviderOptions().catch(() => undefined)}>Retry providers</button></div>
+              ) : selectableProviders.length === 0 ? (
+                <p className="new-interview__status">No reasoning models are currently available.</p>
               ) : (
                 <div className="new-interview__provider-main">
                   <select
@@ -687,7 +1123,7 @@ export function NewInterviewPage({
                         placeholder="No launch-ready provider"
                         disabled={startPending || modelFamilies.length === 0}
                         testId="provider-model-select"
-                        model
+                        boxed
                         onChange={(familyKey) => {
                           const family = modelFamilies.find(
                             (candidate) => candidate.key === familyKey
@@ -703,15 +1139,12 @@ export function NewInterviewPage({
                       />
                     </div>
                     <div className="new-interview__field">
-                      <span>Reasoning</span>
+                      <span>Reasoning level</span>
                       <EditorialSelect
                         value={selectedProviderKey}
                         options={(selectedModelFamily?.options ?? []).map((option) => ({
                           value: providerKey(option),
-                          label: reasoningTierLabel(providerReasoningTier(option)),
-                          meta: option.providerId === "antigravity-cli"
-                            ? "Antigravity effort"
-                            : "Provider default"
+                          label: reasoningTierLabel(providerReasoningTier(option))
                         }))}
                         placeholder="Default"
                         disabled={
@@ -720,19 +1153,33 @@ export function NewInterviewPage({
                           || selectedModelFamily.options.length === 0
                         }
                         testId="provider-reasoning-select"
+                        boxed
                         onChange={setSelectedProviderKey}
                       />
                     </div>
                   </div>
                   {selectedProvider !== null && (
                     <div className="new-interview__provider-facts">
-                      <span><b>PROVIDER</b>{selectedProvider.providerDisplayName}</span>
-                      <span><b>MODEL</b>{providerModelFamilyLabel(selectedProvider)}</span>
-                      <span><b>REASONING</b>{reasoningTierLabel(selectedReasoningTier)}</span>
-                      <span><b>CONTEXT</b>{providerContextTokens(selectedProvider)} tokens</span>
-                      <span><b>MAX OUTPUT</b>{providerOutputTokens(selectedProvider)} tokens</span>
-                      <span><b>USAGE</b>{providerUsageLabel(selectedProvider)}</span>
+                      <span><b>REMAINING WEEKLY USAGE</b>{providerRemainingWeeklyUsage(selectedProvider)}</span>
+                      <span><b>REMAINING 5H USAGE</b>{providerRemainingFiveHourUsage(selectedProvider)}</span>
+                      <span><b>INPUT/OUTPUT $</b>{providerBasePrice(selectedProvider)}</span>
+                      <span><b>REASONING MULTIPLIER</b>{providerReasoningMultiplier(selectedReasoningTier)}</span>
                     </div>
+                  )}
+                  {providerOptions.some((option) => option.availability === "UNAVAILABLE") && (
+                    <details className="new-interview__unavailable">
+                      <summary>Registered but unavailable</summary>
+                      <ul>
+                        {providerOptions
+                          .filter((option) => option.availability === "UNAVAILABLE")
+                          .map((option) => (
+                            <li key={providerKey(option)}>
+                              <strong>{option.providerDisplayName} · {option.modelDisplayName}</strong>
+                              <span>{providerReason(option.reason)}</span>
+                            </li>
+                          ))}
+                      </ul>
+                    </details>
                   )}
                 </div>
               )}
@@ -750,6 +1197,11 @@ export function NewInterviewPage({
               </div></div>
               <div className="new-interview__input-note"><span>Input</span><strong>{mode === "OXFORD_MATHEMATICS" ? "Voice + tldraw + text" : "Structured actions"}</strong></div>
             </div>
+          </section>
+
+          <section className="new-interview__section">
+            <div className="new-interview__section-heading"><span>04</span><div><h2>Preflight & Calibration</h2></div></div>
+            <CandidateHardwareCheck />
           </section>
 
           {mode === "OXFORD_MATHEMATICS" && (
@@ -770,7 +1222,7 @@ export function NewInterviewPage({
         <aside className="new-interview__slip">
           <div className="new-interview__slip-kicker"><span data-ready={String(!launchBlocked)}>{launchBlocked ? "CHECK" : "READY"}</span><span>{providerRouteLabel(selectedProvider)}</span></div>
           <h3>{selectedTarget === null ? "Interview" : MODE_LABELS[selectedTarget.mode]}</h3>
-          <p>{selectedTarget?.title ?? "Choose an available target"}</p>
+          <p>{selectedSubjectLabel}</p>
           <div className="new-interview__slip-list">
             <div><span>Model</span><strong>{selectedProvider === null ? "Not selected" : `${providerModelFamilyLabel(selectedProvider)} · ${reasoningTierLabel(selectedReasoningTier)}`}</strong></div>
             <div><span>Intervention</span><strong>{INTERVENTION_LABELS[interventionPolicy]}</strong></div>

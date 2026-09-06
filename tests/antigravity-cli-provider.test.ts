@@ -698,6 +698,13 @@ describe("Antigravity CLI one-turn protocol", () => {
     const content = stdinMessage.message?.content;
     expect(typeof content).toBe("string");
     if (typeof content !== "string") throw new Error("Expected string prompt content");
+    expect(content).toContain(
+      "exact property names realizedAction, claimedDisclosureLevel, claimedDisclosureIds, speechText, and boardActions"
+    );
+    expect(content).toContain("never rename speechText to speech");
+    expect(content).toContain("raw JSON only: no Markdown, no code fence");
+    expect(content).toContain("no second object");
+    expect(content).toContain("Do not retry, critique, repair, or follow up");
     const contextMarker = "APPLICATION_SELECTED_CONTEXT_JSON\n";
     const contextIndex = content.indexOf(contextMarker);
     expect(contextIndex).toBeGreaterThanOrEqual(0);

@@ -908,7 +908,7 @@ export const App: React.FC = () => {
             </span>
           )}
 
-          {session.isStreaming && (
+          {session.isResponding && (
             <span className="app-header__streaming">Responding</span>
           )}
 

@@ -11,8 +11,6 @@ import type {
   ProviderLaunchOption
 } from "../../../../packages/domain/src/index.js";
 import type {
-  BorderStyle,
-  CornerStyle,
   ThemeMode
 } from "../appearance/appearance.js";
 import {
@@ -292,14 +290,10 @@ export function SettingsPage({
     setAccent,
     setAccentIntensity,
     setZoomPercent,
-    setCorners,
-    setBorders,
     reset
   } = useAppearance();
 
-  const themes: readonly ThemeMode[] = ["system", "light", "dark"];
-  const corners: readonly CornerStyle[] = ["square", "soft", "round", "generous"];
-  const borders: readonly BorderStyle[] = ["quiet", "regular", "strong", "contrast"];
+  const themes: readonly ThemeMode[] = ["light", "dark"];
 
   const antigravityOptions = providerOptions.filter(isAntigravity);
   const antigravity = antigravityOptions.find(
@@ -852,48 +846,6 @@ export function SettingsPage({
       <section className="expressive-settings__row">
         <div className="expressive-settings__copy">
           <span>03</span>
-          <div>
-            <h3>Shape & border</h3>
-            <p>Adjust geometry without adding shadows, blur, or visual noise.</p>
-          </div>
-        </div>
-        <div className="expressive-settings__control expressive-settings__dual">
-          <div>
-            <small>Corners</small>
-            <div className="expressive-settings__chips">
-              {corners.map((corner) => (
-                <button
-                  key={corner}
-                  type="button"
-                  aria-pressed={settings.corners === corner}
-                  onClick={() => setCorners(corner)}
-                >
-                  {corner}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <small>Borders</small>
-            <div className="expressive-settings__chips">
-              {borders.map((border) => (
-                <button
-                  key={border}
-                  type="button"
-                  aria-pressed={settings.borders === border}
-                  onClick={() => setBorders(border)}
-                >
-                  {border}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="expressive-settings__row">
-        <div className="expressive-settings__copy">
-          <span>04</span>
           <div>
             <h3>Zoom</h3>
             <p>Use any percentage, just like a normal app zoom control.</p>

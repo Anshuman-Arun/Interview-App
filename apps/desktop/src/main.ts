@@ -1212,8 +1212,14 @@ function stepDesktopZoom(window: BrowserWindow, direction: -1 | 1): void {
   applyDesktopZoomFactor(window, target, true);
 }
 
-function installDesktopZoomShortcuts(window: BrowserWindow): void {
+function installDesktopShortcuts(window: BrowserWindow): void {
   window.webContents.on("before-input-event", (event, input) => {
+    if (input.type === "keyDown" && input.key === "F11") {
+      event.preventDefault();
+      window.setFullScreen(!window.isFullScreen());
+      return;
+    }
+
     if (
       input.type !== "keyDown"
       || (!input.control && !input.meta)
@@ -1260,6 +1266,7 @@ async function createMainWindow(preloadPath?: string): Promise<void> {
     minWidth: DESKTOP_MIN_WIDTH,
     minHeight: DESKTOP_MIN_HEIGHT,
     show: false,
+    fullscreen: true,
     autoHideMenuBar: true,
     webPreferences: createSecureWebPreferences(resolvedPreload)
   });
@@ -1293,7 +1300,7 @@ async function createMainWindow(preloadPath?: string): Promise<void> {
   );
   removePermissionCapability = thisRemovePermissionCapability;
 
-  installDesktopZoomShortcuts(window);
+  installDesktopShortcuts(window);
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   const guardNavigation = (details: { preventDefault(): void; url: string }): void => {
     if (!isTrustedDesktopNavigation(details.url, targetUrl)) details.preventDefault();
@@ -1325,6 +1332,7 @@ async function createMainWindow(preloadPath?: string): Promise<void> {
 
   await window.loadURL(targetUrl);
   if (!window.isDestroyed()) {
+    window.setFullScreen(true);
     window.show();
     window.focus();
     startupTracker.recordStage(STARTUP_STAGE_MAIN_WINDOW_READY);

@@ -525,12 +525,15 @@ const geminiFactory: ProviderAdapterFactoryDefinition = {
 };
 
 function antigravityModelDisplayName(modelId: string): string {
-  const match = modelId.match(/^gemini-(3\.[78])-flash-(high|medium|low)$/u);
-  if (match === null) return modelId;
-  const version = match[1];
-  const effort = match[2];
-  if (version === undefined || effort === undefined) return modelId;
-  return `Gemini ${version} Flash (${effort[0]?.toUpperCase() ?? ""}${effort.slice(1)})`;
+  const geminiMatch = modelId.match(/^gemini-(3\.[78])-flash-(high|medium|low)$/u);
+  if (geminiMatch !== null) {
+    const version = geminiMatch[1];
+    const effort = geminiMatch[2];
+    if (version !== undefined && effort !== undefined) {
+      return `Gemini ${version} Flash (${effort[0]?.toUpperCase() ?? ""}${effort.slice(1)})`;
+    }
+  }
+  return modelId;
 }
 
 const ANTIGRAVITY_CLI_PROVIDER_INPUT: ProviderDefinitionInput = {
