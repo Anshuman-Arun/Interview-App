@@ -1,12 +1,6 @@
 name: Build Windows installer
 
 on:
-  push:
-    branches:
-      - "ui/editorial-v10-port"
-    paths:
-      - ".github/workflows/windows-installer.yml"
-    # Temporary certified-build trigger; remove after artifact capture.
   pull_request:
     paths:
       - ".gitattributes"
