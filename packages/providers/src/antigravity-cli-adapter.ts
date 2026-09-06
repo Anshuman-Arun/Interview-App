@@ -755,21 +755,12 @@ function parseAntigravityStream(
       ) {
         throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
       }
-      let responsePayload: unknown;
-      try {
-        responsePayload = parseStrictJson(result.data.result.response.trim());
-      } catch {
-        throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
-      }
-      if (
-        !jsonValuesCanonicallyEqual(
-          responsePayload,
-          result.data.result.structured_output
-        )
-      ) {
-        throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
-      }
-
+      // With --json-schema, Antigravity's structured_output is the
+      // schema-enforced machine payload. The sibling response field is
+      // presentation/model text and is not guaranteed to be JSON or to
+      // canonically equal structured_output (real 1.1.27 runs demonstrate
+      // this during structured-output repair). Treat only structured_output
+      // as the proposal transport, then apply the full local domain validator.
       const envelope = AntigravityProposalEnvelopeSchema.safeParse(
         result.data.result.structured_output
       );
