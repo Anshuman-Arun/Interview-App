@@ -84,67 +84,19 @@ const BOARD_OPERATIONS = [
 ] as const;
 
 const INTERVIEWER_PROPOSAL_JSON_SCHEMA = Object.freeze({
-  // Keep the CLI-enforced transport schema deliberately shallow.
-  //
-  // Antigravity CLI 1.1.27 successfully enforces simple structured-output
-  // schemas but terminates the agent when given the previous deeply nested
-  // board geometry + anyOf schema. The application remains authoritative:
-  // parseAntigravityStream() still validates structured_output with the full
-  // InterviewerProposalSchema below before any proposal can enter state.
+  // Antigravity CLI 1.1.27 crashes on the application's proposal-shaped
+  // schema even when the same model/agent/stream succeeds with a tiny schema.
+  // Ask the CLI to enforce only a one-string transport envelope. The string
+  // itself is parsed and fully validated by InterviewerProposalSchema below,
+  // which remains the sole authority before proposal admission.
   type: "object",
   additionalProperties: false,
   properties: {
-    realizedAction: {
-      type: "string",
-      enum: [...SOCRATIC_ACTIONS]
-    },
-    claimedDisclosureLevel: {
-      type: "integer",
-      enum: [0, 1, 2, 3, 4, 5]
-    },
-    claimedDisclosureIds: {
-      type: "array",
-      maxItems: MAX_DISCLOSURE_IDS,
-      items: {
-        type: "string",
-        minLength: 1,
-        maxLength: MAX_DISCLOSURE_ID_CHARACTERS
-      }
-    },
-    speechText: {
-      type: "string",
-      minLength: 1,
-      maxLength: MAX_SPEECH_CHARACTERS
-    },
-    boardActions: {
-      type: "array",
-      maxItems: MAX_BOARD_ACTIONS,
-      items: {
-        type: "object",
-        properties: {
-          operation: {
-            type: "string",
-            enum: [...BOARD_OPERATIONS]
-          },
-          layer: {
-            type: "string",
-            enum: ["AI_ANNOTATION"]
-          },
-          annotationPurpose: {
-            type: "string",
-            minLength: 1,
-            maxLength: MAX_ANNOTATION_PURPOSE_CHARACTERS
-          }
-        },
-        required: ["operation", "layer", "annotationPurpose"]
-      }
+    proposalJson: {
+      type: "string"
     }
   },
-  required: [
-    "realizedAction",
-    "claimedDisclosureLevel",
-    "claimedDisclosureIds"
-  ]
+  required: ["proposalJson"]
 });
 export const ANTIGRAVITY_CLI_PROPOSAL_SCHEMA_ARGUMENT = JSON.stringify(
   INTERVIEWER_PROPOSAL_JSON_SCHEMA
@@ -209,6 +161,9 @@ const INTERVIEWER_PROPOSAL_SCHEMA_CANONICAL = serializeBoundedPlainJson(
   INTERVIEWER_PROPOSAL_JSON_SCHEMA,
   MAX_SCHEMA_BYTES
 );
+const AntigravityProposalEnvelopeSchema = z.strictObject({
+  proposalJson: z.string().min(1).max(MAX_JSON_TEXT_CHARACTERS)
+});
 
 const INIT_TOOLS_FIELD = "tools" as const;
 
@@ -670,10 +625,12 @@ function createSingleTurnInput(input: ReasoningTurnInput): string {
     "When referring to student work, use an explicit target, targetRegion, or placement anchor; do not encode a student target indirectly with absolute coordinates.",
     "Use boardActions sparingly as a supporting explanatory medium; do not dump a solution onto the board.",
     "Do not use tools, subagents, files, prior conversations, or persistent memory.",
-    "Return exactly one interviewer proposal satisfying the supplied JSON schema.",
-    "Use the exact property names realizedAction, claimedDisclosureLevel, claimedDisclosureIds, speechText, and boardActions when those properties are present in the supplied JSON schema.",
-    "never rename speechText to speech, interviewerText, text, or any other alias.",
-    "Return raw JSON only: no Markdown, no code fence, no prose before or after the object, and no second object.",
+    "Return exactly one JSON transport object satisfying the supplied JSON schema.",
+    "Its proposalJson property must be a JSON-encoded string containing exactly one interviewer proposal object.",
+    "Inside proposalJson use the exact property names realizedAction, claimedDisclosureLevel, claimedDisclosureIds, speechText, and boardActions.",
+    "Inside proposalJson never rename speechText to speech, interviewerText, text, or any other alias.",
+    "The proposal must include realizedAction, claimedDisclosureLevel, and claimedDisclosureIds, and must include speechText or at least one boardActions item.",
+    "Return only the single transport object: no Markdown, no code fence, no prose before or after it, and no second object.",
     "Do not retry, critique, repair, or follow up after emitting the single proposal object.",
     "Do not add facts or disclosures that are not authorized by the context.",
     "",
@@ -801,8 +758,21 @@ function parseAntigravityStream(
         throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
       }
 
-      const parsedProposal = InterviewerProposalSchema.safeParse(
+      const envelope = AntigravityProposalEnvelopeSchema.safeParse(
         result.data.result.structured_output
+      );
+      if (!envelope.success) {
+        throw new AntigravityCliAdapterError("INVALID_PROPOSAL");
+      }
+
+      let proposalPayload: unknown;
+      try {
+        proposalPayload = parseStrictJson(envelope.data.proposalJson);
+      } catch {
+        throw new AntigravityCliAdapterError("INVALID_PROPOSAL");
+      }
+      const parsedProposal = InterviewerProposalSchema.safeParse(
+        proposalPayload
       );
       if (
         !parsedProposal.success
