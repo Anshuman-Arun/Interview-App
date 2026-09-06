@@ -54,7 +54,7 @@ afterEach(async () => {
     await manager.stopAll().catch(() => undefined);
   }
   for (const root of temporaryRoots.splice(0)) {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   }
 });
 
