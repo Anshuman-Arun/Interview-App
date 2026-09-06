@@ -22,7 +22,22 @@ describe("security and context boundary", () => {
       const serialized = JSON.stringify(context);
       expect(serialized).not.toContain(sixPeopleProblem.private.canonicalSolution);
       expect(context.realizationRequest.requiredAction).toBe("PROBE_JUSTIFICATION");
+      expect(context.authorizedSpeechRealizations).toEqual([
+        {
+          speechText: "Why must that step be true?",
+          claimedDisclosureLevel: 0,
+          claimedDisclosureIds: []
+        },
+        {
+          speechText: "Why must that claim hold?",
+          claimedDisclosureLevel: 0,
+          claimedDisclosureIds: []
+        }
+      ]);
       expect(context.forbiddenDisclosureIds).toHaveLength(2);
+      for (const disclosure of sixPeopleProblem.interviewer.protectedDisclosures) {
+        expect(serialized).not.toContain(disclosure.fact);
+      }
     } finally {
       harness.store.close();
     }
