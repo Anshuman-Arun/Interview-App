@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import type { Dirent } from "node:fs";
 import { access, mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -173,7 +174,7 @@ function sanitizeText(value: string): string {
   return output.slice(0, 8_192);
 }
 
-function errorSnapshot(error: unknown): CheckResult["error"] {
+function errorSnapshot(error: unknown): NonNullable<CheckResult["error"]> {
   if (error instanceof Error) {
     const code = Reflect.get(error, "code");
     return {
@@ -240,7 +241,7 @@ async function locateAppData(explicit?: string): Promise<string | undefined> {
   const preferred = path.join(base, "Interview App");
   if (await exists(preferred)) return preferred;
 
-  let entries;
+  let entries: Dirent[];
   try {
     entries = await readdir(base, { withFileTypes: true });
   } catch {
@@ -499,66 +500,99 @@ async function runAntigravityReadiness(model: string): Promise<CheckOutcome> {
       return {
         status: "FAIL",
         reasonCode: "READINESS_UNAVAILABLE",
-        detail: "Antigravity readiness verifier is unavailable"
+        detail: "Antigravity readiness verifier is unavailable",
+        data: { trace: source.inspectDiagnostics?.() ?? [] }
       };
     }
-    await verify({
-      providerId: ANTIGRAVITY_CLI_PROVIDER_ID,
-      modelId: model
-    });
-    return {
-      status: "PASS",
-      reasonCode: "ZERO_TURN_READY",
-      detail: `Supervised Antigravity zero-turn readiness passed for ${model}`
-    };
+    try {
+      await verify({
+        providerId: ANTIGRAVITY_CLI_PROVIDER_ID,
+        modelId: model
+      });
+      return {
+        status: "PASS",
+        reasonCode: "ZERO_TURN_READY",
+        detail: `Supervised Antigravity zero-turn readiness passed for ${model}`,
+        data: { trace: source.inspectDiagnostics?.() ?? [] }
+      };
+    } catch (error) {
+      const snapshot = errorSnapshot(error);
+      return {
+        status: "FAIL",
+        reasonCode: snapshot.code ?? snapshot.name,
+        detail: snapshot.message,
+        data: {
+          error: snapshot,
+          trace: source.inspectDiagnostics?.() ?? []
+        }
+      };
+    }
   } finally {
     await source.drain();
   }
 }
 
 async function runDirectAntigravityInference(model: string): Promise<CheckOutcome> {
-  const resolver = new ProviderRuntimeResolver();
+  const source = createApplicationProviderAdapterRuntimeSource();
+  const resolver = new ProviderRuntimeResolver({ adapterRuntimeSource: source });
   let session: Awaited<ReturnType<InterviewerProposalProvider["createSession"]>> | undefined;
   try {
-    const resolved = await resolver.resolve({
-      selection: {
-        providerId: ANTIGRAVITY_CLI_PROVIDER_ID,
-        modelId: model
+    try {
+      const resolved = await resolver.resolve({
+        selection: {
+          providerId: ANTIGRAVITY_CLI_PROVIDER_ID,
+          modelId: model
+        }
+      });
+      const provider = resolved.provider as InterviewerProposalProvider;
+      session = await provider.createSession();
+      const proposals: InterviewerProposal[] = [];
+      for await (const proposal of session.sendTurn({
+        generationId: newGenerationId(),
+        context: {
+          diagnostic: true,
+          selectedAction: "CLARIFY",
+          maximumDisclosureLevel: 0,
+          authorizedDisclosureIds: [],
+          studentText: "I would start by checking a simple case.",
+          instruction:
+            "Return one brief clarifying interviewer question. Do not use a board action."
+        }
+      })) {
+        proposals.push(proposal);
       }
-    });
-    const provider = resolved.provider as InterviewerProposalProvider;
-    session = await provider.createSession();
-    const proposals: InterviewerProposal[] = [];
-    for await (const proposal of session.sendTurn({
-      generationId: newGenerationId(),
-      context: {
-        diagnostic: true,
-        selectedAction: "CLARIFY",
-        maximumDisclosureLevel: 0,
-        authorizedDisclosureIds: [],
-        studentText: "I would start by checking a simple case.",
-        instruction:
-          "Return one brief clarifying interviewer question. Do not use a board action."
+      if (proposals.length !== 1) {
+        return {
+          status: "FAIL",
+          reasonCode: "PROPOSAL_COUNT_MISMATCH",
+          detail: `Expected exactly one proposal, received ${String(proposals.length)}`,
+          data: {
+            proposalCount: proposals.length,
+            trace: source.inspectDiagnostics?.() ?? []
+          }
+        };
       }
-    })) {
-      proposals.push(proposal);
-    }
-    if (proposals.length !== 1) {
+      return {
+        status: "PASS",
+        reasonCode: "REAL_INFERENCE_OK",
+        detail: `Real supervised Antigravity inference produced one valid proposal for ${model}`,
+        data: {
+          proposal: proposals[0],
+          trace: source.inspectDiagnostics?.() ?? []
+        }
+      };
+    } catch (error) {
+      const snapshot = errorSnapshot(error);
       return {
         status: "FAIL",
-        reasonCode: "PROPOSAL_COUNT_MISMATCH",
-        detail: `Expected exactly one proposal, received ${String(proposals.length)}`,
-        data: { proposalCount: proposals.length }
+        reasonCode: snapshot.code ?? snapshot.name,
+        detail: snapshot.message,
+        data: {
+          error: snapshot,
+          trace: source.inspectDiagnostics?.() ?? []
+        }
       };
     }
-    return {
-      status: "PASS",
-      reasonCode: "REAL_INFERENCE_OK",
-      detail: `Real supervised Antigravity inference produced one valid proposal for ${model}`,
-      data: {
-        proposal: proposals[0]
-      }
-    };
   } finally {
     await session?.close().catch(() => undefined);
     await resolver.drain().catch(() => undefined);
