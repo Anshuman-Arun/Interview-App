@@ -38,6 +38,7 @@ import {
   consumeAuthenticatedRendererStream,
   createLoopbackAcknowledgementSender
 } from "../apps/web/src/renderer-stream.js";
+import { runAntigravityIsolationMatrix } from "./antigravity-isolation-matrix.js";
 
 type CheckStatus = "PASS" | "FAIL" | "WARN" | "SKIP";
 
@@ -1102,6 +1103,28 @@ async function main(): Promise<void> {
       }
     };
   });
+
+  if (!options.skipRemote) {
+    await check(
+      `provider.matrix.${options.model}`,
+      "provider",
+      async () => {
+        const matrix = await runAntigravityIsolationMatrix(options.model);
+        return {
+          status: matrix.firstFailureId === undefined ? "PASS" : "FAIL",
+          reasonCode: matrix.firstFailureId === undefined
+            ? "MATRIX_ALL_PASS"
+            : `MATRIX_BREAK_${matrix.firstFailureId
+              .toUpperCase()
+              .replaceAll("-", "_")}`,
+          detail: matrix.firstFailureId === undefined
+            ? "All raw Antigravity isolation probes passed"
+            : `First Antigravity isolation failure: ${matrix.firstFailureId}`,
+          data: matrix
+        };
+      }
+    );
+  }
 
   if (options.skipRemote) {
     await check("provider.remote", "provider", async () => ({
