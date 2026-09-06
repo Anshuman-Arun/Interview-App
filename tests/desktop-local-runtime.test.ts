@@ -1740,6 +1740,12 @@ describe("desktop local model runtime", () => {
       speed: 1,
       sampleRate: 24_000
     });
+    expect(Object.keys(result).sort()).toEqual([
+      "channels",
+      "durationMs",
+      "sampleRate",
+      "samples"
+    ]);
     expect(result.sampleRate).toBe(24_000);
     expect(result.channels).toBe(1);
     expect(result.samples[0]).toBe(0);
