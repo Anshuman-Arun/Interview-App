@@ -6,6 +6,7 @@ import {
   BoardSceneSemanticRelationSchema,
   ContextCompilationManifestSchema,
   DisclosureIdSchema,
+  DisclosureLevelSchema,
   MAX_BOARD_SCENE_AI_ANNOTATIONS,
   MAX_BOARD_SCENE_ANNOTATION_PURPOSE_CHARACTERS,
   MAX_BOARD_SCENE_BYTES,
@@ -29,18 +30,37 @@ import {
   type TurnId
 } from "../../domain/src/index.js";
 import type { SessionState } from "../../events/src/index.js";
+import {
+  getReviewedBoardAnnotationPurposes,
+  getReviewedZeroDisclosureRealizations
+} from "./reviewed-realizations.js";
+
+export const AuthorizedSpeechRealizationSchema = z.object({
+  speechText: z.string().min(1).max(100_000),
+  claimedDisclosureLevel: DisclosureLevelSchema,
+  claimedDisclosureIds: z.array(DisclosureIdSchema).max(256)
+}).strict();
+export type AuthorizedSpeechRealization = z.infer<
+  typeof AuthorizedSpeechRealizationSchema
+>;
 
 export const CompiledContextSchema = z.object({
   problemPrompt: z.string().min(1),
   recentStudentWork: z.string().min(1),
   realizationRequest: RealizationRequestSchema,
+  authorizedSpeechRealizations: z.array(
+    AuthorizedSpeechRealizationSchema
+  ).min(1).max(512),
+  authorizedBoardAnnotationPurposes: z.array(
+    z.string().min(1).max(100_000)
+  ).min(1).max(32),
   deliveredFacts: z.array(DisclosureIdSchema),
   forbiddenDisclosureIds: z.array(DisclosureIdSchema),
   boardScene: BoardSceneContextSchema.optional()
 }).strict();
 export type CompiledContext = z.infer<typeof CompiledContextSchema>;
 
-export const CONTEXT_COMPILER_VERSION = "phase0-safe-context@3" as const;
+export const CONTEXT_COMPILER_VERSION = "phase0-safe-context@4" as const;
 
 const MAX_LIVE_CONTEXT_STUDENT_TEXT_CHARACTERS = 1_000_000;
 const MAX_LIVE_CONTEXT_PROBLEM_PROMPT_CHARACTERS = 100_000;
@@ -716,10 +736,38 @@ export function compileContext(input: {
     input.generationBasis?.boardRevision ?? input.state.boardRevision
   );
 
+  const authorizedSpeechRealizations: AuthorizedSpeechRealization[] = [
+    ...getReviewedZeroDisclosureRealizations(request.requiredAction).map(
+      (speechText): AuthorizedSpeechRealization => ({
+        speechText,
+        claimedDisclosureLevel: 0,
+        claimedDisclosureIds: []
+      })
+    )
+  ];
+  for (const disclosureId of request.allowedDisclosureIds ?? []) {
+    const disclosure = disclosureById.get(disclosureId);
+    if (disclosure === undefined) {
+      throw new Error("Realization request authorizes an unknown protected disclosure");
+    }
+    authorizedSpeechRealizations.push({
+      speechText: disclosure.fact,
+      claimedDisclosureLevel: disclosure.minimumDisclosureLevel,
+      claimedDisclosureIds: [disclosure.id]
+    });
+  }
+  if (authorizedSpeechRealizations.length === 0) {
+    throw new Error("Realization request has no authorized speech realization");
+  }
+
   return CompiledContextSchema.parse({
     problemPrompt: input.state.problem.prompt,
     recentStudentWork: turn.studentText,
     realizationRequest: request,
+    authorizedSpeechRealizations,
+    authorizedBoardAnnotationPurposes: [
+      ...getReviewedBoardAnnotationPurposes()
+    ],
     deliveredFacts: [...delivered],
     forbiddenDisclosureIds: input.problem.interviewer.protectedDisclosures
       .map((item) => item.id)
