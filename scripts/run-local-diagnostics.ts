@@ -473,6 +473,13 @@ async function runSpeechLoopback(
   const events: unknown[] = [];
   let sequence = 0;
   let timestampMs = 0;
+  let streamTerminal = false;
+  const terminalEventTypes = new Set([
+    "UTTERANCE_FINALIZED",
+    "UTTERANCE_DISCARDED",
+    "SPEECH_CANCELLED",
+    "SPEECH_WORKER_ERROR"
+  ]);
   for (let offset = 0; offset < pcm.byteLength; offset += bytesPerFrame) {
     const end = Math.min(pcm.byteLength, offset + bytesPerFrame);
     const byteLength = end - offset;
@@ -494,16 +501,24 @@ async function runSpeechLoopback(
       timestampMs
     }, payload);
     events.push(...frameEvents);
+    streamTerminal = frameEvents.some((event) =>
+      typeof event === "object"
+      && event !== null
+      && terminalEventTypes.has(String(Reflect.get(event, "type")))
+    );
     sequence += 1;
     timestampMs += frameSamples / sampleRate * 1_000;
+    if (streamTerminal) break;
   }
-  const flushEvents = await runtime.speechWorker.flush({
-    protocolVersion: 1,
-    requestId: `diagflush.${crypto.randomUUID().replaceAll("-", "")}`,
-    streamId,
-    type: "FLUSH_SPEECH"
-  });
-  events.push(...flushEvents);
+  if (!streamTerminal) {
+    const flushEvents = await runtime.speechWorker.flush({
+      protocolVersion: 1,
+      requestId: `diagflush.${crypto.randomUUID().replaceAll("-", "")}`,
+      streamId,
+      type: "FLUSH_SPEECH"
+    });
+    events.push(...flushEvents);
+  }
   const transcript = events.find((event) =>
     typeof event === "object"
     && event !== null
