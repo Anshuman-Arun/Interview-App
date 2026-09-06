@@ -66,7 +66,7 @@ import type { TranscriptItem } from "../components/TranscriptFeed.js";
 
 const RENDERER_REATTACH_MAX_ATTEMPTS = 10;
 const RENDERER_REATTACH_DELAY_MS = 50;
-const INTERVIEWER_RESPONSE_TIMEOUT_MS = 40_000;
+const INTERVIEWER_RESPONSE_TIMEOUT_MS = 90_000;
 const INTERVIEWER_RESPONSE_TIMEOUT_MESSAGE =
   "The interviewer did not produce a valid response. Please try again or check the selected provider in Settings.";
 export const DEFAULT_INTERVIEW_OPENING_TEXT =
