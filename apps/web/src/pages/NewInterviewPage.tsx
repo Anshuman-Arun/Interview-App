@@ -448,11 +448,15 @@ function CandidateHardwareCheck() {
 
   useEffect(() => {
     let active = true;
+    const mediaDevices = (
+      navigator as unknown as { readonly mediaDevices?: MediaDevices }
+    ).mediaDevices;
+    if (mediaDevices === undefined) return undefined;
 
     const refreshDevices = async (): Promise<void> => {
-      if (typeof navigator.mediaDevices.enumerateDevices !== "function") return;
+      if (typeof mediaDevices.enumerateDevices !== "function") return;
       try {
-        const allDevices = await navigator.mediaDevices.enumerateDevices();
+        const allDevices = await mediaDevices.enumerateDevices();
         if (!active) return;
         const audioInputs = allDevices.filter((device) => device.kind === "audioinput");
         setDevices(audioInputs);
@@ -466,7 +470,6 @@ function CandidateHardwareCheck() {
     };
 
     void refreshDevices();
-    const mediaDevices = navigator.mediaDevices;
     mediaDevices.addEventListener("devicechange", handleDeviceChange);
     return () => {
       active = false;
@@ -482,15 +485,21 @@ function CandidateHardwareCheck() {
     setPeakDb(-60);
 
     try {
+      const mediaDevices = (
+        navigator as unknown as { readonly mediaDevices?: MediaDevices }
+      ).mediaDevices;
+      if (mediaDevices === undefined) {
+        throw new Error("Media devices are unavailable");
+      }
       const audioConstraints: boolean | MediaTrackConstraints = selectedDeviceId
         ? { deviceId: { exact: selectedDeviceId } }
         : true;
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+      const stream = await mediaDevices.getUserMedia({ audio: audioConstraints });
 
-      // After permission granted, enumerate devices again so labeled names become available
-      if (typeof navigator.mediaDevices.enumerateDevices === "function") {
+      // After permission granted, enumerate devices again so labeled names become available.
+      if (typeof mediaDevices.enumerateDevices === "function") {
         try {
-          const allDevices = await navigator.mediaDevices.enumerateDevices();
+          const allDevices = await mediaDevices.enumerateDevices();
           const audioInputs = allDevices.filter((d) => d.kind === "audioinput");
           setDevices(audioInputs);
         } catch {
