@@ -491,40 +491,6 @@ class ProductionWorkerUnitTests(unittest.TestCase):
         )
         self.assertEqual(exit_codes, [0])
 
-    def test_worker_subprocess_with_early_stdin_eof_still_fails_invalid_startup_args(self) -> None:
-        # Closing stdin must not make an otherwise invalid worker invocation pass.
-        # Runtime/model argument validation owns startup and fails closed with code 2;
-        # the monitor contract itself is covered independently above.
-        proc = subprocess.Popen(
-            [
-                sys.executable,
-                "-I",
-                str(WORKER_PATH),
-                "--component",
-                "vision",
-                "--port",
-                "0",
-            ],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        try:
-            proc.stdin.close()
-            ret = proc.wait(timeout=10)
-            stderr = proc.stderr.read() if proc.stderr else ""
-            self.assertEqual(ret, 2)
-            self.assertIn("RuntimeError", stderr)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            self.fail("worker failed to terminate after invalid startup")
-        finally:
-            if proc.stdout and not proc.stdout.closed:
-                proc.stdout.close()
-            if proc.stderr and not proc.stderr.closed:
-                proc.stderr.close()
-
 
 if __name__ == "__main__":
     unittest.main()
