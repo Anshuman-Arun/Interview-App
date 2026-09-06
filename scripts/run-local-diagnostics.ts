@@ -889,14 +889,32 @@ async function runFullTurn(
       };
     }
 
-    await waitForCondition(
+    const audioSatisfied = await waitForCondition(
       () => textDeliveries.length === 0 || audioDeliveries.length > 0,
       45_000
     );
+    if (!audioSatisfied && textDeliveries.length > 0) {
+      return {
+        status: "FAIL",
+        reasonCode: "FULL_TURN_TTS_NO_AUDIO",
+        detail: "Interviewer text was delivered but no authoritative Kokoro audio delivery completed within 45 seconds",
+        data: {
+          committed,
+          selectedOption,
+          textDeliveries,
+          boardDeliveries,
+          audioDeliveries,
+          state: stateSummary,
+          observability
+        }
+      };
+    }
     return {
       status: "PASS",
       reasonCode: "FULL_TURN_OK",
-      detail: "Actual app turn path produced an interviewer delivery",
+      detail: textDeliveries.length > 0
+        ? "Actual app turn produced interviewer text and authoritative Kokoro audio"
+        : "Actual app turn produced an interviewer board delivery",
       data: {
         committed,
         selectedOption,
