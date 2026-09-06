@@ -84,6 +84,13 @@ const BOARD_OPERATIONS = [
 ] as const;
 
 const INTERVIEWER_PROPOSAL_JSON_SCHEMA = Object.freeze({
+  // Keep the CLI-enforced transport schema deliberately shallow.
+  //
+  // Antigravity CLI 1.1.27 successfully enforces simple structured-output
+  // schemas but terminates the agent when given the previous deeply nested
+  // board geometry + anyOf schema. The application remains authoritative:
+  // parseAntigravityStream() still validates structured_output with the full
+  // InterviewerProposalSchema below before any proposal can enter state.
   type: "object",
   additionalProperties: false,
   properties: {
@@ -114,7 +121,6 @@ const INTERVIEWER_PROPOSAL_JSON_SCHEMA = Object.freeze({
       maxItems: MAX_BOARD_ACTIONS,
       items: {
         type: "object",
-        additionalProperties: false,
         properties: {
           operation: {
             type: "string",
@@ -124,164 +130,10 @@ const INTERVIEWER_PROPOSAL_JSON_SCHEMA = Object.freeze({
             type: "string",
             enum: ["AI_ANNOTATION"]
           },
-          content: {
-            type: "string",
-            maxLength: MAX_BOARD_CONTENT_CHARACTERS
-          },
-          targetShapeId: {
-            type: "string",
-            minLength: 1,
-            maxLength: MAX_BOARD_TARGET_ID_CHARACTERS,
-            pattern: "\\S"
-          },
-          expectedShapeRevision: {
-            type: "integer",
-            minimum: 1,
-            maximum: Number.MAX_SAFE_INTEGER
-          },
-          targetAnnotationId: {
-            type: "string",
-            minLength: 1,
-            maxLength: MAX_BOARD_TARGET_ID_CHARACTERS,
-            pattern: "\\S"
-          },
-          targetRegion: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              shapeId: {
-                type: "string",
-                minLength: 1,
-                maxLength: MAX_BOARD_TARGET_ID_CHARACTERS,
-                pattern: "\\S"
-              },
-              shapeRevision: {
-                type: "integer",
-                minimum: 1,
-                maximum: Number.MAX_SAFE_INTEGER
-              },
-              xFraction: {
-                type: "number",
-                minimum: 0,
-                maximum: 1
-              },
-              yFraction: {
-                type: "number",
-                minimum: 0,
-                maximum: 1
-              },
-              widthFraction: {
-                type: "number",
-                exclusiveMinimum: 0,
-                maximum: 1
-              },
-              heightFraction: {
-                type: "number",
-                exclusiveMinimum: 0,
-                maximum: 1
-              }
-            },
-            required: ["shapeId", "shapeRevision", "xFraction", "yFraction"]
-          },
-          placement: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              anchorShapeId: {
-                type: "string",
-                minLength: 1,
-                maxLength: MAX_BOARD_TARGET_ID_CHARACTERS,
-                pattern: "\\S"
-              },
-              anchorRevision: {
-                type: "integer",
-                minimum: 1,
-                maximum: Number.MAX_SAFE_INTEGER
-              },
-              position: {
-                type: "string",
-                enum: ["LEFT", "RIGHT", "ABOVE", "BELOW", "CENTER"]
-              },
-              x: {
-                type: "number",
-                minimum: -MAX_BOARD_COORDINATE_MAGNITUDE,
-                maximum: MAX_BOARD_COORDINATE_MAGNITUDE
-              },
-              y: {
-                type: "number",
-                minimum: -MAX_BOARD_COORDINATE_MAGNITUDE,
-                maximum: MAX_BOARD_COORDINATE_MAGNITUDE
-              },
-              offsetX: {
-                type: "number",
-                minimum: -MAX_BOARD_OFFSET_MAGNITUDE,
-                maximum: MAX_BOARD_OFFSET_MAGNITUDE
-              },
-              offsetY: {
-                type: "number",
-                minimum: -MAX_BOARD_OFFSET_MAGNITUDE,
-                maximum: MAX_BOARD_OFFSET_MAGNITUDE
-              }
-            }
-          },
-          points: {
-            type: "array",
-            maxItems: MAX_BOARD_ACTION_POINTS,
-            items: {
-              type: "object",
-              additionalProperties: false,
-              properties: {
-                x: {
-                  type: "number",
-                  minimum: -MAX_BOARD_COORDINATE_MAGNITUDE,
-                  maximum: MAX_BOARD_COORDINATE_MAGNITUDE
-                },
-                y: {
-                  type: "number",
-                  minimum: -MAX_BOARD_COORDINATE_MAGNITUDE,
-                  maximum: MAX_BOARD_COORDINATE_MAGNITUDE
-                }
-              },
-              required: ["x", "y"]
-            }
-          },
-          fromShapeId: {
-            type: "string",
-            minLength: 1,
-            maxLength: MAX_BOARD_TARGET_ID_CHARACTERS,
-            pattern: "\\S"
-          },
-          fromShapeRevision: {
-            type: "integer",
-            minimum: 1,
-            maximum: Number.MAX_SAFE_INTEGER
-          },
-          toShapeId: {
-            type: "string",
-            minLength: 1,
-            maxLength: MAX_BOARD_TARGET_ID_CHARACTERS,
-            pattern: "\\S"
-          },
-          toShapeRevision: {
-            type: "integer",
-            minimum: 1,
-            maximum: Number.MAX_SAFE_INTEGER
-          },
-          width: {
-            type: "number",
-            exclusiveMinimum: 0,
-            maximum: MAX_BOARD_GEOMETRY_DIMENSION
-          },
-          height: {
-            type: "number",
-            exclusiveMinimum: 0,
-            maximum: MAX_BOARD_GEOMETRY_DIMENSION
-          },
           annotationPurpose: {
             type: "string",
             minLength: 1,
-            maxLength: MAX_ANNOTATION_PURPOSE_CHARACTERS,
-            pattern: "\\S"
+            maxLength: MAX_ANNOTATION_PURPOSE_CHARACTERS
           }
         },
         required: ["operation", "layer", "annotationPurpose"]
@@ -292,15 +144,6 @@ const INTERVIEWER_PROPOSAL_JSON_SCHEMA = Object.freeze({
     "realizedAction",
     "claimedDisclosureLevel",
     "claimedDisclosureIds"
-  ],
-  anyOf: [
-    { required: ["speechText"] },
-    {
-      required: ["boardActions"],
-      properties: {
-        boardActions: { minItems: 1 }
-      }
-    }
   ]
 });
 export const ANTIGRAVITY_CLI_PROPOSAL_SCHEMA_ARGUMENT = JSON.stringify(
