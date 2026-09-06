@@ -321,7 +321,7 @@ export async function runAntigravityIsolationMatrix(
       }) + "\n"
     },
     {
-      id: "stream-custom-agent-full-schema",
+      id: "stream-custom-agent-production-schema",
       args: [
         "--input-format", "stream-json",
         "--output-format", "stream-json",
