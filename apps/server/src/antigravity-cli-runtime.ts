@@ -108,6 +108,12 @@ export interface AntigravityRuntimeDiagnosticRecord {
   readonly stderrBytes?: number;
   readonly errorName?: string;
   readonly errorCode?: string;
+  readonly initModel?: string;
+  readonly initAgent?: string;
+  readonly permissionMode?: string;
+  readonly terminalStatus?: string;
+  readonly terminalError?: string;
+  readonly eventTypes?: readonly string[];
 }
 
 export interface ApplicationProviderAdapterRuntimeSource {
@@ -244,6 +250,9 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
             result.exitCode !== 0
             || !isSupportedAntigravityCliVersionOutput(result.stdout)
           ) {
+            const diagnosticSummary = summarizeAntigravityStdoutForDiagnostics(
+              result.stdout
+            );
             recordDiagnostic({
               stage: "VERSION_CHECK",
               startedAt: timing.startedAt,
@@ -251,10 +260,14 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
               outcome: "FAILURE",
               exitCode: result.exitCode,
               stdoutBytes: result.stdoutBytes,
-              stderrBytes: result.stderrBytes
+              stderrBytes: result.stderrBytes,
+              ...diagnosticSummary
             });
             throw new Error("Installed Antigravity CLI version is unsupported");
           }
+          const diagnosticSummary = summarizeAntigravityStdoutForDiagnostics(
+            result.stdout
+          );
           recordDiagnostic({
             stage: "VERSION_CHECK",
             startedAt: timing.startedAt,
@@ -262,7 +275,8 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
             outcome: "SUCCESS",
             exitCode: result.exitCode,
             stdoutBytes: result.stdoutBytes,
-            stderrBytes: result.stderrBytes
+            stderrBytes: result.stderrBytes,
+            ...diagnosticSummary
           });
         } catch (error) {
           if (
@@ -305,6 +319,9 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
           try {
             assertAntigravityCliZeroTurnPreflightResult(result);
           } catch (error) {
+            const diagnosticSummary = summarizeAntigravityStdoutForDiagnostics(
+              result.stdout
+            );
             recordDiagnostic({
               stage: "ZERO_TURN_PREFLIGHT",
               startedAt: timing.startedAt,
@@ -313,6 +330,7 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
               exitCode: result.exitCode,
               stdoutBytes: result.stdoutBytes,
               stderrBytes: result.stderrBytes,
+              ...diagnosticSummary,
               errorName: error instanceof Error ? error.name : "UnknownError",
               ...(typeof error === "object"
                 && error !== null
@@ -322,6 +340,9 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
             });
             throw error;
           }
+          const diagnosticSummary = summarizeAntigravityStdoutForDiagnostics(
+            result.stdout
+          );
           recordDiagnostic({
             stage: "ZERO_TURN_PREFLIGHT",
             startedAt: timing.startedAt,
@@ -329,7 +350,8 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
             outcome: "SUCCESS",
             exitCode: result.exitCode,
             stdoutBytes: result.stdoutBytes,
-            stderrBytes: result.stderrBytes
+            stderrBytes: result.stderrBytes,
+            ...diagnosticSummary
           });
         } catch (error) {
           if (
@@ -366,6 +388,9 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
           signal: request.signal,
           onProcessStart: request.onProcessStart
         });
+        const diagnosticSummary = summarizeAntigravityStdoutForDiagnostics(
+          result.stdout
+        );
         recordDiagnostic({
           stage: "TURN_EXECUTION",
           startedAt: timing.startedAt,
@@ -373,7 +398,8 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
           outcome: result.exitCode === 0 ? "SUCCESS" : "FAILURE",
           exitCode: result.exitCode,
           stdoutBytes: result.stdoutBytes,
-          stderrBytes: result.stderrBytes
+          stderrBytes: result.stderrBytes,
+          ...diagnosticSummary
         });
         return result;
       } catch (error) {
@@ -421,6 +447,80 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
     async drain(): Promise<void> {
       if (runner !== undefined) await runner.drain();
     }
+  });
+}
+
+function safeAntigravityDiagnosticText(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  return value
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/gu, "")
+    .replace(
+      /(?:AIza[A-Za-z0-9_-]{20,}|sk[-_][A-Za-z0-9_-]{12,}|gh[pousr]_[A-Za-z0-9_]{20,})/gu,
+      "[REDACTED_SECRET]"
+    )
+    .slice(0, 2_048);
+}
+
+function summarizeAntigravityStdoutForDiagnostics(stdout: string): Readonly<{
+  initModel?: string;
+  initAgent?: string;
+  permissionMode?: string;
+  terminalStatus?: string;
+  terminalError?: string;
+  eventTypes: readonly string[];
+}> {
+  const eventTypes: string[] = [];
+  let initModel: string | undefined;
+  let initAgent: string | undefined;
+  let permissionMode: string | undefined;
+  let terminalStatus: string | undefined;
+  let terminalError: string | undefined;
+
+  for (const raw of stdout.split(/\r?\n/u).slice(0, 128)) {
+    if (raw.trim().length === 0) continue;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw) as unknown;
+    } catch {
+      eventTypes.push("INVALID_JSON");
+      continue;
+    }
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      eventTypes.push("NON_OBJECT");
+      continue;
+    }
+    const event = Reflect.get(parsed, "event");
+    eventTypes.push(typeof event === "string" ? event.slice(0, 128) : "UNKNOWN");
+    if (event === "init") {
+      const init = Reflect.get(parsed, "init");
+      if (typeof init === "object" && init !== null && !Array.isArray(init)) {
+        initModel = safeAntigravityDiagnosticText(Reflect.get(init, "model"));
+        initAgent = safeAntigravityDiagnosticText(Reflect.get(init, "agent"));
+        permissionMode = safeAntigravityDiagnosticText(
+          Reflect.get(init, "permission_mode")
+        );
+      }
+    }
+    if (event === "result") {
+      const result = Reflect.get(parsed, "result");
+      if (typeof result === "object" && result !== null && !Array.isArray(result)) {
+        terminalStatus = safeAntigravityDiagnosticText(
+          Reflect.get(result, "status")
+        );
+        terminalError = safeAntigravityDiagnosticText(
+          Reflect.get(result, "error")
+        );
+      }
+    }
+  }
+
+  return Object.freeze({
+    ...(initModel === undefined ? {} : { initModel }),
+    ...(initAgent === undefined ? {} : { initAgent }),
+    ...(permissionMode === undefined ? {} : { permissionMode }),
+    ...(terminalStatus === undefined ? {} : { terminalStatus }),
+    ...(terminalError === undefined ? {} : { terminalError }),
+    eventTypes: Object.freeze(eventTypes.slice(0, 128))
   });
 }
 
