@@ -245,9 +245,12 @@ async function isDesktopAppDataRoot(candidate: string): Promise<boolean> {
 
 async function normalizeDesktopAppDataRoot(candidate: string): Promise<string | undefined> {
   const resolved = path.resolve(candidate);
-  if (await isDesktopAppDataRoot(resolved)) return resolved;
   const dataChild = path.join(resolved, "data");
+  // Packaged Electron always passes resolveDesktopPaths(...).appDataRoot,
+  // which is <userData>/data. Prefer that authoritative child when both
+  // it and a stale pre-migration parent contain runtime-looking files.
   if (await isDesktopAppDataRoot(dataChild)) return dataChild;
+  if (await isDesktopAppDataRoot(resolved)) return resolved;
   return undefined;
 }
 
