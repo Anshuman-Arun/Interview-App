@@ -624,13 +624,22 @@ class TtsRuntime:
                             raise ProtocolError(409, "CANCELLED")
                     if int(chunk.sample_rate) != 24_000:
                         raise RuntimeError("Kokoro returned unexpected sample rate")
-                    pcm_chunk = self._np.asarray(chunk.samples, dtype="<f4").reshape(-1)
+                    pcm_chunk = (
+                        self._np.asarray(chunk.samples, dtype="<f4")
+                        .reshape(-1)
+                        .copy()
+                    )
                     if pcm_chunk.size == 0:
                         continue
                     if not self._np.isfinite(pcm_chunk).all() or bool(
                         (self._np.abs(pcm_chunk) > 1.001).any()
                     ):
                         raise RuntimeError("Kokoro returned invalid PCM")
+                    # Kokoro can produce tiny floating-point overshoots around
+                    # +/-1.0. The TypeScript authority boundary requires
+                    # normalized PCM strictly inside [-1, 1], so canonicalize
+                    # only the already-admitted <=0.1% overshoot here.
+                    self._np.clip(pcm_chunk, -1.0, 1.0, out=pcm_chunk)
                     frame_count += int(pcm_chunk.size)
                     if frame_count > 24_000 * MAX_TTS_SECONDS:
                         raise RuntimeError("Kokoro output exceeds PCM bound")
