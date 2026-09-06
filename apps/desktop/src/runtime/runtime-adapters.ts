@@ -412,12 +412,21 @@ function parseTtsResult(value: unknown): KokoroRuntimeSynthesisResult {
   for (let index = 0; index < samples.length; index += 1) {
     samples[index] = view.getFloat32(index * Float32Array.BYTES_PER_ELEMENT, true);
   }
-  return snapshotAndValidatePcm({
+  const validated = snapshotAndValidatePcm({
     samples,
     sampleRate,
     channels,
     durationMs
   }, 24_000);
+  // Do not leak snapshotAndValidatePcm's internal frameCount/byteLength
+  // bookkeeping into the public runtime result. TtsRequestManager performs
+  // the authoritative second validation with a strict SynthesizedPcm schema.
+  return Object.freeze({
+    samples: validated.samples,
+    sampleRate: validated.sampleRate,
+    channels: validated.channels,
+    durationMs: validated.durationMs
+  });
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
