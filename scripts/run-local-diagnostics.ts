@@ -440,6 +440,26 @@ async function synthesizePcm(
   };
 }
 
+function upsamplePcmF32Le24kTo48k(input: Uint8Array): Uint8Array {
+  if (input.byteLength === 0 || input.byteLength % Float32Array.BYTES_PER_ELEMENT !== 0) {
+    throw new Error("24 kHz TTS PCM is malformed");
+  }
+  const sourceFrames = input.byteLength / Float32Array.BYTES_PER_ELEMENT;
+  const output = new Uint8Array(sourceFrames * 2 * Float32Array.BYTES_PER_ELEMENT);
+  const sourceView = new DataView(input.buffer, input.byteOffset, input.byteLength);
+  const outputView = new DataView(output.buffer);
+  for (let index = 0; index < sourceFrames; index += 1) {
+    const sample = sourceView.getFloat32(
+      index * Float32Array.BYTES_PER_ELEMENT,
+      true
+    );
+    const offset = index * 2 * Float32Array.BYTES_PER_ELEMENT;
+    outputView.setFloat32(offset, sample, true);
+    outputView.setFloat32(offset + Float32Array.BYTES_PER_ELEMENT, sample, true);
+  }
+  return output;
+}
+
 async function runSpeechLoopback(
   runtime: NonNullable<DesktopLocalRuntimeComposition["voiceRuntime"]>,
   pcm: Uint8Array
@@ -1036,12 +1056,17 @@ async function main(): Promise<void> {
       const result = await synthesizePcm(
         runtime,
         "Moonshine diagnostic phrase. Please recognize this sentence.",
-        48_000
+        24_000
       );
-      loopbackPcm = result.bytes;
+      loopbackPcm = upsamplePcmF32Le24kTo48k(result.bytes);
       return {
-        detail: "Actual Kokoro worker synthesized 48 kHz speech for STT loopback",
-        data: { bytes: result.bytes.byteLength, chunks: result.chunks, model: result.model }
+        detail: "Actual Kokoro worker synthesized 24 kHz speech and the diagnostic resampled it to 48 kHz for Moonshine loopback",
+        data: {
+          sourceBytes: result.bytes.byteLength,
+          loopbackBytes: loopbackPcm.byteLength,
+          chunks: result.chunks,
+          model: result.model
+        }
       };
     });
 
