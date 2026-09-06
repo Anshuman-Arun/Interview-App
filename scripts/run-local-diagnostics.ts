@@ -377,6 +377,10 @@ async function runContractTests(): Promise<CheckOutcome> {
     "run",
     "tests/antigravity-cli-provider.test.ts",
     "tests/antigravity-cli-runtime-profile.test.ts",
+    "tests/provider-coordinator.test.ts",
+    "tests/security-and-context.test.ts",
+    "tests/context-reproducibility.test.ts",
+    "tests/compatibility-and-disclosure.test.ts",
     "tests/e2e-voice-interview.test.ts",
     "tests/desktop-local-runtime.test.ts",
     "--maxWorkers=1",
@@ -386,7 +390,7 @@ async function runContractTests(): Promise<CheckOutcome> {
     status: result.exitCode === 0 ? "PASS" : "FAIL",
     reasonCode: result.exitCode === 0 ? "CONTRACTS_GREEN" : "CONTRACTS_FAILED",
     detail: result.exitCode === 0
-      ? "Provider, voice, desktop-runtime, and adversarial contract suites passed"
+      ? "Provider, context-security, disclosure, voice, desktop-runtime, and adversarial contract suites passed"
       : `Focused contract suite exited with code ${String(result.exitCode)}`,
     data: {
       exitCode: result.exitCode,
