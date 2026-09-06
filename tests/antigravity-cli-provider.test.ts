@@ -79,10 +79,10 @@ function antigravityStream(
       result: {
         conversation_id: "fake-conversation",
         status: "SUCCESS",
-        response: JSON.stringify(proposal),
+        response: JSON.stringify({ proposalJson: JSON.stringify(proposal) }),
         duration_seconds: 0.1,
         num_turns: 1,
-        structured_output: proposal,
+        structured_output: { proposalJson: JSON.stringify(proposal) },
         json_schema: ANTIGRAVITY_CLI_PROPOSAL_SCHEMA,
         usage: {
           input_tokens: 1,
@@ -365,50 +365,27 @@ describe("Antigravity zero-turn runtime preflight", () => {
 });
 
 describe("Antigravity structured-output contract alignment", () => {
-  it("keeps the CLI enforcement schema shallow and leaves full proposal validation to the application", () => {
-    const schema = ANTIGRAVITY_CLI_PROPOSAL_SCHEMA as {
-      readonly anyOf?: unknown;
-      readonly properties?: {
-        readonly boardActions?: {
-          readonly items?: {
-            readonly anyOf?: unknown;
-            readonly properties?: Readonly<Record<string, unknown>>;
-          };
-        };
-      };
-    };
-    expect(schema.anyOf).toBeUndefined();
-    expect(schema.properties?.boardActions?.items?.anyOf).toBeUndefined();
-    expect(Object.keys(
-      schema.properties?.boardActions?.items?.properties ?? {}
-    ).sort()).toEqual([
-      "annotationPurpose",
-      "layer",
-      "operation"
-    ]);
+  it("keeps the CLI enforcement schema as a tiny proposalJson envelope", () => {
+    expect(ANTIGRAVITY_CLI_PROPOSAL_SCHEMA).toEqual({
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        proposalJson: { type: "string" }
+      },
+      required: ["proposalJson"]
+    });
   });
 
-  it("keeps provider action enums exactly aligned with authoritative domain schemas", () => {
-    const schema = ANTIGRAVITY_CLI_PROPOSAL_SCHEMA as {
-      readonly properties?: {
-        readonly realizedAction?: { readonly enum?: readonly string[] };
-        readonly boardActions?: {
-          readonly items?: {
-            readonly properties?: {
-              readonly operation?: { readonly enum?: readonly string[] };
-            };
-          };
-        };
-      };
-    };
-    const providerActions = schema.properties?.realizedAction?.enum;
-    const providerBoardOperations =
-      schema.properties?.boardActions?.items?.properties?.operation?.enum;
-
-    expect(providerActions).toEqual(SocraticActionSchema.options);
-    expect(providerBoardOperations).toEqual(
-      BoardActionSchema.shape.operation.options
-    );
+  it("keeps authoritative action validation in the domain schemas rather than the CLI envelope", () => {
+    expect(SocraticActionSchema.options.length).toBeGreaterThan(0);
+    expect(BoardActionSchema.shape.operation.options.length).toBeGreaterThan(0);
+    expect(
+      (ANTIGRAVITY_CLI_PROPOSAL_SCHEMA as {
+        readonly properties?: Readonly<Record<string, unknown>>;
+      }).properties
+    ).toEqual({
+      proposalJson: { type: "string" }
+    });
   });
 });
 
