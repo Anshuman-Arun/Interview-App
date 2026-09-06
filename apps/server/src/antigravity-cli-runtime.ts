@@ -92,6 +92,24 @@ Abstain when meaning is ambiguous or unsupported.
 Do not use tools, files, commands, URLs, MCP, plugins, skills, subagents, prior conversations, or persistent memory.
 `;
 
+export type AntigravityRuntimeDiagnosticStage =
+  | "USER_PROFILE_SAFETY"
+  | "VERSION_CHECK"
+  | "ZERO_TURN_PREFLIGHT"
+  | "TURN_EXECUTION";
+
+export interface AntigravityRuntimeDiagnosticRecord {
+  readonly stage: AntigravityRuntimeDiagnosticStage;
+  readonly startedAt: string;
+  readonly durationMs: number;
+  readonly outcome: "SUCCESS" | "FAILURE";
+  readonly exitCode?: number;
+  readonly stdoutBytes?: number;
+  readonly stderrBytes?: number;
+  readonly errorName?: string;
+  readonly errorCode?: string;
+}
+
 export interface ApplicationProviderAdapterRuntimeSource {
   readonly resolveRuntime: (
     selection: ProviderSelectionReference
@@ -99,6 +117,7 @@ export interface ApplicationProviderAdapterRuntimeSource {
   readonly verifyRuntimeReadiness?: (
     selection: ProviderSelectionReference
   ) => Promise<void>;
+  readonly inspectDiagnostics?: () => readonly AntigravityRuntimeDiagnosticRecord[];
   readonly drain: () => Promise<void>;
 }
 
@@ -108,12 +127,44 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
       resolveRuntime(): undefined {
         return undefined;
       },
-      async drain(): Promise<void> {
+      inspectDiagnostics(): readonly AntigravityRuntimeDiagnosticRecord[] {
+      return Object.freeze(diagnostics.map((record) => Object.freeze({ ...record })));
+    },
+    async drain(): Promise<void> {
         // The concrete Antigravity runtime is intentionally unavailable on
         // platforms where this PR cannot provide kernel-owned tree containment.
       }
     });
   }
+
+  const diagnostics: AntigravityRuntimeDiagnosticRecord[] = [];
+  const recordDiagnostic = (
+    record: AntigravityRuntimeDiagnosticRecord
+  ): void => {
+    diagnostics.push(Object.freeze({ ...record }));
+    if (diagnostics.length > 64) diagnostics.splice(0, diagnostics.length - 64);
+  };
+  const beginDiagnostic = (): { readonly startedAt: string; readonly started: number } => ({
+    startedAt: new Date().toISOString(),
+    started: performance.now()
+  });
+  const failDiagnostic = (
+    stage: AntigravityRuntimeDiagnosticStage,
+    timing: { readonly startedAt: string; readonly started: number },
+    error: unknown
+  ): void => {
+    const code = typeof error === "object" && error !== null
+      ? Reflect.get(error, "code")
+      : undefined;
+    recordDiagnostic({
+      stage,
+      startedAt: timing.startedAt,
+      durationMs: Math.max(0, Math.round(performance.now() - timing.started)),
+      outcome: "FAILURE",
+      errorName: error instanceof Error ? error.name : "UnknownError",
+      ...(typeof code === "string" ? { errorCode: code.slice(0, 128) } : {})
+    });
+  };
 
   let runner: SupervisedProcessRunner | undefined;
   let versionVerification: Promise<void> | undefined;
@@ -143,7 +194,21 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
   const ensureSafeUserProfile = async (): Promise<void> => {
     let check = userProfileSafetyVerification;
     if (check === undefined) {
-      check = verifyAntigravityUserProfileSafety();
+      const timing = beginDiagnostic();
+      check = verifyAntigravityUserProfileSafety().then(
+        () => {
+          recordDiagnostic({
+            stage: "USER_PROFILE_SAFETY",
+            startedAt: timing.startedAt,
+            durationMs: Math.max(0, Math.round(performance.now() - timing.started)),
+            outcome: "SUCCESS"
+          });
+        },
+        (error: unknown) => {
+          failDiagnostic("USER_PROFILE_SAFETY", timing, error);
+          throw error;
+        }
+      );
       userProfileSafetyVerification = check;
       const captured = check;
       void captured.catch(() => {
@@ -165,19 +230,39 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
     let check = versionVerification;
     if (check === undefined) {
       check = (async () => {
-        const result = await getRunner().execute({
-          executableId: ANTIGRAVITY_EXECUTABLE_ID,
-          args: ["--version"],
-          stdin: "",
-          timeoutMs: ANTIGRAVITY_VERSION_CHECK_TIMEOUT_MS,
-          maxStdoutBytes: ANTIGRAVITY_VERSION_STDOUT_BYTES,
-          maxStderrBytes: ANTIGRAVITY_VERSION_STDERR_BYTES
-        });
-        if (
-          result.exitCode !== 0
-          || !isSupportedAntigravityCliVersionOutput(result.stdout)
-        ) {
-          throw new Error("Installed Antigravity CLI version is unsupported");
+        const timing = beginDiagnostic();
+        try {
+          const result = await getRunner().execute({
+            executableId: ANTIGRAVITY_EXECUTABLE_ID,
+            args: ["--version"],
+            stdin: "",
+            timeoutMs: ANTIGRAVITY_VERSION_CHECK_TIMEOUT_MS,
+            maxStdoutBytes: ANTIGRAVITY_VERSION_STDOUT_BYTES,
+            maxStderrBytes: ANTIGRAVITY_VERSION_STDERR_BYTES
+          });
+          recordDiagnostic({
+            stage: "VERSION_CHECK",
+            startedAt: timing.startedAt,
+            durationMs: Math.max(0, Math.round(performance.now() - timing.started)),
+            outcome: result.exitCode === 0 ? "SUCCESS" : "FAILURE",
+            exitCode: result.exitCode,
+            stdoutBytes: result.stdoutBytes,
+            stderrBytes: result.stderrBytes
+          });
+          if (
+            result.exitCode !== 0
+            || !isSupportedAntigravityCliVersionOutput(result.stdout)
+          ) {
+            throw new Error("Installed Antigravity CLI version is unsupported");
+          }
+        } catch (error) {
+          if (
+            diagnostics.at(-1)?.stage !== "VERSION_CHECK"
+            || diagnostics.at(-1)?.startedAt !== timing.startedAt
+          ) {
+            failDiagnostic("VERSION_CHECK", timing, error);
+          }
+          throw error;
         }
       })();
       versionVerification = check;
@@ -198,15 +283,35 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
     let check = profileVerification;
     if (check === undefined) {
       check = (async () => {
-        const result = await getRunner().execute({
-          executableId: ANTIGRAVITY_EXECUTABLE_ID,
-          args: ANTIGRAVITY_CLI_TURN_ARGUMENTS,
-          stdin: ANTIGRAVITY_CLI_ZERO_TURN_PREFLIGHT_INPUT,
-          timeoutMs: ANTIGRAVITY_PROFILE_PREFLIGHT_TIMEOUT_MS,
-          maxStdoutBytes: ANTIGRAVITY_PROFILE_PREFLIGHT_STDOUT_BYTES,
-          maxStderrBytes: ANTIGRAVITY_PROFILE_PREFLIGHT_STDERR_BYTES
-        });
-        assertAntigravityCliZeroTurnPreflightResult(result);
+        const timing = beginDiagnostic();
+        try {
+          const result = await getRunner().execute({
+            executableId: ANTIGRAVITY_EXECUTABLE_ID,
+            args: ANTIGRAVITY_CLI_TURN_ARGUMENTS,
+            stdin: ANTIGRAVITY_CLI_ZERO_TURN_PREFLIGHT_INPUT,
+            timeoutMs: ANTIGRAVITY_PROFILE_PREFLIGHT_TIMEOUT_MS,
+            maxStdoutBytes: ANTIGRAVITY_PROFILE_PREFLIGHT_STDOUT_BYTES,
+            maxStderrBytes: ANTIGRAVITY_PROFILE_PREFLIGHT_STDERR_BYTES
+          });
+          recordDiagnostic({
+            stage: "ZERO_TURN_PREFLIGHT",
+            startedAt: timing.startedAt,
+            durationMs: Math.max(0, Math.round(performance.now() - timing.started)),
+            outcome: "SUCCESS",
+            exitCode: result.exitCode,
+            stdoutBytes: result.stdoutBytes,
+            stderrBytes: result.stderrBytes
+          });
+          assertAntigravityCliZeroTurnPreflightResult(result);
+        } catch (error) {
+          if (
+            diagnostics.at(-1)?.stage !== "ZERO_TURN_PREFLIGHT"
+            || diagnostics.at(-1)?.startedAt !== timing.startedAt
+          ) {
+            failDiagnostic("ZERO_TURN_PREFLIGHT", timing, error);
+          }
+          throw error;
+        }
       })();
       profileVerification = check;
       const captured = check;
@@ -221,16 +326,32 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
     execute: async (request: SupervisedCliExecutionRequest) => {
       await ensureSupportedVersion(request.signal);
       await ensureSupportedProfile(request.signal);
-      return await getRunner().execute({
-        executableId: ANTIGRAVITY_EXECUTABLE_ID,
-        args: request.args,
-        stdin: request.stdin,
-        timeoutMs: request.timeoutMs,
-        maxStdoutBytes: request.maxStdoutBytes,
-        maxStderrBytes: request.maxStderrBytes,
-        signal: request.signal,
-        onProcessStart: request.onProcessStart
-      });
+      const timing = beginDiagnostic();
+      try {
+        const result = await getRunner().execute({
+          executableId: ANTIGRAVITY_EXECUTABLE_ID,
+          args: request.args,
+          stdin: request.stdin,
+          timeoutMs: request.timeoutMs,
+          maxStdoutBytes: request.maxStdoutBytes,
+          maxStderrBytes: request.maxStderrBytes,
+          signal: request.signal,
+          onProcessStart: request.onProcessStart
+        });
+        recordDiagnostic({
+          stage: "TURN_EXECUTION",
+          startedAt: timing.startedAt,
+          durationMs: Math.max(0, Math.round(performance.now() - timing.started)),
+          outcome: result.exitCode === 0 ? "SUCCESS" : "FAILURE",
+          exitCode: result.exitCode,
+          stdoutBytes: result.stdoutBytes,
+          stderrBytes: result.stderrBytes
+        });
+        return result;
+      } catch (error) {
+        failDiagnostic("TURN_EXECUTION", timing, error);
+        throw error;
+      }
     }
   });
   // Profile isolation disables AI-credit fallback and inherited API-key/custom-endpoint
