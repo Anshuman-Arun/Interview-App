@@ -68,9 +68,9 @@ const RENDERER_REATTACH_MAX_ATTEMPTS = 10;
 const RENDERER_REATTACH_DELAY_MS = 50;
 const INTERVIEWER_RESPONSE_TIMEOUT_MS = 90_000;
 const INTERVIEWER_RESPONSE_TIMEOUT_MESSAGE =
-  "The interviewer did not produce a valid response. Please try again or check the selected provider in Settings.";
+  "The selected provider has not delivered a response after 90 seconds. If Antigravity is still working, let it finish before sending another turn; otherwise retry once or check the provider in Settings.";
 export const DEFAULT_INTERVIEW_OPENING_TEXT =
-  "Hi, welcome! Before we get started, is everything ready to go on your end?";
+  "Hi, welcome! Let's get started. The problem is on screen—take a moment to read it, then tell me how you'd begin.";
 
 export class TerminalSessionOutcomeUnknownError extends Error {
   public constructor() {
