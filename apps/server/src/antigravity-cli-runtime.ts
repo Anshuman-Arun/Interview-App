@@ -323,7 +323,7 @@ async function verifyAntigravityUserProfileSafety(): Promise<void> {
     ) {
       return;
     }
-    throw new Error("Antigravity user settings could not be inspected");
+    throw new Error("Antigravity user settings could not be inspected", { cause: error });
   }
   if (!info.isFile() || info.isSymbolicLink() || info.size > ANTIGRAVITY_USER_SETTINGS_MAX_BYTES) {
     throw new Error("Antigravity user settings are unsafe or outside the bounded profile");
