@@ -71,6 +71,18 @@ class _FakeTts:
         self.cancel_calls += 1
 
 
+class _FakeStreamingTts(_FakeTts):
+    def __init__(self, samples: list[float]) -> None:
+        super().__init__()
+        self.samples = samples
+
+    def stream(self, _text: str):
+        yield SimpleNamespace(
+            sample_rate=24_000,
+            samples=np.asarray(self.samples, dtype="<f4"),
+        )
+
+
 class ProductionWorkerUnitTests(unittest.TestCase):
     def test_parent_stdin_eof_before_server_creation_exits_worker_immediately(self) -> None:
         exit_codes: list[int] = []
@@ -373,6 +385,52 @@ class ProductionWorkerUnitTests(unittest.TestCase):
         self.assertEqual(len(result["words"]), 1)
         self.assertEqual(result["words"][0]["word"], "hello")
         self.assertAlmostEqual(result["confidence"], 0.9)
+
+    def test_tts_clamps_only_tiny_normalized_model_overshoot(self) -> None:
+        runtime = object.__new__(worker.TtsRuntime)
+        runtime._np = np
+        runtime._tts = _FakeStreamingTts([1.0005, -1.0005, 0.25])
+        runtime._synthesis_lock = threading.Lock()
+        runtime._state_lock = threading.Lock()
+        runtime._current_request_id = None
+        runtime._cancelled_request_ids = OrderedDict()
+
+        result = runtime.synthesize({
+            "requestId": "overshoot-request",
+            "text": "Bounded overshoot",
+            "voice": "kokoro_af_heart",
+            "language": "en-US",
+            "speed": 1.0,
+            "sampleRate": 24_000,
+        })
+        pcm = np.frombuffer(
+            base64.b64decode(result["pcmF32Base64"]),
+            dtype="<f4",
+        )
+        self.assertTrue(np.isfinite(pcm).all())
+        self.assertLessEqual(float(np.max(np.abs(pcm))), 1.0)
+        self.assertAlmostEqual(float(pcm[0]), 1.0)
+        self.assertAlmostEqual(float(pcm[1]), -1.0)
+        self.assertAlmostEqual(float(pcm[2]), 0.25)
+
+    def test_tts_rejects_model_output_beyond_tiny_overshoot_tolerance(self) -> None:
+        runtime = object.__new__(worker.TtsRuntime)
+        runtime._np = np
+        runtime._tts = _FakeStreamingTts([1.01])
+        runtime._synthesis_lock = threading.Lock()
+        runtime._state_lock = threading.Lock()
+        runtime._current_request_id = None
+        runtime._cancelled_request_ids = OrderedDict()
+
+        with self.assertRaises(RuntimeError):
+            runtime.synthesize({
+                "requestId": "invalid-overshoot",
+                "text": "Reject excessive overshoot",
+                "voice": "kokoro_af_heart",
+                "language": "en-US",
+                "speed": 1.0,
+                "sampleRate": 24_000,
+            })
 
     def test_tts_cancel_before_synthesis_registration_prevents_model_start(self) -> None:
         runtime = object.__new__(worker.TtsRuntime)
