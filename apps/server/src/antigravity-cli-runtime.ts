@@ -128,9 +128,9 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
         return undefined;
       },
       inspectDiagnostics(): readonly AntigravityRuntimeDiagnosticRecord[] {
-      return Object.freeze(diagnostics.map((record) => Object.freeze({ ...record })));
-    },
-    async drain(): Promise<void> {
+        return Object.freeze([]);
+      },
+      async drain(): Promise<void> {
         // The concrete Antigravity runtime is intentionally unavailable on
         // platforms where this PR cannot provide kernel-owned tree containment.
       }
@@ -384,6 +384,11 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
         return runtime;
       }
       return undefined;
+    },
+    inspectDiagnostics(): readonly AntigravityRuntimeDiagnosticRecord[] {
+      return Object.freeze(
+        diagnostics.map((record) => Object.freeze({ ...record }))
+      );
     },
     async drain(): Promise<void> {
       if (runner !== undefined) await runner.drain();
