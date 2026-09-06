@@ -240,21 +240,30 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
             maxStdoutBytes: ANTIGRAVITY_VERSION_STDOUT_BYTES,
             maxStderrBytes: ANTIGRAVITY_VERSION_STDERR_BYTES
           });
-          recordDiagnostic({
-            stage: "VERSION_CHECK",
-            startedAt: timing.startedAt,
-            durationMs: Math.max(0, Math.round(performance.now() - timing.started)),
-            outcome: result.exitCode === 0 ? "SUCCESS" : "FAILURE",
-            exitCode: result.exitCode,
-            stdoutBytes: result.stdoutBytes,
-            stderrBytes: result.stderrBytes
-          });
           if (
             result.exitCode !== 0
             || !isSupportedAntigravityCliVersionOutput(result.stdout)
           ) {
+            recordDiagnostic({
+              stage: "VERSION_CHECK",
+              startedAt: timing.startedAt,
+              durationMs: Math.max(0, Math.round(performance.now() - timing.started)),
+              outcome: "FAILURE",
+              exitCode: result.exitCode,
+              stdoutBytes: result.stdoutBytes,
+              stderrBytes: result.stderrBytes
+            });
             throw new Error("Installed Antigravity CLI version is unsupported");
           }
+          recordDiagnostic({
+            stage: "VERSION_CHECK",
+            startedAt: timing.startedAt,
+            durationMs: Math.max(0, Math.round(performance.now() - timing.started)),
+            outcome: "SUCCESS",
+            exitCode: result.exitCode,
+            stdoutBytes: result.stdoutBytes,
+            stderrBytes: result.stderrBytes
+          });
         } catch (error) {
           if (
             diagnostics.at(-1)?.stage !== "VERSION_CHECK"
@@ -293,6 +302,26 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
             maxStdoutBytes: ANTIGRAVITY_PROFILE_PREFLIGHT_STDOUT_BYTES,
             maxStderrBytes: ANTIGRAVITY_PROFILE_PREFLIGHT_STDERR_BYTES
           });
+          try {
+            assertAntigravityCliZeroTurnPreflightResult(result);
+          } catch (error) {
+            recordDiagnostic({
+              stage: "ZERO_TURN_PREFLIGHT",
+              startedAt: timing.startedAt,
+              durationMs: Math.max(0, Math.round(performance.now() - timing.started)),
+              outcome: "FAILURE",
+              exitCode: result.exitCode,
+              stdoutBytes: result.stdoutBytes,
+              stderrBytes: result.stderrBytes,
+              errorName: error instanceof Error ? error.name : "UnknownError",
+              ...(typeof error === "object"
+                && error !== null
+                && typeof Reflect.get(error, "code") === "string"
+                ? { errorCode: String(Reflect.get(error, "code")).slice(0, 128) }
+                : {})
+            });
+            throw error;
+          }
           recordDiagnostic({
             stage: "ZERO_TURN_PREFLIGHT",
             startedAt: timing.startedAt,
@@ -302,7 +331,6 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
             stdoutBytes: result.stdoutBytes,
             stderrBytes: result.stderrBytes
           });
-          assertAntigravityCliZeroTurnPreflightResult(result);
         } catch (error) {
           if (
             diagnostics.at(-1)?.stage !== "ZERO_TURN_PREFLIGHT"
