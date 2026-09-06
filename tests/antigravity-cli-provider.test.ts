@@ -365,6 +365,29 @@ describe("Antigravity zero-turn runtime preflight", () => {
 });
 
 describe("Antigravity structured-output contract alignment", () => {
+  it("keeps the CLI enforcement schema shallow and leaves full proposal validation to the application", () => {
+    const schema = ANTIGRAVITY_CLI_PROPOSAL_SCHEMA as {
+      readonly anyOf?: unknown;
+      readonly properties?: {
+        readonly boardActions?: {
+          readonly items?: {
+            readonly anyOf?: unknown;
+            readonly properties?: Readonly<Record<string, unknown>>;
+          };
+        };
+      };
+    };
+    expect(schema.anyOf).toBeUndefined();
+    expect(schema.properties?.boardActions?.items?.anyOf).toBeUndefined();
+    expect(Object.keys(
+      schema.properties?.boardActions?.items?.properties ?? {}
+    ).sort()).toEqual([
+      "annotationPurpose",
+      "layer",
+      "operation"
+    ]);
+  });
+
   it("keeps provider action enums exactly aligned with authoritative domain schemas", () => {
     const schema = ANTIGRAVITY_CLI_PROPOSAL_SCHEMA as {
       readonly properties?: {
