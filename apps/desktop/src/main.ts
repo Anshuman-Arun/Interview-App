@@ -10,6 +10,7 @@ import {
   app,
   BrowserWindow,
   dialog,
+  Menu,
   ipcMain,
   type IpcMainEvent,
   type IpcMainInvokeEvent
@@ -1260,6 +1261,7 @@ async function createMainWindow(preloadPath?: string): Promise<void> {
     isPackaged: app.isPackaged
   }).preloadPath;
 
+  Menu.setApplicationMenu(null);
   const window = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -1270,6 +1272,8 @@ async function createMainWindow(preloadPath?: string): Promise<void> {
     autoHideMenuBar: true,
     webPreferences: createSecureWebPreferences(resolvedPreload)
   });
+  window.setMenu(null);
+  window.setMenuBarVisibility(false);
   mainWindow = window;
   const electronSession = window.webContents.session;
 
