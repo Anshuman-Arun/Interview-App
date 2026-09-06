@@ -818,7 +818,10 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
       });
       break;
     case "FORMAL_INTERPRETATION_PROPOSAL_REJECTED":
-      next = updateGeneration(state, event.payload.generationId, { status: "REJECTED" });
+      next = updateGeneration(state, event.payload.generationId, {
+        status: "REJECTED",
+        rejectionReason: event.payload.reason
+      });
       break;
     case "MODEL_GENERATION_SUPERSEDED":
       next = updateGeneration(state, event.payload.generationId, { status: "SUPERSEDED" });
@@ -836,7 +839,10 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
       break;
     }
     case "PROPOSAL_REJECTED":
-      next = updateGeneration(state, event.payload.generationId, { status: "REJECTED" });
+      next = updateGeneration(state, event.payload.generationId, {
+        status: "REJECTED",
+        rejectionReason: event.payload.reason
+      });
       break;
     case "DELIVERY_QUEUED":
       if (event.payload.atom.status !== "VALIDATED") throw new Error("Only validated atoms may be queued");
