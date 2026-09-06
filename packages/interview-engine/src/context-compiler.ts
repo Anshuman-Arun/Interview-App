@@ -50,7 +50,7 @@ export const CompiledContextSchema = z.object({
   realizationRequest: RealizationRequestSchema,
   authorizedSpeechRealizations: z.array(
     AuthorizedSpeechRealizationSchema
-  ).min(1).max(512),
+  ).max(512),
   authorizedBoardAnnotationPurposes: z.array(
     z.string().min(1).max(100_000)
   ).min(1).max(32),
@@ -756,10 +756,6 @@ export function compileContext(input: {
       claimedDisclosureIds: [disclosure.id]
     });
   }
-  if (authorizedSpeechRealizations.length === 0) {
-    throw new Error("Realization request has no authorized speech realization");
-  }
-
   return CompiledContextSchema.parse({
     problemPrompt: input.state.problem.prompt,
     recentStudentWork: turn.studentText,
