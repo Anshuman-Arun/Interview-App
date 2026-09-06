@@ -749,8 +749,11 @@ function parseAntigravityStream(
         || conversationId === undefined
         || result.data.result.conversation_id !== conversationId
         || result.data.result.status !== "SUCCESS"
-        || completedUserInputSteps < 1
-        || result.data.result.num_turns !== completedUserInputSteps
+        || result.data.result.num_turns < 1
+        || (
+          completedUserInputSteps > 0
+          && result.data.result.num_turns !== completedUserInputSteps
+        )
         || !schemaMatches
       ) {
         throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
@@ -926,18 +929,6 @@ function stringWithinCodePointLimit(
     if (count > maximum) return false;
   }
   return true;
-}
-
-function jsonValuesCanonicallyEqual(
-  left: unknown,
-  right: unknown
-): boolean {
-  try {
-    return serializeBoundedPlainJson(left, MAX_STDOUT_BYTES)
-      === serializeBoundedPlainJson(right, MAX_STDOUT_BYTES);
-  } catch {
-    return false;
-  }
 }
 
 function schemaMatchesProposalContract(value: unknown): boolean {
