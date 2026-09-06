@@ -12,6 +12,15 @@ function escapeLatex(text: string): string {
     .replace(/\^/g, "\\textasciicircum{}");
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export function generateLatexTranscript({
   sessionId,
   problemTitle = "Oxford Tutorial",
@@ -62,7 +71,7 @@ export function generateLatexTranscript({
 `;
 
   if (evalData !== null) {
-    latex += `\\begin{tcolorbox}[colback=faintbg,colframe=oxfordblue,title=\\textbf{Tutor Evaluation: ${evalData.composite.score !== null ? evalData.composite.score + " / 100" : "Completed"}}]
+    latex += `\\begin{tcolorbox}[colback=faintbg,colframe=oxfordblue,title=\\textbf{Tutor Evaluation: ${evalData.composite.score !== null ? `${String(evalData.composite.score)} / 100` : "Completed"}}]
 \\textbf{Summary}: ${escapeLatex(evalData.summaryAssessment)}
 
 \\vspace{0.5em}
@@ -70,7 +79,7 @@ export function generateLatexTranscript({
 \\begin{itemize}[noitemsep,topsep=0pt]
 `;
     for (const dim of evalData.dimensions) {
-      latex += `  \\item \\textbf{${escapeLatex(dim.name)}}: ${dim.score !== null ? dim.score : "N/A"}${dim.notScoredReason ? " (" + escapeLatex(dim.notScoredReason) + ")" : ""}\n`;
+      latex += `  \\item \\textbf{${escapeLatex(dim.name)}}: ${dim.score !== null ? String(dim.score) : "N/A"}${dim.notScoredReason ? ` (${escapeLatex(dim.notScoredReason)})` : ""}\n`;
     }
     latex += `\\end{itemize}
 
@@ -204,7 +213,7 @@ export function exportPrintablePdfTranscript(args: {
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Oxford Tutorial Summary - ${args.sessionId}</title>
+  <title>Oxford Tutorial Summary - ${escapeHtml(args.sessionId)}</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", serif;
@@ -250,9 +259,9 @@ export function exportPrintablePdfTranscript(args: {
   <header>
     <h1>Oxford Tutorial Summary & Transcript</h1>
     <div class="meta">
-      <span><strong>Topic:</strong> ${args.problemTitle ?? "Oxford Mathematics"}</span>
-      <span><strong>Session:</strong> ${args.sessionId}</span>
-      <span><strong>Date:</strong> ${dateStr}</span>
+      <span><strong>Topic:</strong> ${escapeHtml(args.problemTitle ?? "Oxford Mathematics")}</span>
+      <span><strong>Session:</strong> ${escapeHtml(args.sessionId)}</span>
+      <span><strong>Date:</strong> ${escapeHtml(dateStr)}</span>
     </div>
   </header>
 `;
@@ -260,10 +269,10 @@ export function exportPrintablePdfTranscript(args: {
   if (evalData !== null) {
     html += `
   <section class="eval-box">
-    <h2>Tutorial Evaluation: ${evalData.composite.score !== null ? evalData.composite.score + " / 100" : "Completed"}</h2>
-    <p><strong>Tutor Assessment:</strong> ${evalData.summaryAssessment}</p>
-    ${evalData.keyStrengths.length > 0 ? `<p><strong>Key Strengths:</strong> ${evalData.keyStrengths.join("; ")}</p>` : ""}
-    ${evalData.areasForImprovement.length > 0 ? `<p><strong>Areas for Improvement:</strong> ${evalData.areasForImprovement.join("; ")}</p>` : ""}
+    <h2>Tutorial Evaluation: ${evalData.composite.score !== null ? `${String(evalData.composite.score)} / 100` : "Completed"}</h2>
+    <p><strong>Tutor Assessment:</strong> ${escapeHtml(evalData.summaryAssessment)}</p>
+    ${evalData.keyStrengths.length > 0 ? `<p><strong>Key Strengths:</strong> ${escapeHtml(evalData.keyStrengths.join("; "))}</p>` : ""}
+    ${evalData.areasForImprovement.length > 0 ? `<p><strong>Areas for Improvement:</strong> ${escapeHtml(evalData.areasForImprovement.join("; "))}</p>` : ""}
   </section>
 `;
   }
@@ -297,8 +306,8 @@ export function exportPrintablePdfTranscript(args: {
 
     html += `
     <div class="transcript-entry ${cls}">
-      <div class="entry-head"><span>${label}</span><span>${time}</span></div>
-      <div class="entry-body">${body}</div>
+      <div class="entry-head"><span>${escapeHtml(label)}</span><span>${escapeHtml(time)}</span></div>
+      <div class="entry-body">${escapeHtml(body)}</div>
     </div>
 `;
   }
@@ -313,7 +322,5 @@ export function exportPrintablePdfTranscript(args: {
 </body>
 </html>`;
 
-  printWindow.document.open();
-  printWindow.document.write(html);
-  printWindow.document.close();
+  printWindow.document.documentElement.innerHTML = html;
 }
