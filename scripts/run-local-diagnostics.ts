@@ -827,7 +827,16 @@ async function runFullTurn(
       turnCount: Object.keys(state.turns).length,
       generationStates: Object.values(state.generations).map((generation) => ({
         generationId: generation.generationId,
-        status: generation.status
+        status: generation.status,
+        ...(generation.pedagogicalAction === undefined
+          ? {}
+          : { pedagogicalAction: generation.pedagogicalAction }),
+        ...(generation.proposal === undefined
+          ? {}
+          : { proposal: generation.proposal }),
+        ...(generation.rejectionReason === undefined
+          ? {}
+          : { rejectionReason: generation.rejectionReason })
       })),
       deliveryStates: Object.values(state.deliveries).map((delivery) => ({
         deliveryId: delivery.deliveryId,
