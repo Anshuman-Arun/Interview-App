@@ -1,14 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { generateLatexTranscript } from "../apps/web/src/export/transcript-export.js";
+import { SessionIdSchema } from "../packages/domain/src/index.js";
 import type { SessionEvaluationReadResponse, SessionReplayReadResponse } from "../packages/replay/src/index.js";
 
 describe("Oxford tutorial transcript export", () => {
   it("generates a formatted LaTeX tutorial transcript with evaluation and dialogue", () => {
+    const sessionId = SessionIdSchema.parse("session_test-123");
     const evaluation = {
       available: true,
-      sessionId: "session_test-123" as any,
+      sessionId: sessionId,
       evaluation: {
-        sessionId: "session_test-123" as any,
+        sessionId: sessionId,
         evaluatedAt: new Date().toISOString(),
         composite: { score: 88, supportLevel: "STRONG", status: "FULL", includedDimensions: ["technicalCorrectness", "rigor"], omittedDimensions: [] },
         summaryAssessment: "Excellent grasp of invariant subspaces.",
@@ -25,14 +27,14 @@ describe("Oxford tutorial transcript export", () => {
 
     const replay = {
       available: true,
-      sessionId: "session_test-123" as any,
+      sessionId: sessionId,
       replay: {
-        sessionId: "session_test-123" as any,
+        sessionId: sessionId,
         complete: true,
         currentStateAvailable: true,
         entries: [
           {
-            eventId: "evt-1" as any,
+            eventId: "evt-1",
             sequence: 1,
             occurredAt: new Date().toISOString(),
             category: "INTERVIEWER_DELIVERY",
@@ -40,7 +42,7 @@ describe("Oxford tutorial transcript export", () => {
             text: { text: "Consider a finite-dimensional vector space V...", originalLength: 46, truncated: false }
           },
           {
-            eventId: "evt-2" as any,
+            eventId: "evt-2",
             sequence: 2,
             occurredAt: new Date().toISOString(),
             category: "STUDENT",
@@ -48,18 +50,18 @@ describe("Oxford tutorial transcript export", () => {
             text: { text: "Let T: V -> V be a linear operator...", originalLength: 36, truncated: false }
           },
           {
-            eventId: "evt-3" as any,
+            eventId: "evt-3",
             sequence: 3,
             occurredAt: new Date().toISOString(),
             category: "WHITEBOARD",
             summary: "Whiteboard drawing",
             delivery: {
               deliveryId: "del-1",
-              generationId: "gen-1" as any,
-              medium: "WHITEBOARD" as any,
-              persistedAtomStatus: "DELIVERED" as any,
-              status: "DELIVERED" as any,
-              presentationState: "PRESENTED" as any,
+              generationId: "gen-1",
+              medium: "WHITEBOARD",
+              persistedAtomStatus: "DELIVERED",
+              status: "DELIVERED",
+              presentationState: "PRESENTED",
               disclosure: { effectiveDisclosureLevel: 0, disclosureIdCount: 0 },
               boardAction: {
                 operation: "write_equation",
@@ -72,7 +74,7 @@ describe("Oxford tutorial transcript export", () => {
     } as unknown as SessionReplayReadResponse;
 
     const latex = generateLatexTranscript({
-      sessionId: "session_test-123" as any,
+      sessionId: sessionId,
       problemTitle: "Eigenvalues & Invariants",
       evaluation,
       replay
