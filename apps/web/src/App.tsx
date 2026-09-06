@@ -909,7 +909,11 @@ export const App: React.FC = () => {
           )}
 
           {session.isResponding && (
-            <span className="app-header__streaming">Responding</span>
+            <span className="app-header__streaming">
+              {session.configuration?.providerSelection?.providerId === "antigravity-cli"
+                ? "Antigravity working…"
+                : "Responding"}
+            </span>
           )}
 
           {hasActiveInterview && (
