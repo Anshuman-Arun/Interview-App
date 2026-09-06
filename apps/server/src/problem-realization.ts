@@ -3,6 +3,11 @@ import type {
   InterviewerProposal,
   RealizationRequest
 } from "../../../packages/domain/src/index.js";
+import {
+  getReviewedBoardAnnotationPurposes,
+  getReviewedZeroDisclosureRealizationTexts,
+  getReviewedZeroDisclosureRealizations
+} from "../../../packages/interview-engine/src/index.js";
 
 const RAMSEY_PROBLEM_ID = "oxford-six-people";
 
@@ -14,14 +19,12 @@ const RAMSEY_FALLBACK_REALIZATION =
   "What relations exist between vertex A and the other five people?";
 
 const REVIEWED_REALIZATIONS = Object.freeze([
+  ...getReviewedZeroDisclosureRealizationTexts(),
+  ...getReviewedBoardAnnotationPurposes(),
   RAMSEY_FALLBACK_REALIZATION,
-  "Why must that step be true?",
-  "Why must that claim hold?",
   "Can you formalize the two cases for the edges among those three vertices?",
   CHOOSE_PERSON_REALIZATION,
-  COMPLETE_TRIANGLE_REALIZATION,
-  "Can you make that step more precise?",
-  "What would you try next?"
+  COMPLETE_TRIANGLE_REALIZATION
 ] as const);
 
 export function getReviewedProblemRealizationTexts(): readonly string[] {
@@ -52,11 +55,17 @@ export function realizeProblemInterviewerProposal(
     };
   }
 
+  const reviewed = getReviewedZeroDisclosureRealizations(
+    request.requiredAction
+  )[0];
+  if (reviewed === undefined) {
+    throw new Error("No reviewed realization exists for the selected action");
+  }
   return {
     realizedAction: request.requiredAction,
     claimedDisclosureLevel: 0,
     claimedDisclosureIds: [],
-    speechText: "Why must that step be true?"
+    speechText: reviewed
   };
 }
 
