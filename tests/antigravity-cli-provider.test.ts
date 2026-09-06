@@ -713,6 +713,22 @@ describe("Antigravity CLI one-turn protocol", () => {
     await session.close();
   });
 
+  it("accepts the CLI-normalized base model id for a tiered Flash turn", async () => {
+    const provider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async (request) => {
+        request.onProcessStart();
+        return executionResult(
+          antigravityStream(PROPOSAL, [], { model: "gemini-3.8-flash" })
+        );
+      })
+    );
+    const session = await provider.createSession();
+
+    await expect(collectProposals(session.sendTurn(turnInput({ tier: "medium" }))))
+      .resolves.toEqual([PROPOSAL]);
+    await session.close();
+  });
+
   it("uses the published low model slug plus explicit low effort", async () => {
     let captured: SupervisedCliExecutionRequest | undefined;
     const provider = createAntigravityCliReasoningProvider(
