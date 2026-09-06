@@ -311,7 +311,7 @@ async function verifyAntigravityUserProfileSafety(): Promise<void> {
     "settings.json"
   );
 
-  let info;
+  let info: Awaited<ReturnType<typeof lstat>>;
   try {
     info = await lstat(settingsPath);
   } catch (error) {
