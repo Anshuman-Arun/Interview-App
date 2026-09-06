@@ -247,7 +247,8 @@ export async function runAntigravityIsolationMatrix(
   const jsonPrompt =
     "Return exactly one JSON object with one property: {\"ok\":\"diagnostic-ok\"}";
   const proposalPrompt =
-    "Return exactly one interviewer proposal with realizedAction CLARIFY, "
+    "Return one object with proposalJson. proposalJson must be a JSON string "
+    + "encoding exactly one interviewer proposal with realizedAction CLARIFY, "
     + "claimedDisclosureLevel 0, claimedDisclosureIds [], and speechText "
     + "\"What simple case would you test first?\".";
 
