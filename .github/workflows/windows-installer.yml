@@ -1,6 +1,11 @@
 name: Build Windows installer
 
 on:
+  push:
+    branches:
+      - "ui/editorial-v10-port"
+    paths:
+      - ".github/workflows/windows-installer.yml"
   pull_request:
     paths:
       - ".gitattributes"
