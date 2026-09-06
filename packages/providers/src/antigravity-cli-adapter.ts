@@ -659,6 +659,7 @@ function parseAntigravityStream(
   let sawResult = false;
   let conversationId: string | undefined;
   let proposal: InterviewerProposal | undefined;
+  let completedUserInputSteps = 0;
 
   for (let index = 0; index < lines.length; index += 1) {
     const raw = lines[index];
@@ -726,6 +727,15 @@ function parseAntigravityStream(
       ) {
         throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
       }
+      if (
+        step.data.step_update.step_type === "user_input"
+        && step.data.step_update.state === "DONE"
+      ) {
+        completedUserInputSteps += 1;
+        if (completedUserInputSteps > 8) {
+          throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
+        }
+      }
       continue;
     }
 
@@ -739,7 +749,8 @@ function parseAntigravityStream(
         || conversationId === undefined
         || result.data.result.conversation_id !== conversationId
         || result.data.result.status !== "SUCCESS"
-        || result.data.result.num_turns !== 1
+        || completedUserInputSteps < 1
+        || result.data.result.num_turns !== completedUserInputSteps
         || !schemaMatches
       ) {
         throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
