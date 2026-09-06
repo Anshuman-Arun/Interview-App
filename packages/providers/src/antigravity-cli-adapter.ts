@@ -824,7 +824,7 @@ function createSingleTurnInput(input: ReasoningTurnInput): string {
     "Use boardActions sparingly as a supporting explanatory medium; do not dump a solution onto the board.",
     "Do not use tools, subagents, files, prior conversations, or persistent memory.",
     "Return exactly one interviewer proposal satisfying the supplied JSON schema.",
-    "Use the exact JSON property names realizedAction, claimedDisclosureLevel, claimedDisclosureIds, speechText, and boardActions when those properties are present in the supplied schema.",
+    "Use the exact property names realizedAction, claimedDisclosureLevel, claimedDisclosureIds, speechText, and boardActions when those properties are present in the supplied JSON schema.",
     "Never rename speechText to speech, interviewerText, text, or any other alias.",
     "Return raw JSON only: no Markdown, no code fence, no prose before or after the object, and no second object.",
     "Do not retry, critique, repair, or follow up after emitting the single proposal object.",
