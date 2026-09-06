@@ -1,7 +1,10 @@
 import { types as utilTypes } from "node:util";
 import { z } from "zod";
 import {
+  DisclosureIdSchema,
+  DisclosureLevelSchema,
   InterviewerProposalSchema,
+  RealizationRequestSchema,
   type InterviewerProposal,
   type ReasoningTurnInput
 } from "../../domain/src/index.js";
@@ -67,6 +70,18 @@ const SOCRATIC_ACTIONS = [
   "GENERALIZE",
   "ASK_ALTERNATE_SOLUTION"
 ] as const;
+
+const AntigravityAuthorizedRealizationContextSchema = z.object({
+  realizationRequest: RealizationRequestSchema,
+  authorizedSpeechRealizations: z.array(z.object({
+    speechText: z.string().min(1).max(MAX_SPEECH_CHARACTERS),
+    claimedDisclosureLevel: DisclosureLevelSchema,
+    claimedDisclosureIds: z.array(DisclosureIdSchema).max(MAX_DISCLOSURE_IDS)
+  }).strict()).max(512),
+  authorizedBoardAnnotationPurposes: z.array(
+    z.string().min(1).max(MAX_ANNOTATION_PURPOSE_CHARACTERS)
+  ).max(32)
+}).passthrough();
 
 const BOARD_OPERATIONS = [
   "write_text",
@@ -378,12 +393,13 @@ export function createAntigravityCliReasoningProvider(
       if (result.exitCode !== 0) {
         throw new AntigravityCliAdapterError("PROCESS_FAILED");
       }
-      return parseAntigravityStream(
+      const proposal = parseAntigravityStream(
         result.stdout,
         modelProfile.cliModelId,
         ANTIGRAVITY_CLI_AGENT_ID,
         modelProfile.logicalModelId
       );
+      return canonicalizeProposalToAuthorizedRealization(input, proposal);
     }
   });
 }
@@ -803,6 +819,59 @@ function parseAntigravityStream(
     throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
   }
   return proposal;
+}
+
+function canonicalizeProposalToAuthorizedRealization(
+  input: ReasoningTurnInput,
+  proposal: InterviewerProposal
+): InterviewerProposal {
+  const context = AntigravityAuthorizedRealizationContextSchema.safeParse(
+    readOwnTurnContext(input)
+  );
+  if (!context.success || context.data.authorizedSpeechRealizations.length === 0) {
+    return proposal;
+  }
+
+  const request = context.data.realizationRequest;
+  const speechOptions = context.data.authorizedSpeechRealizations;
+  const authorizedSpeech = proposal.speechText === undefined
+    ? undefined
+    : speechOptions.find((option) =>
+        option.speechText === proposal.speechText
+        && option.claimedDisclosureLevel === proposal.claimedDisclosureLevel
+        && option.claimedDisclosureIds.length === proposal.claimedDisclosureIds.length
+        && option.claimedDisclosureIds.every(
+          (id, index) => id === proposal.claimedDisclosureIds[index]
+        )
+      );
+  const authorizedPurposes = new Set(
+    context.data.authorizedBoardAnnotationPurposes
+  );
+  const authorizedBoard = (proposal.boardActions ?? []).every((action) =>
+    authorizedPurposes.has(action.annotationPurpose)
+    && (
+      action.content === undefined
+      || speechOptions.some((option) => option.speechText === action.content)
+    )
+  );
+
+  if (
+    proposal.realizedAction === request.requiredAction
+    && (proposal.speechText === undefined || authorizedSpeech !== undefined)
+    && authorizedBoard
+  ) {
+    return proposal;
+  }
+
+  const fallback = speechOptions[0];
+  if (fallback === undefined) return proposal;
+  return InterviewerProposalSchema.parse({
+    realizedAction: request.requiredAction,
+    claimedDisclosureLevel: fallback.claimedDisclosureLevel,
+    claimedDisclosureIds: [...fallback.claimedDisclosureIds],
+    speechText: fallback.speechText,
+    boardActions: []
+  });
 }
 
 function antigravityProposalWithinBounds(
