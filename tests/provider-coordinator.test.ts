@@ -81,6 +81,49 @@ describe("application-owned ProviderCoordinator", () => {
     }
   });
 
+  it("persists the exact proposal-admission rejection reason in replayable generation state", async () => {
+    const harness = await coordinatorHarness();
+    try {
+      const provider = new MockModelAdapter({
+        proposal: {
+          ...PROPOSAL,
+          realizedAction: "CLARIFY"
+        }
+      });
+      const execution = await harness.coordinator.start({
+        inputEpisodeId: harness.inputEpisodeId,
+        turnId: harness.turnId,
+        provider,
+        policy: POLICY,
+        problem: sixPeopleProblem,
+        validator: harness.validator,
+        now: NOW
+      });
+      const outcome = await execution.completion;
+
+      expect(outcome).toMatchObject({
+        status: "REJECTED",
+        reason: "Model realized an action that application policy did not select"
+      });
+      expect(harness.writer.getState().generations[execution.generationId]).toMatchObject({
+        status: "REJECTED",
+        rejectionReason: "Model realized an action that application policy did not select",
+        proposal: {
+          realizedAction: "CLARIFY"
+        },
+        pedagogicalAction: {
+          requiredAction: "PROBE_JUSTIFICATION"
+        }
+      });
+      expect(replaySession(
+        harness.sessionId,
+        harness.store.load(harness.sessionId)
+      )).toEqual(harness.writer.getState());
+    } finally {
+      harness.store.close();
+    }
+  });
+
   it("suppresses output released after cancellation even when the provider ignores cancellation", async () => {
     const harness = await coordinatorHarness();
     try {
