@@ -720,6 +720,12 @@ describe("Antigravity CLI one-turn protocol", () => {
       "Set proposal.realizedAction EXACTLY equal to realizationRequest.requiredAction"
     );
     expect(content).toContain(
+      "copy speechText EXACTLY from one authorizedSpeechRealizations entry"
+    );
+    expect(content).toContain(
+      "Every board action annotationPurpose must be copied EXACTLY from that list"
+    );
+    expect(content).toContain(
       "if allowedDisclosureIds is absent, proposal.claimedDisclosureIds must be an empty array"
     );
     expect(content).toContain("Return only the single transport object");
