@@ -599,8 +599,8 @@ class TtsRuntime:
             raise ProtocolError(400, "INVALID_TEXT")
         if voice != "kokoro_af_heart" or language != "en-US" or sample_rate != 24_000:
             raise ProtocolError(400, "UNSUPPORTED_TTS_CONFIGURATION")
-        # Moonshine's cancellable TTS path is the streaming API. It does not
-        # expose per-request speed mutation, and desktop v1 always requests 1x.
+        # Desktop v1 requests 1x. This worker needs complete PCM samples,
+        # not playback, so use Moonshine's documented batch synthesize() API.
         if speed != 1.0:
             raise ProtocolError(400, "UNSUPPORTED_TTS_SPEED")
 
@@ -615,42 +615,36 @@ class TtsRuntime:
                     raise ProtocolError(409, "TTS_BUSY")
                 self._current_request_id = request_id
 
-            chunks: list[Any] = []
-            frame_count = 0
             try:
-                for chunk in self._tts.stream(text):
-                    with self._state_lock:
-                        if request_id in self._cancelled_request_ids:
-                            raise ProtocolError(409, "CANCELLED")
-                    if int(chunk.sample_rate) != 24_000:
-                        raise RuntimeError("Kokoro returned unexpected sample rate")
-                    pcm_chunk = (
-                        self._np.asarray(chunk.samples, dtype="<f4")
-                        .reshape(-1)
-                        .copy()
-                    )
-                    if pcm_chunk.size == 0:
-                        continue
-                    if not self._np.isfinite(pcm_chunk).all() or bool(
-                        (self._np.abs(pcm_chunk) > 1.001).any()
-                    ):
-                        raise RuntimeError("Kokoro returned invalid PCM")
-                    # Kokoro can produce tiny floating-point overshoots around
-                    # +/-1.0. The TypeScript authority boundary requires
-                    # normalized PCM strictly inside [-1, 1], so canonicalize
-                    # only the already-admitted <=0.1% overshoot here.
-                    self._np.clip(pcm_chunk, -1.0, 1.0, out=pcm_chunk)
-                    frame_count += int(pcm_chunk.size)
-                    if frame_count > 24_000 * MAX_TTS_SECONDS:
-                        raise RuntimeError("Kokoro output exceeds PCM bound")
-                    chunks.append(pcm_chunk.copy())
-
+                synthesized = self._tts.synthesize(text)
+                if (
+                    not isinstance(synthesized, tuple)
+                    or len(synthesized) != 2
+                ):
+                    raise RuntimeError("Kokoro returned invalid synthesis result")
+                raw_samples, output_sample_rate = synthesized
+                if int(output_sample_rate) != 24_000:
+                    raise RuntimeError("Kokoro returned unexpected sample rate")
+                pcm = (
+                    self._np.asarray(raw_samples, dtype="<f4")
+                    .reshape(-1)
+                    .copy()
+                )
                 with self._state_lock:
                     if request_id in self._cancelled_request_ids:
                         raise ProtocolError(409, "CANCELLED")
-                if not chunks:
+                if pcm.size == 0:
                     raise RuntimeError("Kokoro returned no PCM")
-                pcm = self._np.concatenate(chunks).astype("<f4", copy=False)
+                if not self._np.isfinite(pcm).all() or bool(
+                    (self._np.abs(pcm) > 1.001).any()
+                ):
+                    raise RuntimeError("Kokoro returned invalid PCM")
+                # Kokoro may exceed normalized full scale by a tiny floating
+                # point margin. Canonicalize only the <=0.1% overshoot already
+                # admitted above; anything larger remains a hard failure.
+                self._np.clip(pcm, -1.0, 1.0, out=pcm)
+                if pcm.size > 24_000 * MAX_TTS_SECONDS:
+                    raise RuntimeError("Kokoro output exceeds PCM bound")
             finally:
                 with self._state_lock:
                     self._current_request_id = None
@@ -687,13 +681,9 @@ class TtsRuntime:
             if self._current_request_id != request_id:
                 return {"accepted": True}
 
-            # Moonshine explicitly documents cancel_stream() as safe for
-            # barge-in from another thread while stream() is producing chunks.
-            try:
-                self._tts.cancel_stream()
-            except Exception:
-                self._cancelled_request_ids.pop(request_id, None)
-                raise
+            # Batch synthesize() does not expose a per-call cancellation
+            # primitive. Keep the exact request tombstoned so any late native
+            # result is discarded before it can cross the application boundary.
         return {"accepted": True}
 
 
