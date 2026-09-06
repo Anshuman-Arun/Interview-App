@@ -64,22 +64,18 @@ class _FakeServer:
 
 
 class _FakeTts:
-    def __init__(self) -> None:
-        self.cancel_calls = 0
-
-    def cancel_stream(self) -> None:
-        self.cancel_calls += 1
+    pass
 
 
-class _FakeStreamingTts(_FakeTts):
-    def __init__(self, samples: list[float]) -> None:
-        super().__init__()
+class _FakeBatchTts(_FakeTts):
+    def __init__(self, samples: list[float], sample_rate: int = 24_000) -> None:
         self.samples = samples
+        self.sample_rate = sample_rate
 
-    def stream(self, _text: str):
-        yield SimpleNamespace(
-            sample_rate=24_000,
-            samples=np.asarray(self.samples, dtype="<f4"),
+    def synthesize(self, _text: str):
+        return (
+            np.asarray(self.samples, dtype="<f4"),
+            self.sample_rate,
         )
 
 
@@ -389,7 +385,7 @@ class ProductionWorkerUnitTests(unittest.TestCase):
     def test_tts_clamps_only_tiny_normalized_model_overshoot(self) -> None:
         runtime = object.__new__(worker.TtsRuntime)
         runtime._np = np
-        runtime._tts = _FakeStreamingTts([1.0005, -1.0005, 0.25])
+        runtime._tts = _FakeBatchTts([1.0005, -1.0005, 0.25])
         runtime._synthesis_lock = threading.Lock()
         runtime._state_lock = threading.Lock()
         runtime._current_request_id = None
@@ -416,7 +412,7 @@ class ProductionWorkerUnitTests(unittest.TestCase):
     def test_tts_rejects_model_output_beyond_tiny_overshoot_tolerance(self) -> None:
         runtime = object.__new__(worker.TtsRuntime)
         runtime._np = np
-        runtime._tts = _FakeStreamingTts([1.01])
+        runtime._tts = _FakeBatchTts([1.01])
         runtime._synthesis_lock = threading.Lock()
         runtime._state_lock = threading.Lock()
         runtime._current_request_id = None
@@ -426,6 +422,25 @@ class ProductionWorkerUnitTests(unittest.TestCase):
             runtime.synthesize({
                 "requestId": "invalid-overshoot",
                 "text": "Reject excessive overshoot",
+                "voice": "kokoro_af_heart",
+                "language": "en-US",
+                "speed": 1.0,
+                "sampleRate": 24_000,
+            })
+
+    def test_tts_uses_batch_synthesis_and_rejects_wrong_sample_rate(self) -> None:
+        runtime = object.__new__(worker.TtsRuntime)
+        runtime._np = np
+        runtime._tts = _FakeBatchTts([0.1, -0.1], sample_rate=22_050)
+        runtime._synthesis_lock = threading.Lock()
+        runtime._state_lock = threading.Lock()
+        runtime._current_request_id = None
+        runtime._cancelled_request_ids = OrderedDict()
+
+        with self.assertRaises(RuntimeError):
+            runtime.synthesize({
+                "requestId": "wrong-rate",
+                "text": "Wrong sample rate",
                 "voice": "kokoro_af_heart",
                 "language": "en-US",
                 "speed": 1.0,
@@ -454,7 +469,6 @@ class ProductionWorkerUnitTests(unittest.TestCase):
             })
         self.assertEqual(raised.exception.status, 409)
         self.assertEqual(raised.exception.code, "CANCELLED")
-        self.assertEqual(fake.cancel_calls, 0)
 
     def test_tts_cancel_is_bound_to_the_exact_active_request(self) -> None:
         runtime = object.__new__(worker.TtsRuntime)
@@ -469,7 +483,6 @@ class ProductionWorkerUnitTests(unittest.TestCase):
         self.assertIn("other-request", runtime._cancelled_request_ids)
 
         self.assertEqual(runtime.cancel({"requestId": "active-request"}), {"accepted": True})
-        self.assertEqual(fake.cancel_calls, 1)
         self.assertIn("active-request", runtime._cancelled_request_ids)
 
     def test_parent_watchdog_exits_worker_immediately_when_parent_terminates_before_server(self) -> None:
