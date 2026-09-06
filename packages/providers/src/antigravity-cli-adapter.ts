@@ -722,6 +722,7 @@ function parseAntigravityStream(
         step.data.step_update.step_type !== "user_input"
         && step.data.step_update.step_type !== "agent_response"
         && step.data.step_update.step_type !== "checkpoint"
+        && step.data.step_update.step_type !== "finish"
       ) {
         throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
       }
