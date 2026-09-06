@@ -172,6 +172,80 @@ async function collectProposals(
   return proposals;
 }
 
+describe("Antigravity authorized realization canonicalization", () => {
+  const authorizedContext = {
+    realizationRequest: {
+      requiredAction: "PROBE_JUSTIFICATION" as const,
+      target: "turn:test",
+      maximumDisclosure: 0 as const
+    },
+    authorizedSpeechRealizations: [
+      {
+        speechText: "Why must that step be true?",
+        claimedDisclosureLevel: 0 as const,
+        claimedDisclosureIds: []
+      },
+      {
+        speechText: "Why must that claim hold?",
+        claimedDisclosureLevel: 0 as const,
+        claimedDisclosureIds: []
+      }
+    ],
+    authorizedBoardAnnotationPurposes: [
+      "Focus attention on this part of the student's work."
+    ],
+    deliveredFacts: [],
+    forbiddenDisclosureIds: []
+  };
+
+  it("preserves provider output that exactly uses an authorized realization", async () => {
+    const proposal: InterviewerProposal = {
+      realizedAction: "PROBE_JUSTIFICATION",
+      claimedDisclosureLevel: 0,
+      claimedDisclosureIds: [],
+      speechText: "Why must that claim hold?",
+      boardActions: []
+    };
+    const provider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async (request) => {
+        request.onProcessStart();
+        return executionResult(antigravityStream(proposal));
+      })
+    );
+    const session = await provider.createSession();
+    await expect(collectProposals(
+      session.sendTurn(turnInput(authorizedContext))
+    )).resolves.toEqual([proposal]);
+    await session.close();
+  });
+
+  it("falls back to the first authorized realization when provider wording is novel", async () => {
+    const provider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async (request) => {
+        request.onProcessStart();
+        return executionResult(antigravityStream({
+          realizedAction: "CLARIFY",
+          claimedDisclosureLevel: 0,
+          claimedDisclosureIds: [],
+          speechText: "Tell me more about what you are thinking here.",
+          boardActions: []
+        }));
+      })
+    );
+    const session = await provider.createSession();
+    await expect(collectProposals(
+      session.sendTurn(turnInput(authorizedContext))
+    )).resolves.toEqual([{
+      realizedAction: "PROBE_JUSTIFICATION",
+      claimedDisclosureLevel: 0,
+      claimedDisclosureIds: [],
+      speechText: "Why must that step be true?",
+      boardActions: []
+    }]);
+    await session.close();
+  });
+});
+
 describe("Antigravity zero-turn runtime preflight", () => {
   it("accepts only the exact zero-turn no-tool profile", () => {
     expect(ANTIGRAVITY_CLI_ZERO_TURN_PREFLIGHT_INPUT)
