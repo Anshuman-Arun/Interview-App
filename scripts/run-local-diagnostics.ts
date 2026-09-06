@@ -816,11 +816,17 @@ async function runFullTurn(
       "I am ready. I would start by testing a simple example and looking for an invariant."
     );
 
-    const delivered = await waitForCondition(
-      () => textDeliveries.length > 0 || boardDeliveries.length > 0,
-      90_000
-    );
+    const completedOrRejected = await waitForCondition(() => {
+      if (textDeliveries.length > 0 || boardDeliveries.length > 0) return true;
+      const current = server.runtime.sessions.getWriter(sessionId).getState();
+      return Object.values(current.generations).some((generation) =>
+        generation.status === "REJECTED"
+        || generation.status === "SUPERSEDED"
+        || generation.status === "VALIDATED"
+      );
+    }, 90_000);
     const state = server.runtime.sessions.getWriter(sessionId).getState();
+    const delivered = textDeliveries.length > 0 || boardDeliveries.length > 0;
     const observability = server.observability.read(sessionId);
     const stateSummary = {
       status: state.status,
@@ -845,10 +851,25 @@ async function runFullTurn(
       }))
     };
     if (!delivered) {
+      const rejectedGeneration = Object.values(state.generations).find(
+        (generation) => generation.status === "REJECTED"
+      );
+      const supersededGeneration = Object.values(state.generations).find(
+        (generation) => generation.status === "SUPERSEDED"
+      );
       return {
         status: "FAIL",
-        reasonCode: "FULL_TURN_NO_DELIVERY",
-        detail: "Committed student input produced no interviewer delivery within 90 seconds",
+        reasonCode: rejectedGeneration !== undefined
+          ? "FULL_TURN_PROPOSAL_REJECTED"
+          : supersededGeneration !== undefined
+            ? "FULL_TURN_GENERATION_SUPERSEDED"
+            : "FULL_TURN_NO_DELIVERY",
+        detail: rejectedGeneration?.rejectionReason
+          ?? (supersededGeneration !== undefined
+            ? "Provider generation was superseded before delivery"
+            : completedOrRejected
+              ? "Generation completed without an interviewer delivery"
+              : "Committed student input produced no interviewer delivery within 90 seconds"),
         data: {
           committed,
           selectedOption,
