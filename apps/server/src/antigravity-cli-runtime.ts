@@ -1,3 +1,4 @@
+import { readFile, lstat } from "node:fs/promises";
 import { win32 as win32Path } from "node:path";
 import process from "node:process";
 import type { ProviderSelectionReference } from "../../../packages/domain/src/index.js";
@@ -29,6 +30,7 @@ const ANTIGRAVITY_VERSION_STDERR_BYTES = 4 * 1024;
 const ANTIGRAVITY_PROFILE_PREFLIGHT_TIMEOUT_MS = 75_000;
 const ANTIGRAVITY_PROFILE_PREFLIGHT_STDOUT_BYTES = 64 * 1024;
 const ANTIGRAVITY_PROFILE_PREFLIGHT_STDERR_BYTES = 16 * 1024;
+const ANTIGRAVITY_USER_SETTINGS_MAX_BYTES = 64 * 1024;
 const ANTIGRAVITY_SAFE_SETTINGS = Object.freeze({
   toolPermission: "strict",
   artifactReviewPolicy: "asks-for-review",
@@ -116,6 +118,7 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
   let runner: SupervisedProcessRunner | undefined;
   let versionVerification: Promise<void> | undefined;
   let profileVerification: Promise<void> | undefined;
+  let userProfileSafetyVerification: Promise<void> | undefined;
 
   const getRunner = (): SupervisedProcessRunner => {
     if (runner !== undefined) return runner;
@@ -137,12 +140,28 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
     return created;
   };
 
+  const ensureSafeUserProfile = async (): Promise<void> => {
+    let check = userProfileSafetyVerification;
+    if (check === undefined) {
+      check = verifyAntigravityUserProfileSafety();
+      userProfileSafetyVerification = check;
+      const captured = check;
+      void captured.catch(() => {
+        if (userProfileSafetyVerification === captured) {
+          userProfileSafetyVerification = undefined;
+        }
+      });
+    }
+    await check;
+  };
+
   const ensureSupportedVersion = async (
     signal: AbortSignal | undefined
   ): Promise<void> => {
     if (signal?.aborted === true) {
       throw new Error("Antigravity runtime verification wait cancelled");
     }
+    await ensureSafeUserProfile();
     let check = versionVerification;
     if (check === undefined) {
       check = (async () => {
@@ -270,6 +289,95 @@ async function waitForSharedVerificationOrAbort(
     await Promise.race([verification, cancelled]);
   } finally {
     signal.removeEventListener("abort", onAbort);
+  }
+}
+
+async function verifyAntigravityUserProfileSafety(): Promise<void> {
+  if (process.platform !== "win32") return;
+  const userProfile = process.env["USERPROFILE"];
+  if (
+    userProfile === undefined
+    || userProfile.length === 0
+    || userProfile.includes("\0")
+    || !win32Path.isAbsolute(userProfile)
+    || userProfile.startsWith("\\\\")
+  ) {
+    throw new Error("Antigravity signed-in Windows profile is unavailable");
+  }
+  const settingsPath = win32Path.join(
+    win32Path.normalize(userProfile),
+    ".gemini",
+    "antigravity-cli",
+    "settings.json"
+  );
+
+  let info;
+  try {
+    info = await lstat(settingsPath);
+  } catch (error) {
+    if (
+      typeof error === "object"
+      && error !== null
+      && "code" in error
+      && error.code === "ENOENT"
+    ) {
+      return;
+    }
+    throw new Error("Antigravity user settings could not be inspected");
+  }
+  if (!info.isFile() || info.isSymbolicLink() || info.size > ANTIGRAVITY_USER_SETTINGS_MAX_BYTES) {
+    throw new Error("Antigravity user settings are unsafe or outside the bounded profile");
+  }
+
+  let parsed: unknown;
+  try {
+    const raw = await readFile(settingsPath, "utf8");
+    if (Buffer.byteLength(raw, "utf8") > ANTIGRAVITY_USER_SETTINGS_MAX_BYTES) {
+      throw new Error("settings too large");
+    }
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    throw new Error("Antigravity user settings are malformed");
+  }
+  if (
+    typeof parsed !== "object"
+    || parsed === null
+    || Array.isArray(parsed)
+  ) {
+    throw new Error("Antigravity user settings are malformed");
+  }
+  const settings = parsed as Record<string, unknown>;
+  const permissionMode = settings["toolPermission"];
+  if (
+    permissionMode !== undefined
+    && permissionMode !== "request-review"
+    && permissionMode !== "strict"
+  ) {
+    throw new Error("Antigravity user permission mode is unsafe for interview execution");
+  }
+  if (
+    settings["allowNonWorkspaceAccess"] === true
+    || settings["useG1Credits"] === true
+    || Object.prototype.hasOwnProperty.call(settings, "modelProvider")
+  ) {
+    throw new Error("Antigravity user profile enables an unsafe interview capability");
+  }
+  const permissions = settings["permissions"];
+  if (permissions !== undefined) {
+    if (
+      typeof permissions !== "object"
+      || permissions === null
+      || Array.isArray(permissions)
+    ) {
+      throw new Error("Antigravity user permission rules are malformed");
+    }
+    const allow = (permissions as Record<string, unknown>)["allow"];
+    if (
+      allow !== undefined
+      && (!Array.isArray(allow) || allow.length !== 0)
+    ) {
+      throw new Error("Antigravity pre-authorized tool rules are not allowed for interviews");
+    }
   }
 }
 
