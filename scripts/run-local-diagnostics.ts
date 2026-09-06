@@ -1028,20 +1028,34 @@ async function main(): Promise<void> {
           detail: "TTS skipped because the production voice runtime is unavailable"
         };
       }
-      const result = await synthesizePcm(
-        runtime,
-        "Diagnostic audio. The local Kokoro voice is working.",
-        24_000
-      );
-      return {
-        detail: "Actual Kokoro worker synthesized production-rate PCM",
-        data: {
-          bytes: result.bytes.byteLength,
-          chunks: result.chunks,
-          model: result.model,
-          summary: result.summary
-        }
-      };
+      try {
+        const result = await synthesizePcm(
+          runtime,
+          "Diagnostic audio. The local Kokoro voice is working.",
+          24_000
+        );
+        return {
+          detail: "Actual Kokoro worker synthesized production-rate PCM",
+          data: {
+            bytes: result.bytes.byteLength,
+            chunks: result.chunks,
+            model: result.model,
+            summary: result.summary,
+            workerInspection: runtime.tts.worker.inspect()
+          }
+        };
+      } catch (error) {
+        const snapshot = errorSnapshot(error);
+        return {
+          status: "FAIL",
+          reasonCode: snapshot.code ?? snapshot.name,
+          detail: snapshot.message,
+          data: {
+            error: snapshot,
+            workerInspection: runtime.tts.worker.inspect()
+          }
+        };
+      }
     });
 
     await check("local.tts.loopback-source", "tts", async () => {
@@ -1053,21 +1067,35 @@ async function main(): Promise<void> {
           detail: "48 kHz loopback synthesis skipped"
         };
       }
-      const result = await synthesizePcm(
-        runtime,
-        "Moonshine diagnostic phrase. Please recognize this sentence.",
-        24_000
-      );
-      loopbackPcm = upsamplePcmF32Le24kTo48k(result.bytes);
-      return {
-        detail: "Actual Kokoro worker synthesized 24 kHz speech and the diagnostic resampled it to 48 kHz for Moonshine loopback",
-        data: {
-          sourceBytes: result.bytes.byteLength,
-          loopbackBytes: loopbackPcm.byteLength,
-          chunks: result.chunks,
-          model: result.model
-        }
-      };
+      try {
+        const result = await synthesizePcm(
+          runtime,
+          "Moonshine diagnostic phrase. Please recognize this sentence.",
+          24_000
+        );
+        loopbackPcm = upsamplePcmF32Le24kTo48k(result.bytes);
+        return {
+          detail: "Actual Kokoro worker synthesized 24 kHz speech and the diagnostic resampled it to 48 kHz for Moonshine loopback",
+          data: {
+            sourceBytes: result.bytes.byteLength,
+            loopbackBytes: loopbackPcm.byteLength,
+            chunks: result.chunks,
+            model: result.model,
+            workerInspection: runtime.tts.worker.inspect()
+          }
+        };
+      } catch (error) {
+        const snapshot = errorSnapshot(error);
+        return {
+          status: "FAIL",
+          reasonCode: snapshot.code ?? snapshot.name,
+          detail: snapshot.message,
+          data: {
+            error: snapshot,
+            workerInspection: runtime.tts.worker.inspect()
+          }
+        };
+      }
     });
 
     await check("local.stt.loopback", "stt", async () => {
