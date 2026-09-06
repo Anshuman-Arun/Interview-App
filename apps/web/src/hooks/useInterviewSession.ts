@@ -1469,7 +1469,10 @@ export function useInterviewSession(
             } catch {
               // Test/development opening presenters are presentation-only and must never undo a successful start.
             }
-          } else {
+          } else if (
+            desktopBootstrap !== undefined
+            || options.voiceBaseUrl !== undefined
+          ) {
             void playApplicationOpeningAudio(targetSessionId);
           }
         }
@@ -1507,10 +1510,12 @@ export function useInterviewSession(
     },
     [
       beginSessionTransition,
+      desktopBootstrap,
       getCommandClient,
       launchRendererStream,
       options.whiteboardAdapter,
       options.openingSpeaker,
+      options.voiceBaseUrl,
       playApplicationOpeningAudio,
       resetBoardSync,
       sessionId,
