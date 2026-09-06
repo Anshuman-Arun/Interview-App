@@ -13,6 +13,52 @@ describe("security and context boundary", () => {
     expect(redactSecrets("authorization=Bearer-abc api_key:xyz")).toBe("authorization=[REDACTED] api_key=[REDACTED]");
   });
 
+  it("exposes only explicitly authorized protected facts in the realization menu", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const committed = await harness.turns.commitInput(
+        "I think I need a stronger hint."
+      );
+      const disclosure = sixPeopleProblem.interviewer.protectedDisclosures[0];
+      const forbidden = sixPeopleProblem.interviewer.protectedDisclosures[1];
+      if (disclosure === undefined || forbidden === undefined) {
+        throw new Error("Expected two protected disclosures");
+      }
+      const request = {
+        requiredAction: "DIRECTIONAL_NUDGE" as const,
+        target: "milestone:test",
+        maximumDisclosure: disclosure.minimumDisclosureLevel,
+        allowedDisclosureIds: [disclosure.id]
+      };
+      const current = harness.writer.getState();
+      const state = {
+        ...current,
+        pedagogicalActions: {
+          ...current.pedagogicalActions,
+          [committed.turnId]: request
+        }
+      };
+      const context = compileContext({
+        state,
+        problem: sixPeopleProblem,
+        turnId: committed.turnId,
+        realizationRequest: request
+      });
+      expect(context.authorizedSpeechRealizations).toContainEqual({
+        speechText: disclosure.fact,
+        claimedDisclosureLevel: disclosure.minimumDisclosureLevel,
+        claimedDisclosureIds: [disclosure.id]
+      });
+      const serialized = JSON.stringify(context);
+      expect(serialized).toContain(disclosure.fact);
+      expect(serialized).not.toContain(forbidden.fact);
+      expect(context.forbiddenDisclosureIds).toContain(forbidden.id);
+      expect(context.forbiddenDisclosureIds).not.toContain(disclosure.id);
+    } finally {
+      harness.store.close();
+    }
+  });
+
   it("keeps private solution out of provider context despite prompt injection", async () => {
     const harness = await createCoreHarness();
     try {
