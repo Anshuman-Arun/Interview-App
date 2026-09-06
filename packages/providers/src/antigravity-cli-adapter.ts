@@ -431,6 +431,10 @@ export const ANTIGRAVITY_AUDITED_CLI_TOOLS = Object.freeze([
 
 const AUDITED_CLI_TOOLS_SET = new Set<string>(ANTIGRAVITY_AUDITED_CLI_TOOLS);
 
+function isSafeAntigravityPermissionMode(value: string): boolean {
+  return value === "strict" || value === "request-review";
+}
+
 export function isAuditedAntigravityCliToolSurface(
   tools: readonly string[]
 ): boolean {
@@ -720,7 +724,7 @@ export function assertAntigravityCliZeroTurnPreflightResult(
         || !modelMatches
         || init.data.init.agent !== ANTIGRAVITY_CLI_AGENT_ID
         || !isAuditedAntigravityCliToolSurface(init.data.init[INIT_TOOLS_FIELD])
-        || init.data.init.permission_mode !== "strict"
+        || !isSafeAntigravityPermissionMode(init.data.init.permission_mode)
         || !schemaMatchesProposalContract(init.data.init.json_schema)
       ) {
         throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
@@ -888,7 +892,7 @@ function parseAntigravityStream(
         || init.data.init.agent !== expectedAgentId
         || !isAuditedAntigravityCliToolSurface(init.data.init[INIT_TOOLS_FIELD])
         || !schemaMatches
-        || init.data.init.permission_mode !== "strict"
+        || !isSafeAntigravityPermissionMode(init.data.init.permission_mode)
       ) {
         throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
       }
