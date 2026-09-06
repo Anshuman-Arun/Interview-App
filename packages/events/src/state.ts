@@ -181,6 +181,8 @@ export interface GenerationState {
   /** Exact interviewer proposal that was present when application validation succeeded. */
   readonly validatedInterviewerProposal?: InterviewerProposal;
   readonly status: "ACTIVE" | "PROPOSAL_RECEIVED" | "VALIDATED" | "REJECTED" | "SUPERSEDED";
+  /** Derived from the authoritative rejection event for diagnostics/replay. */
+  readonly rejectionReason?: string;
   readonly contextManifest?: ContextCompilationManifest;
   readonly proposal?: InterviewerProposal;
   readonly formalInterpretationProposal?: FormalInterpretationProposal;
