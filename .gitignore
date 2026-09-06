@@ -42,3 +42,6 @@ __pycache__/
 
 # Generated from the reviewed base64 icon source during Windows packaging.
 apps/desktop/assets/icon.png
+
+# Local diagnostic reports
+diagnostics-output/
