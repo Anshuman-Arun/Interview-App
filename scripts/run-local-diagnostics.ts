@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { access, mkdir, readdir, stat, writeFile } from "node:fs/promises";
+import { access, mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import {
@@ -20,6 +20,7 @@ import {
   ANTIGRAVITY_CLI_PROVIDER_ID
 } from "../packages/providers/src/index.js";
 import { DesktopLocalRuntimeComposition } from "../apps/desktop/src/runtime/index.js";
+import { defaultAntigravityCliExecutablePath } from "../packages/local-runtime/src/index.js";
 import {
   createApplicationProviderAdapterRuntimeSource
 } from "../apps/server/src/antigravity-cli-runtime.js";
@@ -664,7 +665,7 @@ async function runFullTurn(
     };
     const whiteboardPresenter: WhiteboardPresenter = {
       presentWhiteboard: (action, deliveryId) => {
-        boardDeliveries.push({ type: action.type, deliveryId });
+        boardDeliveries.push({ type: action.operation, deliveryId });
       }
     };
     const audioPlayer: AudioPlayer = {
@@ -992,6 +993,42 @@ async function main(): Promise<void> {
   const modelsToProbe = options.allModels
     ? ANTIGRAVITY_CLI_MODEL_IDS
     : [options.model];
+
+  await check("provider.cli.version", "provider", async () => {
+    const executable = defaultAntigravityCliExecutablePath("win32");
+    if (!await exists(executable)) {
+      return {
+        status: "FAIL",
+        reasonCode: "AGY_EXECUTABLE_MISSING",
+        detail: "The Antigravity CLI executable expected by the app does not exist",
+        data: { executable: sanitizeText(executable) }
+      };
+    }
+    const result = await runCommand(executable, ["--version"], 30_000);
+    return {
+      status: result.exitCode === 0 ? "PASS" : "FAIL",
+      reasonCode: result.exitCode === 0 ? "AGY_VERSION_OK" : "AGY_VERSION_FAILED",
+      detail: result.exitCode === 0
+        ? `Raw Antigravity CLI version command succeeded: ${result.stdout.trim()}`
+        : `Raw Antigravity CLI version command failed with code ${String(result.exitCode)}`,
+      data: {
+        executable: sanitizeText(executable),
+        stdout: result.stdout,
+        stderr: result.stderr,
+        userGeminiDirectoryExists: process.env["USERPROFILE"] === undefined
+          ? false
+          : await exists(path.join(process.env["USERPROFILE"], ".gemini")),
+        userAntigravitySettingsExist: process.env["USERPROFILE"] === undefined
+          ? false
+          : await exists(path.join(
+            process.env["USERPROFILE"],
+            ".gemini",
+            "antigravity-cli",
+            "settings.json"
+          ))
+      }
+    };
+  });
 
   if (options.skipRemote) {
     await check("provider.remote", "provider", async () => ({
