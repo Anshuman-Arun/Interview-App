@@ -429,6 +429,8 @@ export function useInterviewSession(
   const visionSchedulerRef = useRef<WhiteboardVisionScheduler | null>(null);
   const visionSchedulerSessionRef = useRef<SessionId | null>(null);
   const rendererAudioPlayerRef = useRef<QueuedRendererAudioPlayer | null>(null);
+  const openingAudioPlaybackRef = useRef<BrowserAudioPlayback | null>(null);
+  const openingAudioAbortRef = useRef<AbortController | null>(null);
   const audioOutputDeviceRef = useRef<string | undefined>(undefined);
   const responseTimeoutRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
   const inputResponseCycleRef = useRef(0);
@@ -495,10 +497,74 @@ export function useInterviewSession(
     }),
     [authenticatedFetch, voiceBaseUrl]
   );
+
+  const stopApplicationOpeningAudio = useCallback((): void => {
+    openingAudioAbortRef.current?.abort();
+    openingAudioAbortRef.current = null;
+    openingAudioPlaybackRef.current?.interruptCurrent();
+    openingAudioPlaybackRef.current?.dispose();
+    openingAudioPlaybackRef.current = null;
+    setIsSpeaking(false);
+  }, []);
+
+  const playApplicationOpeningAudio = useCallback(
+    async (targetSessionId: SessionId): Promise<void> => {
+      stopApplicationOpeningAudio();
+      const controller = new AbortController();
+      const playback = new BrowserAudioPlayback();
+      openingAudioAbortRef.current = controller;
+      openingAudioPlaybackRef.current = playback;
+      let release: (() => void) | undefined;
+      try {
+        const resolved = await audioVoiceClient.resolveApplicationOpeningAudio(
+          targetSessionId,
+          controller.signal
+        );
+        release = resolved.release;
+        if (
+          controller.signal.aborted
+          || openingAudioPlaybackRef.current !== playback
+        ) {
+          release?.();
+          return;
+        }
+        const handle = playback.enqueue({
+          id: `opening_${targetSessionId}`,
+          source: resolved.source,
+          ...(audioOutputDeviceRef.current === undefined
+            ? {}
+            : { outputDeviceId: audioOutputDeviceRef.current }),
+          callbacks: {
+            onStarted: () => setIsSpeaking(true),
+            onCompleted: () => setIsSpeaking(false),
+            onCancelled: () => setIsSpeaking(false),
+            onInterrupted: () => setIsSpeaking(false),
+            onFailed: () => setIsSpeaking(false)
+          }
+        });
+        await handle.result;
+      } catch {
+        if (!controller.signal.aborted) {
+          setError("Opening audio could not be synthesized by the local Kokoro runtime");
+        }
+      } finally {
+        release?.();
+        if (openingAudioAbortRef.current === controller) {
+          openingAudioAbortRef.current = null;
+        }
+        if (openingAudioPlaybackRef.current === playback) {
+          playback.dispose();
+          openingAudioPlaybackRef.current = null;
+        }
+      }
+    },
+    [audioVoiceClient, stopApplicationOpeningAudio]
+  );
   const interruptPlaybackForBargeIn = useCallback((): void => {
     inputResponseCycleRef.current += 1;
     voiceResponseCyclePendingRef.current = true;
     clearPendingInterviewerResponse();
+    stopApplicationOpeningAudio();
     const player = rendererAudioPlayerRef.current;
     player?.interruptCurrent();
     player?.clearQueued();
@@ -508,7 +574,7 @@ export function useInterviewSession(
     // consumer has settled, so recovery can classify uncertainty first and
     // cannot replay cancelled/POSSIBLY_EXPOSED output.
     if (sessionId !== null) rendererRestartRef.current?.(sessionId);
-  }, [clearPendingInterviewerResponse, sessionId]);
+  }, [clearPendingInterviewerResponse, sessionId, stopApplicationOpeningAudio]);
   const setAudioOutputDevice = useCallback((deviceId: string | undefined): void => {
     audioOutputDeviceRef.current = deviceId;
     rendererAudioPlayerRef.current?.setOutputDeviceId(deviceId);
@@ -1307,11 +1373,17 @@ export function useInterviewSession(
     // Session replacement is an authority boundary, not merely a React state
     // change. Revoke the old renderer synchronously and begin bounded
     // microphone teardown before any fallible replacement command can yield.
+    stopApplicationOpeningAudio();
     stopRendererTransport();
     resetBoardSync();
     await voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
     return transitionEpoch;
-  }, [resetBoardSync, stopRendererTransport, voiceIntegration.voiceControls]);
+  }, [
+    resetBoardSync,
+    stopApplicationOpeningAudio,
+    stopRendererTransport,
+    voiceIntegration.voiceControls
+  ]);
 
   const startSessionWith = useCallback(
     async (
@@ -1390,11 +1462,15 @@ export function useInterviewSession(
           status: "COMPLETED",
           timestamp: Date.now()
         }]);
-        if (openingText !== undefined && options.openingSpeaker !== undefined) {
-          try {
-            options.openingSpeaker(openingText);
-          } catch {
-            // Test/development opening presenters are presentation-only and must never undo a successful start.
+        if (openingText !== undefined) {
+          if (options.openingSpeaker !== undefined) {
+            try {
+              options.openingSpeaker(openingText);
+            } catch {
+              // Test/development opening presenters are presentation-only and must never undo a successful start.
+            }
+          } else {
+            void playApplicationOpeningAudio(targetSessionId);
           }
         }
 
@@ -1435,6 +1511,7 @@ export function useInterviewSession(
       launchRendererStream,
       options.whiteboardAdapter,
       options.openingSpeaker,
+      playApplicationOpeningAudio,
       resetBoardSync,
       sessionId,
       sessionStatus,
@@ -2203,6 +2280,10 @@ export function useInterviewSession(
       boardSyncSessionRef.current = null;
       rendererAudioPlayerRef.current?.dispose();
       rendererAudioPlayerRef.current = null;
+      openingAudioAbortRef.current?.abort();
+      openingAudioAbortRef.current = null;
+      openingAudioPlaybackRef.current?.dispose();
+      openingAudioPlaybackRef.current = null;
       if (responseTimeoutRef.current !== null) {
         globalThis.clearTimeout(responseTimeoutRef.current);
         responseTimeoutRef.current = null;
