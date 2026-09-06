@@ -758,6 +758,43 @@ async function runFullTurn(
       }
     });
 
+    const openingResponse = await authenticatedFetch(
+      `${server.bound.voice.url}/v1/voice/presentation/opening`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          protocolVersion: 1,
+          sessionId
+        })
+      }
+    );
+    const openingBytes = new Uint8Array(await openingResponse.arrayBuffer());
+    const openingAudio = {
+      status: openingResponse.status,
+      contentType: openingResponse.headers.get("content-type"),
+      bytes: openingBytes.byteLength,
+      riff: new TextDecoder("ascii").decode(openingBytes.slice(0, 4))
+    };
+    if (
+      !openingResponse.ok
+      || openingAudio.contentType !== "audio/wav"
+      || openingAudio.bytes <= 44
+      || openingAudio.riff !== "RIFF"
+    ) {
+      return {
+        status: "FAIL",
+        reasonCode: "OPENING_AUDIO_FAILED",
+        detail: "Configured session opening did not produce a valid Kokoro WAV through the production voice transport",
+        data: {
+          selectedOption,
+          openingAudio
+        }
+      };
+    }
+
     const textDeliveries: Array<{ text: string; deliveryId: string }> = [];
     const boardDeliveries: Array<{ type: string; deliveryId: string }> = [];
     const audioDeliveries: Array<{
@@ -883,6 +920,7 @@ async function runFullTurn(
         data: {
           committed,
           selectedOption,
+          openingAudio,
           state: stateSummary,
           observability
         }
@@ -901,6 +939,7 @@ async function runFullTurn(
         data: {
           committed,
           selectedOption,
+          openingAudio,
           textDeliveries,
           boardDeliveries,
           audioDeliveries,
@@ -918,6 +957,7 @@ async function runFullTurn(
       data: {
         committed,
         selectedOption,
+        openingAudio,
         textDeliveries,
         boardDeliveries,
         audioDeliveries,
