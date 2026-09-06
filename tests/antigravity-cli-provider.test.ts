@@ -1378,7 +1378,7 @@ describe("Antigravity CLI one-turn protocol", () => {
     await lyingSession.close();
   });
 
-  it("rejects a terminal response that contradicts structured_output", async () => {
+  it("accepts non-JSON response text when structured_output contains the valid proposal envelope", async () => {
     const lines = antigravityStream().trim().split("\n");
     const terminal = JSON.parse(lines[lines.length - 1] ?? "{}") as {
       result?: { response?: string };
@@ -1386,10 +1386,8 @@ describe("Antigravity CLI one-turn protocol", () => {
     if (terminal.result === undefined) {
       throw new Error("test terminal result is missing");
     }
-    terminal.result.response = JSON.stringify({
-      ...PROPOSAL,
-      speechText: "contradictory response"
-    });
+    terminal.result.response =
+      "The structured output was repaired successfully; this field is presentation text.";
     lines[lines.length - 1] = JSON.stringify(terminal);
 
     const provider = createAntigravityCliReasoningProvider(
@@ -1398,7 +1396,7 @@ describe("Antigravity CLI one-turn protocol", () => {
     const session = await provider.createSession();
     await expect(collectProposals(
       session.sendTurn(turnInput({ safe: true }))
-    )).rejects.toMatchObject({ code: "INVALID_PROTOCOL" });
+    )).resolves.toEqual([PROPOSAL]);
     await session.close();
   });
 
