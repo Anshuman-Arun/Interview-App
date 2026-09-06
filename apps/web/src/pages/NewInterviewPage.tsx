@@ -449,32 +449,28 @@ function CandidateHardwareCheck() {
   useEffect(() => {
     let active = true;
 
-    const refreshDevices = async () => {
-      if (typeof navigator === "undefined" || !navigator.mediaDevices?.enumerateDevices) {
-        return;
-      }
+    const refreshDevices = async (): Promise<void> => {
+      if (typeof navigator.mediaDevices.enumerateDevices !== "function") return;
       try {
         const allDevices = await navigator.mediaDevices.enumerateDevices();
         if (!active) return;
-        const audioInputs = allDevices.filter((d) => d.kind === "audioinput");
+        const audioInputs = allDevices.filter((device) => device.kind === "audioinput");
         setDevices(audioInputs);
       } catch {
-        // Fallback silently if device enumeration fails before permission
+        // Fallback silently if device enumeration fails before permission.
       }
     };
 
-    void refreshDevices();
+    const handleDeviceChange = (): void => {
+      void refreshDevices();
+    };
 
+    void refreshDevices();
     const mediaDevices = navigator.mediaDevices;
-    if (mediaDevices?.addEventListener) {
-      mediaDevices.addEventListener("devicechange", refreshDevices);
-      return () => {
-        active = false;
-        mediaDevices.removeEventListener("devicechange", refreshDevices);
-      };
-    }
+    mediaDevices.addEventListener("devicechange", handleDeviceChange);
     return () => {
       active = false;
+      mediaDevices.removeEventListener("devicechange", handleDeviceChange);
     };
   }, []);
 
@@ -492,7 +488,7 @@ function CandidateHardwareCheck() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
 
       // After permission granted, enumerate devices again so labeled names become available
-      if (typeof navigator !== "undefined" && navigator.mediaDevices?.enumerateDevices) {
+      if (typeof navigator.mediaDevices.enumerateDevices === "function") {
         try {
           const allDevices = await navigator.mediaDevices.enumerateDevices();
           const audioInputs = allDevices.filter((d) => d.kind === "audioinput");
@@ -502,8 +498,7 @@ function CandidateHardwareCheck() {
         }
       }
 
-      const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      const audioCtx = new AudioContextClass();
+      const audioCtx = new window.AudioContext();
       const source = audioCtx.createMediaStreamSource(stream);
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 256;
@@ -576,9 +571,9 @@ function CandidateHardwareCheck() {
             <small>Select your microphone and speak normally to verify input gain before starting.</small>
           </div>
           {micState === "PASSED" ? (
-            <span className="new-interview__badge new-interview__badge--success">✓ Verified ({peakDb} dB)</span>
+            <span className="new-interview__badge new-interview__badge--success">✓ Verified ({String(peakDb)} dB)</span>
           ) : micState === "TESTING" ? (
-            <span className="new-interview__badge new-interview__badge--active">Testing... {micSeconds}s</span>
+            <span className="new-interview__badge new-interview__badge--active">Testing... {String(micSeconds)}s</span>
           ) : micState === "FAILED" ? (
             <span className="new-interview__badge new-interview__badge--warning">Check input</span>
           ) : (
@@ -599,7 +594,7 @@ function CandidateHardwareCheck() {
               <option value="">System default microphone</option>
               {devices.map((device, index) => (
                 <option key={device.deviceId || String(index)} value={device.deviceId}>
-                  {device.label || `Microphone ${index + 1}`}
+                  {device.label || `Microphone ${String(index + 1)}`}
                 </option>
               ))}
             </select>
@@ -611,7 +606,7 @@ function CandidateHardwareCheck() {
             <div
               className="new-interview__vu-meter-fill"
               style={{
-                width: `${audioLevel}%`,
+                width: `${String(audioLevel)}%`,
                 background: audioLevel > 80 ? "var(--danger, #c0392b)" : audioLevel > 50 ? "var(--warning, #d35400)" : "var(--accent, #002147)"
               }}
             />
@@ -633,7 +628,7 @@ function CandidateHardwareCheck() {
           disabled={micState === "TESTING"}
           onClick={() => void startMicTest()}
         >
-          {micState === "TESTING" ? `Listening (${micSeconds}s)…` : "Test microphone (3s)"}
+          {micState === "TESTING" ? `Listening (${String(micSeconds)}s)…` : "Test microphone (3s)"}
         </button>
       </div>
     </div>
