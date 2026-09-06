@@ -10,6 +10,7 @@ export * from "./interpretation-coordinator.js";
 export * from "./local-compute-coordinator.js";
 export * from "./pedagogical-policy.js";
 export * from "./provider-coordinator.js";
+export * from "./reviewed-realizations.js";
 export * from "./session-writer.js";
 export * from "./synthetic-interview.js";
 export * from "./turn-coordinator.js";
