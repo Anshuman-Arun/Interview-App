@@ -479,9 +479,22 @@ class ProductionWorkerUnitTests(unittest.TestCase):
             if proc.stderr and not proc.stderr.closed:
                 proc.stderr.close()
 
-    def test_worker_subprocess_with_early_stdin_eof_exits_cleanly(self) -> None:
-        # If the parent process closes stdin during worker startup, monitor_parent_stdin
-        # detects EOF and exits with code 0.
+    def test_parent_stdin_eof_before_server_requests_clean_exit(self) -> None:
+        # Native/runtime validation intentionally happens before the blocking stdin
+        # monitor is started to avoid the Windows CRT import deadlock. Exercise the
+        # monitor contract directly so startup argument failures do not race this test.
+        exit_codes: list[int] = []
+        worker.monitor_parent_stdin(
+            {},
+            io.StringIO(""),
+            exit_process=lambda code: exit_codes.append(code),
+        )
+        self.assertEqual(exit_codes, [0])
+
+    def test_worker_subprocess_with_early_stdin_eof_still_fails_invalid_startup_args(self) -> None:
+        # Closing stdin must not make an otherwise invalid worker invocation pass.
+        # Runtime/model argument validation owns startup and fails closed with code 2;
+        # the monitor contract itself is covered independently above.
         proc = subprocess.Popen(
             [
                 sys.executable,
@@ -500,10 +513,12 @@ class ProductionWorkerUnitTests(unittest.TestCase):
         try:
             proc.stdin.close()
             ret = proc.wait(timeout=10)
-            self.assertEqual(ret, 0)
+            stderr = proc.stderr.read() if proc.stderr else ""
+            self.assertEqual(ret, 2)
+            self.assertIn("RuntimeError", stderr)
         except subprocess.TimeoutExpired:
             proc.kill()
-            self.fail("worker failed to exit on stdin EOF")
+            self.fail("worker failed to terminate after invalid startup")
         finally:
             if proc.stdout and not proc.stdout.closed:
                 proc.stdout.close()
