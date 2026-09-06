@@ -234,12 +234,34 @@ async function check(
   return result;
 }
 
+async function isDesktopAppDataRoot(candidate: string): Promise<boolean> {
+  return (
+    await exists(path.join(candidate, "runtime-models"))
+    || await exists(path.join(candidate, "model-assets"))
+    || await exists(path.join(candidate, "python-runtime"))
+    || await exists(path.join(candidate, "interview-session.sqlite"))
+  );
+}
+
+async function normalizeDesktopAppDataRoot(candidate: string): Promise<string | undefined> {
+  const resolved = path.resolve(candidate);
+  if (await isDesktopAppDataRoot(resolved)) return resolved;
+  const dataChild = path.join(resolved, "data");
+  if (await isDesktopAppDataRoot(dataChild)) return dataChild;
+  return undefined;
+}
+
 async function locateAppData(explicit?: string): Promise<string | undefined> {
-  if (explicit !== undefined) return explicit;
+  if (explicit !== undefined) {
+    return await normalizeDesktopAppDataRoot(explicit);
+  }
   const base = process.env["APPDATA"];
   if (base === undefined) return undefined;
-  const preferred = path.join(base, "Interview App");
-  if (await exists(preferred)) return preferred;
+
+  for (const name of ["Interview App", "technical-interview-app"]) {
+    const normalized = await normalizeDesktopAppDataRoot(path.join(base, name));
+    if (normalized !== undefined) return normalized;
+  }
 
   let entries: Dirent[];
   try {
@@ -249,13 +271,10 @@ async function locateAppData(explicit?: string): Promise<string | undefined> {
   }
   for (const entry of entries.slice(0, 256)) {
     if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
-    const candidate = path.join(base, entry.name);
-    if (
-      await exists(path.join(candidate, "model-assets"))
-      || await exists(path.join(candidate, "python-runtime"))
-    ) {
-      return candidate;
-    }
+    const normalized = await normalizeDesktopAppDataRoot(
+      path.join(base, entry.name)
+    );
+    if (normalized !== undefined) return normalized;
   }
   return undefined;
 }
@@ -341,10 +360,16 @@ async function runCommand(
 }
 
 async function runContractTests(): Promise<CheckOutcome> {
-  const executable = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-  const result = await runCommand(executable, [
-    "exec",
-    "vitest",
+  const vitestEntry = path.join(repoRoot, "node_modules", "vitest", "vitest.mjs");
+  if (!await exists(vitestEntry)) {
+    return {
+      status: "FAIL",
+      reasonCode: "VITEST_ENTRY_MISSING",
+      detail: "Installed repository dependencies do not contain Vitest"
+    };
+  }
+  const result = await runCommand(process.execPath, [
+    vitestEntry,
     "run",
     "tests/antigravity-cli-provider.test.ts",
     "tests/antigravity-cli-runtime-profile.test.ts",
@@ -903,14 +928,25 @@ async function main(): Promise<void> {
     const workerPath = path.join(resourcesPath, "workers", "python", "local_model_worker.py");
     const pythonRoot = path.join(appDataRoot, "python-runtime");
     const assetsRoot = path.join(appDataRoot, "model-assets");
+    const workerExists = await exists(workerPath);
+    const pythonRuntimeExists = await exists(pythonRoot);
+    const modelAssetsExist = await exists(assetsRoot);
+    const runtimeViewsExist = await exists(path.join(appDataRoot, "runtime-models"));
     return {
-      detail: "Installed app data, packaged worker, Python runtime, and model cache paths located",
+      status: workerExists && (pythonRuntimeExists || runtimeViewsExist)
+        ? "PASS"
+        : "WARN",
+      reasonCode: workerExists
+        ? "DESKTOP_RUNTIME_PATHS_LOCATED"
+        : "PACKAGED_WORKER_MISSING",
+      detail: "Resolved the exact desktop app data root used by runtime composition",
       data: {
         appDataRoot: sanitizeText(appDataRoot),
         resourcesPath: sanitizeText(resourcesPath),
-        workerExists: await exists(workerPath),
-        pythonRuntimeExists: await exists(pythonRoot),
-        modelAssetsExist: await exists(assetsRoot)
+        workerExists,
+        pythonRuntimeExists,
+        modelAssetsExist,
+        runtimeViewsExist
       }
     };
   });
