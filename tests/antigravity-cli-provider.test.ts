@@ -177,11 +177,21 @@ describe("Antigravity zero-turn runtime preflight", () => {
     )).not.toThrow();
   });
 
+  it("accepts request-review as a safe zero-turn permission mode", () => {
+    expect(() => assertAntigravityCliZeroTurnPreflightResult(
+      executionResult(
+        zeroTurnPreflightStream({ permissionMode: "request-review" }),
+        { exitCode: 2 }
+      )
+    )).not.toThrow();
+  });
+
   const invalidProfiles: readonly (
     readonly [string, ZeroTurnPreflightOverrides]
   )[] = [
     ["unauthorized tool exposure", { tools: ["unauthorized_tool"] }],
-    ["permission drift", { permissionMode: "request-review" }],
+    ["unsafe permission mode", { permissionMode: "always-proceed" }],
+    ["sandbox permission mode", { permissionMode: "proceed-in-sandbox" }],
     ["model drift", { model: "unexpected-model" }],
     ["agent drift", { agent: "unexpected-agent" }],
     ["schema drift", { schema: { type: "string" } }],
@@ -909,6 +919,27 @@ describe("Antigravity CLI one-turn protocol", () => {
     await session.close();
   });
 
+  it("accepts request-review for a no-tool real turn", async () => {
+    const provider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async (request) => {
+        request.onProcessStart();
+        return executionResult(
+          antigravityStream().replace(
+            '"permission_mode":"strict"',
+            '"permission_mode":"request-review"'
+          )
+        );
+      })
+    );
+    const session = await provider.createSession();
+    await expect(collectProposals(session.sendTurn(turnInput({
+      disclosure: { maximum: 0 },
+      selectedAction: "CLARIFY",
+      studentText: "I would try parity."
+    })))).resolves.toEqual([PROPOSAL]);
+    await session.close();
+  });
+
   it("rejects malformed, ambiguous, tool-bearing, and non-proposal output", async () => {
     const invalidStreams = [
       "terminal prose\n",
@@ -920,10 +951,6 @@ describe("Antigravity CLI one-turn protocol", () => {
       antigravityStream().replace(
         '"event":"init"',
         '"event":"init","__proto__":{"polluted":true}'
-      ),
-      antigravityStream().replace(
-        '"permission_mode":"strict"',
-        '"permission_mode":"request-review"'
       ),
       antigravityStream().replace(
         '"permission_mode":"strict"',
