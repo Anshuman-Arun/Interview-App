@@ -72,18 +72,6 @@ const INTERVIEWER_RESPONSE_TIMEOUT_MESSAGE =
 export const DEFAULT_INTERVIEW_OPENING_TEXT =
   "Hi, welcome! Before we get started, is everything ready to go on your end?";
 
-function speakInterviewOpening(text: string): void {
-  if (
-    typeof globalThis.speechSynthesis === "undefined"
-    || typeof globalThis.SpeechSynthesisUtterance === "undefined"
-  ) return;
-  globalThis.speechSynthesis.cancel();
-  const utterance = new globalThis.SpeechSynthesisUtterance(text);
-  utterance.rate = 1;
-  utterance.pitch = 1;
-  globalThis.speechSynthesis.speak(utterance);
-}
-
 export class TerminalSessionOutcomeUnknownError extends Error {
   public constructor() {
     super(
@@ -1402,11 +1390,11 @@ export function useInterviewSession(
           status: "COMPLETED",
           timestamp: Date.now()
         }]);
-        if (openingText !== undefined) {
+        if (openingText !== undefined && options.openingSpeaker !== undefined) {
           try {
-            (options.openingSpeaker ?? speakInterviewOpening)(openingText);
+            options.openingSpeaker(openingText);
           } catch {
-            // Opening speech is presentation-only and must never undo a successful start.
+            // Test/development opening presenters are presentation-only and must never undo a successful start.
           }
         }
 
