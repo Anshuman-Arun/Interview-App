@@ -513,7 +513,7 @@ export class VoiceSynthesisCoordinator {
   ): Promise<Uint8Array | undefined> {
     const sessionId = SessionIdSchema.parse(sessionIdInput);
     const exactText =
-      "Hi, welcome! Before we get started, is everything ready to go on your end?";
+      "Hi, welcome! Let's get started. The problem is on screen—take a moment to read it, then tell me how you'd begin.";
     let ttsTiming: LocalTimingHandle | undefined;
     let requestId: string | undefined;
 
