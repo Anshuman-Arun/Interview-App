@@ -126,12 +126,10 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
       executable: defaultAntigravityCliExecutablePath("win32"),
       environment,
       isolatedWorkingDirectory: true,
-      isolatedHomeFiles: {
-        ".gemini/antigravity-cli/settings.json":
-          ANTIGRAVITY_SUPERVISED_SETTINGS_JSON,
-        ".gemini/config/agents/interview-realizer/agent.md":
+      isolatedWorkingDirectoryFiles: {
+        ".agents/agents/interview-realizer/agent.md":
           ANTIGRAVITY_REALIZER_AGENT_MARKDOWN,
-        ".gemini/config/agents/formal-interpreter/agent.md":
+        ".agents/agents/formal-interpreter/agent.md":
           ANTIGRAVITY_FORMAL_INTERPRETER_AGENT_MARKDOWN
       }
     }]);
@@ -282,7 +280,20 @@ function antigravityEnvironment(): {
   if (process.platform === "win32") {
     const systemRoot = trustedWindowsSystemRoot();
     return Object.freeze({
-      inherit: Object.freeze([]),
+      // Headless Antigravity reuses the signed-in user's cached OAuth/keyring
+      // state from the real Windows profile. Keep only the profile-location
+      // variables needed for that authentication state; app-owned agents live
+      // in the isolated workspace and API-key/custom-endpoint variables remain
+      // excluded below.
+      inherit: Object.freeze([
+        "USERPROFILE",
+        "HOMEDRIVE",
+        "HOMEPATH",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "USERNAME",
+        "USERDOMAIN"
+      ]),
       values: Object.freeze({
         SYSTEMROOT: systemRoot,
         WINDIR: systemRoot,
