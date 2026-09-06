@@ -58,7 +58,11 @@ function executionResult(
 function antigravityStream(
   proposal: InterviewerProposal = PROPOSAL,
   between: readonly unknown[] = [],
-  overrides: { readonly model?: string; readonly agent?: string } = {}
+  overrides: {
+    readonly model?: string;
+    readonly agent?: string;
+    readonly numTurns?: number;
+  } = {}
 ): string {
   return [
     JSON.stringify({
@@ -81,7 +85,7 @@ function antigravityStream(
         status: "SUCCESS",
         response: JSON.stringify({ proposalJson: JSON.stringify(proposal) }),
         duration_seconds: 0.1,
-        num_turns: 1,
+        num_turns: overrides.numTurns ?? 1,
         structured_output: { proposalJson: JSON.stringify(proposal) },
         json_schema: ANTIGRAVITY_CLI_PROPOSAL_SCHEMA,
         usage: {
@@ -916,6 +920,68 @@ describe("Antigravity CLI one-turn protocol", () => {
       recentStudentWork: "original",
       nested: { value: "before" }
     });
+    await session.close();
+  });
+
+  it("accepts cumulative num_turns that matches completed user-input repair steps", async () => {
+    const provider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async (request) => {
+        request.onProcessStart();
+        return executionResult(antigravityStream(PROPOSAL, [
+          {
+            event: "step_update",
+            step_update: {
+              conversation_id: "fake-conversation",
+              step_index: 0,
+              state: "DONE",
+              step_type: "user_input"
+            }
+          },
+          {
+            event: "step_update",
+            step_update: {
+              conversation_id: "fake-conversation",
+              step_index: 1,
+              state: "DONE",
+              step_type: "agent_response"
+            }
+          },
+          {
+            event: "step_update",
+            step_update: {
+              conversation_id: "fake-conversation",
+              step_index: 2,
+              state: "DONE",
+              step_type: "user_input"
+            }
+          },
+          {
+            event: "step_update",
+            step_update: {
+              conversation_id: "fake-conversation",
+              step_index: 3,
+              state: "DONE",
+              step_type: "agent_response"
+            }
+          },
+          {
+            event: "step_update",
+            step_update: {
+              conversation_id: "fake-conversation",
+              step_index: 4,
+              state: "DONE",
+              step_type: "finish"
+            }
+          }
+        ], { numTurns: 2 }));
+      })
+    );
+    const session = await provider.createSession();
+    await expect(collectProposals(session.sendTurn(turnInput({
+      disclosure: { maximum: 0 },
+      selectedAction: "CLARIFY",
+      studentText: "I would try parity."
+    })))).resolves.toEqual([PROPOSAL]);
     await session.close();
   });
 
