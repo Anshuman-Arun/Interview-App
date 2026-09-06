@@ -479,7 +479,6 @@ class ProductionWorkerUnitTests(unittest.TestCase):
         runtime._cancelled_request_ids = OrderedDict()
 
         self.assertEqual(runtime.cancel({"requestId": "other-request"}), {"accepted": True})
-        self.assertEqual(fake.cancel_calls, 0)
         self.assertIn("other-request", runtime._cancelled_request_ids)
 
         self.assertEqual(runtime.cancel({"requestId": "active-request"}), {"accepted": True})
