@@ -1,9 +1,10 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
   lstat,
   mkdir,
   mkdtemp,
   readdir,
+  rename,
   rm,
   statfs
 } from "node:fs/promises";
@@ -74,6 +75,14 @@ export async function materializeRuntimeAssetView(input: {
   if (abortRequested(input.signal)) throw abortError();
   await ensureOwnedDirectory(input.baseRoot);
 
+  const persistentRoot = persistentRuntimeViewRoot(input.baseRoot, input.assets);
+  const reused = await tryOpenPersistentRuntimeView(
+    persistentRoot,
+    input.assets,
+    input.signal
+  );
+  if (reused !== undefined) return reused;
+
   const totalBytes = input.assets.reduce((sum, asset) => sum + asset.manifest.sizeBytes, 0);
   if (!Number.isSafeInteger(totalBytes) || totalBytes < 0) {
     throw new Error("Local runtime asset-view size exceeds safe integer accounting");
@@ -84,12 +93,12 @@ export async function materializeRuntimeAssetView(input: {
     throw new Error("Insufficient disk space for verified local runtime asset view");
   }
 
-  const root = await mkdtemp(path.join(
+  const stagingRoot = await mkdtemp(path.join(
     input.baseRoot,
     `run-${String(process.pid)}-${RUNTIME_VIEW_OWNER_TOKEN}-`
   ));
-  const resolvedRoot = path.resolve(root);
-  const rootMetadata = await lstat(root, { bigint: true });
+  const resolvedStagingRoot = path.resolve(stagingRoot);
+  const rootMetadata = await lstat(stagingRoot, { bigint: true });
   if (!rootMetadata.isDirectory() || rootMetadata.isSymbolicLink()) {
     throw new Error("Local runtime asset-view root changed after creation");
   }
@@ -97,17 +106,17 @@ export async function materializeRuntimeAssetView(input: {
     device: rootMetadata.dev,
     inode: rootMetadata.ino
   });
-  ACTIVE_RUNTIME_VIEW_ROOTS.add(resolvedRoot);
+  ACTIVE_RUNTIME_VIEW_ROOTS.add(resolvedStagingRoot);
   const paths = new Map<string, string>();
   try {
     for (const asset of input.assets) {
       if (abortRequested(input.signal)) throw abortError();
-      await assertRuntimeViewRootIdentity(root, rootIdentity);
+      await assertRuntimeViewRootIdentity(stagingRoot, rootIdentity);
       const source = await input.manager.getInstalledPath(asset.manifest, input.signal);
-      const destination = resolveWithinRoot(root, asset.runtimeRelativePath);
+      const destination = resolveWithinRoot(stagingRoot, asset.runtimeRelativePath);
       const parent = path.dirname(destination);
-      await ensureSafeDirectory(root, parent);
-      await assertRuntimeViewRootIdentity(root, rootIdentity);
+      await ensureSafeDirectory(stagingRoot, parent);
+      await assertRuntimeViewRootIdentity(stagingRoot, rootIdentity);
       if (abortRequested(input.signal)) throw abortError();
 
       const parentMetadata = await lstat(parent, { bigint: true });
@@ -133,34 +142,35 @@ export async function materializeRuntimeAssetView(input: {
       } finally {
         await destinationHandle.close();
       }
-      await assertRuntimeViewRootIdentity(root, rootIdentity);
+      await assertRuntimeViewRootIdentity(stagingRoot, rootIdentity);
       if (abortRequested(input.signal)) throw abortError();
       const verification = await verifyArtifactFile(destination, {
         sizeBytes: asset.manifest.sizeBytes,
         sha256: asset.manifest.sha256,
         maxBytes: asset.manifest.sizeBytes
       }, input.signal);
-      await assertRuntimeViewRootIdentity(root, rootIdentity);
+      await assertRuntimeViewRootIdentity(stagingRoot, rootIdentity);
       if (!verification.ok) {
         throw new Error("Copied local runtime asset failed digest verification");
       }
       paths.set(asset.runtimeRelativePath, destination);
     }
-    return Object.freeze({
-      root,
-      paths,
-      dispose: async () => {
-        await rm(root, { recursive: true, force: true });
-        ACTIVE_RUNTIME_VIEW_ROOTS.delete(resolvedRoot);
-      }
-    });
+
+    ACTIVE_RUNTIME_VIEW_ROOTS.delete(resolvedStagingRoot);
+    await rm(persistentRoot, { recursive: true, force: true });
+    await rename(stagingRoot, persistentRoot);
+    const stablePaths = new Map<string, string>();
+    for (const asset of input.assets) {
+      stablePaths.set(
+        asset.runtimeRelativePath,
+        resolveWithinRoot(persistentRoot, asset.runtimeRelativePath)
+      );
+    }
+    return persistentRuntimeView(persistentRoot, stablePaths);
   } catch (error) {
-    // The caller never receives a RuntimeAssetView on failed materialization,
-    // so this root must no longer be protected as live even if immediate
-    // cleanup itself fails. A later stale-view sweep can retry it.
-    ACTIVE_RUNTIME_VIEW_ROOTS.delete(resolvedRoot);
+    ACTIVE_RUNTIME_VIEW_ROOTS.delete(resolvedStagingRoot);
     try {
-      await rm(root, { recursive: true, force: true });
+      await rm(stagingRoot, { recursive: true, force: true });
     } catch (cleanupError) {
       throw new AggregateError(
         [error, cleanupError],
@@ -170,6 +180,87 @@ export async function materializeRuntimeAssetView(input: {
     }
     throw error;
   }
+}
+
+function persistentRuntimeViewRoot(
+  baseRoot: string,
+  assets: readonly DesktopRuntimeAsset[]
+): string {
+  const digest = createHash("sha256");
+  for (const asset of assets) {
+    digest
+      .update(asset.runtimeRelativePath)
+      .update("\0")
+      .update(String(asset.manifest.sizeBytes))
+      .update("\0")
+      .update(asset.manifest.sha256)
+      .update("\0");
+  }
+  return resolveWithinRoot(baseRoot, `view-${digest.digest("hex")}`);
+}
+
+async function tryOpenPersistentRuntimeView(
+  root: string,
+  assets: readonly DesktopRuntimeAsset[],
+  signal?: AbortSignal
+): Promise<RuntimeAssetView | undefined> {
+  if (abortRequested(signal)) throw abortError();
+  try {
+    const metadata = await lstat(root);
+    if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
+      await rm(root, { recursive: true, force: true });
+      return undefined;
+    }
+  } catch (error) {
+    if (isMissingPathError(error)) return undefined;
+    throw error;
+  }
+
+  const paths = new Map<string, string>();
+  try {
+    for (const asset of assets) {
+      if (abortRequested(signal)) throw abortError();
+      const candidate = resolveWithinRoot(root, asset.runtimeRelativePath);
+      const verification = await verifyArtifactFile(candidate, {
+        sizeBytes: asset.manifest.sizeBytes,
+        sha256: asset.manifest.sha256,
+        maxBytes: asset.manifest.sizeBytes
+      }, signal);
+      if (!verification.ok) {
+        await rm(root, { recursive: true, force: true });
+        return undefined;
+      }
+      paths.set(asset.runtimeRelativePath, candidate);
+    }
+  } catch (error) {
+    if (abortRequested(signal)) throw abortError();
+    await rm(root, { recursive: true, force: true });
+    if (isMissingPathError(error)) return undefined;
+    return undefined;
+  }
+  return persistentRuntimeView(root, paths);
+}
+
+function persistentRuntimeView(
+  root: string,
+  paths: ReadonlyMap<string, string>
+): RuntimeAssetView {
+  const resolvedRoot = path.resolve(root);
+  ACTIVE_RUNTIME_VIEW_ROOTS.add(resolvedRoot);
+  return Object.freeze({
+    root,
+    paths,
+    dispose: async () => {
+      ACTIVE_RUNTIME_VIEW_ROOTS.delete(resolvedRoot);
+    }
+  });
+}
+
+function isMissingPathError(error: unknown): boolean {
+  return typeof error === "object"
+    && error !== null
+    && "code" in error
+    && (error as { readonly code?: unknown }).code === "ENOENT";
 }
 
 async function assertRuntimeViewRootIdentity(

@@ -10,6 +10,10 @@ import {
   ReplayPanel,
   failureMessage
 } from "../components/SessionReviewModal.js";
+import {
+  downloadLatexTranscript,
+  exportPrintablePdfTranscript
+} from "../export/transcript-export.js";
 import type { ReviewView } from "./ReviewPageShell.js";
 import "./ReviewReadPanel.css";
 
@@ -44,6 +48,7 @@ export function ReviewReadPanel({
   const [performanceError, setPerformanceError] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [readAttempt, setReadAttempt] = useState(0);
 
   useEffect(() => {
     setEvaluation(null);
@@ -51,6 +56,7 @@ export function ReviewReadPanel({
     setPerformance(null);
     setPerformanceError(false);
     setError(null);
+    setReadAttempt(0);
   }, [sessionId]);
 
   useEffect(() => {
@@ -67,6 +73,7 @@ export function ReviewReadPanel({
   }, [readPerformance, sessionId]);
 
   useEffect(() => {
+    setError(null);
     if (view === "evaluation" && evaluation !== null) {
       setLoading(false);
       return;
@@ -77,7 +84,6 @@ export function ReviewReadPanel({
     }
 
     const controller = new AbortController();
-    setError(null);
     setLoading(true);
 
     const pending = view === "evaluation"
@@ -100,8 +106,8 @@ export function ReviewReadPanel({
         if (controller.signal.aborted) return;
         setError(
           view === "evaluation"
-            ? "The bounded evaluation read could not be loaded."
-            : "The bounded replay read could not be loaded."
+            ? "The evaluation could not be loaded."
+            : "The replay could not be loaded."
         );
         setLoading(false);
       });
@@ -113,7 +119,8 @@ export function ReviewReadPanel({
     readReplay,
     replay,
     sessionId,
-    view
+    view,
+    readAttempt
   ]);
 
   if (loading) {
@@ -122,8 +129,8 @@ export function ReviewReadPanel({
         <span>READING</span>
         <p>
           {view === "evaluation"
-            ? "Loading bounded evaluation…"
-            : "Loading bounded replay…"}
+            ? "Loading evaluation…"
+            : "Loading replay…"}
         </p>
       </div>
     );
@@ -131,9 +138,19 @@ export function ReviewReadPanel({
 
   if (error !== null) {
     return (
-      <div className="review-read-state review-read-state--error" role="status">
+      <div className="review-read-state review-read-state--error" role="alert">
         <span>READ ERROR</span>
         <p>{error}</p>
+        <button
+          type="button"
+          onClick={() => {
+            setError(null);
+            setLoading(true);
+            setReadAttempt((attempt) => attempt + 1);
+          }}
+        >
+          Retry read
+        </button>
       </div>
     );
   }
@@ -163,6 +180,30 @@ export function ReviewReadPanel({
 
   return (
     <>
+      <div className="review-export-bar">
+        <div>
+          <strong>Oxford Tutorial Summary & Transcript</strong>
+          <span>Export formatted Oxford-style LaTeX document or generate printable PDF transcript</span>
+        </div>
+        <div className="review-export-buttons">
+          <button
+            type="button"
+            className="review-export-btn"
+            onClick={() => downloadLatexTranscript({ sessionId, evaluation, replay })}
+            title="Download formatted .tex source"
+          >
+            Export LaTeX (.tex)
+          </button>
+          <button
+            type="button"
+            className="review-export-btn review-export-btn--primary"
+            onClick={() => exportPrintablePdfTranscript({ sessionId, evaluation, replay })}
+            title="Open printable view to save as PDF"
+          >
+            Export PDF Transcript
+          </button>
+        </div>
+      </div>
       {primary}
       <PerformancePanel
         response={performance}
@@ -190,7 +231,7 @@ function PerformancePanel({
           <small>Partial metrics available</small>
         </div>
         <p className="session-performance-card__note">
-          Observability data could not be read. Interview Review remains available because metrics are non-authoritative.
+          Performance metrics could not be loaded. They are optional and do not affect your saved interview or review.
         </p>
       </section>
     );

@@ -414,6 +414,7 @@ async function startServer(databasePath: string): Promise<StartedServer> {
     host: "127.0.0.1",
     commandPort: 0,
     rendererStreamPort: 0,
+    voicePort: 0,
     clientToken: TOKEN,
     allowedOrigins: [ORIGIN],
     databasePath

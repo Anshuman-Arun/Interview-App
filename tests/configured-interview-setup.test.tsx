@@ -152,7 +152,7 @@ describe("configured interview setup product flow", () => {
     await act(async () => {
       setSelect(
         "interview-target-select",
-        "OXFORD_MATHEMATICS:oxford-divisibility-chain@1.0.0"
+        "number-theory"
       );
       setSelect("provider-select", "mock-model:mock-default");
       setInput("duration-input", "30");
@@ -226,13 +226,13 @@ describe("configured interview setup product flow", () => {
       throw new Error("Expected target select");
     }
     expect([...target.options].map((option) => option.textContent))
-      .toEqual(["Basic Market Making"]);
+      .toEqual(["Recommended", "Market Making & Pricing"]);
 
     await act(async () => {
       setSelect("interview-mode-select", "OXFORD_MATHEMATICS");
       setSelect(
         "interview-target-select",
-        "OXFORD_MATHEMATICS:oxford-divisibility-chain@1.0.0"
+        "number-theory"
       );
     });
 
@@ -250,7 +250,7 @@ describe("configured interview setup product flow", () => {
       throw new Error("Expected refreshed target select");
     }
     expect(refreshedTarget.value).toBe(
-      "OXFORD_MATHEMATICS:six-people@1.0.0"
+      "recommended"
     );
   });
 

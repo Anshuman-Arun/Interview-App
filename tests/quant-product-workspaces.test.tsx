@@ -525,6 +525,175 @@ describe("Quant product hook authority", () => {
 });
 
 describe("Quant workspace lifecycle refresh", () => {
+  it("keeps structured actions disabled until activation refresh settles", async () => {
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: () => ({
+        matches: false,
+        media: "",
+        onchange: null,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+        dispatchEvent: () => false
+      })
+    });
+
+    const configuration = InterviewSessionConfigurationSchema.parse({
+      configurationVersion: 1,
+      mode: "QUANT_TRADING",
+      scenario: { id: "BASIC_MARKET_MAKING", version: "1.0.0" },
+      interventionPolicy: "BALANCED"
+    });
+    if (configuration.mode !== "QUANT_TRADING") {
+      throw new Error("Expected Trading configuration");
+    }
+
+    let resolveRefresh!: (value: null) => void;
+    const refreshPending = new Promise<null>((resolve) => {
+      resolveRefresh = resolve;
+    });
+    const refresh = vi.fn(() => refreshPending);
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <AppearanceProvider>
+          <QuantSessionWorkspace
+            configuration={configuration}
+            quantState={{ mode: "QUANT_TRADING", state: activeTradingState(1) }}
+            quantStateLoading={false}
+            quantActionPending={false}
+            sessionStatus="ACTIVE"
+            paused={false}
+            productHidden={false}
+            notice={null}
+            onDismissNotice={() => undefined}
+            onHome={() => undefined}
+            onReview={() => undefined}
+            onRefresh={refresh}
+            onSubmitTrading={async () => activeTradingState(2)}
+            onSubmitResearch={async () => {
+              throw new Error("Research submit is unavailable in Trading");
+            }}
+          />
+        </AppearanceProvider>
+      );
+      await Promise.resolve();
+    });
+
+    const pass = container.querySelector<HTMLButtonElement>(
+      '[data-testid="quant-pass"]'
+    );
+    if (pass === null) throw new Error("Quant pass action did not mount");
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(pass.disabled).toBe(true);
+
+    await act(async () => {
+      resolveRefresh(null);
+      await refreshPending;
+      await Promise.resolve();
+    });
+
+    expect(pass.disabled).toBe(false);
+
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
+  it("keeps mutations disabled while disconnected and refreshes before reconnect admission", async () => {
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: () => ({
+        matches: false,
+        media: "",
+        onchange: null,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+        dispatchEvent: () => false
+      })
+    });
+
+    const configuration = InterviewSessionConfigurationSchema.parse({
+      configurationVersion: 1,
+      mode: "QUANT_TRADING",
+      scenario: { id: "BASIC_MARKET_MAKING", version: "1.0.0" },
+      interventionPolicy: "BALANCED"
+    });
+    if (configuration.mode !== "QUANT_TRADING") {
+      throw new Error("Expected Trading configuration");
+    }
+
+    let resolveRefresh!: (value: null) => void;
+    const refreshPending = new Promise<null>((resolve) => {
+      resolveRefresh = resolve;
+    });
+    const refresh = vi.fn(() => refreshPending);
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+
+    const renderWorkspace = async (connected: boolean): Promise<void> => {
+      await act(async () => {
+        root.render(
+          <AppearanceProvider>
+            <QuantSessionWorkspace
+              configuration={configuration}
+              quantState={{ mode: "QUANT_TRADING", state: activeTradingState(1) }}
+              quantStateLoading={false}
+              quantActionPending={false}
+              connected={connected}
+              sessionStatus="ACTIVE"
+              paused={false}
+              productHidden={false}
+              notice={null}
+              onDismissNotice={() => undefined}
+              onHome={() => undefined}
+              onReview={() => undefined}
+              onRefresh={refresh}
+              onSubmitTrading={async () => activeTradingState(2)}
+              onSubmitResearch={async () => {
+                throw new Error("Research submit is unavailable in Trading");
+              }}
+            />
+          </AppearanceProvider>
+        );
+        await Promise.resolve();
+      });
+    };
+
+    await renderWorkspace(false);
+
+    const pass = container.querySelector<HTMLButtonElement>(
+      '[data-testid="quant-pass"]'
+    );
+    if (pass === null) throw new Error("Quant pass action did not mount");
+    expect(pass.disabled).toBe(true);
+    expect(refresh).toHaveBeenCalledTimes(0);
+
+    const refreshButton = Array.from(container.querySelectorAll("button"))
+      .find((button) => button.textContent.trim() === "Refresh");
+    if (!(refreshButton instanceof HTMLButtonElement)) {
+      throw new Error("Quant refresh action did not mount");
+    }
+    expect(refreshButton.disabled).toBe(false);
+
+    await renderWorkspace(true);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(pass.disabled).toBe(true);
+
+    await act(async () => {
+      resolveRefresh(null);
+      await refreshPending;
+      await Promise.resolve();
+    });
+    expect(pass.disabled).toBe(false);
+
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
   it("performs exactly one deferred refresh after a pending action spans pause/resume", async () => {
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
@@ -813,6 +982,58 @@ describe("Quant Trading client admission boundaries", () => {
       }
     });
   });
+
+  it("clears a stale quote draft when authoritative Trading round advances", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <QuantTradingWorkspace
+          state={activeTradingState(1)}
+          loading={false}
+          actionPending={false}
+          disabled={false}
+          onRefresh={async () => undefined}
+          onSubmit={async () => activeTradingState(2)}
+          onReview={() => undefined}
+        />
+      );
+    });
+
+    let inputs = [...container.querySelectorAll("input")];
+    if (inputs.length !== 4) throw new Error("Expected four Trading quote inputs");
+    await act(async () => {
+      setInputValue(inputs[0] as HTMLInputElement, "99.5");
+      setInputValue(inputs[1] as HTMLInputElement, "2");
+      setInputValue(inputs[2] as HTMLInputElement, "100.5");
+      setInputValue(inputs[3] as HTMLInputElement, "2");
+    });
+    expect(inputs.map((input) => input.value)).toEqual(["99.5", "2", "100.5", "2"]);
+
+    await act(async () => {
+      root.render(
+        <QuantTradingWorkspace
+          state={activeTradingState(2)}
+          loading={false}
+          actionPending={false}
+          disabled={false}
+          onRefresh={async () => undefined}
+          onSubmit={async () => activeTradingState(3)}
+          onReview={() => undefined}
+        />
+      );
+      await Promise.resolve();
+    });
+
+    inputs = [...container.querySelectorAll("input")];
+    expect(inputs.map((input) => input.value)).toEqual(["", "", "", ""]);
+
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
 });
 
 describe("Quant workspace public rendering", () => {

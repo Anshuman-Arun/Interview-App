@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import type {
   InterviewSessionConfiguration,
   QuantResearchCandidateAction,
@@ -19,6 +19,7 @@ export interface QuantSessionWorkspaceProps {
   readonly quantState: QuantSessionPublicState | null;
   readonly quantStateLoading: boolean;
   readonly quantActionPending: boolean;
+  readonly connected?: boolean;
   readonly sessionStatus: SessionStatus;
   readonly paused: boolean;
   readonly productHidden: boolean;
@@ -36,6 +37,7 @@ export const QuantSessionWorkspace: React.FC<QuantSessionWorkspaceProps> = ({
   quantState,
   quantStateLoading,
   quantActionPending,
+  connected = true,
   sessionStatus,
   paused,
   productHidden,
@@ -48,13 +50,17 @@ export const QuantSessionWorkspace: React.FC<QuantSessionWorkspaceProps> = ({
   onSubmitResearch
 }) => {
   const presentationActive =
-    !productHidden
+    connected
+    && !productHidden
     && !paused
     && sessionStatus === "ACTIVE";
   const actionPendingRef = useRef(quantActionPending);
   const presentationActiveRef = useRef(presentationActive);
   const lifecycleInitializedRef = useRef(false);
   const deferredRefreshRef = useRef(false);
+  const activationRefreshEpochRef = useRef(0);
+  const [activationRefreshing, setActivationRefreshing] =
+    useState(presentationActive);
 
   useEffect(() => {
     const wasPending = actionPendingRef.current;
@@ -63,6 +69,8 @@ export const QuantSessionWorkspace: React.FC<QuantSessionWorkspaceProps> = ({
     presentationActiveRef.current = presentationActive;
 
     if (!presentationActive) {
+      activationRefreshEpochRef.current += 1;
+      setActivationRefreshing(true);
       if (quantActionPending || wasPending) {
         deferredRefreshRef.current = true;
       }
@@ -72,6 +80,7 @@ export const QuantSessionWorkspace: React.FC<QuantSessionWorkspaceProps> = ({
     if (quantActionPending) {
       if (!wasPresentationActive) {
         deferredRefreshRef.current = true;
+        setActivationRefreshing(true);
       }
       lifecycleInitializedRef.current = true;
       return;
@@ -82,10 +91,26 @@ export const QuantSessionWorkspace: React.FC<QuantSessionWorkspaceProps> = ({
       || !wasPresentationActive
       || (wasPending && deferredRefreshRef.current);
     lifecycleInitializedRef.current = true;
-    if (!shouldRefresh) return;
+    if (!shouldRefresh) {
+      setActivationRefreshing(false);
+      return;
+    }
 
     deferredRefreshRef.current = false;
-    void onRefresh().catch(() => undefined);
+    const refreshEpoch = activationRefreshEpochRef.current + 1;
+    activationRefreshEpochRef.current = refreshEpoch;
+    setActivationRefreshing(true);
+    void onRefresh()
+      .catch(() => undefined)
+      .finally(() => {
+        if (
+          activationRefreshEpochRef.current === refreshEpoch
+          && presentationActiveRef.current
+          && !actionPendingRef.current
+        ) {
+          setActivationRefreshing(false);
+        }
+      });
   }, [
     onRefresh,
     presentationActive,
@@ -110,7 +135,8 @@ export const QuantSessionWorkspace: React.FC<QuantSessionWorkspaceProps> = ({
   }, [onRefresh, presentationActive]);
 
   const modeLabel = configuration.mode === "QUANT_TRADING" ? "Quant Trading" : "Quant Research";
-  const disabled = paused || sessionStatus !== "ACTIVE";
+  const disabled =
+    !connected || paused || sessionStatus !== "ACTIVE" || activationRefreshing;
 
   return (
     <div
@@ -134,9 +160,12 @@ export const QuantSessionWorkspace: React.FC<QuantSessionWorkspaceProps> = ({
           </span>
         </button>
         <div className="app-header__actions">
-          <span className="app-header__connection" data-connected="true">
+          <span
+            className="app-header__connection"
+            data-connected={String(connected)}
+          >
             <span aria-hidden="true" />
-            Deterministic state
+            {connected ? "Deterministic state" : "Disconnected"}
           </span>
           <button
             type="button"

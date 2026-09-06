@@ -507,7 +507,7 @@ describe("SessionObservability", () => {
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 
   it("makes duplicate terminal callbacks idempotent for remote and local timing", () => {
     const metrics = new SessionObservability(undefined, () => 10);

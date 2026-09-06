@@ -20,6 +20,8 @@ import {
 } from "./appearance.js";
 
 interface DesktopAppearanceBridge {
+  readonly getAppearanceSettings?: () => string | null;
+  readonly saveAppearanceSettings?: (raw: string) => Promise<void>;
   readonly setZoomFactor?: (factor: number) => void;
   readonly onZoomFactorChanged?: (
     listener: (factor: number) => void
@@ -42,6 +44,19 @@ const AppearanceContext = createContext<AppearanceContextValue | null>(null);
 
 function readInitialSettings(): AppearanceSettings {
   if (typeof window === "undefined") return DEFAULT_APPEARANCE;
+
+  const bridge = (globalThis as typeof globalThis & {
+    readonly interviewDesktop?: DesktopAppearanceBridge;
+  }).interviewDesktop;
+  try {
+    const desktopRaw = bridge?.getAppearanceSettings?.();
+    if (desktopRaw !== undefined && desktopRaw !== null) {
+      return normalizeAppearance(JSON.parse(desktopRaw));
+    }
+  } catch {
+    // Fall through to origin-local persistence for browser/dev use.
+  }
+
   try {
     const raw = window.localStorage.getItem(APPEARANCE_STORAGE_KEY);
     return raw === null ? DEFAULT_APPEARANCE : normalizeAppearance(JSON.parse(raw));
@@ -99,13 +114,18 @@ export function AppearanceProvider({
     root.dataset["borders"] = settings.borders;
     root.style.setProperty("--accent-wash", `${String(settings.accentIntensity)}%`);
 
+    const serialized = JSON.stringify(settings);
     try {
-      window.localStorage.setItem(
-        APPEARANCE_STORAGE_KEY,
-        JSON.stringify(settings)
-      );
+      window.localStorage.setItem(APPEARANCE_STORAGE_KEY, serialized);
     } catch {
       // Appearance persistence is best-effort and never session-authoritative.
+    }
+
+    const bridge = (globalThis as typeof globalThis & {
+      readonly interviewDesktop?: DesktopAppearanceBridge;
+    }).interviewDesktop;
+    if (bridge?.saveAppearanceSettings !== undefined) {
+      void bridge.saveAppearanceSettings(serialized).catch(() => undefined);
     }
   }, [prefersDark, settings]);
 

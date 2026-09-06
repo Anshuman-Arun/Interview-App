@@ -1932,6 +1932,30 @@ describe("Kokoro adapter seam", () => {
       expect(String(error)).not.toContain(sensitiveRuntimePath);
     }
   });
+
+  it("accepts semicolon-delimited runtime version strings from production workers", async () => {
+    const runtime: KokoroRuntime = {
+      initialize: async () => ({
+        modelId: "kokoro-af-heart",
+        modelVersion: "af-heart-35d84fc0eb2d7451",
+        runtimeVersion: "moonshine-voice/0.1.5;deps/1",
+        supportedVoices: ["kokoro_af_heart"],
+        supportedLanguages: ["en-US"],
+        supportedSampleRates: [24_000],
+        synthesize: async () => ({
+          samples: new Float32Array([0]),
+          sampleRate: 24_000,
+          channels: 1,
+          durationMs: 1
+        })
+      })
+    };
+    const adapter = await KokoroSpeechSynthesizer.create({
+      runtime,
+      modelPath: resolve("fixtures/kokoro/model.onnx")
+    });
+    expect(adapter.identity.runtimeVersion).toBe("moonshine-voice/0.1.5;deps/1");
+  });
 });
 
 describe("transport-neutral TTS worker authority boundary", () => {

@@ -79,8 +79,8 @@ describe("expressive product page layer", () => {
       })
     );
 
-    expect(markup).toContain("Think on the page.");
-    expect(markup).toContain("Talk through the proof.");
+    expect(markup).toContain("Think aloud.");
+    expect(markup).toContain("Draw it out.");
     expect(markup).toContain("Return to room");
     expect(markup).toContain("Divisibility chains");
     expect(markup).not.toContain(">Enter interview<");
@@ -123,9 +123,33 @@ describe("expressive product page layer", () => {
       })
     );
 
-    expect(markup).toContain("A ledger, not a dashboard.");
+    expect(markup).toContain("Resume active work, inspect finished interviews");
     expect(markup).toContain("Current");
     expect(markup).toContain("Review");
+  });
+
+  it("visually interlocks the Sessions ledger while a recovery is pending", () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(SessionsPage, {
+        sessions,
+        currentSessionId: ACTIVE,
+        canReview: (session) => session.status === "COMPLETED",
+        onResume: vi.fn(),
+        onReview: vi.fn(),
+        onRefresh: vi.fn(),
+        history: null,
+        historyLoading: false,
+        historyError: null,
+        sessionEntryPending: true
+      })
+    );
+
+    expect(markup).toContain('aria-busy="true"');
+    expect(markup).toMatch(
+      /class="expressive-sessions__refresh"[^>]*disabled=""/u
+    );
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Current<\/button>/u);
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Review<\/button>/u);
   });
 
   it("does not render ACTIVE-session problem identity on Home or Sessions", () => {
@@ -174,6 +198,55 @@ describe("expressive product page layer", () => {
     expect(sessionsMarkup).toContain("Active interview");
     expect(sessionsMarkup).not.toContain("spoiler-active-problem-id");
     expect(sessionsMarkup).not.toContain("secret-version");
+  });
+
+
+  it("surfaces multiple active sessions instead of offering a false new-room state", () => {
+    const firstSession = sessions[0];
+    if (firstSession === undefined) throw new Error("Expected active fixture");
+    const markup = renderToStaticMarkup(
+      React.createElement(HomePage, {
+        activeSessionId: null,
+        activeSessionCount: 2,
+        activeProblemTitle: null,
+        sessions: [
+          firstSession,
+          { ...firstSession, sessionId: COMPLETE, updatedAt: "2026-09-01T20:21:00.000Z" }
+        ],
+        onStartInterview: vi.fn(),
+        onResumeInterview: vi.fn(),
+        onOpenSessions: vi.fn(),
+        onOpenSettings: vi.fn(),
+        canReview: () => false,
+        onReview: vi.fn(),
+        sessionEntryPending: false
+      })
+    );
+
+    expect(markup).toContain("Choose active session");
+    expect(markup).toContain("2 active sessions need resolution");
+    expect(markup).not.toContain('data-testid="start-session-btn"');
+  });
+
+  it("renders setup indicators with explicit non-ready state", () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(
+        AppearanceProvider,
+        null,
+        React.createElement(ProductFrame, {
+          activePage: "home",
+          title: "Home",
+          kicker: "Interview room",
+          onNavigate: vi.fn(),
+          reasoningReady: false,
+          children: React.createElement("div", null, "content")
+        })
+      )
+    );
+
+    expect(markup).toContain("Setup needed");
+    expect(markup).toContain("CHECK SETUP");
+    expect(markup).toContain('data-ready="false"');
   });
 
   it("keeps review presentation independent of product-read implementation", () => {

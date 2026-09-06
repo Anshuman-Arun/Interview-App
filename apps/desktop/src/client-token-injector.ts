@@ -52,8 +52,25 @@ export function installDesktopClientTokenInjector(
     "/v1/renderer-stream"
   );
   const voiceOrigin = exactDesktopOrigin(input.voiceBaseUrl);
-  const endpoints = new Set([commandUrl, rendererStreamUrl]);
   const commandOrigin = new URL(commandUrl).origin;
+  // Whiteboard mutation + vision requests are sent to dedicated command-origin
+  // endpoints rather than /v1/commands. They still originate from the trusted
+  // renderer and carry only the public desktop marker, so they must cross the
+  // same main-process token boundary as every other authenticated backend call.
+  const whiteboardMutationUrl = exactDesktopEndpoint(
+    `${commandOrigin}/v1/whiteboard-mutations`,
+    "/v1/whiteboard-mutations"
+  );
+  const whiteboardVisionUrl = exactDesktopEndpoint(
+    `${commandOrigin}/v1/whiteboard-vision`,
+    "/v1/whiteboard-vision"
+  );
+  const endpoints = new Set([
+    commandUrl,
+    whiteboardMutationUrl,
+    whiteboardVisionUrl,
+    rendererStreamUrl
+  ]);
   const filterOrigins = [...new Set(
     [...endpoints].map((endpoint) => `${new URL(endpoint).origin}/*`)
       .concat([`${voiceOrigin}/*`])

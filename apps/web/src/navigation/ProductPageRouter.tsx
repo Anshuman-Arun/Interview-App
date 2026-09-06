@@ -21,11 +21,14 @@ export function ProductPageRouter({
   route,
   sessions,
   activeSessionId,
+  activeSessionCount = activeSessionId === null ? 0 : 1,
   currentSessionId,
   activeProblemTitle,
   activeSessionPaused,
   canReview,
   sessionEntryPending,
+  sessionAuthorityChecking = false,
+  sessionAuthorityUnavailable = false,
   onNavigatePage,
   onEnterInterview,
   launchCatalog,
@@ -51,11 +54,14 @@ export function ProductPageRouter({
   readonly route: Exclude<ProductRoute, { readonly page: "interview" }>;
   readonly sessions: readonly StoredSessionSummary[];
   readonly activeSessionId: SessionId | null;
+  readonly activeSessionCount?: number;
   readonly currentSessionId: SessionId | null;
   readonly activeProblemTitle?: string | null;
   readonly activeSessionPaused?: boolean;
   readonly canReview: (session: StoredSessionSummary) => boolean;
   readonly sessionEntryPending: boolean;
+  readonly sessionAuthorityChecking?: boolean;
+  readonly sessionAuthorityUnavailable?: boolean;
   readonly onNavigatePage: (page: ProductPageId) => void;
   readonly onEnterInterview: () => void;
   readonly launchCatalog: readonly InterviewCatalogEntry[];
@@ -105,6 +111,7 @@ export function ProductPageRouter({
       content = (
         <HomePage
           activeSessionId={activeSessionId}
+          activeSessionCount={activeSessionCount}
           activeProblemTitle={activeProblemTitle ?? null}
           activeSessionPaused={activeSessionPaused ?? false}
           sessions={sessions}
@@ -114,6 +121,8 @@ export function ProductPageRouter({
           onOpenSettings={() => onNavigatePage("settings")}
           canReview={canReview}
           sessionEntryPending={sessionEntryPending}
+          sessionAuthorityChecking={sessionAuthorityChecking}
+          sessionAuthorityUnavailable={sessionAuthorityUnavailable}
           onReview={(sessionId) => onReview(sessionId, "evaluation")}
         />
       );
@@ -131,7 +140,10 @@ export function ProductPageRouter({
           providerOptionsLoading={providerOptionsLoading}
           providerOptionsError={providerOptionsError}
           activeSessionId={activeSessionId}
+          activeSessionCount={activeSessionCount}
           startPending={sessionEntryPending}
+          sessionAuthorityChecking={sessionAuthorityChecking}
+          sessionAuthorityUnavailable={sessionAuthorityUnavailable}
           onRefreshCatalog={onRefreshLaunchCatalog}
           onRefreshProviderOptions={onRefreshProviderOptions}
           onStart={onStartConfiguredInterview}
@@ -158,6 +170,9 @@ export function ProductPageRouter({
           history={history}
           historyLoading={historyLoading}
           historyError={historyError}
+          sessionEntryPending={sessionEntryPending}
+          sessionAuthorityChecking={sessionAuthorityChecking}
+          sessionAuthorityUnavailable={sessionAuthorityUnavailable}
         />
       );
       break;
@@ -171,6 +186,9 @@ export function ProductPageRouter({
           providerOptions={providerOptions}
           providerOptionsLoading={providerOptionsLoading}
           providerOptionsError={providerOptionsError}
+          activeSessionCount={activeSessionCount}
+          sessionAuthorityChecking={sessionAuthorityChecking}
+          sessionAuthorityUnavailable={sessionAuthorityUnavailable}
           onRefreshProviderOptions={onRefreshProviderOptions}
           onStartInterview={onEnterInterview}
         />
@@ -179,7 +197,7 @@ export function ProductPageRouter({
     case "review":
       title = "Review";
       kicker = "Post-interview";
-      activePage = null;
+      activePage = "sessions";
       content = (
         <ReviewPageShell
           view={route.view}
@@ -200,6 +218,16 @@ export function ProductPageRouter({
       title={title}
       kicker={kicker}
       onNavigate={onNavigatePage}
+      reasoningReady={
+        !providerOptionsLoading
+        && providerOptionsError === null
+        && providerOptions.some((option) => option.availability === "AVAILABLE")
+      }
+      reasoningChecking={providerOptionsLoading}
+      authorityChecking={sessionAuthorityChecking}
+      authorityUnavailable={sessionAuthorityUnavailable}
+      navigationLocked={(activeSessionPaused ?? false) && activeSessionId !== null}
+      transitionLocked={sessionEntryPending}
       notice={notice}
       onDismissNotice={onDismissNotice}
     >

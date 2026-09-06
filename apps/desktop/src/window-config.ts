@@ -37,3 +37,30 @@ export function createSecureWebPreferences(preloadPath: string): SecureDesktopWe
     partition: DESKTOP_SESSION_PARTITION
   };
 }
+
+export interface SecureStartupWebPreferences {
+  readonly contextIsolation: true;
+  readonly nodeIntegration: false;
+  readonly nodeIntegrationInWorker: false;
+  readonly nodeIntegrationInSubFrames: false;
+  readonly sandbox: true;
+  readonly webSecurity: true;
+  readonly allowRunningInsecureContent: false;
+  readonly webviewTag: false;
+  readonly partition: typeof DESKTOP_SESSION_PARTITION;
+}
+
+export function createSecureStartupWebPreferences(): SecureStartupWebPreferences {
+  return {
+    contextIsolation: true,
+    nodeIntegration: false,
+    nodeIntegrationInWorker: false,
+    nodeIntegrationInSubFrames: false,
+    sandbox: true,
+    webSecurity: true,
+    allowRunningInsecureContent: false,
+    webviewTag: false,
+    partition: DESKTOP_SESSION_PARTITION
+  };
+}
+

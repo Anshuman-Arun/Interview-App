@@ -319,6 +319,86 @@ export class BrowserVoiceClient {
     };
   }
 
+  public async resolveApplicationOpeningAudio(
+    sessionIdInput: SessionId,
+    signal: AbortSignal
+  ): Promise<ResolvedAudioSource> {
+    const sessionId = SessionIdSchema.parse(sessionIdInput);
+    const response = await this.authenticatedFetch(
+      `${this.baseUrl}/v1/voice/presentation/opening`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          protocolVersion: 1,
+          sessionId
+        }),
+        cache: "no-store",
+        signal
+      }
+    );
+    if (!response.ok) {
+      await cancelResponseBody(response);
+      throw new Error(
+        `Opening audio synthesis failed with HTTP ${String(response.status)}`
+      );
+    }
+    const contentType = response.headers
+      .get("content-type")
+      ?.split(";", 1)[0]
+      ?.trim()
+      .toLowerCase();
+    if (contentType !== "audio/wav") {
+      await cancelResponseBody(response);
+      throw new Error("Opening audio response has an unexpected content type");
+    }
+    const declared = response.headers.get("content-length");
+    if (declared !== null) {
+      if (
+        declared.length === 0
+        || declared.length > 16
+        || !/^[1-9][0-9]*$/u.test(declared)
+      ) {
+        await cancelResponseBody(response);
+        throw new Error("Opening audio declared size is malformed");
+      }
+      const parsed = Number(declared);
+      if (!Number.isSafeInteger(parsed) || parsed > MAX_WAV_ASSET_BYTES) {
+        await cancelResponseBody(response);
+        throw new Error("Opening audio declared size is outside the browser bound");
+      }
+    }
+    const audioBytes = await readBoundedResponseBytes(
+      response,
+      MAX_WAV_ASSET_BYTES,
+      MAX_WAV_ASSET_CHUNKS,
+      "Opening audio"
+    );
+    if (audioBytes.byteLength === 0) {
+      throw new Error("Opening audio body is outside the browser bound");
+    }
+    const blob = new Blob([audioBytes], { type: "audio/wav" });
+    const urlFactory = globalThis.URL;
+    if (
+      typeof urlFactory.createObjectURL !== "function"
+      || typeof urlFactory.revokeObjectURL !== "function"
+    ) {
+      throw new Error("Browser Blob URL playback is unavailable");
+    }
+    const objectUrl = urlFactory.createObjectURL(blob);
+    let released = false;
+    return {
+      source: objectUrl,
+      release: () => {
+        if (released) return;
+        released = true;
+        urlFactory.revokeObjectURL(objectUrl);
+      }
+    };
+  }
+
   public async sendFrame(input: {
     readonly sessionId: SessionId;
     readonly streamId: string;

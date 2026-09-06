@@ -74,6 +74,7 @@ switch (mode) {
   case "inspect-isolation": {
     collectStdin(() => {
       const relativeFile = args[0];
+      const workingRelativeFile = args[1];
       if (!relativeFile) throw new Error("relative file required");
       const home = process.platform === "win32"
         ? process.env.USERPROFILE
@@ -88,6 +89,9 @@ switch (mode) {
           ? process.env.TEMP
           : process.env.TMPDIR,
         configuredContent: readFileSync(target, "utf8"),
+        workingConfiguredContent: workingRelativeFile
+          ? readFileSync(path.join(process.cwd(), ...workingRelativeFile.split("/")), "utf8")
+          : undefined,
         mutationExisted: existsSync(marker),
         supervisorVariablesExisted:
           Object.keys(process.env).some(

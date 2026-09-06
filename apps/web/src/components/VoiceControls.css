@@ -88,8 +88,19 @@
   color: var(--text-primary);
 }
 
-.voice-strip__devices[open] > summary span {
-  transform: rotate(180deg);
+.voice-strip__chevron {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: translateY(-1px) rotate(45deg);
+  transform-origin: center;
+}
+
+.voice-strip__devices[open] > summary .voice-strip__chevron {
+  transform: translateY(1px) rotate(225deg);
 }
 
 .voice-strip__popover {
@@ -229,3 +240,6 @@
   font-size: 8px;
   line-height: 1.4;
 }
+
+/* Editorial v10 voice strip */
+.voice-strip{min-height:30px;gap:8px;margin-bottom:7px;color:var(--text-muted)}.voice-strip__mic{min-height:27px;padding:0 8px;border-color:var(--border-subtle);border-radius:2px;background:transparent;color:var(--text-secondary);font:500 8px/1 var(--font-ui)}.voice-strip__mic:hover:not(:disabled){border-color:var(--border-default);background:var(--surface-panel)}.voice-strip__state{font:600 7px/1 var(--font-mono);letter-spacing:.05em;text-transform:uppercase}.voice-strip__dot{width:6px;height:6px}.voice-strip__devices>summary{min-height:25px;padding:0 7px;border-radius:2px;font:500 7px/1 var(--font-ui)}.voice-strip__popover{border-radius:3px}.voice-device-picker__choices button{border-radius:2px;background:transparent}

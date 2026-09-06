@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
-import { access, lstat, readFile, realpath, rm } from "node:fs/promises";
+import { access, lstat, readFile, readdir, realpath, rm } from "node:fs/promises";
 import path from "node:path";
 import {
   KokoroSpeechSynthesizer,
@@ -64,6 +64,7 @@ const SPEECH_RUNTIME_VERSION = "moonshine-voice/0.1.5;onnxruntime/1.29.0;deps/1"
 const TTS_RUNTIME_VERSION = "moonshine-voice/0.1.5;deps/1";
 const MAX_ASSET_BYTES = 128 * 1024 * 1024;
 const MAX_CACHE_BYTES = 512 * 1024 * 1024;
+const MODEL_DOWNLOAD_TIMEOUT_MS = 10 * 60_000;
 
 export type DesktopRuntimeCapabilityState =
   | "READY"
@@ -133,19 +134,19 @@ export class DesktopLocalRuntimeComposition {
       rootDir: path.join(options.appDataRoot, "model-assets"),
       maxArtifactBytes: MAX_ASSET_BYTES,
       maxCacheBytes: MAX_CACHE_BYTES,
-      downloadTimeoutMs: 120_000,
+      downloadTimeoutMs: MODEL_DOWNLOAD_TIMEOUT_MS,
       maxRedirects: 3,
-      allowCrossOriginRedirects: false,
+      allowCrossOriginRedirects: true,
       maxListEntries: 256
     });
-    // GitHub release downloads use an HTTPS cross-origin object redirect.
-    // Isolate that policy exception to vision only; fixed manifest size/SHA-256
-    // remains the content authority and voice keeps its stricter redirect policy.
+    // Both upstream model distribution paths may use HTTPS object/CDN
+    // redirects. Every accepted artifact is still pinned by manifest byte size
+    // and SHA-256 before it can enter the runtime view.
     this.visionAssetManager = new ModelAssetManager({
       rootDir: path.join(options.appDataRoot, "model-assets"),
       maxArtifactBytes: MAX_ASSET_BYTES,
       maxCacheBytes: MAX_CACHE_BYTES,
-      downloadTimeoutMs: 120_000,
+      downloadTimeoutMs: MODEL_DOWNLOAD_TIMEOUT_MS,
       maxRedirects: 3,
       allowCrossOriginRedirects: true,
       maxListEntries: 256
@@ -181,6 +182,21 @@ export class DesktopLocalRuntimeComposition {
       ?? (process.platform === "win32" ? "python" : "python3");
     this.requireManagedPythonRuntime = options.isPackaged;
     this.enforcePackagedWorkerIntegrity = options.isPackaged;
+  }
+
+  public async hasPreparedRuntimeViews(): Promise<boolean> {
+    try {
+      const entries = await readdir(this.runtimeViewsRoot, { withFileTypes: true });
+      return entries.some((entry) =>
+        entry.isDirectory()
+        && !entry.isSymbolicLink()
+        && /^view-[0-9a-f]{64}$/u.test(entry.name)
+      );
+    } catch {
+      // This is only a startup-budget hint. Runtime startup still performs the
+      // full safe-directory and digest verification before using any asset.
+      return false;
+    }
   }
 
   public start(options: { readonly signal?: AbortSignal } = {}): Promise<void> {
@@ -326,6 +342,23 @@ export class DesktopLocalRuntimeComposition {
       if (abortRequested(signal)) throw abortError();
       await this.assetManager.install(asset.manifest, signal);
     }
+
+    // Build the verified persistent runtime views during explicit setup so the
+    // next launch only has to re-verify them instead of copying hundreds of MB.
+    const speechView = await materializeRuntimeAssetView({
+      manager: this.assetManager,
+      assets: SPEECH_ASSETS,
+      baseRoot: this.runtimeViewsRoot,
+      ...(signal === undefined ? {} : { signal })
+    });
+    await speechView.dispose();
+    const ttsView = await materializeRuntimeAssetView({
+      manager: this.assetManager,
+      assets: TTS_ASSETS,
+      baseRoot: this.runtimeViewsRoot,
+      ...(signal === undefined ? {} : { signal })
+    });
+    await ttsView.dispose();
   }
 
   public async installVisionAssets(signal?: AbortSignal): Promise<void> {
@@ -347,6 +380,14 @@ export class DesktopLocalRuntimeComposition {
       if (abortRequested(signal)) throw abortError();
       await this.visionAssetManager.install(asset.manifest, signal);
     }
+
+    const visionView = await materializeRuntimeAssetView({
+      manager: this.visionAssetManager,
+      assets: VISION_ASSETS,
+      baseRoot: this.runtimeViewsRoot,
+      ...(signal === undefined ? {} : { signal })
+    });
+    await visionView.dispose();
   }
 
   public stopWorkers(): Promise<void> {

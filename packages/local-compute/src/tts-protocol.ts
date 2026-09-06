@@ -177,7 +177,7 @@ const SafeIdentityTextSchema = z.string().superRefine((value, context) => {
     context.addIssue({ code: "custom", message: "Model identity metadata exceeds its limit" });
     return;
   }
-  if (!/^[A-Za-z0-9][A-Za-z0-9._/+:-]*$/u.test(value)) {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._/+;:-]*$/u.test(value)) {
     context.addIssue({ code: "custom", message: "Model identity metadata is malformed" });
     return;
   }

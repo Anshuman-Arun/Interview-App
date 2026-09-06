@@ -393,6 +393,20 @@ describe("desktop secure bootstrap", () => {
     expect(output?.["x-interview-client-token"]).toBe(secret);
 
     for (const url of [
+      "http://127.0.0.1:41100/v1/whiteboard-mutations",
+      "http://127.0.0.1:41100/v1/whiteboard-vision"
+    ]) {
+      webRequest.listener?.({
+        url,
+        method: "POST",
+        webContentsId: 42,
+        frame: TRUSTED_MAIN_FRAME,
+        requestHeaders: { "x-interview-client-token": DESKTOP_AUTH_HEADER_VALUE }
+      }, (result) => { output = result.requestHeaders; });
+      expect(output?.["x-interview-client-token"]).toBe(secret);
+    }
+
+    for (const url of [
       "http://127.0.0.1:41100/v1/read/sessions",
       "http://127.0.0.1:41100/v1/read/sessions/session_desktop/evaluation",
       "http://127.0.0.1:41100/v1/read/sessions/session_desktop/replay"
@@ -432,6 +446,20 @@ describe("desktop secure bootstrap", () => {
     }, (result) => { output = result.requestHeaders; });
     expect(output).toEqual(subFrameHeaders);
     expect(JSON.stringify(output)).not.toContain(secret);
+
+    for (const url of [
+      "http://127.0.0.1:41100/v1/whiteboard-mutations?unexpected=1",
+      "http://127.0.0.1:41100/v1/whiteboard-vision?unexpected=1"
+    ]) {
+      webRequest.listener?.({
+        url,
+        method: "POST",
+        webContentsId: 42,
+        frame: TRUSTED_MAIN_FRAME,
+        requestHeaders: { "x-interview-client-token": DESKTOP_AUTH_HEADER_VALUE }
+      }, (result) => { output = result.requestHeaders; });
+      expect(output?.["x-interview-client-token"]).toBe(DESKTOP_AUTH_HEADER_VALUE);
+    }
 
     webRequest.listener?.({
       url: "http://127.0.0.1:41100/other",

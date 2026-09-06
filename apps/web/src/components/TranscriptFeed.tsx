@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import type { DeliveryId, InputEpisodeId, TurnId } from "../../../../packages/domain/src/index.js";
 import { MathText } from "./MathText.js";
 import { DeliveryBadge, type MessageDeliveryStatus } from "./DeliveryBadge.js";
@@ -21,19 +21,86 @@ export interface TranscriptFeedProps {
   readonly onRetry?: (itemId: string) => void | Promise<void>;
   readonly retryDisabled?: boolean;
   readonly className?: string;
+  readonly scrollContextKey?: string | null;
+  readonly focused?: boolean;
+  readonly onToggleFocus?: (() => void) | undefined;
 }
 
 export const TranscriptFeed: React.FC<TranscriptFeedProps> = ({
   items,
   onRetry,
   retryDisabled = false,
-  className = ""
+  className = "",
+  scrollContextKey = null,
+  focused = false,
+  onToggleFocus
 }) => {
-  const feedEndRef = useRef<HTMLDivElement | null>(null);
+  const messagesRef = useRef<HTMLDivElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const followingRef = useRef(true);
+  const previousScrollContextKeyRef = useRef<string | null>(scrollContextKey);
+  const [showJump, setShowJump] = useState(false);
+
+  const scrollToLatest = (): void => {
+    const node = messagesRef.current;
+    if (node === null) return;
+    followingRef.current = true;
+    setShowJump(false);
+    node.scrollTo({ top: node.scrollHeight });
+  };
 
   useEffect(() => {
-    feedEndRef.current?.scrollIntoView({ block: "end" });
-  }, [items]);
+    const node = messagesRef.current;
+    if (node === null) return;
+
+    if (previousScrollContextKeyRef.current !== scrollContextKey) {
+      previousScrollContextKeyRef.current = scrollContextKey;
+      followingRef.current = true;
+      setShowJump(false);
+      node.scrollTo({ top: items.length === 0 ? 0 : node.scrollHeight });
+      return;
+    }
+
+    if (items.length === 0) {
+      followingRef.current = true;
+      setShowJump(false);
+      node.scrollTo({ top: 0 });
+      return;
+    }
+
+    if (followingRef.current) {
+      node.scrollTo({ top: node.scrollHeight });
+      setShowJump(false);
+    } else {
+      setShowJump(true);
+    }
+  }, [items, scrollContextKey]);
+
+  useEffect(() => {
+    const node = messagesRef.current;
+    const content = contentRef.current;
+    if (
+      node === null
+      || content === null
+      || typeof ResizeObserver === "undefined"
+    ) return;
+
+    const observer = new ResizeObserver(() => {
+      if (!followingRef.current) return;
+      node.scrollTo({ top: node.scrollHeight });
+      setShowJump(false);
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, []);
+
+  const handleScroll = (): void => {
+    const node = messagesRef.current;
+    if (node === null) return;
+    const nearBottom = node.scrollHeight - node.scrollTop - node.clientHeight <= 36;
+    followingRef.current = nearBottom;
+    setShowJump(!nearBottom);
+  };
 
   const formatTimestamp = (timestamp: number): string => {
     return new Date(timestamp).toLocaleTimeString([], {
@@ -43,89 +110,94 @@ export const TranscriptFeed: React.FC<TranscriptFeedProps> = ({
   };
 
   return (
-    <div
-      className={`transcript-feed transcript-feed-container ${className}`}
-      data-testid="transcript-feed"
-    >
+    <div className={`transcript-feed transcript-feed-container ${className}`} data-testid="transcript-feed">
       <header className="transcript-feed__header">
-        <strong>Transcript</strong>
-        <span className="transcript-feed__count">
-          {items.length} {items.length === 1 ? "entry" : "entries"}
-        </span>
+        <strong>Conversation</strong>
+        <div className="transcript-feed__header-actions">
+          <span className="transcript-feed__count">
+            {items.length} {items.length === 1 ? "entry" : "entries"} · live transcript
+          </span>
+          {showJump && (
+            <button type="button" className="transcript-feed__jump" onClick={scrollToLatest}>
+              Jump to latest ↓
+            </button>
+          )}
+          {onToggleFocus !== undefined && (
+            <button
+              type="button"
+              className="transcript-feed__focus"
+              onClick={onToggleFocus}
+              aria-label={focused ? "Restore split view" : "Focus transcript"}
+              title={focused ? "Restore split view" : "Focus transcript"}
+            >
+              {focused ? "↔" : "⤢"}
+            </button>
+          )}
+        </div>
       </header>
 
-      <div className="transcript-feed__messages">
-        {items.length === 0 ? (
-          <div className="transcript-feed__empty">
-            <span className="transcript-feed__empty-index">00</span>
-            <div>
-              <p>The interview dialogue has not started yet.</p>
-              <span>
-                Start the session, then explain the first thing you know rather than
-                waiting for a perfect proof.
-              </span>
+      <div className="transcript-feed__messages" ref={messagesRef} onScroll={handleScroll}>
+        <div className="transcript-feed__content" ref={contentRef}>
+          {items.length === 0 ? (
+            <div className="transcript-feed__empty">
+              <span className="transcript-feed__empty-index">00</span>
+              <div>
+                <p>The interview dialogue has not started yet.</p>
+                <span>Start the session, then explain the first thing you know rather than waiting for a perfect proof.</span>
+              </div>
             </div>
-          </div>
-        ) : (
-          items.map((item) => {
-            const isStudent = item.role === "student";
-
-            return (
-              <article
-                key={item.id}
-                data-testid={`transcript-bubble-${item.id}`}
-                className="transcript-entry transcript-message"
-                data-role={item.role}
-              >
-                <div className="transcript-entry__rail">
-                  <span className="transcript-entry__speaker">
-                    {isStudent ? "Student (You)" : "Socratic Interviewer"}
-                  </span>
-                  <time dateTime={new Date(item.timestamp).toISOString()}>
-                    {formatTimestamp(item.timestamp)}
-                  </time>
-                  <DeliveryBadge status={item.status} />
-                </div>
-
-                <div className="transcript-entry__body">
-                  <div
-                    className={
-                      isStudent
-                        ? "message-content student-math-bubble"
-                        : "message-content ai-math-bubble"
-                    }
-                  >
-                    <MathText text={item.text} />
-                    {!isStudent && item.status === "DELIVERING" && (
-                      <span className="transcript-entry__streaming" aria-label="Responding">
-                        ▌
-                      </span>
-                    )}
+          ) : (
+            items.map((item) => {
+              const isStudent = item.role === "student";
+              return (
+                <article
+                  key={item.id}
+                  data-testid={`transcript-bubble-${item.id}`}
+                  className="transcript-entry transcript-message"
+                  data-role={item.role}
+                >
+                  <div className="transcript-entry__rail">
+                    <span
+                      className="transcript-entry__speaker"
+                      aria-label={isStudent ? "Student (You)" : "Socratic Interviewer"}
+                    >
+                      {isStudent ? "YOU" : "INTERVIEWER"}
+                    </span>
                   </div>
-
-                  {item.errorMessage !== undefined && (
-                    <div className="transcript-entry__error" role="status">
-                      <span>Error: {item.errorMessage}</span>
-                      {onRetry !== undefined && (
+                  <div className="transcript-entry__body">
+                    <div className={isStudent ? "message-content student-math-bubble" : "message-content ai-math-bubble"}>
+                      <MathText text={item.text} />
+                      {!isStudent && item.status === "DELIVERING" && <span className="transcript-entry__streaming" aria-label="Responding">▌</span>}
+                    </div>
+                    <div className="transcript-entry__meta">
+                      <time dateTime={new Date(item.timestamp).toISOString()}>{formatTimestamp(item.timestamp)}</time>
+                      <DeliveryBadge status={item.status} />
+                    </div>
+                    {item.errorMessage !== undefined && (
+                      <div className="transcript-entry__error" role="status">
+                        <span>Error: {item.errorMessage}</span>
+                        {onRetry !== undefined && (
                         <button
                           type="button"
                           disabled={retryDisabled}
                           onClick={() => {
-                            if (!retryDisabled) void onRetry(item.id);
+                            if (retryDisabled) return;
+                            void Promise.resolve()
+                              .then(() => onRetry(item.id))
+                              .catch(() => undefined);
                           }}
                         >
                           Retry
                         </button>
                       )}
-                    </div>
-                  )}
-
-                </div>
-              </article>
-            );
-          })
-        )}
-        <div ref={feedEndRef} />
+                      </div>
+                    )}
+                  </div>
+                </article>
+              );
+            })
+          )}
+        </div>
       </div>
     </div>
   );

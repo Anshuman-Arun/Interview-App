@@ -18,13 +18,15 @@ import {
 import type {
   EphemeralAudioAssetStore,
   VoiceInputCoordinator,
-  VoiceIngressResult
+  VoiceIngressResult,
+  VoiceSynthesisCoordinator
 } from "./voice-runtime.js";
 
 const VOICE_OPEN_PATH = "/v1/voice/streams";
 const VOICE_FRAME_PATH = "/v1/voice/frames";
 const VOICE_FLUSH_PATH = "/v1/voice/flush";
 const VOICE_CANCEL_PATH = "/v1/voice/cancel";
+const VOICE_OPENING_AUDIO_PATH = "/v1/voice/presentation/opening";
 const VOICE_AUDIO_PREFIX = "/v1/voice/audio/";
 const MAX_CONTROL_BYTES = 4 * 1024;
 const MAX_FRAME_BYTES = Math.ceil(48_000 * (MAX_SPEECH_FRAME_DURATION_MS / 1_000)) * 4;
@@ -66,10 +68,16 @@ const ControlSchema = z.object({
   requestId: SpeechRequestIdSchema
 }).strict();
 
+const OpeningAudioSchema = z.object({
+  protocolVersion: z.literal(1),
+  sessionId: SessionIdSchema
+}).strict();
+
 export interface VoiceTransportServerOptions {
   readonly security: LocalTransportSecurity;
   readonly assets: EphemeralAudioAssetStore;
   readonly coordinator?: VoiceInputCoordinator;
+  readonly synthesis?: VoiceSynthesisCoordinator;
   readonly port?: number;
   readonly maxFrameRequests?: number;
 }
@@ -218,6 +226,10 @@ export class VoiceTransportServer {
       }
       if (request.url === VOICE_CANCEL_PATH) {
         await this.handleControl(request, response, origin, "CANCEL");
+        return;
+      }
+      if (request.url === VOICE_OPENING_AUDIO_PATH) {
+        await this.handleOpeningAudio(request, response, origin);
         return;
       }
       throw new VoiceHttpError(404, "NOT_FOUND", "Voice endpoint not found");
@@ -450,6 +462,50 @@ export class VoiceTransportServer {
       request.off("aborted", cancelDroppedStream);
       response.off("close", onResponseClose);
     }
+  }
+
+  private async handleOpeningAudio(
+    request: IncomingMessage,
+    response: ServerResponse,
+    origin: string | undefined
+  ): Promise<void> {
+    const synthesis = this.options.synthesis;
+    if (synthesis === undefined) {
+      throw new VoiceHttpError(
+        503,
+        "VOICE_RUNTIME_UNAVAILABLE",
+        "Local TTS model runtime has not been configured"
+      );
+    }
+    assertJsonContentType(request);
+    const body = await readBody(request, MAX_CONTROL_BYTES);
+    const parsed = OpeningAudioSchema.safeParse(parseJson(body));
+    if (!parsed.success) {
+      throw new VoiceHttpError(
+        400,
+        "INVALID_CONTROL",
+        "Opening audio request is invalid"
+      );
+    }
+    const wav = await synthesis.synthesizeApplicationOpening(parsed.data.sessionId);
+    if (wav === undefined) {
+      throw new VoiceHttpError(
+        503,
+        "TTS_SYNTHESIS_FAILED",
+        "Local opening audio synthesis did not complete"
+      );
+    }
+    response.writeHead(200, {
+      "content-type": "audio/wav",
+      "content-length": wav.byteLength,
+      "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
+      ...(origin === undefined ? {} : {
+        "access-control-allow-origin": origin,
+        vary: "Origin"
+      })
+    });
+    response.end(Buffer.from(wav));
   }
 
   private handleAudioAsset(
@@ -722,6 +778,7 @@ function allowedPreflightMethod(rawUrl: string | undefined): "GET" | "POST" | un
     || rawUrl === VOICE_FRAME_PATH
     || rawUrl === VOICE_FLUSH_PATH
     || rawUrl === VOICE_CANCEL_PATH
+    || rawUrl === VOICE_OPENING_AUDIO_PATH
   ) {
     return "POST";
   }

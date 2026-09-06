@@ -31,9 +31,10 @@ async function main(): Promise<void> {
   );
 }
 
-void main().catch(() => {
+void main().catch((err: unknown) => {
+  console.error(err);
   process.stderr.write(
-    "Antigravity readiness smoke failed. Confirm agy 1.1.25 is installed and retry. Authentication is intentionally not probed by this zero-inference smoke; run agy interactively once before the first real interview turn.\n"
+    "Antigravity readiness smoke failed. Confirm a supported agy version (1.1.26 or 1.1.27) is installed and retry. Authentication is intentionally not probed by this zero-inference smoke; run agy interactively once before the first real interview turn.\n"
   );
   process.exitCode = 1;
 });

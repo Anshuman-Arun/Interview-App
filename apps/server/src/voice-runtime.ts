@@ -508,6 +508,156 @@ export class VoiceSynthesisCoordinator {
     }
   }
 
+  public async synthesizeApplicationOpening(
+    sessionIdInput: SessionId
+  ): Promise<Uint8Array | undefined> {
+    const sessionId = SessionIdSchema.parse(sessionIdInput);
+    const exactText =
+      "Hi, welcome! Before we get started, is everything ready to go on your end?";
+    let ttsTiming: LocalTimingHandle | undefined;
+    let requestId: string | undefined;
+
+    try {
+      await this.sessions.ensureRecovered(sessionId);
+      const state = this.sessions.getWriter(sessionId).getState();
+      if (!state.started || state.status !== "ACTIVE") return undefined;
+
+      const request = TtsSynthesizeRequestSchema.parse({
+        protocolVersion: 1,
+        type: "SYNTHESIZE",
+        requestId: newRequestId(),
+        text: exactText,
+        voice: this.runtime.voice,
+        speed: this.runtime.speed,
+        language: this.runtime.language,
+        sampleRate: this.runtime.sampleRate,
+        outputFormat: "PCM_F32LE"
+      });
+      requestId = request.requestId;
+      const plan = planTtsRequest(request);
+      const assembly: TtsAssembly = {
+        begin: undefined,
+        chunks: [],
+        end: undefined,
+        totalChunkBytes: 0,
+        totalChunkFrames: 0
+      };
+      this.rememberActive(sessionId, request.requestId);
+      this.observability?.recordTtsRequest(sessionId);
+      ttsTiming = this.observability?.beginLocalTiming(sessionId, "TTS");
+
+      const summary = await this.runtime.worker.handle(request, async (messageInput) => {
+        const message = TtsOutgoingMessageSchema.parse(messageInput);
+        if (message.requestId !== request.requestId) {
+          throw new Error("TTS callback request identity changed");
+        }
+        if (message.type === "TTS_ERROR" || message.type === "CANCEL_RESULT") {
+          throw new Error("TTS synthesis emitted an unexpected control result");
+        }
+        if (message.requestBasisHash !== plan.requestBasisHash) {
+          throw new Error("TTS callback basis does not match the exact admitted opening");
+        }
+        if (message.type === "AUDIO_BEGIN") {
+          if (
+            assembly.begin !== undefined
+            || message.normalizedTextHash !== plan.normalizedTextHash
+          ) {
+            throw new Error("TTS opening begin metadata does not match");
+          }
+          assembly.begin = message;
+          return;
+        }
+        if (message.type === "AUDIO_CHUNK") {
+          if (assembly.begin === undefined || assembly.end !== undefined) {
+            throw new Error("TTS opening chunk arrived outside the admitted stream");
+          }
+          if (
+            message.sequence !== assembly.chunks.length + 1
+            || message.chunkIndex !== assembly.chunks.length
+          ) {
+            throw new Error("TTS opening chunk sequence is discontinuous");
+          }
+          const nextBytes = assembly.totalChunkBytes + message.byteLength;
+          const nextFrames = assembly.totalChunkFrames + message.frameCount;
+          if (
+            !Number.isSafeInteger(nextBytes)
+            || nextBytes > TTS_LIMITS.maxPcmBytes
+            || !Number.isSafeInteger(nextFrames)
+            || nextFrames > Math.floor(
+              TTS_LIMITS.maxPcmBytes / Float32Array.BYTES_PER_ELEMENT
+            )
+          ) {
+            throw new Error("TTS opening stream exceeds the aggregate PCM bound");
+          }
+          assembly.totalChunkBytes = nextBytes;
+          assembly.totalChunkFrames = nextFrames;
+          assembly.chunks.push(message);
+          return;
+        }
+        if (assembly.begin === undefined || assembly.end !== undefined) {
+          throw new Error("TTS opening end arrived outside the admitted stream");
+        }
+        if (
+          message.sequence !== assembly.chunks.length + 1
+          || message.totalBytes !== assembly.totalChunkBytes
+          || message.totalFrames !== assembly.totalChunkFrames
+        ) {
+          throw new Error("TTS opening end summary does not match the chunk aggregate");
+        }
+        assembly.end = message;
+      });
+
+      if (summary.kind !== "SYNTHESIS" || summary.summary.outcome !== "DONE") {
+        ttsTiming?.finish(
+          this.cancelledRequests.has(request.requestId) ? "CANCELLED" : "FAILURE"
+        );
+        return undefined;
+      }
+
+      const begin = assembly.begin;
+      const end = assembly.end;
+      if (begin === undefined || end === undefined || assembly.chunks.length === 0) {
+        throw new Error("TTS opening completed without a bounded audio stream");
+      }
+      validateTtsAssemblyConsistency(
+        plan,
+        request.sampleRate,
+        begin,
+        assembly.chunks,
+        end
+      );
+      if (
+        begin.model.engine !== end.model.engine
+        || begin.model.modelId !== end.model.modelId
+        || begin.model.modelVersion !== end.model.modelVersion
+        || begin.model.runtimeVersion !== end.model.runtimeVersion
+        || begin.model.waveformDeterminism !== end.model.waveformDeterminism
+      ) {
+        throw new Error("TTS opening model/runtime identity changed");
+      }
+      const pcm = concatenateTtsPcm(assembly.chunks, end.totalBytes);
+      if (sha256Bytes(pcm) !== end.audioHash) {
+        throw new Error("TTS opening aggregate audio hash does not match emitted PCM");
+      }
+      ttsTiming?.finish(
+        this.cancelledRequests.has(request.requestId) ? "CANCELLED" : "SUCCESS"
+      );
+      return encodePcm16Wav(pcm, end.sampleRate);
+    } catch {
+      ttsTiming?.finish(
+        requestId !== undefined && this.cancelledRequests.has(requestId)
+          ? "CANCELLED"
+          : "FAILURE"
+      );
+      return undefined;
+    } finally {
+      if (requestId !== undefined) {
+        this.forgetActive(sessionId, requestId);
+        this.cancelledRequests.delete(requestId);
+      }
+    }
+  }
+
   public hasActiveSession(sessionIdInput: SessionId): boolean {
     const sessionId = SessionIdSchema.parse(sessionIdInput);
     return (this.activeBySession.get(sessionId)?.size ?? 0) > 0;

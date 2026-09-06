@@ -217,6 +217,7 @@ export class LocalInterviewTransportRuntime {
       security: options.security,
       assets: this.audioAssets,
       ...(this.voiceInput === undefined ? {} : { coordinator: this.voiceInput }),
+      ...(this.voiceSynthesis === undefined ? {} : { synthesis: this.voiceSynthesis }),
       ...(options.voicePort === undefined ? {} : { port: options.voicePort })
     });
   }

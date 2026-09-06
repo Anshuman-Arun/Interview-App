@@ -27,6 +27,7 @@ extraResources:
     to: workers/python/requirements-local-model-runtime.txt
 
 win:
+  icon: apps/desktop/assets/icon.png
   target:
     - target: nsis
       arch:

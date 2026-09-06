@@ -1,3 +1,4 @@
+import { readFile, lstat } from "node:fs/promises";
 import { win32 as win32Path } from "node:path";
 import process from "node:process";
 import type { ProviderSelectionReference } from "../../../packages/domain/src/index.js";
@@ -6,17 +7,20 @@ import {
   defaultAntigravityCliExecutablePath
 } from "../../../packages/local-runtime/src/index.js";
 import {
-  ANTIGRAVITY_CLI_MODEL_ID,
   ANTIGRAVITY_CLI_PROVIDER_ID,
   ANTIGRAVITY_CLI_TURN_ARGUMENTS,
   ANTIGRAVITY_CLI_ZERO_TURN_PREFLIGHT_INPUT,
   assertAntigravityCliZeroTurnPreflightResult,
+  isSupportedAntigravityCliModelId,
   type SupervisedCliExecutionRequest,
   type SupervisedCliExecutor
 } from "../../../packages/providers/src/index.js";
 
 const ANTIGRAVITY_EXECUTABLE_ID = "antigravity-cli";
-const ANTIGRAVITY_SAFE_CLI_VERSION = Object.freeze([1, 1, 25] as const);
+const ANTIGRAVITY_SAFE_CLI_VERSIONS = Object.freeze([
+  Object.freeze([1, 1, 26] as const),
+  Object.freeze([1, 1, 27] as const)
+]);
 // First use also pays cold executable hashing and trusted Windows supervisor
 // compilation. Those stages are each independently bounded at 30s, so this
 // one-time local preflight must leave room for both plus `agy --version`.
@@ -26,6 +30,7 @@ const ANTIGRAVITY_VERSION_STDERR_BYTES = 4 * 1024;
 const ANTIGRAVITY_PROFILE_PREFLIGHT_TIMEOUT_MS = 75_000;
 const ANTIGRAVITY_PROFILE_PREFLIGHT_STDOUT_BYTES = 64 * 1024;
 const ANTIGRAVITY_PROFILE_PREFLIGHT_STDERR_BYTES = 16 * 1024;
+const ANTIGRAVITY_USER_SETTINGS_MAX_BYTES = 64 * 1024;
 const ANTIGRAVITY_SAFE_SETTINGS = Object.freeze({
   toolPermission: "strict",
   artifactReviewPolicy: "asks-for-review",
@@ -64,7 +69,8 @@ subagent: false
 
 You are a fallible, stateless interviewer-response realization engine.
 Use only the user message supplied for the current turn.
-Return only the structured interviewer proposal requested by the caller.
+Return exactly one raw JSON object using the caller's exact schema property names, then stop.
+Never wrap JSON in Markdown or a code fence, rename schema properties, emit commentary, or make a second attempt.
 Do not use tools, files, commands, URLs, MCP, plugins, skills, subagents, or prior conversations.
 `;
 export const ANTIGRAVITY_FORMAL_INTERPRETER_AGENT_MARKDOWN = `---
@@ -112,6 +118,7 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
   let runner: SupervisedProcessRunner | undefined;
   let versionVerification: Promise<void> | undefined;
   let profileVerification: Promise<void> | undefined;
+  let userProfileSafetyVerification: Promise<void> | undefined;
 
   const getRunner = (): SupervisedProcessRunner => {
     if (runner !== undefined) return runner;
@@ -122,17 +129,30 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
       executable: defaultAntigravityCliExecutablePath("win32"),
       environment,
       isolatedWorkingDirectory: true,
-      isolatedHomeFiles: {
-        ".gemini/antigravity-cli/settings.json":
-          ANTIGRAVITY_SUPERVISED_SETTINGS_JSON,
-        ".gemini/config/agents/interview-realizer/agent.md":
+      isolatedWorkingDirectoryFiles: {
+        ".agents/agents/interview-realizer/agent.md":
           ANTIGRAVITY_REALIZER_AGENT_MARKDOWN,
-        ".gemini/config/agents/formal-interpreter/agent.md":
+        ".agents/agents/formal-interpreter/agent.md":
           ANTIGRAVITY_FORMAL_INTERPRETER_AGENT_MARKDOWN
       }
     }]);
     runner = created;
     return created;
+  };
+
+  const ensureSafeUserProfile = async (): Promise<void> => {
+    let check = userProfileSafetyVerification;
+    if (check === undefined) {
+      check = verifyAntigravityUserProfileSafety();
+      userProfileSafetyVerification = check;
+      const captured = check;
+      void captured.catch(() => {
+        if (userProfileSafetyVerification === captured) {
+          userProfileSafetyVerification = undefined;
+        }
+      });
+    }
+    await check;
   };
 
   const ensureSupportedVersion = async (
@@ -141,6 +161,7 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
     if (signal?.aborted === true) {
       throw new Error("Antigravity runtime verification wait cancelled");
     }
+    await ensureSafeUserProfile();
     let check = versionVerification;
     if (check === undefined) {
       check = (async () => {
@@ -224,7 +245,7 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
     ): Promise<void> {
       if (
         selection.providerId !== ANTIGRAVITY_CLI_PROVIDER_ID
-        || selection.modelId !== ANTIGRAVITY_CLI_MODEL_ID
+        || !isSupportedAntigravityCliModelId(selection.modelId)
       ) {
         return;
       }
@@ -234,7 +255,7 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
     resolveRuntime(selection: ProviderSelectionReference): unknown {
       if (
         selection.providerId === ANTIGRAVITY_CLI_PROVIDER_ID
-        && selection.modelId === ANTIGRAVITY_CLI_MODEL_ID
+        && isSupportedAntigravityCliModelId(selection.modelId)
       ) {
         // Acquire only for the selected provider. Construction failures are
         // allowed to be retried later and must not affect unrelated providers.
@@ -271,6 +292,95 @@ async function waitForSharedVerificationOrAbort(
   }
 }
 
+async function verifyAntigravityUserProfileSafety(): Promise<void> {
+  if (process.platform !== "win32") return;
+  const userProfile = process.env["USERPROFILE"];
+  if (
+    userProfile === undefined
+    || userProfile.length === 0
+    || userProfile.includes("\0")
+    || !win32Path.isAbsolute(userProfile)
+    || userProfile.startsWith("\\\\")
+  ) {
+    throw new Error("Antigravity signed-in Windows profile is unavailable");
+  }
+  const settingsPath = win32Path.join(
+    win32Path.normalize(userProfile),
+    ".gemini",
+    "antigravity-cli",
+    "settings.json"
+  );
+
+  let info: Awaited<ReturnType<typeof lstat>>;
+  try {
+    info = await lstat(settingsPath);
+  } catch (error) {
+    if (
+      typeof error === "object"
+      && error !== null
+      && "code" in error
+      && error.code === "ENOENT"
+    ) {
+      return;
+    }
+    throw new Error("Antigravity user settings could not be inspected", { cause: error });
+  }
+  if (!info.isFile() || info.isSymbolicLink() || info.size > ANTIGRAVITY_USER_SETTINGS_MAX_BYTES) {
+    throw new Error("Antigravity user settings are unsafe or outside the bounded profile");
+  }
+
+  let parsed: unknown;
+  try {
+    const raw = await readFile(settingsPath, "utf8");
+    if (Buffer.byteLength(raw, "utf8") > ANTIGRAVITY_USER_SETTINGS_MAX_BYTES) {
+      throw new Error("settings too large");
+    }
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    throw new Error("Antigravity user settings are malformed");
+  }
+  if (
+    typeof parsed !== "object"
+    || parsed === null
+    || Array.isArray(parsed)
+  ) {
+    throw new Error("Antigravity user settings are malformed");
+  }
+  const settings = parsed as Record<string, unknown>;
+  const permissionMode = settings["toolPermission"];
+  if (
+    permissionMode !== undefined
+    && permissionMode !== "request-review"
+    && permissionMode !== "strict"
+  ) {
+    throw new Error("Antigravity user permission mode is unsafe for interview execution");
+  }
+  if (
+    settings["allowNonWorkspaceAccess"] === true
+    || settings["useG1Credits"] === true
+    || Object.prototype.hasOwnProperty.call(settings, "modelProvider")
+  ) {
+    throw new Error("Antigravity user profile enables an unsafe interview capability");
+  }
+  const permissions = settings["permissions"];
+  if (permissions !== undefined) {
+    if (
+      typeof permissions !== "object"
+      || permissions === null
+      || Array.isArray(permissions)
+    ) {
+      throw new Error("Antigravity user permission rules are malformed");
+    }
+    const allow = (permissions as Record<string, unknown>)["allow"];
+    if (
+      allow !== undefined
+      && (!Array.isArray(allow) || allow.length !== 0)
+    ) {
+      throw new Error("Antigravity pre-authorized tool rules are not allowed for interviews");
+    }
+  }
+}
+
 function antigravityEnvironment(): {
   readonly inherit: readonly string[];
   readonly values: Readonly<Record<string, string>>;
@@ -278,7 +388,20 @@ function antigravityEnvironment(): {
   if (process.platform === "win32") {
     const systemRoot = trustedWindowsSystemRoot();
     return Object.freeze({
-      inherit: Object.freeze([]),
+      // Headless Antigravity reuses the signed-in user's cached OAuth/keyring
+      // state from the real Windows profile. Keep only the profile-location
+      // variables needed for that authentication state; app-owned agents live
+      // in the isolated workspace and API-key/custom-endpoint variables remain
+      // excluded below.
+      inherit: Object.freeze([
+        "USERPROFILE",
+        "HOMEDRIVE",
+        "HOMEPATH",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "USERNAME",
+        "USERDOMAIN"
+      ]),
       values: Object.freeze({
         SYSTEMROOT: systemRoot,
         WINDIR: systemRoot,
@@ -325,12 +448,15 @@ export function isSupportedAntigravityCliVersionOutput(
     return false;
   }
 
-  const [safeMajor, safeMinor, safePatch] = ANTIGRAVITY_SAFE_CLI_VERSION;
-  // Headless, keyring restoration, profile, auth, stdio, and protocol behavior
-  // can change even in a patch release. This runtime depends on the later 1.1.x
-  // fixes for keyring/account restoration, stream integrity, and piped stdio
-  // shutdown, so admit exactly the release audited for this adapter.
-  return major === safeMajor && minor === safeMinor && patch === safePatch;
+  // Patch releases can change the headless/keyring/stdio contract, so keep an
+  // explicit audited allowlist instead of accepting an open-ended 1.1.x range.
+  // 1.1.27 is the current Windows CLI release; retain 1.1.26 during the
+  // transition so an otherwise healthy installed runtime is not needlessly
+  // rejected before the user's updater has run.
+  return ANTIGRAVITY_SAFE_CLI_VERSIONS.some(
+    ([safeMajor, safeMinor, safePatch]) =>
+      major === safeMajor && minor === safeMinor && patch === safePatch
+  );
 }
 
 function assertRestrictedAntigravityProfile(environment: {

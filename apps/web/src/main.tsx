@@ -4,6 +4,7 @@ import "katex/dist/katex.min.css";
 import { App } from "./App.js";
 import { AppearanceProvider } from "./appearance/AppearanceProvider.js";
 import "./styles/theme.css";
+import "./styles/editorial-v10.css";
 
 const rootElement = document.getElementById("root");
 

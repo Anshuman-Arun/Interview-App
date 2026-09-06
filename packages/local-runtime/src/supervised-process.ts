@@ -83,6 +83,7 @@ export interface SupervisedExecutableDefinition {
   readonly fixedArgs?: readonly string[];
   readonly environment?: LocalEnvironmentDefinition;
   readonly isolatedWorkingDirectory?: boolean;
+  readonly isolatedWorkingDirectoryFiles?: Readonly<Record<string, string>>;
   readonly isolatedHomeFiles?: Readonly<Record<string, string>>;
 }
 
@@ -114,6 +115,7 @@ interface ExecutableDefinitionSnapshot {
   readonly fixedArgs: readonly string[];
   readonly environment?: LocalEnvironmentDefinition;
   readonly isolatedWorkingDirectory: boolean;
+  readonly isolatedWorkingDirectoryFiles?: readonly IsolatedHomeFile[];
   readonly isolatedHomeFiles?: readonly IsolatedHomeFile[];
 }
 
@@ -123,6 +125,7 @@ interface RegisteredExecutable {
   readonly fixedArgs: readonly string[];
   readonly environment: NodeJS.ProcessEnv;
   readonly isolatedWorkingDirectory: boolean;
+  readonly isolatedWorkingDirectoryFiles?: readonly IsolatedHomeFile[];
   readonly isolatedHomeFiles?: readonly IsolatedHomeFile[];
 }
 
@@ -239,6 +242,9 @@ export class SupervisedProcessRunner {
         fixedArgs: snapshot.fixedArgs,
         environment,
         isolatedWorkingDirectory: snapshot.isolatedWorkingDirectory,
+        ...(snapshot.isolatedWorkingDirectoryFiles === undefined
+          ? {}
+          : { isolatedWorkingDirectoryFiles: snapshot.isolatedWorkingDirectoryFiles }),
         ...(snapshot.isolatedHomeFiles === undefined
           ? {}
           : { isolatedHomeFiles: snapshot.isolatedHomeFiles })
@@ -1472,6 +1478,7 @@ function snapshotExecutableDefinition(
     "fixedArgs",
     "environment",
     "isolatedWorkingDirectory",
+    "isolatedWorkingDirectoryFiles",
     "isolatedHomeFiles"
   ]), "INVALID_DEFINITION");
   if (
@@ -1505,6 +1512,15 @@ function snapshotExecutableDefinition(
     throw new SupervisedProcessError("INVALID_DEFINITION");
   }
   const environment = record.environment as LocalEnvironmentDefinition | undefined;
+  const isolatedWorkingDirectoryFiles = snapshotIsolatedHomeFiles(
+    record.isolatedWorkingDirectoryFiles
+  );
+  if (
+    isolatedWorkingDirectoryFiles !== undefined
+    && !isolatedWorkingDirectory
+  ) {
+    throw new SupervisedProcessError("INVALID_DEFINITION");
+  }
   const isolatedHomeFiles = snapshotIsolatedHomeFiles(record.isolatedHomeFiles);
   return Object.freeze({
     id: record.id,
@@ -1512,6 +1528,9 @@ function snapshotExecutableDefinition(
     fixedArgs,
     ...(environment === undefined ? {} : { environment }),
     isolatedWorkingDirectory,
+    ...(isolatedWorkingDirectoryFiles === undefined
+      ? {}
+      : { isolatedWorkingDirectoryFiles }),
     ...(isolatedHomeFiles === undefined ? {} : { isolatedHomeFiles })
   });
 }
@@ -2220,6 +2239,13 @@ async function createExecutionIsolation(
 
     if (definition.isolatedWorkingDirectory) {
       workingDirectory = await createIsolatedWorkingDirectory(temporaryRoot);
+      if (definition.isolatedWorkingDirectoryFiles !== undefined) {
+        await populateIsolatedHome(
+          workingDirectory,
+          definition.isolatedWorkingDirectoryFiles,
+          platform
+        );
+      }
     }
 
     return Object.freeze({

@@ -568,6 +568,42 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
     }
   });
 
+  it("synthesizes the deterministic application opening through the configured TTS runtime", async () => {
+    server = await createAndStartServer({
+      host: "127.0.0.1",
+      commandPort: 0,
+      rendererStreamPort: 0,
+      voicePort: 0,
+      clientToken: TEST_CLIENT_TOKEN,
+      allowedOrigins: [TEST_ORIGIN],
+      databasePath: ":memory:",
+      voiceRuntime: voiceRuntime([])
+    });
+
+    const fetchWithAuth = authenticatedFetch();
+    const commandClient = new BrowserCommandClient({
+      baseUrl: server.bound.command.url,
+      clientToken: TEST_CLIENT_TOKEN,
+      fetchImpl: fetchWithAuth
+    });
+    const sessionId: SessionId = newSessionId();
+    await commandClient.startSession(sessionId);
+
+    const response = await fetchWithAuth(
+      `${server.bound.voice.url}/v1/voice/presentation/opening`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ protocolVersion: 1, sessionId })
+      }
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("audio/wav");
+    const wav = new Uint8Array(await response.arrayBuffer());
+    expect(wav.byteLength).toBeGreaterThan(44);
+    expect(new TextDecoder().decode(wav.slice(0, 4))).toBe("RIFF");
+  });
+
   it("runs the deterministic voice vertical slice through physical audio interruption and a new turn", async () => {
     server = await createAndStartServer({
       host: "127.0.0.1",

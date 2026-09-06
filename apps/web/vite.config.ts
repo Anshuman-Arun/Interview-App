@@ -27,6 +27,7 @@ export default defineConfig({
   build: {
     outDir: path.resolve(currentDir, "../../dist/apps/web"),
     emptyOutDir: true,
-    sourcemap: true
+    sourcemap: true,
+    cssMinify: "esbuild"
   }
 });

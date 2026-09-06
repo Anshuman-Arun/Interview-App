@@ -10,6 +10,7 @@ import {
 } from "../../domain/src/index.js";
 import {
   ANTIGRAVITY_CLI_MODEL_ID,
+  isAuditedAntigravityCliToolSurface,
   parseStrictJson,
   serializeAntigravityBoundedJson
 } from "./antigravity-cli-adapter.js";
@@ -558,7 +559,7 @@ function parseFormalInterpretationStream(
         || init.data.init.model !== expectedModelId
         || init.data.init.agent !== ANTIGRAVITY_CLI_FORMAL_INTERPRETER_AGENT_ID
         || init.data.init.permission_mode !== "strict"
-        || init.data.init[INIT_TOOLS_FIELD].length !== 0
+        || !isAuditedAntigravityCliToolSurface(init.data.init[INIT_TOOLS_FIELD])
         || !sameJson(init.data.init.json_schema, expectedSchema)
       ) {
         throw new AntigravityCliFormalInterpretationError("INVALID_PROTOCOL");
