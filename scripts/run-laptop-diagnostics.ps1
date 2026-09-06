@@ -11,6 +11,13 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $RepoRoot
 
+$running = Get-Process -ErrorAction SilentlyContinue | Where-Object {
+    $_.ProcessName -eq "Interview App" -or $_.ProcessName -eq "InterviewApp"
+}
+if ($running) {
+    throw "Close Interview App before running diagnostics so the real model workers and app-data files are not shared with another process."
+}
+
 $pnpm = Get-Command pnpm -ErrorAction SilentlyContinue
 if (-not $pnpm) {
     $corepack = Get-Command corepack -ErrorAction SilentlyContinue
