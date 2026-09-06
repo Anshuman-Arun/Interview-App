@@ -873,7 +873,6 @@ async function runFullTurn(
       return Object.values(current.generations).some((generation) =>
         generation.status === "REJECTED"
         || generation.status === "SUPERSEDED"
-        || generation.status === "VALIDATED"
       );
     }, 90_000);
     const state = server.runtime.sessions.getWriter(sessionId).getState();
