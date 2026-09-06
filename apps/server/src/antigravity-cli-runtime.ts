@@ -113,6 +113,9 @@ export interface AntigravityRuntimeDiagnosticRecord {
   readonly permissionMode?: string;
   readonly terminalStatus?: string;
   readonly terminalError?: string;
+  readonly terminalNumTurns?: number;
+  readonly responseJsonParseable?: boolean;
+  readonly structuredOutputKeys?: readonly string[];
   readonly eventTypes?: readonly string[];
   readonly stepSummaries?: readonly Readonly<{
     readonly stepIndex?: number;
@@ -479,6 +482,9 @@ function summarizeAntigravityStdoutForDiagnostics(stdout: string): Readonly<{
   permissionMode?: string;
   terminalStatus?: string;
   terminalError?: string;
+  terminalNumTurns?: number;
+  responseJsonParseable?: boolean;
+  structuredOutputKeys?: readonly string[];
   eventTypes: readonly string[];
   stepSummaries: readonly Readonly<{
     readonly stepIndex?: number;
@@ -499,6 +505,9 @@ function summarizeAntigravityStdoutForDiagnostics(stdout: string): Readonly<{
   let permissionMode: string | undefined;
   let terminalStatus: string | undefined;
   let terminalError: string | undefined;
+  let terminalNumTurns: number | undefined;
+  let responseJsonParseable: boolean | undefined;
+  let structuredOutputKeys: readonly string[] | undefined;
   const stepSummaries: Array<Readonly<{
     stepIndex?: number;
     state?: string;
@@ -596,6 +605,33 @@ function summarizeAntigravityStdoutForDiagnostics(stdout: string): Readonly<{
         terminalError = safeAntigravityDiagnosticText(
           Reflect.get(result, "error")
         );
+        const numTurns = Reflect.get(result, "num_turns");
+        if (
+          typeof numTurns === "number"
+          && Number.isSafeInteger(numTurns)
+          && numTurns >= 0
+        ) {
+          terminalNumTurns = numTurns;
+        }
+        const response = Reflect.get(result, "response");
+        if (typeof response === "string") {
+          try {
+            JSON.parse(response);
+            responseJsonParseable = true;
+          } catch {
+            responseJsonParseable = false;
+          }
+        }
+        const structuredOutput = Reflect.get(result, "structured_output");
+        if (
+          typeof structuredOutput === "object"
+          && structuredOutput !== null
+          && !Array.isArray(structuredOutput)
+        ) {
+          structuredOutputKeys = Object.keys(
+            structuredOutput as Record<string, unknown>
+          ).slice(0, 32);
+        }
       }
     }
   }
@@ -606,6 +642,11 @@ function summarizeAntigravityStdoutForDiagnostics(stdout: string): Readonly<{
     ...(permissionMode === undefined ? {} : { permissionMode }),
     ...(terminalStatus === undefined ? {} : { terminalStatus }),
     ...(terminalError === undefined ? {} : { terminalError }),
+    ...(terminalNumTurns === undefined ? {} : { terminalNumTurns }),
+    ...(responseJsonParseable === undefined ? {} : { responseJsonParseable }),
+    ...(structuredOutputKeys === undefined
+      ? {}
+      : { structuredOutputKeys: Object.freeze([...structuredOutputKeys]) }),
     eventTypes: Object.freeze(eventTypes.slice(0, 128)),
     stepSummaries: Object.freeze(stepSummaries.slice(0, 128))
   });
