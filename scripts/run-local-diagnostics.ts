@@ -614,13 +614,23 @@ async function runDirectAntigravityInference(model: string): Promise<CheckOutcom
       for await (const proposal of session.sendTurn({
         generationId: newGenerationId(),
         context: {
-          diagnostic: true,
-          selectedAction: "CLARIFY",
-          maximumDisclosureLevel: 0,
-          authorizedDisclosureIds: [],
-          studentText: "I would start by checking a simple case.",
-          instruction:
-            "Return one brief clarifying interviewer question. Do not use a board action."
+          problemPrompt: "Diagnostic interview problem.",
+          recentStudentWork: "I would start by checking a simple case.",
+          realizationRequest: {
+            requiredAction: "CLARIFY",
+            target: "turn:diagnostic",
+            maximumDisclosure: 0
+          },
+          authorizedSpeechRealizations: [{
+            speechText: "Can you make that step more precise?",
+            claimedDisclosureLevel: 0,
+            claimedDisclosureIds: []
+          }],
+          authorizedBoardAnnotationPurposes: [
+            "Focus attention on this part of the student's work."
+          ],
+          deliveredFacts: [],
+          forbiddenDisclosureIds: []
         }
       })) {
         proposals.push(proposal);
