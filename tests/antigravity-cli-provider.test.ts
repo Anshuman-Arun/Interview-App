@@ -919,6 +919,30 @@ describe("Antigravity CLI one-turn protocol", () => {
     await session.close();
   });
 
+  it("accepts the non-tool finish step emitted before a successful result", async () => {
+    const provider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async (request) => {
+        request.onProcessStart();
+        return executionResult(antigravityStream(PROPOSAL, [{
+          event: "step_update",
+          step_update: {
+            conversation_id: "fake-conversation",
+            step_index: 4,
+            state: "DONE",
+            step_type: "finish"
+          }
+        }]));
+      })
+    );
+    const session = await provider.createSession();
+    await expect(collectProposals(session.sendTurn(turnInput({
+      disclosure: { maximum: 0 },
+      selectedAction: "CLARIFY",
+      studentText: "I would try parity."
+    })))).resolves.toEqual([PROPOSAL]);
+    await session.close();
+  });
+
   it("accepts request-review for a no-tool real turn", async () => {
     const provider = createAntigravityCliReasoningProvider(
       fakeExecutor(async (request) => {
