@@ -378,6 +378,44 @@ describe("supervised one-shot process execution", () => {
     expect(existsSync(secondPayload.cwd)).toBe(false);
   });
 
+  it("seeds fresh application-owned files into every isolated working directory", async () => {
+    const runtime = new SupervisedProcessRunner([{
+      id: "fixture",
+      executable: process.execPath,
+      isolatedWorkingDirectory: true,
+      isolatedWorkingDirectoryFiles: {
+        ".agents/agents/interview-realizer/agent.md": "workspace-owned-agent"
+      },
+      isolatedHomeFiles: {
+        ".fixture/settings.txt": "application-owned-settings"
+      }
+    }]);
+
+    const result = await runtime.execute(request([
+      FIXTURE,
+      "inspect-isolation",
+      ".fixture/settings.txt",
+      ".agents/agents/interview-realizer/agent.md"
+    ]));
+    const payload = JSON.parse(result.stdout) as {
+      readonly cwd: string;
+      readonly workingConfiguredContent: string;
+    };
+
+    expect(payload.workingConfiguredContent).toBe("workspace-owned-agent");
+    expect(existsSync(payload.cwd)).toBe(false);
+  });
+
+  it("rejects workspace seed files unless working-directory isolation is enabled", () => {
+    expect(() => new SupervisedProcessRunner([{
+      id: "fixture",
+      executable: process.execPath,
+      isolatedWorkingDirectoryFiles: {
+        ".agents/agents/interview-realizer/agent.md": "must-not-be-written"
+      }
+    }])).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+  });
+
   it.runIf(process.platform === "win32")(
     "supports provider environments beyond the command-argument framing limit",
     async () => {
