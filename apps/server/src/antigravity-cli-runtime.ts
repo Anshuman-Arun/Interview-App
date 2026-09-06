@@ -114,6 +114,18 @@ export interface AntigravityRuntimeDiagnosticRecord {
   readonly terminalStatus?: string;
   readonly terminalError?: string;
   readonly eventTypes?: readonly string[];
+  readonly stepSummaries?: readonly Readonly<{
+    readonly stepIndex?: number;
+    readonly state?: string;
+    readonly stepType?: string;
+    readonly textDeltaChars?: number;
+    readonly durationSeconds?: number;
+    readonly inputTokens?: number;
+    readonly outputTokens?: number;
+    readonly thinkingTokens?: number;
+    readonly toolPresent: boolean;
+    readonly subagentPresent: boolean;
+  }>[];
 }
 
 export interface ApplicationProviderAdapterRuntimeSource {
@@ -468,6 +480,18 @@ function summarizeAntigravityStdoutForDiagnostics(stdout: string): Readonly<{
   terminalStatus?: string;
   terminalError?: string;
   eventTypes: readonly string[];
+  stepSummaries: readonly Readonly<{
+    readonly stepIndex?: number;
+    readonly state?: string;
+    readonly stepType?: string;
+    readonly textDeltaChars?: number;
+    readonly durationSeconds?: number;
+    readonly inputTokens?: number;
+    readonly outputTokens?: number;
+    readonly thinkingTokens?: number;
+    readonly toolPresent: boolean;
+    readonly subagentPresent: boolean;
+  }>[];
 }> {
   const eventTypes: string[] = [];
   let initModel: string | undefined;
@@ -475,6 +499,18 @@ function summarizeAntigravityStdoutForDiagnostics(stdout: string): Readonly<{
   let permissionMode: string | undefined;
   let terminalStatus: string | undefined;
   let terminalError: string | undefined;
+  const stepSummaries: Array<Readonly<{
+    stepIndex?: number;
+    state?: string;
+    stepType?: string;
+    textDeltaChars?: number;
+    durationSeconds?: number;
+    inputTokens?: number;
+    outputTokens?: number;
+    thinkingTokens?: number;
+    toolPresent: boolean;
+    subagentPresent: boolean;
+  }>> = [];
 
   for (const raw of stdout.split(/\r?\n/u).slice(0, 128)) {
     if (raw.trim().length === 0) continue;
@@ -501,6 +537,56 @@ function summarizeAntigravityStdoutForDiagnostics(stdout: string): Readonly<{
         );
       }
     }
+    if (event === "step_update") {
+      const step = Reflect.get(parsed, "step_update");
+      if (typeof step === "object" && step !== null && !Array.isArray(step)) {
+        const usage = Reflect.get(step, "usage");
+        const usageRecord =
+          typeof usage === "object" && usage !== null && !Array.isArray(usage)
+            ? usage
+            : undefined;
+        const textDelta = Reflect.get(step, "text_delta");
+        const stepIndex = Reflect.get(step, "step_index");
+        const state = safeAntigravityDiagnosticText(Reflect.get(step, "state"));
+        const stepType = safeAntigravityDiagnosticText(Reflect.get(step, "step_type"));
+        const durationSeconds = Reflect.get(step, "duration_seconds");
+        const inputTokens = usageRecord === undefined
+          ? undefined
+          : Reflect.get(usageRecord, "input_tokens");
+        const outputTokens = usageRecord === undefined
+          ? undefined
+          : Reflect.get(usageRecord, "output_tokens");
+        const thinkingTokens = usageRecord === undefined
+          ? undefined
+          : Reflect.get(usageRecord, "thinking_tokens");
+        stepSummaries.push(Object.freeze({
+          ...(typeof stepIndex === "number" && Number.isSafeInteger(stepIndex)
+            ? { stepIndex }
+            : {}),
+          ...(state === undefined ? {} : { state }),
+          ...(stepType === undefined ? {} : { stepType }),
+          ...(typeof textDelta === "string"
+            ? { textDeltaChars: Array.from(textDelta).length }
+            : {}),
+          ...(typeof durationSeconds === "number" && Number.isFinite(durationSeconds)
+            ? { durationSeconds }
+            : {}),
+          ...(typeof inputTokens === "number" && Number.isSafeInteger(inputTokens)
+            ? { inputTokens }
+            : {}),
+          ...(typeof outputTokens === "number" && Number.isSafeInteger(outputTokens)
+            ? { outputTokens }
+            : {}),
+          ...(typeof thinkingTokens === "number" && Number.isSafeInteger(thinkingTokens)
+            ? { thinkingTokens }
+            : {}),
+          toolPresent:
+            Reflect.get(step, "tool_name") !== undefined
+            || Reflect.get(step, "tool_info") !== undefined,
+          subagentPresent: Reflect.get(step, "subagent_info") !== undefined
+        }));
+      }
+    }
     if (event === "result") {
       const result = Reflect.get(parsed, "result");
       if (typeof result === "object" && result !== null && !Array.isArray(result)) {
@@ -520,7 +606,8 @@ function summarizeAntigravityStdoutForDiagnostics(stdout: string): Readonly<{
     ...(permissionMode === undefined ? {} : { permissionMode }),
     ...(terminalStatus === undefined ? {} : { terminalStatus }),
     ...(terminalError === undefined ? {} : { terminalError }),
-    eventTypes: Object.freeze(eventTypes.slice(0, 128))
+    eventTypes: Object.freeze(eventTypes.slice(0, 128)),
+    stepSummaries: Object.freeze(stepSummaries.slice(0, 128))
   });
 }
 
