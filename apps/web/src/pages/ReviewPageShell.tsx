@@ -20,9 +20,17 @@ export function ReviewPageShell({
   const replayRef = useRef<HTMLButtonElement | null>(null);
 
   const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>): void => {
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    let next: ReviewView | null = null;
+    if (event.key === "Home") {
+      next = "evaluation";
+    } else if (event.key === "End") {
+      next = "replay";
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      next = view === "evaluation" ? "replay" : "evaluation";
+    }
+    if (next === null) return;
+
     event.preventDefault();
-    const next: ReviewView = view === "evaluation" ? "replay" : "evaluation";
     onViewChange(next);
     queueMicrotask(() => {
       if (next === "evaluation") evaluationRef.current?.focus();

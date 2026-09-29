@@ -123,7 +123,7 @@ describe("expressive product page layer", () => {
       })
     );
 
-    expect(markup).toContain("A ledger, not a dashboard.");
+    expect(markup).toContain("Resume active work, inspect finished interviews");
     expect(markup).toContain("Current");
     expect(markup).toContain("Review");
   });
