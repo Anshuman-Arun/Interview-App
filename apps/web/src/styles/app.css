@@ -1048,3 +1048,90 @@ summary:focus-visible {
 .fixed.inset-0.z-50 button:disabled {
   cursor: not-allowed;
 }
+
+/*
+ * PR #125 static extraction: live-header editorial palette and typography only.
+ * All App.tsx handlers, session transitions, pane geometry, transcript scrolling,
+ * whiteboard, model generation and transport remain unchanged.
+ */
+.interview-app-container:not(.interview-app-container--backgrounded) {
+  background: #ebe7dc !important;
+}
+
+.interview-app-container:not(.interview-app-container--backgrounded) > .app-header {
+  min-height: 58px !important;
+  flex: 0 0 58px;
+  padding: 0 15px 0 18px !important;
+  border-bottom: 1px solid var(--border-default) !important;
+  background: var(--surface-panel) !important;
+}
+
+.app-header__identity {
+  gap: 10px;
+}
+
+.app-header__identity-copy strong {
+  font: 500 13px/1 var(--font-display);
+}
+
+.app-header__identity-copy small {
+  font: 400 7px/1 var(--font-mono);
+}
+
+.app-header__identity .brand-mark {
+  color: var(--text-primary);
+}
+
+.app-header__identity .brand-mark__dot {
+  color: var(--accent);
+}
+
+:root[data-theme="dark"] .app-header__identity .brand-mark,
+:root[data-theme="dark"] .app-header__identity .brand-mark__dot {
+  color: #fff;
+}
+
+.app-header__connection,
+.app-header__streaming {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: 500 7px/1 var(--font-mono);
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+
+.app-header__connection > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warning);
+}
+
+.app-header__connection[data-connected="true"] > span {
+  background: var(--success);
+}
+
+.app-header__quiet,
+.app-header__end {
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 2px !important;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.app-header__end {
+  border-color: color-mix(in srgb, var(--danger) 30%, var(--border-subtle));
+  color: var(--danger);
+}
+
+.app-header__end:hover:not(:disabled) {
+  border-color: var(--danger);
+}
