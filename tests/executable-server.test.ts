@@ -274,7 +274,7 @@ describe("Executable Server Orchestration & End-to-End Delivery", () => {
     expect(Object.keys(stateAfterRecovery.generations).length).toBeGreaterThanOrEqual(1);
   });
 
-  it("persists all events and recovers exact session state across server process close and reopen with file-backed SQLite", { timeout: 15_000 }, async () => {
+  it("persists all events and recovers exact session state across server process close and reopen with file-backed SQLite", async () => {
     const fs = await import("node:fs");
     const os = await import("node:os");
     const path = await import("node:path");

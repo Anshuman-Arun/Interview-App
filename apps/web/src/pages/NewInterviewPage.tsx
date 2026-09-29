@@ -386,7 +386,7 @@ export function NewInterviewPage({
             <span>03</span>
             <div>
               <h2>Session controls</h2>
-              <p>These values are persisted as part of the authoritative session configuration.</p>
+              <p>These settings are saved with the session. Duration is a planning reminder, not an automatic cutoff.</p>
             </div>
           </div>
           <div className="new-interview__fields">

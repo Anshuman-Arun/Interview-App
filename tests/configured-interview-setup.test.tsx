@@ -194,6 +194,95 @@ describe("configured interview setup product flow", () => {
     ).toBeUndefined();
   });
 
+  it("starts Quant Trading and Quant Research from the normal configured launch UI", async () => {
+    const started: InterviewSessionConfiguration[] = [];
+    const host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+
+    await act(async () => {
+      root?.render(
+        <NewInterviewPage
+          catalog={CATALOG}
+          catalogLoading={false}
+          catalogError={null}
+          providerOptions={PROVIDERS}
+          providerOptionsLoading={false}
+          providerOptionsError={null}
+          activeSessionId={null}
+          startPending={false}
+          onRefreshCatalog={async () => CATALOG}
+          onRefreshProviderOptions={async () => PROVIDERS}
+          onStart={async (configuration) => {
+            started.push(configuration);
+          }}
+          onResumeActive={null}
+        />
+      );
+    });
+
+    setSelect("provider-select", "mock-model:mock-default");
+
+    const launch = async (
+      mode: "QUANT_TRADING" | "QUANT_RESEARCH",
+      target: string
+    ): Promise<void> => {
+      await act(async () => {
+        setSelect("interview-mode-select", mode);
+        setSelect("interview-target-select", target);
+      });
+      const start = document.querySelector(
+        '[data-testid="start-configured-session-btn"]'
+      );
+      if (!(start instanceof HTMLButtonElement)) {
+        throw new Error("Expected configured Start button");
+      }
+      expect(start.disabled).toBe(false);
+      await act(async () => {
+        start.click();
+        await Promise.resolve();
+      });
+    };
+
+    await launch(
+      "QUANT_TRADING",
+      "QUANT_TRADING:BASIC_MARKET_MAKING@1.0.0"
+    );
+    await launch(
+      "QUANT_RESEARCH",
+      "QUANT_RESEARCH:MODEL_COMPARISON@1.0.0"
+    );
+
+    expect(started).toEqual([
+      InterviewSessionConfigurationSchema.parse({
+        configurationVersion: 1,
+        mode: "QUANT_TRADING",
+        scenario: {
+          id: "BASIC_MARKET_MAKING",
+          version: "1.0.0"
+        },
+        interventionPolicy: "BALANCED",
+        providerSelection: {
+          providerId: "mock-model",
+          modelId: "mock-default"
+        }
+      }),
+      InterviewSessionConfigurationSchema.parse({
+        configurationVersion: 1,
+        mode: "QUANT_RESEARCH",
+        scenario: {
+          id: "MODEL_COMPARISON",
+          version: "1.0.0"
+        },
+        interventionPolicy: "BALANCED",
+        providerSelection: {
+          providerId: "mock-model",
+          modelId: "mock-default"
+        }
+      })
+    ]);
+  });
+
   it("filters targets by mode and resets a stale target after catalog refresh", async () => {
     const host = document.createElement("div");
     document.body.append(host);

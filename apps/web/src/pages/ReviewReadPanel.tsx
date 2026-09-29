@@ -100,8 +100,8 @@ export function ReviewReadPanel({
         if (controller.signal.aborted) return;
         setError(
           view === "evaluation"
-            ? "The bounded evaluation read could not be loaded."
-            : "The bounded replay read could not be loaded."
+            ? "The evaluation could not be loaded."
+            : "The replay could not be loaded."
         );
         setLoading(false);
       });
@@ -122,8 +122,8 @@ export function ReviewReadPanel({
         <span>READING</span>
         <p>
           {view === "evaluation"
-            ? "Loading bounded evaluation…"
-            : "Loading bounded replay…"}
+            ? "Loading evaluation…"
+            : "Loading replay…"}
         </p>
       </div>
     );
@@ -190,7 +190,7 @@ function PerformancePanel({
           <small>Partial metrics available</small>
         </div>
         <p className="session-performance-card__note">
-          Observability data could not be read. Interview Review remains available because metrics are non-authoritative.
+          Performance metrics could not be loaded. They are optional and do not affect your saved interview or review.
         </p>
       </section>
     );
