@@ -268,3 +268,34 @@
     text-align: left;
   }
 }
+
+/* PR #125 visual-only treatment: retain main's exact native provider,
+   model, target, duration, intervention and session-start controls. */
+.new-interview { max-width: 1200px; }
+.new-interview__form { gap: 0; }
+.new-interview__section {
+  padding: 27px 0 29px;
+  border: 0;
+  border-bottom: 1px solid var(--border-default);
+  border-radius: 0;
+  background: transparent;
+}
+.new-interview__section-heading > span { color: var(--accent); opacity: 1; font: 600 9px/1 var(--font-mono); }
+.new-interview__section-heading h2 { font: 500 23px/1.1 var(--font-display); }
+.new-interview__section-heading p { color: var(--text-muted); font: 400 10px/1.5 var(--font-ui); opacity: 1; }
+.new-interview label > span { color: var(--text-muted); font: 600 8px/1.2 var(--font-mono); text-transform: uppercase; }
+.new-interview select, .new-interview input {
+  min-height: 40px;
+  border: 1px solid var(--border-default);
+  border-radius: 2px;
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  font: 500 10px/1 var(--font-ui);
+}
+.new-interview select:focus, .new-interview input:focus { border-color: var(--accent); box-shadow: none; }
+.new-interview__active, .new-interview__submit-row { border-color: var(--border-default); border-radius: 2px; background: var(--surface-panel); }
+.new-interview__active { margin-top: 20px; }
+.new-interview__submit-row { margin-top: 27px; }
+.new-interview__submit-row button { border-radius: 2px; background: var(--text-primary); color: var(--surface-panel); }
+.new-interview__submit-row > div > span { color: var(--accent); opacity: 1; font: 600 8px/1 var(--font-mono); }
+.new-interview__unavailable { border-top-color: var(--border-subtle); }

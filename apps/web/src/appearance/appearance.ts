@@ -27,7 +27,7 @@ export const APPEARANCE_STORAGE_KEY = "interview-appearance-v1";
 
 export const DEFAULT_APPEARANCE: AppearanceSettings = {
   theme: "system",
-  accent: "cobalt",
+  accent: "coral",
   accentIntensity: 16,
   zoomPercent: 100,
   corners: "soft",
@@ -40,10 +40,10 @@ export const ACCENT_OPTIONS: readonly {
   readonly color: string;
 }[] = [
   { id: "ink", label: "Ink", color: "#24272e" },
-  { id: "cobalt", label: "Cobalt", color: "#315ee8" },
+  { id: "cobalt", label: "Indigo", color: "#4a5d78" },
   { id: "teal", label: "Teal", color: "#078d83" },
   { id: "amber", label: "Amber", color: "#d98616" },
-  { id: "coral", label: "Coral", color: "#dd6048" },
+  { id: "coral", label: "Vermilion", color: "#a74733" },
   { id: "violet", label: "Violet", color: "#7755d9" },
   { id: "rose", label: "Rose", color: "#c84e72" }
 ];
