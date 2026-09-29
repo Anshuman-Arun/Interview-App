@@ -56,10 +56,8 @@ describe("expressive UI appearance foundations", () => {
     expect(provider).toContain("}, [settings.zoomPercent]);");
     expect(provider).toContain("bridge.setZoomFactor(zoomFactor)");
     expect(dock).toContain('aria-label="Interface zoom percent"');
-    expect(dock).toContain("defaultValue={settings.zoomPercent}");
-    expect(dock).toContain("onBlur={(event)");
+    expect(dock).toContain("appearance-zoom__apply");
     expect(dock).toContain("setZoomPercent");
-    expect(dock).not.toContain('value={settings.zoomPercent}\n                aria-label="Interface zoom percent"');
     expect(dock).not.toContain("const SCALES");
   });
 

@@ -105,6 +105,7 @@ export function ProductPageRouter({
       content = (
         <HomePage
           activeSessionId={activeSessionId}
+          activeSessionCount={sessions.filter((storedSession) => storedSession.status === "ACTIVE").length}
           activeProblemTitle={activeProblemTitle ?? null}
           activeSessionPaused={activeSessionPaused ?? false}
           sessions={sessions}
@@ -121,7 +122,7 @@ export function ProductPageRouter({
     case "new":
       title = "New interview";
       kicker = "Configure the room";
-      activePage = null;
+      activePage = "new";
       content = (
         <NewInterviewPage
           catalog={launchCatalog}
@@ -158,6 +159,7 @@ export function ProductPageRouter({
           history={history}
           historyLoading={historyLoading}
           historyError={historyError}
+          sessionEntryPending={sessionEntryPending}
         />
       );
       break;
@@ -200,6 +202,10 @@ export function ProductPageRouter({
       title={title}
       kicker={kicker}
       onNavigate={onNavigatePage}
+      reasoningReady={!providerOptionsLoading && providerOptionsError === null && providerOptions.some((option) => option.availability === "AVAILABLE")}
+      reasoningChecking={providerOptionsLoading}
+      navigationLocked={(activeSessionPaused ?? false) && activeSessionId !== null}
+      transitionLocked={sessionEntryPending}
       notice={notice}
       onDismissNotice={onDismissNotice}
     >
