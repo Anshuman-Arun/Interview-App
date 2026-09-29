@@ -35,3 +35,6 @@ yarn-error.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# Generated at Windows packaging time; never committed.
+apps/desktop/assets/icon.png
