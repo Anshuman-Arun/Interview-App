@@ -8,7 +8,7 @@ import {
 import { useAppearance } from "../appearance/AppearanceProvider.js";
 import "./AppearanceDock.css";
 
-const THEMES: readonly ThemeMode[] = ["light", "dark"];
+const THEMES: readonly ThemeMode[] = ["system", "light", "dark"];
 
 export function AppearanceDock({
   compact = false
@@ -158,7 +158,6 @@ export function AppearanceDock({
             </button>
             <label className="appearance-zoom__value">
               <input
-                key={draftZoom}
                 type="number"
                 min={MIN_INTERFACE_ZOOM_PERCENT}
                 max={MAX_INTERFACE_ZOOM_PERCENT}
