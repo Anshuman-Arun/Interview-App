@@ -88,8 +88,19 @@
   color: var(--text-primary);
 }
 
-.voice-strip__devices[open] > summary span {
-  transform: rotate(180deg);
+.voice-strip__chevron {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: translateY(-1px) rotate(45deg);
+  transform-origin: center;
+}
+
+.voice-strip__devices[open] > summary .voice-strip__chevron {
+  transform: translateY(1px) rotate(225deg);
 }
 
 .voice-strip__popover {
