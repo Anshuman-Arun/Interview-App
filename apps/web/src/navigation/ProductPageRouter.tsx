@@ -21,6 +21,7 @@ export function ProductPageRouter({
   route,
   sessions,
   activeSessionId,
+  activeSessionCount = activeSessionId === null ? 0 : 1,
   currentSessionId,
   activeProblemTitle,
   activeSessionPaused,
@@ -51,6 +52,7 @@ export function ProductPageRouter({
   readonly route: Exclude<ProductRoute, { readonly page: "interview" }>;
   readonly sessions: readonly StoredSessionSummary[];
   readonly activeSessionId: SessionId | null;
+  readonly activeSessionCount?: number;
   readonly currentSessionId: SessionId | null;
   readonly activeProblemTitle?: string | null;
   readonly activeSessionPaused?: boolean;
@@ -105,6 +107,7 @@ export function ProductPageRouter({
       content = (
         <HomePage
           activeSessionId={activeSessionId}
+          activeSessionCount={activeSessionCount}
           activeProblemTitle={activeProblemTitle ?? null}
           activeSessionPaused={activeSessionPaused ?? false}
           sessions={sessions}
@@ -121,7 +124,7 @@ export function ProductPageRouter({
     case "new":
       title = "New interview";
       kicker = "Configure the room";
-      activePage = null;
+      activePage = "new";
       content = (
         <NewInterviewPage
           catalog={launchCatalog}
@@ -200,6 +203,10 @@ export function ProductPageRouter({
       title={title}
       kicker={kicker}
       onNavigate={onNavigatePage}
+      reasoningReady={!providerOptionsLoading && providerOptionsError === null && providerOptions.some((option) => option.availability === "AVAILABLE")}
+      reasoningChecking={providerOptionsLoading}
+      navigationLocked={(activeSessionPaused ?? false) && activeSessionId !== null}
+      transitionLocked={sessionEntryPending}
       notice={notice}
       onDismissNotice={onDismissNotice}
     >

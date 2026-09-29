@@ -517,6 +517,7 @@ export const App: React.FC = () => {
         route={displayRoute}
         sessions={session.availableSessions}
         activeSessionId={resumableActiveSessionId}
+        activeSessionCount={session.availableSessions.filter((storedSession) => storedSession.status === "ACTIVE").length}
         currentSessionId={hasActiveInterview ? session.sessionId : null}
         activeProblemTitle={
           hasActiveInterview
